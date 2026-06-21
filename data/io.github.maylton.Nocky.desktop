@@ -1,14 +1,14 @@
 [Desktop Entry]
 Name=Nocky
 GenericName=Music Player
-Comment=Browse and play your local music library
+Comment=Play your local library and YouTube Music
 Exec=nocky
 TryExec=nocky
 Icon=io.github.maylton.Nocky
 Terminal=false
 Type=Application
 Categories=AudioVideo;Audio;Music;Player;GTK;
-Keywords=music;audio;player;lyrics;albums;artists;playlists;mpris;
+Keywords=music;audio;player;lyrics;albums;artists;playlists;mpris;youtube;youtube music;
 StartupNotify=true
 DBusActivatable=false
 X-GNOME-UsesNotifications=true

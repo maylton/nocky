@@ -355,35 +355,119 @@ searchbar entry {
 
 
 /* Library browser pages */
-.collection-card {
-  padding: 10px;
-  border-radius: 16px;
-  background-color: alpha(@nm_surface_alt, 0.64);
-  border: 1px solid alpha(@nm_text, 0.08);
+.library-home {
+  padding: 2px 2px 8px 2px;
 }
 
-.collection-card:hover {
-  background-color: alpha(@nm_accent, 0.10);
-  border-color: alpha(@nm_accent, 0.28);
+.home-section {
+  padding: 0 2px;
+}
+
+.home-section-title {
+  color: @nm_text;
+  font-size: 1.42rem;
+  font-weight: 900;
+}
+
+.home-carousel-scroll {
+  background: transparent;
+}
+
+.home-carousel {
+  padding: 2px 2px 8px 2px;
+}
+
+.home-card-button {
+  min-width: 142px;
+  min-height: 184px;
+  padding: 0;
+  border-radius: 16px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.home-card-button:hover {
+  background-color: alpha(@nm_accent, 0.08);
+}
+
+.home-card {
+  min-width: 128px;
+}
+
+.home-syncing-hint {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background-color: alpha(@nm_accent, 0.08);
+}
+
+.collection-page {
+  padding: 16px 18px 18px;
+}
+
+.collection-page-header {
+  padding: 2px 2px 12px 2px;
+}
+
+.collection-page-icon {
+  min-width: 52px;
+  min-height: 52px;
+  border-radius: 16px;
+  color: @nm_accent;
+  background-color: alpha(@nm_accent, 0.13);
+}
+
+.collection-page-title {
+  color: @nm_text;
+  font-size: 1.62rem;
+  font-weight: 900;
+}
+
+.collection-card {
+  min-width: 128px;
+  max-width: 128px;
+  padding: 6px;
+  border-radius: 12px;
+  background-color: transparent;
+  border: 1px solid transparent;
+}
+
+.collection-grid {
+  margin-top: 2px;
+}
+
+.collection-card-button {
+  min-width: 148px;
+  min-height: 184px;
+  padding: 0;
+  border-radius: 13px;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.collection-card-button:hover .collection-card {
+  background-color: alpha(@nm_text, 0.055);
+  border-color: alpha(@nm_text, 0.08);
 }
 
 .collection-artwork {
-  border-radius: 14px;
+  border-radius: 12px;
   background-image: radial-gradient(circle at 30% 20%, alpha(@nm_accent, 0.70), alpha(@nm_surface_alt, 0.90) 72%);
   border: 1px solid alpha(@nm_text, 0.08);
 }
 
 .collection-artwork picture {
-  border-radius: 14px;
+  border-radius: 12px;
 }
 
 .collection-card-title {
   font-weight: 800;
-  font-size: 0.96rem;
+  font-size: 0.90rem;
 }
 
 flowboxchild {
-  border-radius: 16px;
+  min-width: 140px;
+  max-width: 140px;
+  border-radius: 12px;
   padding: 0;
 }
 
@@ -405,4 +489,89 @@ flowboxchild:hover {
 .playlist-list row:hover,
 .playlist-list row:selected {
   background-color: alpha(@nm_accent, 0.13);
+}
+
+/* YouTube Music integration */
+.youtube-page {
+  background-color: transparent;
+}
+
+.youtube-status {
+  color: alpha(@nm_text, 0.76);
+  font-weight: 650;
+}
+
+.youtube-auth-card {
+  padding: 14px;
+  border-radius: 16px;
+  background-color: alpha(@nm_surface_alt, 0.76);
+  border: 1px solid alpha(@nm_text, 0.08);
+}
+
+.youtube-auth-input {
+  border-radius: 12px;
+  border: 1px solid alpha(@nm_text, 0.10);
+  background-color: alpha(@nm_surface, 0.56);
+}
+
+.youtube-results row {
+  border-radius: 12px;
+}
+
+.youtube-results row:hover {
+  background-color: alpha(@nm_accent, 0.09);
+}
+
+.youtube-result-icon {
+  color: @nm_accent;
+  min-width: 40px;
+}
+
+/* Unified local + YouTube Music library */
+.source-badge {
+  min-height: 20px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: alpha(@nm_text, 0.64);
+  background-color: alpha(@nm_text, 0.07);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.youtube-source-badge {
+  color: @nm_accent;
+  background-color: alpha(@nm_accent, 0.13);
+}
+
+.youtube-source-label {
+  color: alpha(@nm_accent, 0.92);
+}
+
+.youtube-collection-card {
+  border-color: alpha(@nm_accent, 0.20);
+}
+
+.collection-card-button:hover .youtube-collection-card {
+  border-color: alpha(@nm_accent, 0.44);
+  background-color: alpha(@nm_accent, 0.12);
+}
+
+.youtube-track-row,
+.youtube-playlist-row {
+  background-color: alpha(@nm_accent, 0.025);
+}
+
+.source-choice-button {
+  min-height: 48px;
+  padding: 8px 14px;
+  border-radius: 14px;
+  font-weight: 750;
+}
+
+.settings-row {
+  min-height: 54px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background-color: alpha(@nm_surface_alt, 0.42);
+  border: 1px solid alpha(@nm_text, 0.06);
 }

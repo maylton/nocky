@@ -11,7 +11,7 @@ use std::{
     time::UNIX_EPOCH,
 };
 
-use crate::lyrics::{LyricLine, load_sidecar};
+use crate::lyrics::{load_sidecar, LyricLine};
 
 #[derive(Clone, Debug)]
 pub struct TrackData {
@@ -46,7 +46,10 @@ impl TrackData {
 
         if let Ok(tagged_file) = lofty::read_from_path(&path) {
             duration_seconds = tagged_file.properties().duration().as_secs();
-            if let Some(tag) = tagged_file.primary_tag().or_else(|| tagged_file.first_tag()) {
+            if let Some(tag) = tagged_file
+                .primary_tag()
+                .or_else(|| tagged_file.first_tag())
+            {
                 title = tag
                     .title()
                     .map(|value| value.trim().to_string())
@@ -130,7 +133,6 @@ fn parse_filename(stem: &str) -> (String, String) {
     }
 }
 
-
 fn find_cover_path(audio_path: &Path) -> Option<PathBuf> {
     let parent = audio_path.parent()?;
     let stem = audio_path.file_stem()?.to_string_lossy();
@@ -157,7 +159,6 @@ fn find_cover_path(audio_path: &Path) -> Option<PathBuf> {
         .map(|name| parent.join(name))
         .find(|candidate| candidate.is_file())
 }
-
 
 fn extract_embedded_cover(audio_path: &Path, tag: &lofty::tag::Tag) -> Option<PathBuf> {
     let picture = tag.pictures().first()?;
@@ -191,7 +192,10 @@ fn cover_cache_dir() -> PathBuf {
         return PathBuf::from(xdg_cache).join("nocky").join("covers");
     }
     if let Some(home) = std::env::var_os("HOME") {
-        return PathBuf::from(home).join(".cache").join("nocky").join("covers");
+        return PathBuf::from(home)
+            .join(".cache")
+            .join("nocky")
+            .join("covers");
     }
     std::env::temp_dir().join("nocky-covers")
 }

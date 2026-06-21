@@ -33,10 +33,7 @@ pub enum MprisUpdate {
     Loop(bool),
     Shuffle(bool),
     Volume(f64),
-    Capabilities {
-        has_tracks: bool,
-        can_seek: bool,
-    },
+    Capabilities { has_tracks: bool, can_seek: bool },
     Shutdown,
 }
 
@@ -85,11 +82,7 @@ impl MprisBridge {
     }
 }
 
-fn run_server(
-    updates: Receiver<MprisUpdate>,
-    commands: Sender<MprisCommand>,
-    initial_volume: f64,
-) {
+fn run_server(updates: Receiver<MprisUpdate>, commands: Sender<MprisCommand>, initial_volume: f64) {
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -224,8 +217,8 @@ fn connect_simple(player: &Player, commands: &Sender<MprisCommand>) {
 async fn apply_update(player: &Player, update: MprisUpdate) -> mpris_server::zbus::Result<()> {
     match update {
         MprisUpdate::Metadata(track) => {
-            let track_id = TrackId::try_from(track.track_id.as_str())
-                .unwrap_or_else(|_| TrackId::NO_TRACK);
+            let track_id =
+                TrackId::try_from(track.track_id.as_str()).unwrap_or_else(|_| TrackId::NO_TRACK);
             let mut builder = Metadata::builder()
                 .trackid(track_id)
                 .title(track.title)

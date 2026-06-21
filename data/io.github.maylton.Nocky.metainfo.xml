@@ -2,14 +2,14 @@
 <component type="desktop-application">
   <id>io.github.maylton.Nocky</id>
   <name>Nocky</name>
-  <summary>A native music player for Linux</summary>
+  <summary>A native local and YouTube Music player for Linux</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <developer id="io.github.maylton">
     <name>Maylton Fernandes</name>
   </developer>
   <description>
-    <p>Nocky is a native GTK4 and libadwaita music player with local album and artist browsing, playlists, liked songs, synchronized lyrics, a real-time audio spectrum and MPRIS integration.</p>
+    <p>Nocky is a native GTK4 and libadwaita music player with local album and artist browsing, playlists, liked songs, synchronized lyrics, a real-time audio spectrum, MPRIS integration and optional YouTube Music catalogue/account access.</p>
   </description>
   <launchable type="desktop-id">io.github.maylton.Nocky.desktop</launchable>
   <provides>
@@ -23,6 +23,31 @@
   <url type="homepage">https://github.com/maylton/nocky</url>
   <url type="bugtracker">https://github.com/maylton/nocky/issues</url>
   <releases>
+    <release version="0.2.4" date="2026-06-21">
+      <description>
+        <p>Adds an automatic YouTube Music startup sync and refreshes the library home, album and artist browsing views.</p>
+      </description>
+    </release>
+    <release version="0.2.3" date="2026-06-21">
+      <description>
+        <p>Adds persistent YouTube library and stream caches, queue prefetching, and high-definition artwork.</p>
+      </description>
+    </release>
+    <release version="0.2.2" date="2026-06-21">
+      <description>
+        <p>Fixes YouTube runtime discovery and adds a saved startup choice between the local library and YouTube Music.</p>
+      </description>
+    </release>
+    <release version="0.2.1" date="2026-06-21">
+      <description>
+        <p>Synchronizes the connected YouTube Music library into the native albums, artists, playlists and liked-songs interface.</p>
+      </description>
+    </release>
+    <release version="0.2.0" date="2026-06-21">
+      <description>
+        <p>Adds optional YouTube Music search, account library, liked songs, playlists and GStreamer stream playback.</p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-06-21">
       <description>
         <p>First official public beta of Nocky.</p>

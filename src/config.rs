@@ -1,8 +1,7 @@
 use gtk::glib;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs,
-    io,
+    fs, io,
     path::{Path, PathBuf},
 };
 
@@ -22,14 +21,45 @@ impl Default for Playlist {
     }
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum StartupSource {
+    Local,
+    YouTube,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AppLanguage {
+    Portuguese,
+    English,
+    Spanish,
+}
+
+impl AppLanguage {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Portuguese => "Português",
+            Self::English => "English",
+            Self::Spanish => "Español",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
     pub music_directory: Option<PathBuf>,
     pub auto_download_lyrics: bool,
+    pub show_home_visualizer: bool,
+    pub show_home_lyrics: bool,
+    pub noctalia_theme_sync: bool,
+    pub youtube_auto_sync: bool,
+    pub language: AppLanguage,
     pub volume: f64,
     pub liked_tracks: Vec<PathBuf>,
     pub playlists: Vec<Playlist>,
+    pub startup_source: Option<StartupSource>,
 }
 
 impl Default for AppConfig {
@@ -37,9 +67,15 @@ impl Default for AppConfig {
         Self {
             music_directory: None,
             auto_download_lyrics: true,
+            show_home_visualizer: true,
+            show_home_lyrics: true,
+            noctalia_theme_sync: true,
+            youtube_auto_sync: true,
+            language: AppLanguage::Portuguese,
             volume: 0.75,
             liked_tracks: Vec::new(),
             playlists: Vec::new(),
+            startup_source: None,
         }
     }
 }
@@ -72,8 +108,8 @@ impl AppConfig {
         }
 
         let temporary = path.with_extension("json.tmp");
-        let contents = serde_json::to_vec_pretty(self)
-            .map_err(|error| io::Error::other(error.to_string()))?;
+        let contents =
+            serde_json::to_vec_pretty(self).map_err(|error| io::Error::other(error.to_string()))?;
         fs::write(&temporary, contents)?;
         fs::rename(temporary, path)
     }

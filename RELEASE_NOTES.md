@@ -1,37 +1,46 @@
-# Nocky 0.1 Beta
+# Nocky 0.2.4 Beta — Automatic Sync and Library Carousels
 
-Nocky 0.1 is the first official public beta of the native GTK4/libadwaita music player.
+Nocky 0.2.4 refreshes the library experience with YouTube Music-inspired carousels and starts the connected YouTube Music sync automatically when the app opens.
 
-## What is included
+## Highlights
 
-- Local music-library scanning
-- Albums, artists, playlists and liked songs
-- Reliable GStreamer playback with stable next/previous ordering
-- Embedded artwork and desktop MPRIS metadata
-- Theme-aware audio spectrum visualizer
-- Synchronized lyrics with a five-line Now Playing preview
-- Optional Noctalia palette integration
-- Cross-distribution installation script
+- The synchronized YouTube Music library is cached on disk and appears immediately at startup
+- Saved YouTube Music sessions sync automatically on application launch
+- The main library now opens to horizontal carousels for mixes, albums, artists and playlists
+- Album and artist pages use larger artwork cards and a richer collection header
+- Previously opened online playlists are available from the cache
+- Temporary stream URLs and required HTTP headers are reused while valid
+- The next four tracks in the active queue are resolved in advance
+- Album, artist and playlist artwork uses the largest available thumbnail
+- Collection cards use 512 px artwork, while the main player uses a 1200 px version
+- Artwork is cached by final URL and size, avoiding stale low-resolution covers
+- Cache writes are atomic and expired stream entries are automatically pruned
 
-## Beta notes
+## Cache locations
 
-This release is ready for regular testing and daily local-library use, but it is still a beta. Reports should include the Linux distribution, desktop environment, terminal output and exact steps needed to reproduce the issue.
+```text
+~/.cache/nocky/youtube/library-cache.json
+~/.cache/nocky/youtube/stream-cache.json
+~/.cache/nocky/youtube/covers/
+```
 
-## Installation
+Disconnecting the YouTube Music account clears the synchronized library cache. Ordinary uninstall operations continue preserving user data by default.
+
+## Install
 
 ```bash
-chmod +x install.sh
 ./install.sh --install-deps
 ```
 
-## Suggested GitHub release title
+For development:
 
-```text
-Nocky 0.1 Beta
+```bash
+./scripts/setup-youtube-runtime.sh
+cargo run
 ```
 
 ## Suggested tag
 
 ```text
-v0.1.0-beta
+v0.2.4-beta
 ```

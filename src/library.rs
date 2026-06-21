@@ -25,10 +25,7 @@ pub fn scan_music_directory(root: &Path) -> Result<Vec<TrackData>, String> {
     });
     paths.dedup();
 
-    Ok(paths
-        .into_iter()
-        .filter_map(TrackData::from_path)
-        .collect())
+    Ok(paths.into_iter().filter_map(TrackData::from_path).collect())
 }
 
 pub fn is_supported_audio(path: &Path) -> bool {
