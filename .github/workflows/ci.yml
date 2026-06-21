@@ -38,5 +38,10 @@ jobs:
       - name: Check
         run: cargo check
 
+      - name: Validate YouTube helper
+        run: |
+          python3 -m py_compile helpers/nocky_youtube.py
+          printf '{}\n' | python3 helpers/nocky_youtube.py status
+
       - name: Verify release metadata
         run: ./scripts/verify-release.sh

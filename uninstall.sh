@@ -60,6 +60,12 @@ for size in 32x32 48x48 64x64 128x128 256x256 512x512; do
   remove_file "${PREFIX}/share/icons/hicolor/${size}/apps/${APP_ID}.png"
 done
 
+if [[ "$MODE" == "system" ]]; then
+  run_root rm -rf "${PREFIX}/share/nocky"
+else
+  rm -rf "${PREFIX}/share/nocky"
+fi
+
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database "${PREFIX}/share/applications" 2>/dev/null || true
 fi
@@ -68,4 +74,4 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 echo "Nocky was removed from ${PREFIX}."
-echo "User settings in ~/.config/nocky and cached artwork in ~/.cache/nocky were preserved."
+echo "User settings, YouTube session data and cached artwork were preserved."

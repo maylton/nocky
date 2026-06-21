@@ -119,8 +119,16 @@ impl SpectrumVisualizer {
         let mut smoothed = [0.0_f64; HALF_BANDS];
         for index in 0..HALF_BANDS {
             let current = reduced[index];
-            let prev = if index > 0 { reduced[index - 1] } else { current };
-            let next = if index + 1 < HALF_BANDS { reduced[index + 1] } else { current };
+            let prev = if index > 0 {
+                reduced[index - 1]
+            } else {
+                current
+            };
+            let next = if index + 1 < HALF_BANDS {
+                reduced[index + 1]
+            } else {
+                current
+            };
             smoothed[index] = (prev * 0.22 + current * 0.56 + next * 0.22).clamp(0.0, 1.0);
         }
 
@@ -210,7 +218,14 @@ fn draw_spectrum(
         context.set_source_rgba(red, green, blue, 0.09 + tapered_value * 0.11);
         let _ = context.fill();
 
-        rounded_rectangle(context, x, y, bar_width, bar_height, (bar_width / 2.0).min(2.8));
+        rounded_rectangle(
+            context,
+            x,
+            y,
+            bar_width,
+            bar_height,
+            (bar_width / 2.0).min(2.8),
+        );
         context.set_source_rgba(red, green, blue, 0.52 + tapered_value * 0.48);
         let _ = context.fill();
     }
@@ -234,13 +249,7 @@ fn rounded_rectangle(
         0.0,
         PI / 2.0,
     );
-    context.arc(
-        x + radius,
-        y + height - radius,
-        radius,
-        PI / 2.0,
-        PI,
-    );
+    context.arc(x + radius, y + height - radius, radius, PI / 2.0, PI);
     context.arc(x + radius, y + radius, radius, PI, PI * 1.5);
     context.close_path();
 }

@@ -1,10 +1,16 @@
 use gtk::{gdk, gio, glib, prelude::*};
-use std::{cell::RefCell, fs, path::PathBuf, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    fs,
+    path::PathBuf,
+    rc::Rc,
+};
 
 pub struct ThemeBridge {
     provider: gtk::CssProvider,
     monitor: RefCell<Option<gio::FileMonitor>>,
     theme_path: PathBuf,
+    noctalia_enabled: Cell<bool>,
 }
 
 impl ThemeBridge {
@@ -33,6 +39,7 @@ impl ThemeBridge {
             provider: gtk::CssProvider::new(),
             monitor: RefCell::new(None),
             theme_path,
+            noctalia_enabled: Cell::new(true),
         });
 
         gtk::style_context_add_provider_for_display(
@@ -47,15 +54,25 @@ impl ThemeBridge {
     }
 
     fn reload(&self) {
+        if !self.noctalia_enabled.get() {
+            self.provider.load_from_string("");
+            return;
+        }
         match fs::read_to_string(&self.theme_path) {
             Ok(css) => self.provider.load_from_string(&css),
             Err(_) => self.provider.load_from_string(""),
         }
     }
 
+    pub fn set_noctalia_enabled(&self, enabled: bool) {
+        self.noctalia_enabled.set(enabled);
+        self.reload();
+    }
+
     fn watch(self: &Rc<Self>, directory: PathBuf) {
         let file = gio::File::for_path(directory);
-        let Ok(monitor) = file.monitor_directory(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE)
+        let Ok(monitor) =
+            file.monitor_directory(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE)
         else {
             return;
         };

@@ -25,10 +25,14 @@ pub fn download_to_sidecar(audio_path: &Path, lookup: &LyricsLookup) -> Result<(
         .map_err(|error| format!("Could not save {}: {error}", sidecar.display()))
 }
 
-fn fetch_synced_lyrics(lookup: &LyricsLookup) -> Result<String, String> {
+pub fn fetch_synced_lyrics(lookup: &LyricsLookup) -> Result<String, String> {
     let client = Client::builder()
         .timeout(Duration::from_secs(15))
-        .user_agent(concat!("Nocky/", env!("CARGO_PKG_VERSION"), " (Linux music player)"))
+        .user_agent(concat!(
+            "Nocky/",
+            env!("CARGO_PKG_VERSION"),
+            " (Linux music player)"
+        ))
         .build()
         .map_err(|error| format!("Could not create the lyrics client: {error}"))?;
 
@@ -48,7 +52,10 @@ fn fetch_synced_lyrics(lookup: &LyricsLookup) -> Result<String, String> {
         .map_err(|error| format!("Lyrics request failed: {error}"))?;
 
     if !response.status().is_success() {
-        return Err(format!("Lyrics service returned HTTP {}", response.status()));
+        return Err(format!(
+            "Lyrics service returned HTTP {}",
+            response.status()
+        ));
     }
 
     let records = response

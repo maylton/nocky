@@ -1,8 +1,12 @@
-use gstreamer as gst;
 use gst::prelude::*;
+use gstreamer as gst;
 use std::{
     cell::Cell,
-    sync::mpsc::{self, Receiver},
+    collections::HashMap,
+    sync::{
+        mpsc::{self, Receiver},
+        Arc, Mutex,
+    },
 };
 
 #[derive(Debug)]
@@ -19,6 +23,7 @@ pub struct PlaybackEngine {
     _bus_watch: gst::bus::BusWatchGuard,
     loaded: Cell<bool>,
     volume: Cell<f64>,
+    request_headers: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl PlaybackEngine {
@@ -61,6 +66,57 @@ impl PlaybackEngine {
         let volume = initial_volume.clamp(0.0, 1.0);
         pipeline.set_property("volume", volume);
 
+        // yt-dlp can return HTTP headers that are required by the temporary
+        // Googlevideo URL. Apply them to souphttpsrc whenever playbin creates
+        // a network source, while leaving local-file sources untouched.
+        let request_headers = Arc::new(Mutex::new(HashMap::<String, String>::new()));
+        let source_headers = request_headers.clone();
+        let _source_setup = pipeline.connect("source-setup", false, move |values| {
+            let Some(source) = values
+                .get(1)
+                .and_then(|value| value.get::<gst::Element>().ok())
+            else {
+                return None;
+            };
+            let Ok(headers) = source_headers.lock() else {
+                return None;
+            };
+            if headers.is_empty() {
+                return None;
+            }
+
+            if let Some(user_agent) = headers
+                .get("User-Agent")
+                .or_else(|| headers.get("user-agent"))
+            {
+                if source.find_property("user-agent").is_some() {
+                    source.set_property("user-agent", user_agent.as_str());
+                }
+            }
+            if let Some(referer) = headers.get("Referer").or_else(|| headers.get("referer")) {
+                if source.find_property("referer").is_some() {
+                    source.set_property("referer", referer.as_str());
+                }
+            }
+
+            if source.find_property("extra-headers").is_some() {
+                let mut extra = gst::Structure::new_empty("headers");
+                let mut has_extra = false;
+                for (key, value) in headers.iter() {
+                    if key.eq_ignore_ascii_case("user-agent") || key.eq_ignore_ascii_case("referer")
+                    {
+                        continue;
+                    }
+                    extra.set(key.as_str(), value.as_str());
+                    has_extra = true;
+                }
+                if has_extra {
+                    source.set_property("extra-headers", extra);
+                }
+            }
+            None
+        });
+
         let bus = pipeline
             .bus()
             .ok_or_else(|| "The GStreamer playback pipeline has no message bus".to_string())?;
@@ -86,9 +142,7 @@ impl PlaybackEngine {
                                         .map(|decibels| {
                                             // Ignore the quietest floor and keep loud tracks from
                                             // pinning every band at full height.
-                                            (((decibels + 66.0) / 66.0)
-                                                .clamp(0.0, 1.0)
-                                                .powf(1.12)
+                                            (((decibels + 66.0) / 66.0).clamp(0.0, 1.0).powf(1.12)
                                                 * 0.78)
                                                 .min(0.86)
                                         })
@@ -131,10 +185,20 @@ impl PlaybackEngine {
             _bus_watch: bus_watch,
             loaded: Cell::new(false),
             volume: Cell::new(volume),
+            request_headers,
         })
     }
 
     pub fn load(&self, uri: &str, autoplay: bool) -> Result<(), String> {
+        self.load_with_headers(uri, autoplay, HashMap::new())
+    }
+
+    pub fn load_with_headers(
+        &self,
+        uri: &str,
+        autoplay: bool,
+        headers: HashMap<String, String>,
+    ) -> Result<(), String> {
         self.loaded.set(false);
 
         // Going all the way to NULL removes pads, decoders and pending bus
@@ -144,6 +208,10 @@ impl PlaybackEngine {
             .set_state(gst::State::Null)
             .map_err(|_| "GStreamer could not stop the previous track".to_string())?;
 
+        *self
+            .request_headers
+            .lock()
+            .map_err(|_| "Could not update YouTube HTTP headers".to_string())? = headers;
         self.pipeline.set_property("uri", uri);
         self.pipeline.set_property("volume", self.volume.get());
 

@@ -7,3 +7,13 @@ Cargo.lock.bak
 .idea/
 .vscode/
 *.log
+__pycache__/
+*.py[cod]
+.venv/
+.venv-*/
+.env
+.env.*
+youtube-session.json
+stream-cache.json
+
+.nocky-runtime/

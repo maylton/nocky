@@ -1,69 +1,61 @@
-# Publishing Nocky 0.1 Beta on GitHub
+# Publishing Nocky 0.2.4 on GitHub
 
-Recommended repository: `maylton/nocky`
+Run these commands from the extracted `nocky-0.2.4` source directory.
 
-## 1. Authenticate GitHub CLI over HTTPS
+## 1. Validate the source
 
 ```bash
-gh auth status
-gh auth login
-gh auth setup-git
+cargo fmt --check
+cargo check
+python3 -m py_compile helpers/nocky_youtube.py
+./scripts/verify-release.sh
 ```
 
-Choose GitHub.com, HTTPS and browser authentication when prompted.
-
-## 2. Initialize and review the repository
+Test local playback and the optional YouTube runtime before publishing:
 
 ```bash
-git init
-git branch -M main
-git add .
+./scripts/check-playback.sh
+./scripts/check-youtube.sh
+cargo run
+```
+
+Never include browser cookies, copied cURL requests, `.env` files, `youtube-session.json`, cache files or terminal logs containing session headers.
+
+## 2. Commit the release
+
+```bash
 git status
-git commit -m "Release Nocky 0.1 beta"
+git add .
+git commit -m "Release Nocky 0.2.4 beta"
+git push origin main
 ```
 
-## 3. Create the public repository and push
+## 3. Create and push the tag
 
 ```bash
-gh repo create nocky \
-  --public \
-  --source=. \
-  --remote=origin \
-  --push \
-  --description "A native GTK4/libadwaita music player for Linux"
+git tag -a v0.2.4-beta -m "Nocky 0.2.4 Beta — Automatic Sync and Library Carousels"
+git push origin v0.2.4-beta
 ```
 
-If `origin` already exists, do not add it again. Use:
+## 4. Create the GitHub release
+
+Place the generated archives and checksum file beside the project directory, then run:
 
 ```bash
-git remote set-url origin https://github.com/maylton/nocky.git
-git push -u origin main
-```
-
-## 4. Create the beta tag
-
-```bash
-git tag -a v0.1.0-beta -m "Nocky 0.1 Beta"
-git push origin v0.1.0-beta
-```
-
-## 5. Create the GitHub release
-
-From inside the project directory:
-
-```bash
-gh release create v0.1.0-beta \
-  ../nocky-0.1.0-beta-source.zip \
-  ../nocky-0.1.0-beta-source.tar.gz \
-  --title "Nocky 0.1 Beta" \
+gh release create v0.2.4-beta \
+  ../nocky-0.2.4-source.zip \
+  ../nocky-0.2.4-source.tar.gz \
+  ../SHA256SUMS-nocky-0.2.4.txt \
+  --title "Nocky 0.2.4 Beta — Automatic Sync and Library Carousels" \
   --notes-file RELEASE_NOTES.md \
-  --prerelease
+  --prerelease \
+  --verify-tag
 ```
 
-## 6. Confirm after publishing
+## 5. Verify the published release
 
-- The Actions tab shows a successful CI run.
-- The release is marked as **Pre-release**.
-- The source archives are attached.
-- The README icon renders correctly.
-- Issues are enabled for bug reports.
+- GitHub Actions completes successfully.
+- The release is marked as a pre-release.
+- ZIP, TAR.GZ and SHA-256 checksums are attached.
+- No account session or cookie data exists in the repository or release assets.
+- The README shows the Nocky icon and documents the default YouTube runtime and `--without-youtube`.

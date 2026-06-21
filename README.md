@@ -1,8 +1,8 @@
 # Nocky
 
-**Nocky** is a native GTK4/libadwaita music player for Linux. It combines a polished local-library experience with synchronized lyrics, a real-time spectrum visualizer, MPRIS controls, and optional Noctalia color integration.
+**Nocky** is a native GTK4/libadwaita music player for Linux. It combines a polished local-library experience with synchronized lyrics, a real-time spectrum visualizer, MPRIS controls, optional Noctalia color integration, and an optional YouTube Music integration.
 
-> **Status:** Nocky 0.1.0 is the first public beta. Core playback is stable, but feedback and bug reports are welcome.
+> **Status:** Nocky 0.2.4 is a beta release. It adds an automatic YouTube Music startup sync and a refreshed library home with collection carousels.
 
 <p align="center">
   <img src="assets/nocky-icon.png" alt="Nocky owl icon" width="180" />
@@ -12,7 +12,7 @@
 
 - Native Rust, GTK4 and libadwaita interface
 - Recursive local music-library scanning
-- Albums, artists, playlists and liked songs
+- Unified local and YouTube Music albums, artists, playlists and liked songs
 - Stable track/disc-aware playback queues
 - Embedded and sidecar album artwork
 - Direct GStreamer playback engine
@@ -22,18 +22,41 @@
 - Automatic LRCLIB lookup
 - MPRIS support for media keys, `playerctl` and desktop shells
 - Optional Noctalia palette integration with live CSS reload
+- Optional YouTube Music catalogue search and automatic account-library synchronization
+- YouTube audio streaming through the existing GStreamer player
 
-## Supported audio formats
+## YouTube Music in 0.2.4
+
+Nocky follows the same integration architecture proven in the author's Nocturne project:
+
+- `ytmusicapi` provides catalogue and account-library data;
+- `yt-dlp` resolves a temporary audio URL;
+- Deno supplies the JavaScript runtime required by current YouTube extraction;
+- Nocky's native GStreamer engine plays the stream and keeps MPRIS, visualizer and media controls working.
+
+Public search works without connecting an account. After connecting, Nocky automatically synchronizes saved songs, liked songs and personal playlists into the main library interface on startup. Online albums and artists are grouped from the synchronized catalogue, and a **Sync with Nocky** button is still available for manual refreshes. The last synchronized library is loaded from disk immediately, while a fresh synchronization runs in the background. Nocky also prefetches the next four stream URLs and keeps separate 512 px and 1200 px artwork caches for collection cards and the now-playing view. Read [docs/YOUTUBE_MUSIC.md](docs/YOUTUBE_MUSIC.md) before connecting an account.
+
+No cookies, sessions, `.env` files or personal data from the reference project are included in this repository.
+
+## Supported local audio formats
 
 Playback depends on the GStreamer plugins installed on the system. With the common plugin sets, Nocky can play MP3, FLAC, OGG, Opus, M4A/MP4, WAV, AAC and many other formats.
 
-## Quick installation
+## Complete installation
 
-The installer builds Nocky from source and supports Debian/Ubuntu, Fedora/RHEL-family, openSUSE and Arch-based distributions.
+The universal source installer supports Debian/Ubuntu, Fedora/RHEL-family, openSUSE and Arch-based distributions.
 
 ```bash
 chmod +x install.sh
 ./install.sh --install-deps
+```
+
+This builds Nocky, installs its desktop integration and icons, creates an isolated Python runtime for YouTube Music, installs pinned `ytmusicapi`/`yt-dlp` dependencies and bundles Deno when it is not already installed.
+
+For local-library-only use:
+
+```bash
+./install.sh --install-deps --without-youtube
 ```
 
 By default, Nocky is installed for the current user under `~/.local`. Use `--system` for `/usr/local`:
@@ -50,14 +73,21 @@ More options:
 
 ## Run from source
 
+Create the project-local YouTube runtime once, then launch the app:
+
 ```bash
+./scripts/setup-youtube-runtime.sh
 cargo run
 ```
 
-Before running, validate the playback plugins:
+For local-only development, `cargo run` works without the helper runtime.
+
+Diagnostics:
 
 ```bash
 ./scripts/check-playback.sh
+./scripts/check-youtube.sh
+./scripts/check-mpris.sh
 ```
 
 ## Installed files
@@ -69,9 +99,27 @@ A user installation places files in:
 ~/.local/share/applications/io.github.maylton.Nocky.desktop
 ~/.local/share/icons/hicolor/*/apps/io.github.maylton.Nocky.png
 ~/.local/share/metainfo/io.github.maylton.Nocky.metainfo.xml
+~/.local/share/nocky/helpers/nocky_youtube.py
+~/.local/share/nocky/runtime/
 ```
 
-The desktop entry and application ID use the same identifier, `io.github.maylton.Nocky`, so the icon is resolved correctly by Wayland desktops, launchers and task switchers after installation.
+The desktop entry, icon and application ID all use `io.github.maylton.Nocky`, so the icon is resolved correctly by Wayland desktops, launchers and task switchers after installation.
+
+## Configuration and private data
+
+Nocky stores ordinary settings at:
+
+```text
+~/.config/nocky/config.json
+```
+
+YouTube Music browser-session headers are stored in Secret Service/libsecret when available. The fallback is:
+
+```text
+~/.config/nocky/youtube-session.json
+```
+
+The fallback file is created with mode `0600`. Stream URLs and cover images are cached below `~/.cache/nocky/youtube/`. Disconnecting the account removes the saved session.
 
 ## Uninstall
 
@@ -85,21 +133,15 @@ For a system installation:
 ./uninstall.sh --system
 ```
 
-## Configuration
-
-Nocky stores settings at `~/.config/nocky/config.json` and extracted artwork at `~/.cache/nocky/covers/`.
+The uninstaller intentionally preserves user settings, session data and cache. Disconnect the account in Nocky before uninstalling, or remove `~/.config/nocky/youtube-session.json` manually when Secret Service is not available.
 
 ## Lyrics
 
-Nocky loads sidecar `.lrc` files and can automatically search LRCLIB when synchronized lyrics are missing. Downloaded lyrics are saved beside the audio file when the folder is writable.
+Nocky loads sidecar `.lrc` files and can automatically search LRCLIB when synchronized lyrics are missing. Downloaded lyrics are saved beside local audio files when the folder is writable. The 0.2.4 YouTube player currently shows a clear placeholder rather than fetching lyrics for streamed tracks.
 
 ## MPRIS
 
-The player registers as `org.mpris.MediaPlayer2.Nocky`. Test it with:
-
-```bash
-./scripts/check-mpris.sh
-```
+The player registers as `org.mpris.MediaPlayer2.Nocky`. Local and YouTube tracks publish title, artist, album, duration, cover and source URL where available.
 
 ## Noctalia theme integration
 
@@ -110,16 +152,22 @@ Nocky remains an independent project, but it can follow Noctalia's Material colo
 ```text
 src/
 ├── main.rs             GTK UI and application controller
-├── browser.rs          albums, artists, playlists and liked-song pages
-├── playback.rs         direct GStreamer playback engine
+├── youtube.rs          native YouTube Music page and helper bridge
+├── browser.rs          unified local/YouTube library browser and queues
+├── playback.rs         GStreamer playback and HTTP stream headers
 ├── visualizer.rs       theme-aware spectrum visualizer
 ├── mpris.rs            MPRIS service and command bridge
 ├── model.rs            metadata, artwork and track model
-├── library.rs          recursive library scanner
+├── library.rs          recursive local-library scanner
 ├── lyrics.rs           local LRC parser
 ├── lyrics_provider.rs  LRCLIB client
 ├── config.rs           persistent settings and migration
 └── theme.rs            GTK/Noctalia theme bridge
+
+helpers/
+└── nocky_youtube.py    ytmusicapi/yt-dlp sidecar
+
+requirements-youtube.txt  pinned optional Python runtime
 ```
 
 ## Development
@@ -127,6 +175,7 @@ src/
 ```bash
 cargo fmt --check
 cargo check
+python3 -m py_compile helpers/nocky_youtube.py
 ./scripts/verify-release.sh
 ```
 
@@ -134,9 +183,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
 ## Current beta limitations
 
-- Internet radio is not implemented yet.
+- YouTube Music uses an unofficial browser-session integration and can require updates when the service changes.
+- YouTube stream URLs are temporary and are resolved again when necessary.
+- YouTube lyrics and account write actions such as liking/unliking are not included yet.
 - Gapless playback is disabled; the pipeline is reset between tracks for reliability.
-- Flatpak packaging is planned but not included in this beta.
+- Flatpak packaging is planned but not included in this release.
 
 ## License
 
