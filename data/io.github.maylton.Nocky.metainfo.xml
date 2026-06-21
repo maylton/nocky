@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.maylton.Nocky</id>
+  <name>Nocky</name>
+  <summary>A native music player for Linux</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="io.github.maylton">
+    <name>Maylton Fernandes</name>
+  </developer>
+  <description>
+    <p>Nocky is a native GTK4 and libadwaita music player with local album and artist browsing, playlists, liked songs, synchronized lyrics, a real-time audio spectrum and MPRIS integration.</p>
+  </description>
+  <launchable type="desktop-id">io.github.maylton.Nocky.desktop</launchable>
+  <provides>
+    <binary>nocky</binary>
+  </provides>
+  <categories>
+    <category>Audio</category>
+    <category>Music</category>
+    <category>Player</category>
+  </categories>
+  <url type="homepage">https://github.com/maylton/nocky</url>
+  <url type="bugtracker">https://github.com/maylton/nocky/issues</url>
+  <releases>
+    <release version="0.1.0" date="2026-06-21">
+      <description>
+        <p>First official public beta of Nocky.</p>
+      </description>
+    </release>
+  </releases>
+</component>

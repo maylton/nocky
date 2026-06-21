@@ -1,0 +1,28 @@
+[package]
+name = "nocky"
+version = "0.1.0"
+edition = "2021"
+description = "A native GTK4/libadwaita music player for Linux"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/maylton/nocky"
+homepage = "https://github.com/maylton/nocky"
+keywords = ["music", "gtk4", "gstreamer", "mpris", "linux"]
+categories = ["multimedia::audio"]
+
+[dependencies]
+adw = { package = "libadwaita", version = "0.9", features = ["v1_8"] }
+gtk = { package = "gtk4", version = "0.11", features = ["v4_14"] }
+gstreamer = "0.25"
+gdk-pixbuf = "0.22"
+lofty = "0.24"
+mpris-server = { version = "0.10", features = ["tokio"] }
+tokio = { version = "1", features = ["rt", "time"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+walkdir = "2.5"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

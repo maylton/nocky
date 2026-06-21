@@ -1,0 +1,40 @@
+name: Bug report
+description: Report a reproducible problem in Nocky
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping test the Nocky beta.
+  - type: input
+    id: distro
+    attributes:
+      label: Linux distribution
+      placeholder: CachyOS, Fedora, Ubuntu, etc.
+    validations:
+      required: true
+  - type: input
+    id: desktop
+    attributes:
+      label: Desktop environment or compositor
+      placeholder: Niri + Noctalia, GNOME, KDE Plasma, etc.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: Provide exact steps.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Terminal output
+      render: shell
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
