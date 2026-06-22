@@ -583,13 +583,13 @@ impl LibraryBrowser {
         let mixes = youtube
             .playlists
             .iter()
-            .filter(|playlist| is_mix_playlist(&playlist.title))
+            .filter(|playlist| is_mix_playlist(playlist))
             .cloned()
             .chain(
                 youtube
                     .playlists
                     .iter()
-                    .filter(|playlist| !is_mix_playlist(&playlist.title))
+                    .filter(|playlist| !is_mix_playlist(playlist))
                     .cloned(),
             )
             .take(12)
@@ -629,7 +629,7 @@ impl LibraryBrowser {
             youtube
                 .playlists
                 .iter()
-                .filter(|playlist| !is_mix_playlist(&playlist.title))
+                .filter(|playlist| !is_mix_playlist(playlist))
                 .take(12)
                 .cloned()
                 .map(HomeCard::YouTubePlaylist),
@@ -856,11 +856,7 @@ impl LibraryBrowser {
         for playlist in online_matches {
             self.playlists_list.append(&playlist_row(
                 &playlist.title,
-                if playlist.subtitle.is_empty() {
-                    "Playlist sincronizada"
-                } else {
-                    &playlist.subtitle
-                },
+                youtube_playlist_subtitle(playlist),
                 true,
             ));
             row_refs.push(Some(PlaylistRef::YouTube(playlist.clone())));
@@ -989,9 +985,31 @@ fn youtube_artist_home_card(entry: &YouTubeCollectionEntry) -> HomeCard {
     }
 }
 
-fn is_mix_playlist(title: &str) -> bool {
-    let title = title.to_lowercase();
+fn is_mix_playlist(playlist: &YouTubeItem) -> bool {
+    if playlist.playlist_kind == "mix" {
+        return true;
+    }
+    let title = playlist.title.to_lowercase();
     title.contains("mix") || title.contains("radio") || title.contains("supermix")
+}
+
+fn youtube_playlist_detail(item: &YouTubeItem) -> &'static str {
+    match item.playlist_kind.as_str() {
+        "mix" => "Mix gerado pelo YouTube Music",
+        "recommended" => "Recomendação do YouTube Music",
+        _ => "YouTube Music",
+    }
+}
+
+fn youtube_playlist_subtitle(item: &YouTubeItem) -> &str {
+    if !item.subtitle.is_empty() {
+        return item.subtitle.as_str();
+    }
+    match item.playlist_kind.as_str() {
+        "mix" => "Mix gerado pelo YouTube Music",
+        "recommended" => "Recomendação do YouTube Music",
+        _ => "Playlist sincronizada",
+    }
 }
 
 fn home_section(
@@ -1083,12 +1101,8 @@ fn home_card_button(card: HomeCard, event_tx: &Sender<BrowserEvent>) -> gtk::But
         HomeCard::YouTubePlaylist(item) => (
             item.cached_cover(),
             item.title.as_str(),
-            if item.subtitle.is_empty() {
-                "Playlist sincronizada"
-            } else {
-                item.subtitle.as_str()
-            },
-            "YouTube Music",
+            youtube_playlist_subtitle(item),
+            youtube_playlist_detail(item),
             true,
         ),
     };

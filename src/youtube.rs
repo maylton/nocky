@@ -26,6 +26,7 @@ pub struct YouTubeItem {
     pub browse_id: String,
     pub album: String,
     pub artist: String,
+    pub playlist_kind: String,
     pub duration_seconds: u64,
     pub thumbnail_url: String,
     pub cover_path: String,
@@ -129,7 +130,7 @@ impl YouTubeLibraryCache {
     }
 }
 
-const LIBRARY_CACHE_VERSION: u32 = 2;
+const LIBRARY_CACHE_VERSION: u32 = 3;
 const BROWSER_COVER_SIZE: u32 = 512;
 const PLAYER_COVER_SIZE: u32 = 1200;
 

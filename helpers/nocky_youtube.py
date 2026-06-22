@@ -504,6 +504,15 @@ def _playlist_id(result: dict[str, Any]) -> str:
     return ""
 
 
+def _playlist_kind(title: str, source: str = "") -> str:
+    if source == "Library playlist":
+        return "library"
+    text = f"{title} {source}".lower()
+    if any(token in text for token in ("mix", "radio", "supermix")):
+        return "mix"
+    return "recommended" if source else "library"
+
+
 def _song_item(result: dict[str, Any], result_type: str = "song") -> dict[str, Any] | None:
     video_id = _text(result.get("videoId") or result.get("video_id"))
     title = _text(result.get("title") or result.get("name"))
@@ -522,6 +531,7 @@ def _song_item(result: dict[str, Any], result_type: str = "song") -> dict[str, A
         "browse_id": "",
         "album": album,
         "artist": artist,
+        "playlist_kind": "",
         "duration_seconds": duration,
         "thumbnail_url": _best_thumbnail(_thumbnails(result)),
     }
@@ -550,6 +560,7 @@ def _playlist_item(result: dict[str, Any], source: str = "") -> dict[str, Any] |
         "browse_id": browse_id,
         "album": "",
         "artist": author,
+        "playlist_kind": _playlist_kind(title, source),
         "duration_seconds": 0,
         "thumbnail_url": _best_thumbnail(_thumbnails(result)),
     }
@@ -573,6 +584,7 @@ def _search_item(result: dict[str, Any]) -> dict[str, Any] | None:
             "browse_id": str(result.get("browseId") or ""),
             "album": title,
             "artist": str(result.get("artist") or ""),
+            "playlist_kind": "",
             "duration_seconds": 0,
             "thumbnail_url": _best_thumbnail(result.get("thumbnails")),
         }
@@ -588,6 +600,7 @@ def _search_item(result: dict[str, Any]) -> dict[str, Any] | None:
             "browse_id": str(result.get("browseId") or ""),
             "album": "",
             "artist": title,
+            "playlist_kind": "",
             "duration_seconds": 0,
             "thumbnail_url": _best_thumbnail(result.get("thumbnails")),
         }

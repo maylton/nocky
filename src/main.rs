@@ -939,6 +939,9 @@ impl AppController {
                 .playlists
                 .iter()
                 .filter(|playlist| !playlist.browse_id.is_empty())
+                .filter(|playlist| {
+                    playlist.playlist_kind.is_empty() || playlist.playlist_kind == "library"
+                })
                 .filter(|playlist| !library.playlist_tracks.contains_key(&playlist.browse_id))
                 .take(4)
                 .cloned()
