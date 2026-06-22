@@ -364,8 +364,18 @@ impl AppController {
         title_row.append(&title);
         title_row.append(&favorite);
 
-        let hero_cover = build_cover(230);
+        let hero_cover = build_cover(280);
         hero_cover.stack.set_halign(gtk::Align::Center);
+
+        // Keep placeholder and real artwork in the same balanced vertical slot.
+        let hero_cover_slot = gtk::CenterBox::new();
+        hero_cover_slot.set_orientation(gtk::Orientation::Vertical);
+        hero_cover_slot.set_vexpand(false);
+        hero_cover_slot.set_hexpand(true);
+        hero_cover_slot.set_margin_top(28);
+        hero_cover_slot.set_margin_bottom(20);
+        hero_cover_slot.set_center_widget(Some(&hero_cover.stack));
+        hero_cover_slot.add_css_class("hero-cover-slot");
 
         let elapsed = gtk::Label::new(Some("0:00"));
         elapsed.add_css_class("time-label");
@@ -426,7 +436,7 @@ impl AppController {
         now_card.set_valign(gtk::Align::Fill);
         now_card.add_css_class("now-playing-card");
         now_card.append(&now_header);
-        now_card.append(&hero_cover.stack);
+        now_card.append(&hero_cover_slot);
         now_card.append(&title_row);
         now_card.append(&artist);
         now_card.append(&album);
@@ -3647,13 +3657,13 @@ fn build_cover(size: i32) -> CoverView {
     placeholder.set_height_request(size);
     placeholder.set_halign(gtk::Align::Center);
     placeholder.set_valign(gtk::Align::Center);
-    placeholder.set_hexpand(true);
-    placeholder.set_vexpand(true);
+    placeholder.set_hexpand(false);
+    placeholder.set_vexpand(false);
     placeholder.append(&icon);
 
     let picture = gtk::Picture::new();
     picture.set_content_fit(gtk::ContentFit::Cover);
-    picture.set_can_shrink(true);
+    picture.set_can_shrink(false);
     picture.set_width_request(size);
     picture.set_height_request(size);
     picture.set_halign(gtk::Align::Center);
@@ -3669,6 +3679,7 @@ fn build_cover(size: i32) -> CoverView {
     stack.set_vexpand(false);
     stack.set_overflow(gtk::Overflow::Hidden);
     stack.set_transition_type(gtk::StackTransitionType::Crossfade);
+    stack.set_transition_duration(180);
     stack.add_named(&placeholder, Some("placeholder"));
     stack.add_named(&picture, Some("picture"));
     stack.set_visible_child_name("placeholder");

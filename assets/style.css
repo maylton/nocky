@@ -89,6 +89,10 @@ button.sidebar-row:disabled {
   background-color: alpha(@nm_accent, 0.10);
 }
 
+.hero-cover-slot {
+  min-height: 280px;
+}
+
 .album-cover {
   border-radius: 17px;
   border: 1px solid alpha(@nm_text, 0.08);
