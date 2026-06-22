@@ -79,12 +79,16 @@ enum BackgroundMessage {
     },
     YouTubeLyricsDownloaded {
         video_id: String,
+        notify: bool,
         result: Result<Vec<LyricLine>, String>,
     },
     YouTubeStatus(Result<YouTubeStatus, String>),
     YouTubeConnected(Result<YouTubeStatus, String>),
     YouTubeDisconnected(Result<YouTubeStatus, String>),
-    YouTubeLibrarySynced(Result<YouTubeLibrarySnapshot, String>),
+    YouTubeLibrarySynced {
+        notify: bool,
+        result: Result<YouTubeLibrarySnapshot, String>,
+    },
     YouTubeBrowserPlaylist {
         request_id: u64,
         playlist: YouTubeItem,
@@ -911,7 +915,7 @@ impl AppController {
         });
     }
 
-    fn sync_youtube_library(&self, force: bool) -> bool {
+    fn sync_youtube_library(&self, force: bool, notify: bool) -> bool {
         let Some(bridge) = self.youtube_bridge.clone() else {
             return false;
         };
@@ -925,9 +929,10 @@ impl AppController {
         self.refresh_browser();
         let sender = self.background_tx.clone();
         thread::spawn(move || {
-            let _ = sender.send(BackgroundMessage::YouTubeLibrarySynced(
-                bridge.sync_library(),
-            ));
+            let _ = sender.send(BackgroundMessage::YouTubeLibrarySynced {
+                notify,
+                result: bridge.sync_library(),
+            });
         });
         true
     }
@@ -1000,7 +1005,6 @@ impl AppController {
             return;
         }
 
-        self.show_toast(&format!("Carregando playlist ‘{}’…", playlist.title));
         let sender = self.background_tx.clone();
         thread::spawn(move || {
             let result = bridge.playlist(&browse_id).map(|mut items| {
@@ -1026,7 +1030,7 @@ impl AppController {
 
             match event {
                 YouTubePageEvent::SyncLibrary => {
-                    if self.sync_youtube_library(true) {
+                    if self.sync_youtube_library(true, true) {
                         self.youtube_page
                             .set_loading(true, "Sincronizando com o Nocky...");
                     } else {
@@ -1132,9 +1136,6 @@ impl AppController {
         }
         let request_id = self.youtube_request_id.get().wrapping_add(1);
         self.youtube_request_id.set(request_id);
-        if !force {
-            self.show_toast("Preparando stream do YouTube Music...");
-        }
         let sender = self.background_tx.clone();
         thread::spawn(move || {
             let result = bridge
@@ -1189,7 +1190,6 @@ impl AppController {
             "Nocky YouTube stream rejected; refreshing signed URL: {}",
             redact_stream_url(error)
         );
-        self.show_toast("O stream desta faixa foi recusado. Obtendo um novo link de reprodução…");
         self.resolve_youtube_track(item, queue, index, true);
         true
     }
@@ -1218,7 +1218,6 @@ impl AppController {
 
         self.last_mpris_position.set(resume_us);
         self.mpris.send(mpris::MprisUpdate::Position(resume_us));
-        self.show_toast("Stream renovado. Reprodução retomada.");
     }
 
     fn apply_youtube_track(
@@ -1305,7 +1304,7 @@ impl AppController {
             self.rebuild_youtube_lyrics(&preserved_lyrics);
         } else if self.config.borrow().auto_download_lyrics {
             self.set_lyrics_message("Searching synchronized lyrics for this YouTube track…");
-            self.request_youtube_lyrics(&item);
+            self.request_youtube_lyrics(&item, false);
         } else {
             self.set_lyrics_message(
                 "No synchronized lyrics loaded yet. Use the menu to search for this YouTube track.",
@@ -1465,7 +1464,7 @@ impl AppController {
                         controller.set_lyrics_message(
                             "Searching synchronized lyrics for this YouTube track…",
                         );
-                        controller.request_youtube_lyrics(&item);
+                        controller.request_youtube_lyrics(&item, true);
                         return;
                     }
                     let current = controller.state.borrow().current;
@@ -1502,7 +1501,7 @@ impl AppController {
                             .as_ref()
                             .map(|state| state.item.clone())
                         {
-                            controller.request_youtube_lyrics(&item);
+                            controller.request_youtube_lyrics(&item, false);
                         } else if let Some(index) = controller.state.borrow().current {
                             controller.request_lyrics(index, false, false);
                         }
@@ -1582,11 +1581,6 @@ impl AppController {
                 self.refresh_youtube_status();
             }
         }
-        let label = match source {
-            StartupSource::Local => "biblioteca local",
-            StartupSource::YouTube => "YouTube Music",
-        };
-        self.show_toast(&format!("Fonte da Home definida como {label}"));
     }
 
     fn apply_home_preferences(&self) {
@@ -1744,7 +1738,6 @@ impl AppController {
                     _ => AppLanguage::Portuguese,
                 };
                 controller.save_config();
-                controller.show_toast(controller.tr("settings_saved"));
             });
         }
         {
@@ -1776,7 +1769,6 @@ impl AppController {
                 controller.config.borrow_mut().blur_mode = mode;
                 controller.save_config();
                 controller.apply_home_preferences();
-                controller.show_toast(controller.tr("settings_saved"));
             });
         }
         {
@@ -1840,7 +1832,6 @@ impl AppController {
                 }
                 controller.save_config();
                 controller.apply_home_preferences();
-                controller.show_toast(controller.tr("settings_saved"));
             });
         }
 
@@ -2011,7 +2002,6 @@ impl AppController {
             return;
         };
 
-        self.show_toast("Escaneando a biblioteca de músicas...");
         let sender = self.background_tx.clone();
         thread::spawn(move || {
             let result = library::scan_music_directory(&root);
@@ -2071,7 +2061,11 @@ impl AppController {
                         }
                     }
                 }
-                BackgroundMessage::YouTubeLyricsDownloaded { video_id, result } => {
+                BackgroundMessage::YouTubeLyricsDownloaded {
+                    video_id,
+                    notify,
+                    result,
+                } => {
                     let current = self.youtube_state.borrow().as_ref().map(|state| {
                         (
                             state.item.video_id.clone(),
@@ -2093,7 +2087,9 @@ impl AppController {
                                 state.lyrics = lyrics.clone();
                             }
                             self.rebuild_youtube_lyrics(&lyrics);
-                            self.show_toast("Letras sincronizadas do YouTube carregadas");
+                            if notify {
+                                self.show_toast("Letras sincronizadas do YouTube carregadas");
+                            }
                         }
                         Err(error) => {
                             let title = current
@@ -2113,7 +2109,7 @@ impl AppController {
                             self.youtube_library.borrow_mut().connected = true;
                             self.prefetch_youtube_playlist_cache();
                             if self.config.borrow().youtube_auto_sync
-                                && self.sync_youtube_library(true)
+                                && self.sync_youtube_library(true, false)
                             {
                                 self.youtube_page.set_loading(
                                     true,
@@ -2138,7 +2134,7 @@ impl AppController {
                             library.connected = true;
                             library.synced = false;
                         }
-                        let _ = self.sync_youtube_library(true);
+                        let _ = self.sync_youtube_library(true, false);
                         self.show_toast("Conta do YouTube Music conectada");
                     }
                     Err(error) => {
@@ -2159,7 +2155,7 @@ impl AppController {
                     }
                     Err(error) => self.youtube_page.show_error(&error),
                 },
-                BackgroundMessage::YouTubeLibrarySynced(result) => match result {
+                BackgroundMessage::YouTubeLibrarySynced { notify, result } => match result {
                     Ok(snapshot) => {
                         let counts = (
                             snapshot.library.len(),
@@ -2174,10 +2170,12 @@ impl AppController {
                             .set_loading(false, "Library synchronized with Nocky");
                         self.refresh_browser();
                         self.prefetch_youtube_playlist_cache();
-                        self.show_toast(&format!(
-                            "YouTube Music sincronizado: {} faixas, {} curtidas e {} playlists",
-                            counts.0, counts.1, counts.2
-                        ));
+                        if notify {
+                            self.show_toast(&format!(
+                                "YouTube Music sincronizado: {} faixas, {} curtidas e {} playlists",
+                                counts.0, counts.1, counts.2
+                            ));
+                        }
                     }
                     Err(error) => {
                         self.youtube_library.borrow_mut().syncing = false;
@@ -2294,7 +2292,6 @@ impl AppController {
             {
                 self.select_track(selected.unwrap_or(0), false);
             }
-            self.show_toast(&format!("{count} tracks found"));
         } else {
             if self.playback_source.get() != PlaybackSource::YouTube {
                 self.reset_now_playing("No supported audio files were found");
@@ -2542,7 +2539,7 @@ impl AppController {
         });
     }
 
-    fn request_youtube_lyrics(&self, item: &YouTubeItem) {
+    fn request_youtube_lyrics(&self, item: &YouTubeItem, notify: bool) {
         if item.video_id.is_empty() {
             return;
         }
@@ -2556,7 +2553,11 @@ impl AppController {
         thread::spawn(move || {
             let result = lyrics_provider::fetch_synced_lyrics(&lookup)
                 .map(|contents| lyrics::parse_lrc(&contents));
-            let _ = sender.send(BackgroundMessage::YouTubeLyricsDownloaded { video_id, result });
+            let _ = sender.send(BackgroundMessage::YouTubeLyricsDownloaded {
+                video_id,
+                notify,
+                result,
+            });
         });
     }
 
