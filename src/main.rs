@@ -12,7 +12,7 @@ mod youtube;
 
 use adw::prelude::*;
 use browser::{BrowserEvent, BrowserRoute, LibraryBrowser};
-use config::{AppLanguage, StartupSource};
+use config::{AppLanguage, BlurMode, StartupSource};
 use gtk::prelude::FileExt;
 use gtk::{gdk, gio, glib};
 use lyrics::LyricLine;
@@ -198,6 +198,7 @@ impl AppController {
         let theme = theme::ThemeBridge::install();
         let config = config::AppConfig::load();
         theme.set_noctalia_enabled(config.noctalia_theme_sync);
+        theme.set_blur_preferences(config.blur_mode, config.blur_opacity);
         let player = PlaybackEngine::new(config.volume.clamp(0.0, 1.0))
             .unwrap_or_else(|error| panic!("Nocky playback initialization failed: {error}"));
         let (background_tx, background_rx) = mpsc::channel();
@@ -1501,6 +1502,8 @@ impl AppController {
             .set_visible(config.show_home_visualizer);
         self.inline_lyrics.set_visible(config.show_home_lyrics);
         self._theme.set_noctalia_enabled(config.noctalia_theme_sync);
+        self._theme
+            .set_blur_preferences(config.blur_mode, config.blur_opacity);
     }
 
     fn show_settings_dialog(self: &Rc<Self>) {
@@ -1559,6 +1562,34 @@ impl AppController {
             self.tr("home_source_description"),
             &source,
         ));
+
+        let blur_mode = gtk::DropDown::from_strings(&[
+            self.tr("blur_custom"),
+            self.tr("blur_noctalia"),
+            self.tr("blur_off"),
+        ]);
+        blur_mode.set_selected(match config.blur_mode {
+            BlurMode::Custom => 0,
+            BlurMode::Noctalia => 1,
+            BlurMode::Off => 2,
+        });
+        content.append(&settings_dropdown_row(
+            self.tr("window_blur"),
+            self.tr("window_blur_description"),
+            &blur_mode,
+        ));
+
+        let blur_opacity = gtk::Scale::with_range(gtk::Orientation::Horizontal, 45.0, 95.0, 1.0);
+        blur_opacity.set_draw_value(true);
+        blur_opacity.set_value(config.blur_opacity.clamp(0.45, 0.95) * 100.0);
+        blur_opacity.set_value_pos(gtk::PositionType::Right);
+        let blur_opacity_row = settings_scale_row(
+            self.tr("blur_opacity"),
+            self.tr("blur_opacity_description"),
+            &blur_opacity,
+        );
+        blur_opacity_row.set_visible(config.blur_mode == BlurMode::Custom);
+        content.append(&blur_opacity_row);
 
         let visualizer = settings_switch(config.show_home_visualizer);
         content.append(&settings_switch_row(
@@ -1629,6 +1660,39 @@ impl AppController {
                 } else {
                     StartupSource::YouTube
                 });
+            });
+        }
+        {
+            let weak = Rc::downgrade(self);
+            let opacity_row = blur_opacity_row.clone();
+            blur_mode.connect_selected_notify(move |dropdown| {
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+                let mode = match dropdown.selected() {
+                    0 => BlurMode::Custom,
+                    2 => BlurMode::Off,
+                    _ => BlurMode::Noctalia,
+                };
+                opacity_row.set_visible(mode == BlurMode::Custom);
+                controller.config.borrow_mut().blur_mode = mode;
+                controller.save_config();
+                controller.apply_home_preferences();
+                controller.show_toast(controller.tr("settings_saved"));
+            });
+        }
+        {
+            let weak = Rc::downgrade(self);
+            blur_opacity.connect_value_changed(move |scale| {
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+                controller.config.borrow_mut().blur_opacity =
+                    (scale.value() / 100.0).clamp(0.45, 0.95);
+                controller.save_config();
+                if controller.config.borrow().blur_mode == BlurMode::Custom {
+                    controller.apply_home_preferences();
+                }
             });
         }
         {
@@ -3130,6 +3194,30 @@ fn settings_dropdown_row(title: &str, subtitle: &str, dropdown: &gtk::DropDown) 
     row
 }
 
+fn settings_scale_row(title: &str, subtitle: &str, scale: &gtk::Scale) -> gtk::Box {
+    let title_label = gtk::Label::new(Some(title));
+    title_label.set_xalign(0.0);
+    title_label.add_css_class("track-title");
+    let subtitle_label = gtk::Label::new(Some(subtitle));
+    subtitle_label.set_xalign(0.0);
+    subtitle_label.set_wrap(true);
+    subtitle_label.add_css_class("dim-label");
+
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    text.set_hexpand(true);
+    text.append(&title_label);
+    text.append(&subtitle_label);
+
+    scale.set_valign(gtk::Align::Center);
+    scale.set_width_request(190);
+
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    row.add_css_class("settings-row");
+    row.append(&text);
+    row.append(scale);
+    row
+}
+
 fn settings_button_row(title: &str, subtitle: &str, button: &gtk::Button) -> gtk::Box {
     let title_label = gtk::Label::new(Some(title));
     title_label.set_xalign(0.0);
@@ -3189,6 +3277,17 @@ fn translate(language: AppLanguage, key: &str) -> &'static str {
             "noctalia_sync_description" => {
                 "Aplica o CSS gerado pelo Noctalia em ~/.config/nocky/theme.css."
             }
+            "window_blur" => "Desfoque da janela",
+            "window_blur_description" => {
+                "Escolha o vidro do Nocky, a aparência sincronizada do Noctalia ou uma janela opaca."
+            }
+            "blur_custom" => "Desfoque",
+            "blur_noctalia" => "Desfoque do Noctalia",
+            "blur_off" => "Desativado",
+            "blur_opacity" => "Transparência do vidro",
+            "blur_opacity_description" => {
+                "Controla a transparência usada no modo Desfoque."
+            }
             "settings_saved" => "Configurações salvas",
             "close" => "Fechar",
             _ => "Nocky",
@@ -3222,6 +3321,17 @@ fn translate(language: AppLanguage, key: &str) -> &'static str {
             "noctalia_sync" => "Sync with Noctalia Shell",
             "noctalia_sync_description" => {
                 "Apply the CSS generated by Noctalia at ~/.config/nocky/theme.css."
+            }
+            "window_blur" => "Window blur",
+            "window_blur_description" => {
+                "Use Nocky's glass, follow Noctalia's appearance, or keep the window opaque."
+            }
+            "blur_custom" => "Blur",
+            "blur_noctalia" => "Noctalia blur",
+            "blur_off" => "Off",
+            "blur_opacity" => "Glass transparency",
+            "blur_opacity_description" => {
+                "Controls the transparency used by the Blur mode."
             }
             "settings_saved" => "Settings saved",
             "close" => "Close",
@@ -3260,6 +3370,17 @@ fn translate(language: AppLanguage, key: &str) -> &'static str {
             "noctalia_sync" => "Sincronizar con Noctalia Shell",
             "noctalia_sync_description" => {
                 "Aplica el CSS generado por Noctalia en ~/.config/nocky/theme.css."
+            }
+            "window_blur" => "Desenfoque de la ventana",
+            "window_blur_description" => {
+                "Usa el cristal de Nocky, sigue la apariencia de Noctalia o deja la ventana opaca."
+            }
+            "blur_custom" => "Desenfoque",
+            "blur_noctalia" => "Desenfoque de Noctalia",
+            "blur_off" => "Desactivado",
+            "blur_opacity" => "Transparencia del cristal",
+            "blur_opacity_description" => {
+                "Controla la transparencia usada por el modo Desenfoque."
             }
             "settings_saved" => "Configuración guardada",
             "close" => "Cerrar",
