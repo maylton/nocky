@@ -129,7 +129,7 @@ impl YouTubeLibraryCache {
     }
 }
 
-const LIBRARY_CACHE_VERSION: u32 = 1;
+const LIBRARY_CACHE_VERSION: u32 = 2;
 const BROWSER_COVER_SIZE: u32 = 512;
 const PLAYER_COVER_SIZE: u32 = 1200;
 
@@ -234,7 +234,7 @@ impl YouTubeBridge {
     }
 
     pub fn playlists(&self) -> Result<Vec<YouTubeItem>, String> {
-        self.run("playlists", json!({ "limit": 100 }))
+        self.run("playlists", json!({ "limit": 150, "home_limit": 8 }))
     }
 
     pub fn sync_library(&self) -> Result<YouTubeLibrarySnapshot, String> {

@@ -61,6 +61,8 @@ Resolved URLs and their required HTTP headers are cached until shortly before ex
 
 The cache keeps the 80 freshest valid entries. When a queue starts, Nocky resolves the next four tracks in the background, so next/previous playback usually starts without waiting for a new `yt-dlp` process.
 
+Playlist sync combines saved library playlists with playlist recommendations from the YouTube Music Home feed, which lets Nocky surface mixes and radios that are not returned as normal library playlists. Opening generated mixes can fall back to YouTube Music's watch-playlist endpoint when the regular playlist endpoint has no tracks.
+
 The synchronized library and any online playlists already opened by the user are cached under:
 
 ```text
