@@ -1203,9 +1203,10 @@ fn compare_text(left: &str, right: &str) -> Ordering {
 }
 
 const COLLECTION_CARD_MIN_WIDTH: i32 = 156;
+const COLLECTION_CARD_MAX_WIDTH: i32 = 220;
 const COLLECTION_CARD_MIN_HEIGHT: i32 = 210;
 const COLLECTION_ARTWORK_MIN_SIZE: i32 = 124;
-const COLLECTION_ARTWORK_MAX_SIZE: i32 = 188;
+const COLLECTION_ARTWORK_MAX_SIZE: i32 = 216;
 
 fn collection_grid() -> gtk::FlowBox {
     let grid = gtk::FlowBox::new();
@@ -1276,7 +1277,7 @@ fn collection_button(
     let button = gtk::Button::new();
     button.set_child(Some(&card));
     button.set_size_request(
-        COLLECTION_CARD_MIN_WIDTH + 20,
+        COLLECTION_CARD_MAX_WIDTH + 20,
         COLLECTION_CARD_MIN_HEIGHT + 12,
     );
     button.set_hexpand(true);
@@ -1331,7 +1332,7 @@ fn collection_card(
     subtitle_label.set_max_width_chars(18);
     subtitle_label.add_css_class("dim-label");
     let card = gtk::Box::new(gtk::Orientation::Vertical, 6);
-    card.set_size_request(COLLECTION_CARD_MIN_WIDTH, COLLECTION_CARD_MIN_HEIGHT);
+    card.set_size_request(COLLECTION_CARD_MAX_WIDTH, COLLECTION_CARD_MIN_HEIGHT);
     card.set_hexpand(true);
     card.set_vexpand(false);
     card.set_halign(gtk::Align::Fill);

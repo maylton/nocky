@@ -481,14 +481,14 @@ searchbar entry {
   font-size: 0.90rem;
 }
 
-flowboxchild {
-  min-width: 140px;
-  max-width: 140px;
+.collection-grid flowboxchild {
+  min-width: 176px;
+  max-width: 240px;
   border-radius: 12px;
   padding: 0;
 }
 
-flowboxchild:hover {
+.collection-grid flowboxchild:hover {
   background: transparent;
 }
 

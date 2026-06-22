@@ -663,11 +663,16 @@ def _home_suggestions(client, limit: int) -> dict[str, list[dict[str, Any]]]:
             if not isinstance(result, dict):
                 continue
             result_type = _text(result.get("resultType")).lower()
-            if result_type == "album":
+            browse_id = _text(result.get("browseId") or result.get("browse_id"))
+            if result_type == "album" or browse_id.startswith("MPRE"):
                 if album := _album_item(result, section):
                     suggestions["albums"].append(album)
                 continue
-            if result_type == "artist":
+            if result_type == "artist" or (
+                browse_id.startswith("UC")
+                and not _text(result.get("playlistId") or result.get("playlist_id"))
+                and not _text(result.get("videoId") or result.get("video_id"))
+            ):
                 if artist := _artist_item(result, section):
                     suggestions["artists"].append(artist)
                 continue

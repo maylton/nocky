@@ -44,6 +44,12 @@ impl YouTubeItem {
     }
 }
 
+pub fn cacheable_youtube_playlist(item: &YouTubeItem) -> bool {
+    item.result_type == "playlist"
+        && !item.browse_id.is_empty()
+        && (item.playlist_kind.is_empty() || item.playlist_kind == "library")
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct YouTubeStatus {
@@ -125,7 +131,8 @@ impl YouTubeLibraryCache {
         let valid_playlists = self
             .playlists
             .iter()
-            .filter_map(|item| (!item.browse_id.is_empty()).then_some(item.browse_id.clone()))
+            .filter(|item| cacheable_youtube_playlist(item))
+            .map(|item| item.browse_id.clone())
             .collect::<HashSet<_>>();
         self.playlist_tracks
             .retain(|browse_id, _| valid_playlists.contains(browse_id));
@@ -1111,6 +1118,17 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
         return YouTubeLibraryCache::default();
     }
 
+    let cacheable_playlists = cache
+        .playlists
+        .iter()
+        .filter(|item| cacheable_youtube_playlist(item))
+        .map(|item| item.browse_id.clone())
+        .collect::<HashSet<_>>();
+    let playlist_tracks = cache
+        .playlist_tracks
+        .into_iter()
+        .filter(|(browse_id, items)| cacheable_playlists.contains(browse_id) && !items.is_empty())
+        .collect();
     let mut library = YouTubeLibraryCache {
         connected: false,
         syncing: false,
@@ -1121,7 +1139,7 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
         playlists: cache.playlists,
         suggested_albums: cache.suggested_albums,
         suggested_artists: cache.suggested_artists,
-        playlist_tracks: cache.playlist_tracks,
+        playlist_tracks,
         albums: cache.albums,
         artists: cache.artists,
     };
@@ -1141,6 +1159,18 @@ pub fn save_library_cache(cache: &YouTubeLibraryCache) -> Result<(), String> {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs())
         .unwrap_or_default();
+    let cacheable_playlists = cache
+        .playlists
+        .iter()
+        .filter(|item| cacheable_youtube_playlist(item))
+        .map(|item| item.browse_id.clone())
+        .collect::<HashSet<_>>();
+    let playlist_tracks = cache
+        .playlist_tracks
+        .iter()
+        .filter(|(browse_id, items)| cacheable_playlists.contains(*browse_id) && !items.is_empty())
+        .map(|(browse_id, items)| (browse_id.clone(), items.clone()))
+        .collect();
     let payload = PersistedYouTubeLibraryCache {
         version: LIBRARY_CACHE_VERSION,
         saved_at,
@@ -1149,7 +1179,7 @@ pub fn save_library_cache(cache: &YouTubeLibraryCache) -> Result<(), String> {
         playlists: cache.playlists.clone(),
         suggested_albums: cache.suggested_albums.clone(),
         suggested_artists: cache.suggested_artists.clone(),
-        playlist_tracks: cache.playlist_tracks.clone(),
+        playlist_tracks,
         albums: cache.albums.clone(),
         artists: cache.artists.clone(),
     };
