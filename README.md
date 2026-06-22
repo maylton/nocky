@@ -1,7 +1,8 @@
 # Nocky
 
 **Nocky** is a native GTK4/libadwaita music player for Linux. It combines a polished local-library experience with synchronized lyrics, a real-time spectrum visualizer, MPRIS controls, optional Noctalia color integration, and an optional YouTube Music integration.
-this app is vibe-coded and any improvement suggestion is welcomed, but don't expect much as it's just a free time hobby project =)
+
+This app is vibe-coded and any improvement suggestion is welcomed, but don't expect much as it's just a free time hobby project =)
 
 > **Status:** Nocky 0.2.4 is a beta release. It adds an automatic YouTube Music startup sync and a refreshed library home with collection carousels. 
 
