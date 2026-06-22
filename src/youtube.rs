@@ -9,7 +9,10 @@ use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
     rc::Rc,
-    sync::mpsc::{self, Receiver, Sender},
+    sync::{
+        mpsc::{self, Receiver, Sender},
+        OnceLock,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -129,6 +132,8 @@ impl YouTubeLibraryCache {
 const LIBRARY_CACHE_VERSION: u32 = 1;
 const BROWSER_COVER_SIZE: u32 = 512;
 const PLAYER_COVER_SIZE: u32 = 1200;
+
+static COVER_CLIENT: OnceLock<Option<reqwest::blocking::Client>> = OnceLock::new();
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -891,21 +896,29 @@ fn download_cover_sized(item: &YouTubeItem, url: &str, size: u32) -> Option<Path
         return Some(destination);
     }
 
-    let client = reqwest::blocking::Client::builder()
-        .user_agent("Nocky/0.2.4")
-        .timeout(std::time::Duration::from_secs(20))
-        .build()
-        .ok()?;
+    let client = cover_client()?;
 
-    let bytes = fetch_cover_bytes(&client, &upgraded).or_else(|| {
+    let bytes = fetch_cover_bytes(client, &upgraded).or_else(|| {
         (upgraded != original)
-            .then(|| fetch_cover_bytes(&client, original))
+            .then(|| fetch_cover_bytes(client, original))
             .flatten()
     })?;
     let temporary = destination.with_extension("tmp");
     fs::write(&temporary, &bytes).ok()?;
     fs::rename(&temporary, &destination).ok()?;
     Some(destination)
+}
+
+fn cover_client() -> Option<&'static reqwest::blocking::Client> {
+    COVER_CLIENT
+        .get_or_init(|| {
+            reqwest::blocking::Client::builder()
+                .user_agent("Nocky/0.2.4")
+                .timeout(std::time::Duration::from_secs(20))
+                .build()
+                .ok()
+        })
+        .as_ref()
 }
 
 fn fetch_cover_bytes(client: &reqwest::blocking::Client, url: &str) -> Option<Vec<u8>> {
@@ -1023,7 +1036,7 @@ pub fn save_library_cache(cache: &YouTubeLibraryCache) -> Result<(), String> {
         albums: cache.albums.clone(),
         artists: cache.artists.clone(),
     };
-    let serialized = serde_json::to_vec_pretty(&payload)
+    let serialized = serde_json::to_vec(&payload)
         .map_err(|error| format!("Could not serialize the YouTube library cache: {error}"))?;
     let temporary = path.with_extension("tmp");
     fs::write(&temporary, serialized)

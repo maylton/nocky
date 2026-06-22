@@ -8,13 +8,29 @@ use std::{
     cell::RefCell,
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    fs,
     path::{Path, PathBuf},
     rc::Rc,
     sync::mpsc::{self, Receiver, Sender},
+    time::UNIX_EPOCH,
 };
 
+const ARTWORK_TEXTURE_CACHE_LIMIT: usize = 160;
+
+#[derive(Default)]
+struct ArtworkTextureCache {
+    entries: HashMap<(PathBuf, i32, u64), CachedArtworkTexture>,
+    clock: u64,
+}
+
+struct CachedArtworkTexture {
+    texture: gdk::Texture,
+    last_used: u64,
+}
+
 thread_local! {
-    static ARTWORK_TEXTURES: RefCell<HashMap<(PathBuf, i32), gdk::Texture>> = RefCell::new(HashMap::new());
+    static ARTWORK_TEXTURES: RefCell<ArtworkTextureCache> =
+        RefCell::new(ArtworkTextureCache::default());
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -318,6 +334,7 @@ impl LibraryBrowser {
         root.set_hexpand(true);
         root.set_vexpand(true);
         root.set_transition_type(gtk::StackTransitionType::Crossfade);
+        root.set_transition_duration(180);
         root.add_named(&home_scroll, Some("home"));
         root.add_named(&tracks_page, Some("tracks"));
         root.add_named(&albums_page, Some("albums"));
@@ -360,6 +377,9 @@ impl LibraryBrowser {
         youtube: &YouTubeLibraryCache,
         query: &str,
     ) {
+        let previous = self.route();
+        self.root
+            .set_transition_type(route_transition(&previous, &route));
         self.route.replace(route);
         self.refresh(tracks, config, youtube, query);
     }
@@ -1343,18 +1363,50 @@ fn artwork(path: Option<&Path>, size: i32) -> gtk::Stack {
 }
 
 fn cached_square_texture(path: &Path, size: i32) -> Option<gdk::Texture> {
-    let key = (path.to_path_buf(), size);
-    if let Some(texture) = ARTWORK_TEXTURES.with(|cache| cache.borrow().get(&key).cloned()) {
+    let stamp = fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_secs())
+        .unwrap_or_default();
+    let key = (path.to_path_buf(), size, stamp);
+
+    if let Some(texture) = ARTWORK_TEXTURES.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        cache.clock = cache.clock.wrapping_add(1);
+        let now = cache.clock;
+        cache.entries.get_mut(&key).map(|entry| {
+            entry.last_used = now;
+            entry.texture.clone()
+        })
+    }) {
         return Some(texture);
     }
 
     let texture = square_pixbuf(path, size).map(|pixbuf| gdk::Texture::for_pixbuf(&pixbuf))?;
     ARTWORK_TEXTURES.with(|cache| {
         let mut cache = cache.borrow_mut();
-        if cache.len() > 512 {
-            cache.clear();
+        cache.clock = cache.clock.wrapping_add(1);
+        let now = cache.clock;
+
+        if cache.entries.len() >= ARTWORK_TEXTURE_CACHE_LIMIT {
+            if let Some(oldest) = cache
+                .entries
+                .iter()
+                .min_by_key(|(_, entry)| entry.last_used)
+                .map(|(key, _)| key.clone())
+            {
+                cache.entries.remove(&oldest);
+            }
         }
-        cache.insert(key, texture.clone());
+
+        cache.entries.insert(
+            key,
+            CachedArtworkTexture {
+                texture: texture.clone(),
+                last_used: now,
+            },
+        );
     });
     Some(texture)
 }
@@ -1538,6 +1590,26 @@ fn empty_row(message: &str) -> gtk::ListBoxRow {
     row.set_selectable(false);
     row.set_child(Some(&label));
     row
+}
+
+fn route_transition(previous: &BrowserRoute, next: &BrowserRoute) -> gtk::StackTransitionType {
+    match (route_is_detail(previous), route_is_detail(next)) {
+        (false, true) => gtk::StackTransitionType::SlideLeft,
+        (true, false) => gtk::StackTransitionType::SlideRight,
+        _ => gtk::StackTransitionType::Crossfade,
+    }
+}
+
+fn route_is_detail(route: &BrowserRoute) -> bool {
+    matches!(
+        route,
+        BrowserRoute::Album(_)
+            | BrowserRoute::Artist(_)
+            | BrowserRoute::Playlist(_)
+            | BrowserRoute::YouTubeAlbum(_)
+            | BrowserRoute::YouTubeArtist(_)
+            | BrowserRoute::YouTubePlaylist { .. }
+    )
 }
 
 fn route_title(route: &BrowserRoute) -> String {

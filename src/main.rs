@@ -3,6 +3,7 @@ mod config;
 mod library;
 mod lyrics;
 mod lyrics_provider;
+mod lyrics_view;
 mod model;
 mod mpris;
 mod playback;
@@ -16,6 +17,7 @@ use config::{AppLanguage, BlurMode, StartupSource};
 use gtk::prelude::FileExt;
 use gtk::{gdk, gio, glib};
 use lyrics::LyricLine;
+use lyrics_view::LyricsPresenter;
 use model::{Track, TrackData};
 use playback::{PlaybackEngine, PlaybackEvent};
 use std::{
@@ -140,7 +142,7 @@ struct AppController {
     sidebar_liked: gtk::Button,
     views: adw::ViewStack,
     browser: LibraryBrowser,
-    lyrics_box: gtk::Box,
+    lyrics: LyricsPresenter,
     youtube_page: Rc<YouTubePage>,
 
     title: gtk::Label,
@@ -163,8 +165,6 @@ struct AppController {
     repeat_button: gtk::ToggleButton,
     shuffle_button: gtk::ToggleButton,
     visualizer: SpectrumVisualizer,
-    inline_lyrics: gtk::Box,
-    inline_lyric_lines: Vec<gtk::Label>,
 
     _theme: Rc<theme::ThemeBridge>,
 }
@@ -405,33 +405,7 @@ impl AppController {
         controls.append(&shuffle);
 
         let visualizer = SpectrumVisualizer::new();
-
-        let inline_lyrics = gtk::Box::new(gtk::Orientation::Vertical, 4);
-        inline_lyrics.set_margin_top(4);
-        inline_lyrics.set_margin_bottom(2);
-        inline_lyrics.set_vexpand(true);
-        inline_lyrics.set_valign(gtk::Align::Center);
-        inline_lyrics.add_css_class("inline-lyrics-panel");
-
-        let mut inline_lyric_lines = Vec::with_capacity(5);
-        for index in 0..5 {
-            let label = gtk::Label::new(None);
-            label.set_wrap(true);
-            label.set_justify(gtk::Justification::Center);
-            label.set_halign(gtk::Align::Center);
-            label.set_hexpand(true);
-            label.add_css_class("inline-lyric-line");
-            match index {
-                2 => label.add_css_class("inline-lyric-current"),
-                1 | 3 => label.add_css_class("inline-lyric-near"),
-                _ => label.add_css_class("inline-lyric-far"),
-            }
-            inline_lyrics.append(&label);
-            inline_lyric_lines.push(label);
-        }
-        inline_lyric_lines[2].set_text("As letras aparecerão aqui");
-        inline_lyric_lines[3]
-            .set_text("Reproduza uma música com letras sincronizadas para ver o contexto");
+        let lyrics = LyricsPresenter::new();
 
         let now_card = gtk::Box::new(gtk::Orientation::Vertical, 12);
         now_card.set_size_request(380, -1);
@@ -446,7 +420,7 @@ impl AppController {
         now_card.append(&time_row);
         now_card.append(&controls);
         now_card.append(visualizer.widget());
-        now_card.append(&inline_lyrics);
+        now_card.append(lyrics.inline_widget());
 
         let browser = LibraryBrowser::new();
 
@@ -484,19 +458,10 @@ impl AppController {
 
         let music_stack = gtk::Stack::new();
         music_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
+        music_stack.set_transition_duration(180);
         music_stack.add_named(&empty_state, Some("empty"));
         music_stack.add_named(&dashboard, Some("library"));
         music_stack.set_visible_child_name("empty");
-
-        let lyrics_box = gtk::Box::new(gtk::Orientation::Vertical, 22);
-        lyrics_box.set_margin_top(56);
-        lyrics_box.set_margin_bottom(56);
-        lyrics_box.set_margin_start(36);
-        lyrics_box.set_margin_end(36);
-        lyrics_box.set_halign(gtk::Align::Center);
-        let lyrics_scroll = gtk::ScrolledWindow::new();
-        lyrics_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-        lyrics_scroll.set_child(Some(&lyrics_box));
 
         views.add_titled_with_icon(
             &music_stack,
@@ -505,7 +470,7 @@ impl AppController {
             "folder-music-symbolic",
         );
         views.add_titled_with_icon(
-            &lyrics_scroll,
+            lyrics.full_widget(),
             Some("lyrics"),
             "Lyrics",
             "audio-input-microphone-symbolic",
@@ -627,7 +592,7 @@ impl AppController {
             sidebar_liked: sidebar_parts.liked_button,
             views,
             browser,
-            lyrics_box,
+            lyrics,
             youtube_page,
             title,
             artist,
@@ -648,8 +613,6 @@ impl AppController {
             repeat_button: repeat.clone(),
             shuffle_button: shuffle.clone(),
             visualizer,
-            inline_lyrics,
-            inline_lyric_lines,
             _theme: theme,
         });
         controller.apply_home_preferences();
@@ -807,6 +770,10 @@ impl AppController {
                         } else {
                             "music"
                         });
+                    if button.is_active() {
+                        let lyrics = controller.lyrics.clone();
+                        glib::idle_add_local_once(move || lyrics.recenter(false));
+                    }
                 }
             });
         }
@@ -853,13 +820,27 @@ impl AppController {
 
         {
             let weak = Rc::downgrade(self);
+            let pending_save = Rc::new(RefCell::new(None::<glib::SourceId>));
             self.volume.connect_value_changed(move |scale| {
                 if let Some(controller) = weak.upgrade() {
                     let value = scale.value().clamp(0.0, 1.0);
                     controller.player.set_volume(value);
                     controller.config.borrow_mut().volume = value;
-                    controller.save_config();
                     controller.mpris.send(mpris::MprisUpdate::Volume(value));
+
+                    if let Some(source) = pending_save.borrow_mut().take() {
+                        source.remove();
+                    }
+                    let weak = weak.clone();
+                    let pending = pending_save.clone();
+                    let source =
+                        glib::timeout_add_local_once(Duration::from_millis(350), move || {
+                            pending.borrow_mut().take();
+                            if let Some(controller) = weak.upgrade() {
+                                controller.save_config();
+                            }
+                        });
+                    pending_save.borrow_mut().replace(source);
                 }
             });
         }
@@ -882,6 +863,7 @@ impl AppController {
 
         {
             let weak = Rc::downgrade(self);
+            let mut progress_ticks = 0_u8;
             glib::timeout_add_local(Duration::from_millis(50), move || {
                 let Some(controller) = weak.upgrade() else {
                     return glib::ControlFlow::Break;
@@ -891,7 +873,16 @@ impl AppController {
                 controller.handle_youtube_events();
                 controller.handle_mpris_commands();
                 controller.handle_playback_events();
-                controller.refresh_progress();
+
+                progress_ticks = progress_ticks.wrapping_add(1);
+                let cadence = if controller.player.is_playing() {
+                    2
+                } else {
+                    10
+                };
+                if progress_ticks % cadence == 0 {
+                    controller.refresh_progress();
+                }
                 glib::ControlFlow::Continue
             });
         }
@@ -943,7 +934,7 @@ impl AppController {
                 .iter()
                 .filter(|playlist| !playlist.browse_id.is_empty())
                 .filter(|playlist| !library.playlist_tracks.contains_key(&playlist.browse_id))
-                .take(24)
+                .take(4)
                 .cloned()
                 .collect::<Vec<_>>()
         };
@@ -1234,17 +1225,7 @@ impl AppController {
     }
 
     fn set_lyrics_message(&self, message: &str) {
-        while let Some(child) = self.lyrics_box.first_child() {
-            self.lyrics_box.remove(&child);
-        }
-        let title = gtk::Label::new(Some(message));
-        title.set_wrap(true);
-        title.set_justify(gtk::Justification::Center);
-        title.add_css_class("title-3");
-        self.lyrics_box.append(&title);
-        for (index, label) in self.inline_lyric_lines.iter().enumerate() {
-            label.set_text(if index == 2 { message } else { " " });
-        }
+        self.lyrics.show_message(message, None);
     }
 
     fn youtube_next_track(&self) {
@@ -1500,7 +1481,11 @@ impl AppController {
         self.visualizer
             .widget()
             .set_visible(config.show_home_visualizer);
-        self.inline_lyrics.set_visible(config.show_home_lyrics);
+        self.visualizer
+            .set_active(config.show_home_visualizer && self.player.is_playing());
+        self.lyrics
+            .inline_widget()
+            .set_visible(config.show_home_lyrics);
         self._theme.set_noctalia_enabled(config.noctalia_theme_sync);
         self._theme
             .set_blur_preferences(config.blur_mode, config.blur_opacity);
@@ -1683,16 +1668,29 @@ impl AppController {
         }
         {
             let weak = Rc::downgrade(self);
+            let pending_save = Rc::new(RefCell::new(None::<glib::SourceId>));
             blur_opacity.connect_value_changed(move |scale| {
                 let Some(controller) = weak.upgrade() else {
                     return;
                 };
                 controller.config.borrow_mut().blur_opacity =
                     (scale.value() / 100.0).clamp(0.45, 0.95);
-                controller.save_config();
                 if controller.config.borrow().blur_mode == BlurMode::Custom {
                     controller.apply_home_preferences();
                 }
+
+                if let Some(source) = pending_save.borrow_mut().take() {
+                    source.remove();
+                }
+                let weak = weak.clone();
+                let pending = pending_save.clone();
+                let source = glib::timeout_add_local_once(Duration::from_millis(350), move || {
+                    pending.borrow_mut().take();
+                    if let Some(controller) = weak.upgrade() {
+                        controller.save_config();
+                    }
+                });
+                pending_save.borrow_mut().replace(source);
             });
         }
         {
@@ -2853,7 +2851,8 @@ impl AppController {
         };
         self.play_icon.set_icon_name(Some(icon));
         self.hero_play_icon.set_icon_name(Some(icon));
-        self.visualizer.set_active(playing);
+        self.visualizer
+            .set_active(playing && self.visualizer.widget().is_visible());
     }
 
     fn refresh_progress(&self) {
@@ -2880,174 +2879,39 @@ impl AppController {
     }
 
     fn rebuild_lyrics(&self, track: &Track) {
-        while let Some(child) = self.lyrics_box.first_child() {
-            self.lyrics_box.remove(&child);
-        }
-
         if track.lyrics.is_empty() {
-            let title = gtk::Label::new(Some("Nenhuma letra sincronizada disponível ainda"));
-            title.add_css_class("title-2");
-            let hint = gtk::Label::new(Some(if self.config.borrow().auto_download_lyrics {
-                "Automatic LRCLIB lookup is enabled. Use the menu to retry whenever needed."
-            } else {
-                "Use the menu to download lyrics, or place a matching .lrc file beside the song."
-            }));
-            hint.set_wrap(true);
-            hint.set_justify(gtk::Justification::Center);
-            hint.add_css_class("dim-label");
-            self.lyrics_box.append(&title);
-            self.lyrics_box.append(&hint);
-            self.clear_inline_lyrics();
-            self.inline_lyric_lines[2].set_text("No synchronized lyrics available yet");
-            self.inline_lyric_lines[3].set_text(if self.config.borrow().auto_download_lyrics {
-                "Automatic LRCLIB lookup is enabled. You can also open the Lyrics page for the full view."
-            } else {
-                "Use the menu to download lyrics, or open the Lyrics page for the full view."
-            });
+            let automatic = self.config.borrow().auto_download_lyrics;
+            self.lyrics.show_state(
+                "Nenhuma letra sincronizada disponível ainda",
+                Some(if automatic {
+                    "Automatic LRCLIB lookup is enabled. Use the menu to retry whenever needed."
+                } else {
+                    "Use the menu to download lyrics, or place a matching .lrc file beside the song."
+                }),
+                "No synchronized lyrics available yet",
+                Some(if automatic {
+                    "Automatic LRCLIB lookup is enabled. You can also open the Lyrics page for the full view."
+                } else {
+                    "Use the menu to download lyrics, or open the Lyrics page for the full view."
+                }),
+            );
             return;
         }
 
-        for line in &track.lyrics {
-            let label = gtk::Label::new(Some(&line.text));
-            label.set_wrap(true);
-            label.set_justify(gtk::Justification::Center);
-            label.set_halign(gtk::Align::Center);
-            label.add_css_class("lyric-line");
-            self.lyrics_box.append(&label);
-        }
-        self.update_inline_lyric_preview(track, None);
+        self.lyrics.set_lines(&track.lyrics);
     }
 
     fn rebuild_youtube_lyrics(&self, lyrics: &[LyricLine]) {
-        while let Some(child) = self.lyrics_box.first_child() {
-            self.lyrics_box.remove(&child);
-        }
-
         if lyrics.is_empty() {
             self.set_lyrics_message("No synchronized lyrics available for this YouTube track yet.");
             return;
         }
 
-        for line in lyrics {
-            let label = gtk::Label::new(Some(&line.text));
-            label.set_wrap(true);
-            label.set_justify(gtk::Justification::Center);
-            label.set_halign(gtk::Align::Center);
-            label.add_css_class("lyric-line");
-            self.lyrics_box.append(&label);
-        }
-        self.update_inline_lyric_preview_lines(lyrics, None);
+        self.lyrics.set_lines(lyrics);
     }
 
     fn highlight_lyric(&self, timestamp: i64) {
-        if self.playback_source.get() == PlaybackSource::YouTube {
-            let lyrics = self
-                .youtube_state
-                .borrow()
-                .as_ref()
-                .map(|state| state.lyrics.clone())
-                .unwrap_or_default();
-            if lyrics.is_empty() {
-                return;
-            }
-
-            let current_index = lyrics
-                .iter()
-                .enumerate()
-                .rev()
-                .find(|(_, line)| timestamp >= line.timestamp_us)
-                .map(|(index, _)| index);
-
-            self.update_inline_lyric_preview_lines(&lyrics, current_index);
-            self.highlight_lyrics_box(current_index);
-            return;
-        }
-
-        let state = self.state.borrow();
-        let Some(track) = state.current.and_then(|index| state.tracks.get(index)) else {
-            return;
-        };
-        if track.lyrics.is_empty() {
-            return;
-        }
-
-        let current_index = track
-            .lyrics
-            .iter()
-            .enumerate()
-            .rev()
-            .find(|(_, line)| timestamp >= line.timestamp_us)
-            .map(|(index, _)| index);
-
-        self.update_inline_lyric_preview(track, current_index);
-        self.highlight_lyrics_box(current_index);
-    }
-
-    fn highlight_lyrics_box(&self, current_index: Option<usize>) {
-        let mut child = self.lyrics_box.first_child();
-        let mut index = 0;
-        while let Some(widget) = child {
-            widget.remove_css_class("current-lyric");
-            widget.remove_css_class("past-lyric");
-            if Some(index) == current_index {
-                widget.add_css_class("current-lyric");
-            } else if current_index.is_some_and(|current| index < current) {
-                widget.add_css_class("past-lyric");
-            }
-            child = widget.next_sibling();
-            index += 1;
-        }
-    }
-
-    fn clear_inline_lyrics(&self) {
-        for label in &self.inline_lyric_lines {
-            label.set_text("");
-        }
-    }
-
-    fn update_inline_lyric_preview(&self, track: &Track, current_index: Option<usize>) {
-        self.update_inline_lyric_preview_lines(&track.lyrics, current_index);
-    }
-
-    fn update_inline_lyric_preview_lines(
-        &self,
-        lyrics: &[LyricLine],
-        current_index: Option<usize>,
-    ) {
-        self.clear_inline_lyrics();
-
-        if lyrics.is_empty() {
-            self.inline_lyric_lines[2].set_text("No synchronized lyrics available yet");
-            self.inline_lyric_lines[3].set_text(if self.config.borrow().auto_download_lyrics {
-                "Automatic LRCLIB lookup is enabled. You can also open the Lyrics page for the full view."
-            } else {
-                "Use the menu to download lyrics, or open the Lyrics page for the full view."
-            });
-            return;
-        }
-
-        let visible = lyrics
-            .iter()
-            .enumerate()
-            .filter(|(_, line)| !line.text.trim().is_empty())
-            .collect::<Vec<_>>();
-
-        if visible.is_empty() {
-            self.inline_lyric_lines[2].set_text("♪");
-            return;
-        }
-
-        let active_visible = current_index
-            .and_then(|current| visible.iter().position(|(index, _)| *index == current))
-            .unwrap_or(0);
-
-        for (slot, offset) in (-2_isize..=2).enumerate() {
-            let position = active_visible as isize + offset;
-            if position < 0 || position >= visible.len() as isize {
-                continue;
-            }
-            self.inline_lyric_lines[slot].set_text(visible[position as usize].1.text.trim());
-        }
+        self.lyrics.update_timestamp(timestamp);
     }
 
     fn reset_now_playing(&self, message: &str) {
@@ -3059,10 +2923,12 @@ impl AppController {
         self.album.set_text(message);
         self.mini_title.set_text("Nada reproduzindo");
         self.mini_artist.set_text("Nocky");
-        self.clear_inline_lyrics();
-        self.inline_lyric_lines[2].set_text("As letras aparecerão aqui");
-        self.inline_lyric_lines[3]
-            .set_text("Play a song with synchronized lyrics to see the surrounding lines");
+        self.lyrics.show_state(
+            "As letras aparecerão aqui",
+            Some("Reproduza uma música com letras sincronizadas para acompanhar cada verso."),
+            "As letras aparecerão aqui",
+            Some("Reproduza uma música com letras sincronizadas para ver o contexto."),
+        );
         self.hero_cover.set_path(None);
         self.mini_cover.set_path(None);
         self.elapsed.set_text("0:00");

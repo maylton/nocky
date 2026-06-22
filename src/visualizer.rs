@@ -48,8 +48,12 @@ impl SpectrumVisualizer {
         {
             let state = state.clone();
             let drawing = root.clone();
-            glib::timeout_add_local(Duration::from_millis(16), move || {
-                let frame_ms = 16.0;
+            glib::timeout_add_local(Duration::from_millis(33), move || {
+                if !state.active.get() || !drawing.is_mapped() {
+                    return glib::ControlFlow::Continue;
+                }
+
+                let frame_ms = 33.0;
                 let target = state.target.borrow();
                 let mut display = state.display.borrow_mut();
                 let mut changed = false;
@@ -142,6 +146,8 @@ impl SpectrumVisualizer {
 
     pub fn clear(&self) {
         self.state.target.borrow_mut().fill(0.0);
+        self.state.display.borrow_mut().fill(0.0);
+        self.root.queue_draw();
     }
 }
 
