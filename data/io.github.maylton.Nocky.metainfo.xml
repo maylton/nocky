@@ -23,6 +23,11 @@
   <url type="homepage">https://github.com/maylton/nocky</url>
   <url type="bugtracker">https://github.com/maylton/nocky/issues</url>
   <releases>
+    <release version="0.2.5" date="2026-06-22">
+      <description>
+        <p>Separates local and YouTube Music modes, removes eager playlist loading, and improves browser responsiveness.</p>
+      </description>
+    </release>
     <release version="0.2.4" date="2026-06-21">
       <description>
         <p>Adds an automatic YouTube Music startup sync and refreshes the library home, album and artist browsing views.</p>

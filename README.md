@@ -2,7 +2,7 @@
 
 **Nocky** is a native GTK4/libadwaita music player for Linux. It combines a polished local-library experience with synchronized lyrics, a real-time spectrum visualizer, MPRIS controls, optional Noctalia color integration, and an optional YouTube Music integration.
 
-> **Status:** Nocky 0.2.4 is a beta release. It adds an automatic YouTube Music startup sync and a refreshed library home with collection carousels.
+> **Status:** Nocky 0.2.5 is a beta release focused on responsiveness and strict separation between local/offline and YouTube Music modes.
 
 <p align="center">
   <img src="assets/nocky-icon.png" alt="Nocky owl icon" width="180" />
@@ -25,7 +25,7 @@
 - Optional YouTube Music catalogue search and automatic account-library synchronization
 - YouTube audio streaming through the existing GStreamer player
 
-## YouTube Music in 0.2.4
+## YouTube Music in 0.2.5
 
 Nocky follows the same integration architecture proven in the author's Nocturne project:
 
@@ -34,9 +34,18 @@ Nocky follows the same integration architecture proven in the author's Nocturne 
 - Deno supplies the JavaScript runtime required by current YouTube extraction;
 - Nocky's native GStreamer engine plays the stream and keeps MPRIS, visualizer and media controls working.
 
-Public search works without connecting an account. After connecting, Nocky automatically synchronizes saved songs, liked songs and personal playlists into the main library interface on startup. Online albums and artists are grouped from the synchronized catalogue, and a **Sync with Nocky** button is still available for manual refreshes. The last synchronized library is loaded from disk immediately, while a fresh synchronization runs in the background. Nocky also prefetches the next four stream URLs and keeps separate 512 px and 1200 px artwork caches for collection cards and the now-playing view. Read [docs/YOUTUBE_MUSIC.md](docs/YOUTUBE_MUSIC.md) before connecting an account.
+When **YouTube Music mode** is active, public search works without an account and connected libraries synchronize into the online interface. When **Local library mode** is active, Nocky does not contact YouTube during startup and online albums, artists, playlists and liked songs are excluded from every browser route. Online albums and artists are grouped from the synchronized catalogue, and a **Sync with Nocky** button is still available for manual refreshes. The last synchronized library is loaded from disk immediately, while a fresh synchronization runs in the background. Nocky also prefetches the next four stream URLs and keeps separate 512 px and 1200 px artwork caches for collection cards and the now-playing view. Read [docs/YOUTUBE_MUSIC.md](docs/YOUTUBE_MUSIC.md) before connecting an account.
 
 No cookies, sessions, `.env` files or personal data from the reference project are included in this repository.
+
+## Performance and source modes
+
+Nocky treats the saved source as an application mode rather than a visual preference:
+
+- **Local library:** offline-only browsing and playback; YouTube cache entries are not rendered and no automatic YouTube status/sync request is started.
+- **YouTube Music:** only synchronized online collections are rendered; local tracks and local playlists stay hidden.
+
+Page responsiveness is improved by debouncing library search, loading playlist tracks only when opened, reusing the persistent library/playlist caches, and avoiding the former startup prefetch of up to 24 complete playlists. See [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 
 ## Supported local audio formats
 
@@ -137,7 +146,7 @@ The uninstaller intentionally preserves user settings, session data and cache. D
 
 ## Lyrics
 
-Nocky loads sidecar `.lrc` files and can automatically search LRCLIB when synchronized lyrics are missing. Downloaded lyrics are saved beside local audio files when the folder is writable. The 0.2.4 YouTube player currently shows a clear placeholder rather than fetching lyrics for streamed tracks.
+Nocky loads sidecar `.lrc` files and can automatically search LRCLIB when synchronized lyrics are missing. Downloaded lyrics are saved beside local audio files when the folder is writable. The 0.2.5 YouTube player currently shows a clear placeholder rather than fetching lyrics for streamed tracks.
 
 ## MPRIS
 

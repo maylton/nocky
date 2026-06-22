@@ -193,10 +193,10 @@ pub struct YouTubeBridge {
 impl YouTubeBridge {
     pub fn discover() -> Result<Self, String> {
         let helper = helper_path().ok_or_else(|| {
-            "The Nocky YouTube helper was not found. Reinstall Nocky 0.2.4.".to_string()
+            "O assistente do YouTube do Nocky não foi encontrado. Reinstale o Nocky.".to_string()
         })?;
         let python = python_path().ok_or_else(|| {
-            "The YouTube Music Python runtime is missing or incomplete. Run ./scripts/setup-youtube-runtime.sh for development, or reinstall with ./install.sh --install-youtube.".to_string()
+            "O ambiente Python do YouTube Music está ausente ou incompleto. Execute ./scripts/setup-youtube-runtime.sh no desenvolvimento ou reinstale com ./install.sh --install-youtube.".to_string()
         })?;
         Ok(Self { python, helper })
     }
@@ -280,30 +280,33 @@ impl YouTubeBridge {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|error| format!("Could not start the YouTube helper: {error}"))?;
+            .map_err(|error| {
+                format!("Não foi possível iniciar o assistente do YouTube: {error}")
+            })?;
 
         if let Some(mut stdin) = child.stdin.take() {
-            serde_json::to_writer(&mut stdin, &payload)
-                .map_err(|error| format!("Could not send data to the YouTube helper: {error}"))?;
+            serde_json::to_writer(&mut stdin, &payload).map_err(|error| {
+                format!("Não foi possível enviar dados ao assistente do YouTube: {error}")
+            })?;
         }
 
         let output = child
             .wait_with_output()
-            .map_err(|error| format!("The YouTube helper did not finish: {error}"))?;
+            .map_err(|error| format!("O assistente do YouTube não foi concluído: {error}"))?;
         let response: HelperResponse<T> =
             serde_json::from_slice(&output.stdout).map_err(|error| {
                 let stderr = String::from_utf8_lossy(&output.stderr);
-                format!("Invalid response from the YouTube helper: {error}. {stderr}")
+                format!("Resposta inválida do assistente do YouTube: {error}. {stderr}")
             })?;
 
         if !response.ok {
-            return Err(response
-                .error
-                .unwrap_or_else(|| "The YouTube helper reported an unknown error".to_string()));
+            return Err(response.error.unwrap_or_else(|| {
+                "O assistente do YouTube informou um erro desconhecido".to_string()
+            }));
         }
         response
             .result
-            .ok_or_else(|| "The YouTube helper returned no result".to_string())
+            .ok_or_else(|| "O assistente do YouTube não retornou resultados".to_string())
     }
 }
 

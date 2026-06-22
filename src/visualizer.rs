@@ -6,10 +6,13 @@ use std::{
     time::Duration,
 };
 
-const DISPLAY_BANDS: usize = 32;
+// More bands and less spatial averaging give the visualizer the lively,
+// fine-grained motion seen in Noctalia without turning quiet passages into a wall.
+const DISPLAY_BANDS: usize = 48;
 const HALF_BANDS: usize = DISPLAY_BANDS / 2;
-const ATTACK_TAU_MS: f64 = 46.0;
-const RELEASE_TAU_MS: f64 = 112.0;
+const SMOOTHING_TAU_MS: f64 = 60.0;
+const NOISE_FLOOR: f64 = 0.028;
+const TARGET_CEILING: f64 = 0.94;
 
 #[derive(Clone)]
 pub struct SpectrumVisualizer {
@@ -50,19 +53,14 @@ impl SpectrumVisualizer {
             let drawing = root.clone();
             glib::timeout_add_local(Duration::from_millis(16), move || {
                 let frame_ms = 16.0;
+                let alpha = 1.0 - (-frame_ms / SMOOTHING_TAU_MS).exp();
                 let target = state.target.borrow();
                 let mut display = state.display.borrow_mut();
                 let mut changed = false;
 
                 for (current, target) in display.iter_mut().zip(target.iter()) {
-                    let tau = if *target > *current {
-                        ATTACK_TAU_MS
-                    } else {
-                        RELEASE_TAU_MS
-                    };
-                    let alpha = 1.0 - (-frame_ms / tau).exp();
                     let delta = *target - *current;
-                    if delta.abs() < 1.0 / 1024.0 {
+                    if delta.abs() < 1.0 / 2048.0 {
                         if *current != *target {
                             *current = *target;
                             changed = true;
@@ -98,13 +96,12 @@ impl SpectrumVisualizer {
         if !self.state.active.get() {
             return;
         }
-
-        let mut reduced = [0.0_f64; HALF_BANDS];
         if values.is_empty() {
             self.clear();
             return;
         }
 
+        let mut reduced = [0.0_f64; HALF_BANDS];
         for (band, output) in reduced.iter_mut().enumerate() {
             let start = band * values.len() / HALF_BANDS;
             let mut end = (band + 1) * values.len() / HALF_BANDS;
@@ -112,11 +109,24 @@ impl SpectrumVisualizer {
                 end = (start + 1).min(values.len());
             }
             let slice = &values[start.min(values.len() - 1)..end.max(start + 1).min(values.len())];
-            let average = slice.iter().map(|value| *value as f64).sum::<f64>() / slice.len() as f64;
-            *output = average.clamp(0.0, 1.0);
+
+            // A peak/RMS blend reacts to transients like Noctalia while RMS keeps it fluid.
+            let mut peak = 0.0_f64;
+            let mut sum_sq = 0.0_f64;
+            for value in slice {
+                let value = (*value as f64).clamp(0.0, 1.0);
+                peak = peak.max(value);
+                sum_sq += value * value;
+            }
+            let rms = (sum_sq / slice.len() as f64).sqrt();
+            let raw = rms * 0.72 + peak * 0.28;
+            let gated = ((raw - NOISE_FLOOR) / (1.0 - NOISE_FLOOR)).clamp(0.0, 1.0);
+            *output = (gated * 0.96).powf(0.86).min(TARGET_CEILING);
         }
 
-        let mut smoothed = [0.0_f64; HALF_BANDS];
+        // Keep only a light neighbour blend. The old 22/56/22 mix made the whole
+        // waveform move as a single blob instead of showing Noctalia-like detail.
+        let mut shaped = [0.0_f64; HALF_BANDS];
         for index in 0..HALF_BANDS {
             let current = reduced[index];
             let prev = if index > 0 {
@@ -129,14 +139,13 @@ impl SpectrumVisualizer {
             } else {
                 current
             };
-            smoothed[index] = (prev * 0.22 + current * 0.56 + next * 0.22).clamp(0.0, 1.0);
+            shaped[index] = (prev * 0.10 + current * 0.80 + next * 0.10).clamp(0.0, 1.0);
         }
 
         let mut target = self.state.target.borrow_mut();
-        for (index, value) in smoothed.iter().enumerate() {
-            let shaped = (value * 0.92).powf(1.08).min(0.84);
-            target[HALF_BANDS - 1 - index] = shaped;
-            target[HALF_BANDS + index] = shaped;
+        for (index, value) in shaped.iter().enumerate() {
+            target[HALF_BANDS - 1 - index] = *value;
+            target[HALF_BANDS + index] = *value;
         }
     }
 
@@ -168,20 +177,20 @@ fn draw_spectrum(
     let width = width as f64;
     let height = height as f64;
     let horizontal_padding = 8.0;
-    let gap = 1.8;
+    let gap = 1.35;
     let available = (width - horizontal_padding * 2.0).max(1.0);
     let bar_width = ((available - gap * (values.len().saturating_sub(1)) as f64)
         / values.len() as f64)
-        .max(2.2);
+        .max(1.7);
     let center_y = height / 2.0;
-    let maximum_height = ((height - 10.0) * 0.88).max(8.0);
+    let maximum_height = ((height - 8.0) * 0.96).max(8.0);
 
     context.set_line_width(1.0);
     context.set_source_rgba(
         accent.red() as f64,
         accent.green() as f64,
         accent.blue() as f64,
-        0.16,
+        0.12,
     );
     context.move_to(horizontal_padding, center_y);
     context.line_to(width - horizontal_padding, center_y);
@@ -195,28 +204,15 @@ fn draw_spectrum(
         };
         let x = horizontal_padding + index as f64 * (bar_width + gap);
         let distance_from_center = (progress - 0.5).abs() * 2.0;
-        let edge_taper = (1.0 - distance_from_center).powf(0.28);
-        let tapered_value = (value * (0.78 + edge_taper * 0.22)).clamp(0.0, 1.0);
-        let bar_height = (2.0 + tapered_value * maximum_height).min(maximum_height);
+        let edge_taper = (1.0 - distance_from_center).powf(0.38);
+        let tapered_value = (value * (0.84 + edge_taper * 0.16)).clamp(0.0, 1.0);
+        let bar_height = (1.5 + tapered_value * maximum_height).min(maximum_height);
         let y = center_y - bar_height / 2.0;
-        let glow_height = (bar_height + 4.0).min(maximum_height + 4.0);
-        let glow_y = center_y - glow_height / 2.0;
 
-        let highlight = 0.18 + tapered_value * 0.32;
+        let highlight = 0.14 + tapered_value * 0.28;
         let red = lerp(accent.red() as f64, text.red() as f64, highlight);
         let green = lerp(accent.green() as f64, text.green() as f64, highlight);
         let blue = lerp(accent.blue() as f64, text.blue() as f64, highlight);
-
-        rounded_rectangle(
-            context,
-            x - 0.5,
-            glow_y,
-            bar_width + 1.0,
-            glow_height,
-            ((bar_width + 1.0) / 2.0).min(3.2),
-        );
-        context.set_source_rgba(red, green, blue, 0.09 + tapered_value * 0.11);
-        let _ = context.fill();
 
         rounded_rectangle(
             context,
@@ -224,9 +220,9 @@ fn draw_spectrum(
             y,
             bar_width,
             bar_height,
-            (bar_width / 2.0).min(2.8),
+            (bar_width / 2.0).min(2.4),
         );
-        context.set_source_rgba(red, green, blue, 0.52 + tapered_value * 0.48);
+        context.set_source_rgba(red, green, blue, 0.58 + tapered_value * 0.42);
         let _ = context.fill();
     }
 }

@@ -2,6 +2,21 @@
 
 All notable public changes to Nocky are documented here.
 
+## 0.2.5 — 2026-06-22
+
+### Fixed
+
+- Local mode no longer renders cached YouTube albums, artists, playlists, liked songs or Home cards
+- Switching modes resets incompatible playback state and returns to the correct Home
+- Local mode no longer performs an automatic YouTube status or library synchronization request
+
+### Improved
+
+- Library search is debounced to avoid rebuilding pages on every keystroke
+- YouTube playlist tracks are loaded lazily and reused from the persistent cache
+- Removed eager startup loading of up to 24 complete YouTube playlists
+- Updated README, release notes and YouTube Music documentation for the distinct operating modes
+
 ## 0.2.4 — 2026-06-21
 
 ### Added

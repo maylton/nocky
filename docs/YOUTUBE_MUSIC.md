@@ -1,6 +1,6 @@
 # YouTube Music integration
 
-Nocky 0.2.4 uses the same working architecture as the author's Nocturne project: `ytmusicapi` for catalogue/account data and `yt-dlp` with Deno for temporary audio URLs.
+Nocky 0.2.5 uses the same working architecture as the author's Nocturne project: `ytmusicapi` for catalogue/account data and `yt-dlp` with Deno for temporary audio URLs.
 
 ## Install
 
@@ -121,7 +121,7 @@ Make sure the distribution's GStreamer base/good/bad/ugly/libav plugin sets are 
 
 ## Running from source
 
-`cargo run` does not automatically use the Python environment installed beside a system copy of Nocky. Version 0.2.4 searches all known runtimes correctly, and also supports a dedicated project runtime:
+`cargo run` does not automatically use the Python environment installed beside a system copy of Nocky. Version 0.2.5 searches all known runtimes correctly, and also supports a dedicated project runtime:
 
 ```bash
 ./scripts/setup-youtube-runtime.sh
@@ -130,6 +130,11 @@ cargo run
 
 The runtime is created in `.nocky-runtime/` and excluded from Git.
 
-## Startup source
+## Source mode
 
-The first launch asks whether Nocky should open the local library or YouTube Music. This controls the initial page only; both sources remain available in the top navigation. Change the saved selection later from **Settings**.
+The first launch asks whether Nocky should run in **Local library** or **YouTube Music** mode. This is a strict content mode, not only a startup-page preference.
+
+- Local mode remains offline, excludes every YouTube collection from Home and browser routes, and does not automatically contact YouTube.
+- YouTube Music mode excludes local tracks and local playlists from the browser and enables account status/synchronization.
+
+Change the saved mode later from **Settings**. Switching modes returns to Home and clears playback state from the previous source. Playlist contents are loaded on demand and then reused from `library-cache.json`.
