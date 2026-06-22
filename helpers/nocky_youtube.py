@@ -532,6 +532,7 @@ def _song_item(result: dict[str, Any], result_type: str = "song") -> dict[str, A
         "album": album,
         "artist": artist,
         "playlist_kind": "",
+        "params": "",
         "duration_seconds": duration,
         "thumbnail_url": _best_thumbnail(_thumbnails(result)),
     }
@@ -556,11 +557,56 @@ def _playlist_item(result: dict[str, Any], source: str = "") -> dict[str, Any] |
         "result_type": "playlist",
         "title": title,
         "subtitle": subtitle,
-        "video_id": "",
+        "video_id": _text(result.get("videoId") or result.get("video_id")),
         "browse_id": browse_id,
         "album": "",
         "artist": author,
         "playlist_kind": _playlist_kind(title, source),
+        "params": _text(result.get("params")),
+        "duration_seconds": 0,
+        "thumbnail_url": _best_thumbnail(_thumbnails(result)),
+    }
+
+
+def _album_item(result: dict[str, Any], source: str = "") -> dict[str, Any] | None:
+    title = _text(result.get("title") or result.get("name"))
+    browse_id = _text(result.get("browseId") or result.get("browse_id"))
+    if not title or not browse_id:
+        return None
+    artist = _names(result.get("artists") or result.get("artist"))
+    year = _text(result.get("year"))
+    subtitle = " • ".join(value for value in (artist, year, source) if value)
+    return {
+        "result_type": "album",
+        "title": title,
+        "subtitle": subtitle,
+        "video_id": "",
+        "browse_id": browse_id,
+        "album": title,
+        "artist": artist,
+        "playlist_kind": "",
+        "params": _text(result.get("params")),
+        "duration_seconds": 0,
+        "thumbnail_url": _best_thumbnail(_thumbnails(result)),
+    }
+
+
+def _artist_item(result: dict[str, Any], source: str = "") -> dict[str, Any] | None:
+    title = _text(result.get("artist") or result.get("title") or result.get("name"))
+    browse_id = _text(result.get("browseId") or result.get("browse_id") or result.get("channelId"))
+    if not title or not browse_id:
+        return None
+    subtitle = source or "Artist"
+    return {
+        "result_type": "artist",
+        "title": title,
+        "subtitle": subtitle,
+        "video_id": "",
+        "browse_id": browse_id,
+        "album": "",
+        "artist": title,
+        "playlist_kind": "",
+        "params": _text(result.get("params")),
         "duration_seconds": 0,
         "thumbnail_url": _best_thumbnail(_thumbnails(result)),
     }
@@ -573,37 +619,9 @@ def _search_item(result: dict[str, Any]) -> dict[str, Any] | None:
     if result_type == "playlist":
         return _playlist_item(result, "Playlist")
     if result_type == "album":
-        title = str(result.get("title") or "").strip()
-        if not title:
-            return None
-        return {
-            "result_type": "album",
-            "title": title,
-            "subtitle": " • ".join(str(result.get(key) or "").strip() for key in ("artist", "year") if result.get(key)),
-            "video_id": "",
-            "browse_id": str(result.get("browseId") or ""),
-            "album": title,
-            "artist": str(result.get("artist") or ""),
-            "playlist_kind": "",
-            "duration_seconds": 0,
-            "thumbnail_url": _best_thumbnail(result.get("thumbnails")),
-        }
+        return _album_item(result)
     if result_type == "artist":
-        title = str(result.get("artist") or result.get("title") or "").strip()
-        if not title:
-            return None
-        return {
-            "result_type": "artist",
-            "title": title,
-            "subtitle": "Artist",
-            "video_id": "",
-            "browse_id": str(result.get("browseId") or ""),
-            "album": "",
-            "artist": title,
-            "playlist_kind": "",
-            "duration_seconds": 0,
-            "thumbnail_url": _best_thumbnail(result.get("thumbnails")),
-        }
+        return _artist_item(result)
     return None
 
 
@@ -620,15 +638,23 @@ def _dedupe(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _home_playlist_items(client, limit: int) -> list[dict[str, Any]]:
+    return _home_suggestions(client, limit).get("playlists", [])
+
+
+def _home_suggestions(client, limit: int) -> dict[str, list[dict[str, Any]]]:
+    suggestions: dict[str, list[dict[str, Any]]] = {
+        "playlists": [],
+        "albums": [],
+        "artists": [],
+    }
     if limit <= 0 or not hasattr(client, "get_home"):
-        return []
+        return suggestions
     try:
         rows = client.get_home(limit=limit)
     except Exception as error:
-        print(f"Nocky YouTube home playlist lookup skipped: {error}", file=sys.stderr)
-        return []
+        print(f"Nocky YouTube home lookup skipped: {error}", file=sys.stderr)
+        return suggestions
 
-    items: list[dict[str, Any]] = []
     for row in rows or []:
         if not isinstance(row, dict):
             continue
@@ -636,27 +662,57 @@ def _home_playlist_items(client, limit: int) -> list[dict[str, Any]]:
         for result in row.get("contents") or []:
             if not isinstance(result, dict):
                 continue
-            playlist = _playlist_item(result, section)
-            if playlist:
-                items.append(playlist)
-    return items
+            result_type = _text(result.get("resultType")).lower()
+            if result_type == "album":
+                if album := _album_item(result, section):
+                    suggestions["albums"].append(album)
+                continue
+            if result_type == "artist":
+                if artist := _artist_item(result, section):
+                    suggestions["artists"].append(artist)
+                continue
+            if playlist := _playlist_item(result, section):
+                suggestions["playlists"].append(playlist)
+    return {key: _dedupe(items) for key, items in suggestions.items()}
 
 
-def _playlist_tracks_from_watch(client, playlist_id: str, limit: int) -> list[dict[str, Any]]:
+def _playlist_tracks_from_watch(
+    client,
+    playlist_id: str,
+    video_id: str,
+    limit: int,
+    radio: bool,
+) -> list[dict[str, Any]]:
     if not hasattr(client, "get_watch_playlist"):
         return []
-    try:
-        data = client.get_watch_playlist(playlistId=playlist_id, limit=limit)
-    except Exception as error:
-        print(f"Nocky YouTube watch playlist fallback failed for {playlist_id}: {error}", file=sys.stderr)
-        return []
-    tracks = data.get("tracks") if isinstance(data, dict) else []
-    return [
-        item
-        for result in tracks or []
-        if isinstance(result, dict)
-        if (item := _song_item(result))
-    ]
+    attempts: list[dict[str, Any]] = []
+    if video_id and playlist_id:
+        attempts.append({"videoId": video_id, "playlistId": playlist_id, "limit": limit, "radio": radio})
+    if playlist_id:
+        attempts.append({"playlistId": playlist_id, "limit": limit, "radio": radio})
+    if video_id:
+        attempts.append({"videoId": video_id, "limit": limit, "radio": radio})
+
+    last_error: Exception | None = None
+    for kwargs in attempts:
+        try:
+            data = client.get_watch_playlist(**kwargs)
+        except Exception as error:
+            last_error = error
+            continue
+        tracks = data.get("tracks") if isinstance(data, dict) else []
+        items = [
+            item
+            for result in tracks or []
+            if isinstance(result, dict)
+            if (item := _song_item(result))
+        ]
+        if items:
+            return items
+
+    if last_error is not None:
+        print(f"Nocky YouTube watch playlist fallback failed for {playlist_id or video_id}: {last_error}", file=sys.stderr)
+    return []
 
 
 def _format_duration(seconds: int) -> str:
@@ -912,7 +968,7 @@ def command_playlists(payload: dict[str, Any]) -> list[dict[str, Any]]:
     if not _load_session().get("headers"):
         raise RuntimeError("Connect a YouTube Music browser session first")
     limit = max(1, min(500, int(payload.get("limit") or 100)))
-    home_limit = max(0, min(12, int(payload.get("home_limit") or 8)))
+    home_limit = max(0, min(12, int(payload["home_limit"] if "home_limit" in payload else 8)))
     results = client.get_library_playlists(limit=limit)
     library_items = [
         item
@@ -923,29 +979,42 @@ def command_playlists(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return _dedupe(library_items + _home_playlist_items(client, home_limit))
 
 
+def command_home(payload: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    client = _create_client(authenticated=True)
+    if not _load_session().get("headers"):
+        raise RuntimeError("Connect a YouTube Music browser session first")
+    limit = max(0, min(12, int(payload.get("limit") or 8)))
+    return _home_suggestions(client, limit)
+
+
 def command_playlist(payload: dict[str, Any]) -> list[dict[str, Any]]:
     client = _create_client(authenticated=True)
     browse_id = str(payload.get("browse_id") or "").strip()
-    if not browse_id:
+    video_id = str(payload.get("video_id") or "").strip()
+    playlist_kind = str(payload.get("playlist_kind") or "").strip()
+    if not browse_id and not video_id:
         return []
     limit = max(1, min(500, int(payload.get("limit") or 200)))
     tracks: list[dict[str, Any]] = []
     playlist_error = None
-    try:
-        data = client.get_playlist(browse_id, limit=limit)
-        tracks = [
-            item
-            for result in (data.get("tracks") or [])
-            if isinstance(result, dict)
-            if (item := _song_item(result))
-        ]
-    except Exception as error:
-        playlist_error = error
+    if browse_id and playlist_kind != "mix":
+        try:
+            data = client.get_playlist(browse_id, limit=limit)
+            tracks = [
+                item
+                for result in (data.get("tracks") or [])
+                if isinstance(result, dict)
+                if (item := _song_item(result))
+            ]
+        except Exception as error:
+            playlist_error = error
 
     if not tracks:
-        tracks = _playlist_tracks_from_watch(client, browse_id, limit)
+        tracks = _playlist_tracks_from_watch(client, browse_id, video_id, limit, playlist_kind == "mix")
     if not tracks and playlist_error is not None:
         raise playlist_error
+    if not tracks:
+        raise RuntimeError("No playable tracks were returned for this YouTube Music playlist")
     return _dedupe(tracks)
 
 
@@ -960,6 +1029,7 @@ COMMANDS = {
     "search": command_search,
     "library": command_library,
     "liked": command_liked,
+    "home": command_home,
     "playlists": command_playlists,
     "playlist": command_playlist,
     "resolve": command_resolve,
@@ -969,7 +1039,7 @@ COMMANDS = {
 def main() -> int:
     try:
         if len(sys.argv) != 2 or sys.argv[1] not in COMMANDS:
-            raise RuntimeError("Usage: nocky_youtube.py <status|connect|disconnect|search|library|liked|playlists|playlist|resolve>")
+            raise RuntimeError("Usage: nocky_youtube.py <status|connect|disconnect|search|library|liked|home|playlists|playlist|resolve>")
         payload = _read_input()
         result = COMMANDS[sys.argv[1]](payload)
         _emit({"ok": True, "result": result})

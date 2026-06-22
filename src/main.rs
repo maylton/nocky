@@ -964,7 +964,7 @@ impl AppController {
             let mut cached = HashMap::new();
             for playlist in playlists {
                 let browse_id = playlist.browse_id.clone();
-                match bridge.playlist(&browse_id) {
+                match bridge.playlist(&playlist) {
                     Ok(mut items) => {
                         cache_items_for_browser(&mut items);
                         cached.insert(browse_id, items);
@@ -1007,7 +1007,7 @@ impl AppController {
 
         let sender = self.background_tx.clone();
         thread::spawn(move || {
-            let result = bridge.playlist(&browse_id).map(|mut items| {
+            let result = bridge.playlist(&playlist).map(|mut items| {
                 cache_items_for_browser(&mut items);
                 items
             });
@@ -1102,14 +1102,13 @@ impl AppController {
                 }
                 YouTubePageEvent::OpenPlaylist(item) => {
                     let title = item.title.clone();
-                    let browse_id = item.browse_id.clone();
                     self.youtube_page
                         .set_loading(true, &format!("Carregando {title}..."));
                     let sender = self.background_tx.clone();
                     thread::spawn(move || {
                         let _ = sender.send(BackgroundMessage::YouTubeItems {
                             title,
-                            result: bridge.playlist(&browse_id),
+                            result: bridge.playlist(&item),
                         });
                     });
                 }
