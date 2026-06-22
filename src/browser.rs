@@ -533,7 +533,9 @@ impl LibraryBrowser {
                 .unwrap_or_default(),
             _ => Vec::new(),
         };
-        online_candidates.sort_by(compare_youtube_items);
+        if !matches!(route, BrowserRoute::YouTubePlaylist { .. }) {
+            online_candidates.sort_by(compare_youtube_items);
+        }
 
         for item in online_candidates {
             let haystack = format!("{} {} {}", item.title, item.artist, item.album).to_lowercase();
