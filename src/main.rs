@@ -131,6 +131,9 @@ struct AppController {
     playback_source: Cell<PlaybackSource>,
     youtube_state: RefCell<Option<YouTubePlaybackState>>,
     youtube_request_id: Cell<u64>,
+    youtube_recovery_in_progress: Cell<bool>,
+    youtube_recovery_attempted: Cell<bool>,
+    youtube_recovery_resume_us: Cell<i64>,
     youtube_bridge: Option<Arc<YouTubeBridge>>,
     youtube_library: RefCell<YouTubeLibraryCache>,
 
@@ -582,6 +585,9 @@ impl AppController {
             playback_source: Cell::new(PlaybackSource::None),
             youtube_state: RefCell::new(None),
             youtube_request_id: Cell::new(0),
+            youtube_recovery_in_progress: Cell::new(false),
+            youtube_recovery_attempted: Cell::new(false),
+            youtube_recovery_resume_us: Cell::new(0),
             youtube_bridge,
             youtube_library: RefCell::new(load_library_cache()),
             sidebar: sidebar_parts.revealer,
@@ -1114,13 +1120,24 @@ impl AppController {
         }
         let request_id = self.youtube_request_id.get().wrapping_add(1);
         self.youtube_request_id.set(request_id);
-        self.show_toast("Preparando stream do YouTube Music...");
+        if !force {
+            self.show_toast("Preparando stream do YouTube Music...");
+        }
         let sender = self.background_tx.clone();
         thread::spawn(move || {
-            let result = bridge.resolve(&item.video_id, force).map(|stream| {
-                let cover = download_cover(&item, &stream.thumbnail_url);
-                (stream, cover)
-            });
+            let result = bridge
+                .resolve(&item.video_id, force)
+                .map(|stream| {
+                    let cover = download_cover(&item, &stream.thumbnail_url);
+                    (stream, cover)
+                })
+                .map_err(|error| {
+                    if force {
+                        format!("__NOCKY_STREAM_RECOVERY_FAILED__{error}")
+                    } else {
+                        error
+                    }
+                });
             let _ = sender.send(BackgroundMessage::YouTubeResolved {
                 request_id,
                 queue,
@@ -1131,6 +1148,67 @@ impl AppController {
         });
     }
 
+    fn try_recover_youtube_stream(&self, error: &str) -> bool {
+        if self.playback_source.get() != PlaybackSource::YouTube
+            || self.youtube_recovery_in_progress.get()
+            || self.youtube_recovery_attempted.get()
+            || !is_refreshable_stream_error(error)
+        {
+            return false;
+        }
+
+        let snapshot = {
+            let state = self.youtube_state.borrow();
+            state
+                .as_ref()
+                .map(|state| (state.queue.clone(), state.current, state.item.clone()))
+        };
+        let Some((queue, index, item)) = snapshot else {
+            return false;
+        };
+
+        self.youtube_recovery_attempted.set(true);
+        self.youtube_recovery_in_progress.set(true);
+        self.youtube_recovery_resume_us
+            .set(self.player.position_us().max(0));
+        let _ = self.player.stop();
+
+        eprintln!(
+            "Nocky YouTube stream rejected; refreshing signed URL: {}",
+            redact_stream_url(error)
+        );
+        self.show_toast("O stream desta faixa foi recusado. Obtendo um novo link de reprodução…");
+        self.resolve_youtube_track(item, queue, index, true);
+        true
+    }
+
+    fn reset_youtube_recovery(&self) {
+        self.youtube_recovery_in_progress.set(false);
+        self.youtube_recovery_attempted.set(false);
+        self.youtube_recovery_resume_us.set(0);
+    }
+
+    fn resume_youtube_after_recovery(&self) {
+        let resume_us = self.youtube_recovery_resume_us.replace(0);
+        if resume_us <= 0 || self.playback_source.get() != PlaybackSource::YouTube {
+            return;
+        }
+
+        if self.player.duration_us() <= 0 {
+            self.youtube_recovery_resume_us.set(resume_us);
+            return;
+        }
+
+        if let Err(error) = self.player.seek(resume_us) {
+            eprintln!("Could not restore YouTube playback position: {error}");
+            return;
+        }
+
+        self.last_mpris_position.set(resume_us);
+        self.mpris.send(mpris::MprisUpdate::Position(resume_us));
+        self.show_toast("Stream renovado. Reprodução retomada.");
+    }
+
     fn apply_youtube_track(
         &self,
         queue: Vec<YouTubeItem>,
@@ -1139,6 +1217,21 @@ impl AppController {
         stream: YouTubeStream,
         cover_path: Option<PathBuf>,
     ) {
+        let recovering = self.youtube_recovery_in_progress.replace(false);
+        let (preserved_lyrics, preserved_cover) = if recovering {
+            self.youtube_state
+                .borrow()
+                .as_ref()
+                .filter(|state| state.item.video_id == item.video_id)
+                .map(|state| (state.lyrics.clone(), state.cover_path.clone()))
+                .unwrap_or_default()
+        } else {
+            self.youtube_recovery_attempted.set(false);
+            self.youtube_recovery_resume_us.set(0);
+            (Vec::new(), None)
+        };
+        let cover_path = cover_path.or(preserved_cover);
+
         if item.title.is_empty() {
             item.title = stream.title.clone();
         }
@@ -1156,6 +1249,8 @@ impl AppController {
             self.player
                 .load_with_headers(&stream.stream_url, true, stream.http_headers.clone())
         {
+            self.youtube_recovery_in_progress.set(false);
+            self.youtube_recovery_resume_us.set(0);
             self.show_error(&error);
             return;
         }
@@ -1168,7 +1263,7 @@ impl AppController {
             item: item.clone(),
             stream: stream.clone(),
             cover_path: cover_path.clone(),
-            lyrics: Vec::new(),
+            lyrics: preserved_lyrics.clone(),
         }));
 
         self.title.set_text(&item.title);
@@ -1193,7 +1288,10 @@ impl AppController {
         self.favorite_icon
             .set_icon_name(Some("emblem-favorite-symbolic"));
         self.favorite_icon.set_opacity(0.28);
-        if self.config.borrow().auto_download_lyrics {
+
+        if recovering && !preserved_lyrics.is_empty() {
+            self.rebuild_youtube_lyrics(&preserved_lyrics);
+        } else if self.config.borrow().auto_download_lyrics {
             self.set_lyrics_message("Searching synchronized lyrics for this YouTube track…");
             self.request_youtube_lyrics(&item);
         } else {
@@ -1201,10 +1299,13 @@ impl AppController {
                 "No synchronized lyrics loaded yet. Use the menu to search for this YouTube track.",
             );
         }
+
         self.update_play_icons(true);
-        self.last_mpris_position.set(0);
+        if !recovering {
+            self.last_mpris_position.set(0);
+            self.mpris.send(mpris::MprisUpdate::Position(0));
+        }
         self.publish_mpris_youtube(&item, &stream, cover_path.as_deref());
-        self.mpris.send(mpris::MprisUpdate::Position(0));
         self.mpris
             .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Playing));
         self.prefetch_youtube_queue();
@@ -2351,6 +2452,7 @@ impl AppController {
 
         self.playback_source.set(PlaybackSource::Local);
         self.youtube_state.replace(None);
+        self.reset_youtube_recovery();
         self.state.borrow_mut().current = Some(index);
         self.title.set_text(&track.title);
         self.artist.set_text(&track.artist);
@@ -2635,13 +2737,28 @@ impl AppController {
         while let Some(event) = self.player.try_recv() {
             match event {
                 PlaybackEvent::EndOfStream => self.handle_end_of_stream(),
-                PlaybackEvent::DurationChanged => self.publish_mpris_capabilities(),
+                PlaybackEvent::DurationChanged => {
+                    self.publish_mpris_capabilities();
+                    self.resume_youtube_after_recovery();
+                }
                 PlaybackEvent::Spectrum(values) => self.visualizer.set_values(&values),
                 PlaybackEvent::Error(error) => {
+                    if self.youtube_recovery_in_progress.get() {
+                        eprintln!(
+                            "Ignoring follow-up GStreamer error during stream refresh: {}",
+                            redact_stream_url(&error)
+                        );
+                        continue;
+                    }
+                    if self.try_recover_youtube_stream(&error) {
+                        continue;
+                    }
+
+                    eprintln!("Nocky playback error: {}", redact_stream_url(&error));
                     self.update_play_icons(false);
                     self.mpris
                         .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Stopped));
-                    self.show_error(&error);
+                    self.show_error(playback_error_message(&error));
                 }
             }
         }
@@ -2918,6 +3035,7 @@ impl AppController {
         let _ = self.player.stop();
         self.playback_source.set(PlaybackSource::None);
         self.youtube_state.replace(None);
+        self.reset_youtube_recovery();
         self.title.set_text("Sua música, naturalmente integrada");
         self.artist.set_text("Nenhuma faixa selecionada");
         self.album.set_text(message);
@@ -2950,14 +3068,77 @@ impl AppController {
     }
 
     fn show_toast(&self, message: &str) {
-        self.toast_overlay.add_toast(adw::Toast::new(message));
+        let toast = adw::Toast::new(message);
+        toast.set_use_markup(false);
+        self.toast_overlay.add_toast(toast);
     }
 
     fn show_error(&self, message: &str) {
-        eprintln!("Nocky error: {message}");
+        if let Some(detail) = message.strip_prefix("__NOCKY_STREAM_RECOVERY_FAILED__") {
+            self.youtube_recovery_in_progress.set(false);
+            self.youtube_recovery_resume_us.set(0);
+            eprintln!(
+                "Nocky stream recovery failed: {}",
+                redact_stream_url(detail)
+            );
+            let friendly =
+                "Não foi possível renovar o stream desta faixa. Tente reproduzi-la novamente.";
+            self.album.set_text(friendly);
+            self.show_toast(friendly);
+            return;
+        }
+
+        eprintln!("Nocky error: {}", redact_stream_url(message));
         self.album.set_text(&format!("Error: {message}"));
         self.show_toast(message);
     }
+}
+
+fn is_refreshable_stream_error(message: &str) -> bool {
+    let message = message.to_ascii_lowercase();
+    let network_source = message.contains("gstsouphttpsrc")
+        || message.contains("souphttpsrc")
+        || message.contains("googlevideo.com");
+    let rejected = message.contains("forbidden")
+        || message.contains("(403)")
+        || message.contains("http 403")
+        || message.contains("unauthorized")
+        || message.contains("(401)")
+        || message.contains("gone")
+        || message.contains("(410)");
+    network_source && rejected
+}
+
+fn playback_error_message(message: &str) -> &str {
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("forbidden") || lower.contains("(403)") || lower.contains("http 403") {
+        "O YouTube recusou o stream desta faixa mesmo após a renovação."
+    } else if lower.contains("souphttpsrc")
+        || lower.contains("internal data stream error")
+        || lower.contains("can't typefind stream")
+    {
+        "A reprodução online foi interrompida. Verifique a conexão e tente novamente."
+    } else {
+        "Não foi possível reproduzir esta faixa."
+    }
+}
+
+fn redact_stream_url(message: &str) -> String {
+    let Some(url_marker) = message.find("URL: http") else {
+        return message.to_string();
+    };
+    let url_start = url_marker + "URL: ".len();
+    let tail = &message[url_start..];
+    let url_end = tail
+        .find(", Redirect")
+        .or_else(|| tail.find(char::is_whitespace))
+        .unwrap_or(tail.len());
+
+    let mut redacted = String::with_capacity(message.len().min(512));
+    redacted.push_str(&message[..url_start]);
+    redacted.push_str("<redacted>");
+    redacted.push_str(&tail[url_end..]);
+    redacted
 }
 
 fn build_sidebar() -> SidebarParts {

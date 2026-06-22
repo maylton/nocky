@@ -645,6 +645,13 @@ def _resolve_stream(video_or_url: str, force: bool = False) -> dict[str, Any]:
     video_id = _extract_video_id(video_or_url)
     cache = _load_stream_cache()
     cached = cache.get(video_id)
+    if force and isinstance(cached, dict):
+        # Overwrite the cached entry with an expired marker so _save_stream_cache
+        # removes a URL that the CDN has already rejected.
+        cache[video_id] = {"expires_at": 0}
+        _save_stream_cache(cache)
+        cache.pop(video_id, None)
+        cached = None
     if (
         not force
         and isinstance(cached, dict)
@@ -664,8 +671,17 @@ def _resolve_stream(video_or_url: str, force: bool = False) -> dict[str, Any]:
         "--no-playlist",
         "--skip-download",
         "--dump-single-json",
+        "--check-formats",
         "--format",
-        "bestaudio/best",
+        "bestaudio[protocol^=http]/bestaudio/best",
+        "--retries",
+        "3",
+        "--extractor-retries",
+        "3",
+        "--fragment-retries",
+        "3",
+        "--socket-timeout",
+        "20",
         "--no-warnings",
         "--no-progress",
         "--no-update",
@@ -700,6 +716,10 @@ def _resolve_stream(video_or_url: str, force: bool = False) -> dict[str, Any]:
         "duration_seconds": _duration(payload.get("duration")),
         "thumbnail_url": _upgrade_thumbnail_url(thumbnail),
         "http_headers": headers,
+        "format_id": str(payload.get("format_id") or ""),
+        "protocol": str(payload.get("protocol") or ""),
+        "container": str(payload.get("ext") or ""),
+        "audio_codec": str(payload.get("acodec") or ""),
         "expires_at": time.time() + STREAM_CACHE_TTL,
     }
     cache[video_id] = result
