@@ -1,8 +1,9 @@
 # Nocky
 
 **Nocky** is a native GTK4/libadwaita music player for Linux. It combines a polished local-library experience with synchronized lyrics, a real-time spectrum visualizer, MPRIS controls, optional Noctalia color integration, and an optional YouTube Music integration.
+this app is vibe-coded and any improvement suggestion is welcomed, but don't expect much as it's just a free time hobby project =)
 
-> **Status:** Nocky 0.2.4 is a beta release. It adds an automatic YouTube Music startup sync and a refreshed library home with collection carousels.
+> **Status:** Nocky 0.2.4 is a beta release. It adds an automatic YouTube Music startup sync and a refreshed library home with collection carousels. 
 
 <p align="center">
   <img src="assets/nocky-icon.png" alt="Nocky owl icon" width="180" />
@@ -23,11 +24,8 @@
 - MPRIS support for media keys, `playerctl` and desktop shells
 - Optional Noctalia palette integration with live CSS reload
 - Optional YouTube Music catalogue search and automatic account-library synchronization
-- YouTube audio streaming through the existing GStreamer player
 
-## YouTube Music in 0.2.4
-
-Nocky follows the same integration architecture proven in the author's Nocturne project:
+## YouTube Music integration
 
 - `ytmusicapi` provides catalogue and account-library data;
 - `yt-dlp` resolves a temporary audio URL;
@@ -44,7 +42,7 @@ Playback depends on the GStreamer plugins installed on the system. With the comm
 
 ## Complete installation
 
-The universal source installer supports Debian/Ubuntu, Fedora/RHEL-family, openSUSE and Arch-based distributions.
+The universal source installer supports Debian/Ubuntu, Fedora, openSUSE and Arch-based distributions.
 
 ```bash
 chmod +x install.sh
