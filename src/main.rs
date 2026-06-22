@@ -121,6 +121,7 @@ struct AppController {
     shuffle_enabled: Cell<bool>,
     rng_state: Cell<u64>,
     search_query: RefCell<String>,
+    search_generation: Cell<u64>,
     lyrics_pending: RefCell<HashSet<PathBuf>>,
     background_tx: Sender<BackgroundMessage>,
     background_rx: Receiver<BackgroundMessage>,
@@ -230,7 +231,7 @@ impl AppController {
         let sidebar_button = gtk::ToggleButton::builder()
             .icon_name("sidebar-show-symbolic")
             .active(true)
-            .tooltip_text("Show or hide the sidebar")
+            .tooltip_text("Mostrar ou ocultar a barra lateral")
             .build();
         header.pack_start(&sidebar_button);
 
@@ -246,34 +247,37 @@ impl AppController {
 
         let search_button = gtk::ToggleButton::builder()
             .icon_name("system-search-symbolic")
-            .tooltip_text("Search the library")
+            .tooltip_text("Buscar na biblioteca")
             .build();
         header.pack_end(&search_button);
 
         let folder_button = gtk::Button::builder()
             .icon_name("folder-open-symbolic")
-            .tooltip_text("Choose the music folder")
+            .tooltip_text("Escolher pasta de músicas")
             .build();
         header.pack_end(&folder_button);
 
         let menu = gio::Menu::new();
         let library_section = gio::Menu::new();
-        library_section.append(Some("Choose Music Folder…"), Some("app.choose-library"));
-        library_section.append(Some("Rescan Library"), Some("app.rescan"));
         library_section.append(
-            Some("Download Lyrics for Current Track"),
+            Some("Escolher pasta de músicas…"),
+            Some("app.choose-library"),
+        );
+        library_section.append(Some("Reescanear biblioteca"), Some("app.rescan"));
+        library_section.append(
+            Some("Baixar letra da faixa atual"),
             Some("app.download-lyrics"),
         );
         library_section.append(
-            Some("Toggle Automatic Lyrics"),
+            Some("Alternar busca automática de letras"),
             Some("app.toggle-auto-lyrics"),
         );
         menu.append_section(None, &library_section);
 
         let app_section = gio::Menu::new();
-        app_section.append(Some("Settings"), Some("app.settings"));
-        app_section.append(Some("About Nocky"), Some("app.about"));
-        app_section.append(Some("Quit"), Some("app.quit"));
+        app_section.append(Some("Configurações"), Some("app.settings"));
+        app_section.append(Some("Sobre o Nocky"), Some("app.about"));
+        app_section.append(Some("Sair"), Some("app.quit"));
         menu.append_section(None, &app_section);
 
         let menu_button = gtk::MenuButton::builder()
@@ -333,7 +337,7 @@ impl AppController {
         favorite.set_child(Some(&favorite_icon));
         favorite.add_css_class("flat");
         favorite.add_css_class("card-icon-button");
-        favorite.set_tooltip_text(Some("Add or remove from liked songs"));
+        favorite.set_tooltip_text(Some("Adicionar ou remover das músicas curtidas"));
         favorite.add_css_class("like-button");
 
         let now_heading = gtk::Label::new(Some("Reproduzindo agora"));
@@ -372,11 +376,11 @@ impl AppController {
 
         let repeat = gtk::ToggleButton::builder()
             .icon_name("media-playlist-repeat-symbolic")
-            .tooltip_text("Repeat current track")
+            .tooltip_text("Repetir faixa atual")
             .build();
         repeat.add_css_class("media-control");
         let previous = gtk::Button::from_icon_name("media-skip-backward-symbolic");
-        previous.set_tooltip_text(Some("Previous track"));
+        previous.set_tooltip_text(Some("Faixa anterior"));
         previous.add_css_class("media-control");
 
         let hero_play_icon = gtk::Image::from_icon_name("media-playback-start-symbolic");
@@ -384,14 +388,14 @@ impl AppController {
         let hero_play_button = gtk::Button::new();
         hero_play_button.set_child(Some(&hero_play_icon));
         hero_play_button.add_css_class("shell-play-button");
-        hero_play_button.set_tooltip_text(Some("Play or pause"));
+        hero_play_button.set_tooltip_text(Some("Reproduzir ou pausar"));
 
         let next = gtk::Button::from_icon_name("media-skip-forward-symbolic");
-        next.set_tooltip_text(Some("Next track"));
+        next.set_tooltip_text(Some("Próxima faixa"));
         next.add_css_class("media-control");
         let shuffle = gtk::ToggleButton::builder()
             .icon_name("media-playlist-shuffle-symbolic")
-            .tooltip_text("Shuffle")
+            .tooltip_text("Aleatório")
             .build();
         shuffle.add_css_class("media-control");
 
@@ -468,7 +472,7 @@ impl AppController {
         let empty_title = gtk::Label::new(Some("Escolha sua biblioteca musical"));
         empty_title.add_css_class("title-2");
         let empty_text = gtk::Label::new(Some(
-            "Nocky scans the selected folder recursively and remembers it for the next launch.",
+            "O Nocky examina a pasta selecionada recursivamente e a memoriza para a próxima inicialização.",
         ));
         empty_text.set_wrap(true);
         empty_text.set_justify(gtk::Justification::Center);
@@ -500,13 +504,13 @@ impl AppController {
         views.add_titled_with_icon(
             &music_stack,
             Some("music"),
-            "Music",
+            "Música",
             "folder-music-symbolic",
         );
         views.add_titled_with_icon(
             &lyrics_scroll,
             Some("lyrics"),
-            "Lyrics",
+            "Letras",
             "audio-input-microphone-symbolic",
         );
 
@@ -564,7 +568,7 @@ impl AppController {
 
         let lyrics_button = gtk::ToggleButton::builder()
             .icon_name("audio-input-microphone-symbolic")
-            .tooltip_text("Lyrics")
+            .tooltip_text("Letras")
             .build();
         lyrics_button.add_css_class("flat");
         lyrics_button.add_css_class("footer-control");
@@ -608,6 +612,7 @@ impl AppController {
             shuffle_enabled: Cell::new(false),
             rng_state: Cell::new(seed),
             search_query: RefCell::new(String::new()),
+            search_generation: Cell::new(0),
             lyrics_pending: RefCell::new(HashSet::new()),
             background_tx,
             background_rx,
@@ -695,10 +700,21 @@ impl AppController {
         {
             let weak = Rc::downgrade(&controller);
             search_entry.connect_search_changed(move |entry| {
-                if let Some(controller) = weak.upgrade() {
-                    controller.search_query.replace(entry.text().to_string());
-                    controller.refresh_browser();
-                }
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+                controller.search_query.replace(entry.text().to_string());
+                let generation = controller.search_generation.get().wrapping_add(1);
+                controller.search_generation.set(generation);
+                let weak = Rc::downgrade(&controller);
+                glib::timeout_add_local_once(Duration::from_millis(180), move || {
+                    let Some(controller) = weak.upgrade() else {
+                        return;
+                    };
+                    if controller.search_generation.get() == generation {
+                        controller.refresh_browser();
+                    }
+                });
             });
         }
 
@@ -826,7 +842,6 @@ impl AppController {
         }
 
         controller.refresh_browser();
-        controller.refresh_youtube_status();
         controller
     }
 
@@ -994,7 +1009,6 @@ impl AppController {
             return;
         }
 
-        self.show_toast(&format!("Carregando playlist ‘{}’…", playlist.title));
         let sender = self.background_tx.clone();
         thread::spawn(move || {
             let result = bridge.playlist(&browse_id).map(|mut items| {
@@ -1020,7 +1034,6 @@ impl AppController {
                         self.youtube_page
                             .set_loading(true, "Sincronizando com o Nocky...");
                     } else {
-                        self.show_toast("A biblioteca já está sendo sincronizada");
                     }
                 }
                 YouTubePageEvent::Search { query, filter } => {
@@ -1122,7 +1135,6 @@ impl AppController {
         }
         let request_id = self.youtube_request_id.get().wrapping_add(1);
         self.youtube_request_id.set(request_id);
-        self.show_toast("Preparando stream do YouTube Music...");
         let sender = self.background_tx.clone();
         thread::spawn(move || {
             let result = bridge.resolve(&item.video_id, force).map(|stream| {
@@ -1202,11 +1214,11 @@ impl AppController {
             .set_icon_name(Some("emblem-favorite-symbolic"));
         self.favorite_icon.set_opacity(0.28);
         if self.config.borrow().auto_download_lyrics {
-            self.set_lyrics_message("Searching synchronized lyrics for this YouTube track…");
+            self.set_lyrics_message("Buscando letra sincronizada para esta faixa do YouTube…");
             self.request_youtube_lyrics(&item);
         } else {
             self.set_lyrics_message(
-                "No synchronized lyrics loaded yet. Use the menu to search for this YouTube track.",
+                "Nenhuma letra sincronizada foi carregada. Use o menu para buscar a letra desta faixa do YouTube.",
             );
         }
         self.update_play_icons(true);
@@ -1368,7 +1380,7 @@ impl AppController {
                         .map(|state| state.item.clone())
                     {
                         controller.set_lyrics_message(
-                            "Searching synchronized lyrics for this YouTube track…",
+                            "Buscando letra sincronizada para esta faixa do YouTube…",
                         );
                         controller.request_youtube_lyrics(&item);
                         return;
@@ -1396,9 +1408,9 @@ impl AppController {
                     };
                     controller.save_config();
                     controller.show_toast(if enabled {
-                        "Automatic lyrics enabled"
+                        "Busca automática de letras ativada"
                     } else {
-                        "Automatic lyrics disabled"
+                        "Busca automática de letras desativada"
                     });
                     if enabled {
                         if let Some(item) = controller
@@ -1432,15 +1444,15 @@ impl AppController {
         {
             let window = self.window.clone();
             about.connect_activate(move |_, _| {
-                let dialog = gtk::AboutDialog::builder()
-                    .transient_for(&window)
-                    .modal(true)
-                    .program_name("Nocky")
+                let dialog = adw::AboutDialog::builder()
+                    .application_name("Nocky")
+                    .application_icon(APP_ID)
                     .version(env!("CARGO_PKG_VERSION"))
+                    .developer_name("Maylton Fernandes")
                     .comments("A native GTK4/libadwaita music player designed for Noctalia Shell.")
                     .license_type(gtk::License::Gpl30)
                     .build();
-                dialog.present();
+                dialog.present(Some(&window));
             });
         }
         app.add_action(&about);
@@ -1464,9 +1476,9 @@ impl AppController {
             self.lyrics_button.set_active(false);
         }
         match self.config.borrow().startup_source {
-            Some(StartupSource::Local) => self.refresh_browser(),
+            Some(StartupSource::Local) => self.navigate_browser(BrowserRoute::All),
             Some(StartupSource::YouTube) => {
-                self.refresh_browser();
+                self.navigate_browser(BrowserRoute::All);
                 self.refresh_youtube_status();
             }
             None => self.show_startup_source_dialog(true),
@@ -1474,24 +1486,47 @@ impl AppController {
     }
 
     fn set_startup_source(&self, source: StartupSource) {
+        let previous = self
+            .config
+            .borrow()
+            .startup_source
+            .unwrap_or(StartupSource::Local);
+        if previous == source {
+            return;
+        }
+
         self.config.borrow_mut().startup_source = Some(source);
         self.save_config();
         self.views.set_visible_child_name("music");
         if self.lyrics_button.is_active() {
             self.lyrics_button.set_active(false);
         }
+
         match source {
-            StartupSource::Local => self.refresh_browser(),
+            StartupSource::Local => {
+                if self.playback_source.get() == PlaybackSource::YouTube {
+                    self.youtube_state.replace(None);
+                    self.playback_source.set(PlaybackSource::None);
+                    self.reset_now_playing("Modo local ativado");
+                }
+                self.navigate_browser(BrowserRoute::All);
+            }
             StartupSource::YouTube => {
-                self.refresh_browser();
+                if self.playback_source.get() == PlaybackSource::Local {
+                    self.state.borrow_mut().current = None;
+                    self.playback_source.set(PlaybackSource::None);
+                    self.reset_now_playing("YouTube Music ativado");
+                }
+                self.navigate_browser(BrowserRoute::All);
                 self.refresh_youtube_status();
             }
         }
+
         let label = match source {
             StartupSource::Local => "biblioteca local",
             StartupSource::YouTube => "YouTube Music",
         };
-        self.show_toast(&format!("Fonte da Home definida como {label}"));
+        self.show_toast(&format!("Modo ativo: {label}"));
     }
 
     fn apply_home_preferences(&self) {
@@ -1615,7 +1650,6 @@ impl AppController {
                     _ => AppLanguage::Portuguese,
                 };
                 controller.save_config();
-                controller.show_toast(controller.tr("settings_saved"));
             });
         }
         {
@@ -1665,7 +1699,6 @@ impl AppController {
                 }
                 controller.save_config();
                 controller.apply_home_preferences();
-                controller.show_toast(controller.tr("settings_saved"));
             });
         }
 
@@ -1826,7 +1859,6 @@ impl AppController {
 
     fn scan_library(&self) {
         if self.scanning.replace(true) {
-            self.show_toast("A biblioteca já está sendo escaneada");
             return;
         }
 
@@ -1836,7 +1868,6 @@ impl AppController {
             return;
         };
 
-        self.show_toast("Escaneando a biblioteca de músicas...");
         let sender = self.background_tx.clone();
         thread::spawn(move || {
             let result = library::scan_music_directory(&root);
@@ -1918,7 +1949,6 @@ impl AppController {
                                 state.lyrics = lyrics.clone();
                             }
                             self.rebuild_youtube_lyrics(&lyrics);
-                            self.show_toast("Letras sincronizadas do YouTube carregadas");
                         }
                         Err(error) => {
                             let title = current
@@ -1936,8 +1966,10 @@ impl AppController {
                         self.youtube_page.set_status(&status);
                         if status.connected {
                             self.youtube_library.borrow_mut().connected = true;
-                            self.prefetch_youtube_playlist_cache();
-                            if self.config.borrow().youtube_auto_sync
+                            let youtube_mode =
+                                self.config.borrow().startup_source == Some(StartupSource::YouTube);
+                            if youtube_mode
+                                && self.config.borrow().youtube_auto_sync
                                 && self.sync_youtube_library(true)
                             {
                                 self.youtube_page.set_loading(
@@ -1957,7 +1989,7 @@ impl AppController {
                     Ok(status) => {
                         self.youtube_page.set_status(&status);
                         self.youtube_page
-                            .set_loading(false, "YouTube Music connected");
+                            .set_loading(false, "YouTube Music conectado");
                         {
                             let mut library = self.youtube_library.borrow_mut();
                             library.connected = true;
@@ -1976,7 +2008,7 @@ impl AppController {
                         self.youtube_page.set_status(&status);
                         self.youtube_page.set_loading(false, "YouTube Music");
                         self.youtube_page
-                            .show_empty("Search for music or connect your account.");
+                            .show_empty("Busque músicas ou conecte sua conta.");
                         self.youtube_library.borrow_mut().clear();
                         clear_library_cache();
                         self.refresh_browser();
@@ -1996,13 +2028,8 @@ impl AppController {
                             eprintln!("Could not save the YouTube library cache: {error}");
                         }
                         self.youtube_page
-                            .set_loading(false, "Library synchronized with Nocky");
+                            .set_loading(false, "Biblioteca sincronizada com o Nocky");
                         self.refresh_browser();
-                        self.prefetch_youtube_playlist_cache();
-                        self.show_toast(&format!(
-                            "YouTube Music sincronizado: {} faixas, {} curtidas e {} playlists",
-                            counts.0, counts.1, counts.2
-                        ));
                     }
                     Err(error) => {
                         self.youtube_library.borrow_mut().syncing = false;
@@ -2109,10 +2136,9 @@ impl AppController {
             {
                 self.select_track(selected.unwrap_or(0), false);
             }
-            self.show_toast(&format!("{count} tracks found"));
         } else {
             if self.playback_source.get() != PlaybackSource::YouTube {
-                self.reset_now_playing("No supported audio files were found");
+                self.reset_now_playing("Nenhum arquivo de áudio compatível foi encontrado");
             }
             self.show_toast("Nenhum arquivo de áudio compatível foi encontrado nessa pasta");
         }
@@ -2123,22 +2149,39 @@ impl AppController {
         let config = self.config.borrow();
         let youtube = self.youtube_library.borrow();
         let query = self.search_query.borrow();
-        let youtube_only = config.startup_source == Some(StartupSource::YouTube);
-        let effective_tracks: &[Track] = if youtube_only {
+        let source = config.startup_source.unwrap_or(StartupSource::Local);
+        let local_mode = source == StartupSource::Local;
+        let youtube_mode = source == StartupSource::YouTube;
+
+        let effective_tracks: &[Track] = if youtube_mode {
             &[]
         } else {
             state.tracks.as_slice()
         };
         let mut effective_config = config.clone();
-        if youtube_only {
+        if youtube_mode {
             effective_config.playlists.clear();
+            effective_config.liked_tracks.clear();
         }
-        let has_library = !effective_tracks.is_empty() || youtube.has_content() || youtube.syncing;
+
+        let empty_youtube = YouTubeLibraryCache::default();
+        let effective_youtube: &YouTubeLibraryCache =
+            if local_mode { &empty_youtube } else { &youtube };
+        let has_library = if local_mode {
+            !effective_tracks.is_empty()
+        } else {
+            effective_youtube.has_content() || effective_youtube.syncing
+        };
+
         self.music_stack
             .set_visible_child_name(if has_library { "library" } else { "empty" });
-        self.browser
-            .refresh(effective_tracks, &effective_config, &youtube, &query);
-        if !youtube_only {
+        self.browser.refresh(
+            effective_tracks,
+            &effective_config,
+            effective_youtube,
+            &query,
+        );
+        if local_mode {
             if let Some(current) = state.current {
                 self.browser.select_track(current);
             }
@@ -2150,21 +2193,29 @@ impl AppController {
         let config = self.config.borrow();
         let youtube = self.youtube_library.borrow();
         let query = self.search_query.borrow();
-        let youtube_only = config.startup_source == Some(StartupSource::YouTube);
-        let effective_tracks: &[Track] = if youtube_only {
+        let source = config.startup_source.unwrap_or(StartupSource::Local);
+        let local_mode = source == StartupSource::Local;
+        let youtube_mode = source == StartupSource::YouTube;
+
+        let effective_tracks: &[Track] = if youtube_mode {
             &[]
         } else {
             state.tracks.as_slice()
         };
         let mut effective_config = config.clone();
-        if youtube_only {
+        if youtube_mode {
             effective_config.playlists.clear();
+            effective_config.liked_tracks.clear();
         }
+
+        let empty_youtube = YouTubeLibraryCache::default();
+        let effective_youtube: &YouTubeLibraryCache =
+            if local_mode { &empty_youtube } else { &youtube };
         self.browser.navigate(
             route.clone(),
             effective_tracks,
             &effective_config,
-            &youtube,
+            effective_youtube,
             &query,
         );
         drop(query);
@@ -2824,9 +2875,9 @@ impl AppController {
             let title = gtk::Label::new(Some("Nenhuma letra sincronizada disponível ainda"));
             title.add_css_class("title-2");
             let hint = gtk::Label::new(Some(if self.config.borrow().auto_download_lyrics {
-                "Automatic LRCLIB lookup is enabled. Use the menu to retry whenever needed."
+                "A busca automática no LRCLIB está ativada. Use o menu para tentar novamente quando necessário."
             } else {
-                "Use the menu to download lyrics, or place a matching .lrc file beside the song."
+                "Use o menu para baixar a letra ou coloque um arquivo .lrc correspondente ao lado da música."
             }));
             hint.set_wrap(true);
             hint.set_justify(gtk::Justification::Center);
@@ -2834,7 +2885,7 @@ impl AppController {
             self.lyrics_box.append(&title);
             self.lyrics_box.append(&hint);
             self.clear_inline_lyrics();
-            self.inline_lyric_lines[2].set_text("No synchronized lyrics available yet");
+            self.inline_lyric_lines[2].set_text("Nenhuma letra sincronizada disponível ainda");
             self.inline_lyric_lines[3].set_text(if self.config.borrow().auto_download_lyrics {
                 "Automatic LRCLIB lookup is enabled. You can also open the Lyrics page for the full view."
             } else {
@@ -2953,7 +3004,7 @@ impl AppController {
         self.clear_inline_lyrics();
 
         if lyrics.is_empty() {
-            self.inline_lyric_lines[2].set_text("No synchronized lyrics available yet");
+            self.inline_lyric_lines[2].set_text("Nenhuma letra sincronizada disponível ainda");
             self.inline_lyric_lines[3].set_text(if self.config.borrow().auto_download_lyrics {
                 "Automatic LRCLIB lookup is enabled. You can also open the Lyrics page for the full view."
             } else {
@@ -3194,7 +3245,7 @@ fn translate(language: AppLanguage, key: &str) -> &'static str {
             _ => "Nocky",
         },
         AppLanguage::English => match key {
-            "settings_title" => "Settings",
+            "settings_title" => "Configurações",
             "settings_description" => "Tune Nocky's Home, integrations, and language.",
             "language" => "Language",
             "language_description" => "Choose the preferred language for settings.",

@@ -1,5 +1,5 @@
 use crate::{
-    config::AppConfig,
+    config::{AppConfig, StartupSource},
     model::Track,
     youtube::{YouTubeCollectionEntry, YouTubeItem, YouTubeLibraryCache},
 };
@@ -560,27 +560,31 @@ impl LibraryBrowser {
             self.home_content.remove(&child);
         }
 
-        let mixes = youtube
-            .playlists
-            .iter()
-            .filter(|playlist| is_mix_playlist(&playlist.title))
-            .cloned()
-            .chain(
-                youtube
-                    .playlists
-                    .iter()
-                    .filter(|playlist| !is_mix_playlist(&playlist.title))
-                    .cloned(),
-            )
-            .take(12)
-            .map(HomeCard::YouTubePlaylist)
-            .collect::<Vec<_>>();
-        self.home_content.append(&home_section(
-            "Mixtapes criadas para você",
-            "Mixes e rádios sincronizadas do YouTube Music",
-            mixes,
-            &self.event_tx,
-        ));
+        let youtube_home = matches!(config.startup_source, Some(StartupSource::YouTube));
+
+        if youtube_home {
+            let mixes = youtube
+                .playlists
+                .iter()
+                .filter(|playlist| is_mix_playlist(&playlist.title))
+                .cloned()
+                .chain(
+                    youtube
+                        .playlists
+                        .iter()
+                        .filter(|playlist| !is_mix_playlist(&playlist.title))
+                        .cloned(),
+                )
+                .take(12)
+                .map(HomeCard::YouTubePlaylist)
+                .collect::<Vec<_>>();
+            self.home_content.append(&home_section(
+                "Mixtapes criadas para você",
+                "Mixes e rádios sincronizadas do YouTube Music",
+                mixes,
+                &self.event_tx,
+            ));
+        }
 
         self.home_content.append(&home_section(
             "Álbuns",
@@ -596,32 +600,40 @@ impl LibraryBrowser {
             &self.event_tx,
         ));
 
-        let mut playlist_cards = config
-            .playlists
-            .iter()
-            .take(8)
-            .map(|playlist| HomeCard::LocalPlaylist {
-                title: playlist.name.clone(),
-                subtitle: format!("{} faixas locais", playlist.tracks.len()),
-            })
-            .collect::<Vec<_>>();
-        playlist_cards.extend(
-            youtube
+        if youtube_home {
+            let playlist_cards = youtube
                 .playlists
                 .iter()
                 .filter(|playlist| !is_mix_playlist(&playlist.title))
                 .take(12)
                 .cloned()
-                .map(HomeCard::YouTubePlaylist),
-        );
-        self.home_content.append(&home_section(
-            "Playlists sugeridas",
-            "Playlists e recomendações sincronizadas",
-            playlist_cards,
-            &self.event_tx,
-        ));
+                .map(HomeCard::YouTubePlaylist)
+                .collect::<Vec<_>>();
+            self.home_content.append(&home_section(
+                "Playlists sugeridas",
+                "Playlists e recomendações sincronizadas",
+                playlist_cards,
+                &self.event_tx,
+            ));
+        } else if !config.playlists.is_empty() {
+            let local_playlists = config
+                .playlists
+                .iter()
+                .take(8)
+                .map(|playlist| HomeCard::LocalPlaylist {
+                    title: playlist.name.clone(),
+                    subtitle: format!("{} faixas locais", playlist.tracks.len()),
+                })
+                .collect::<Vec<_>>();
+            self.home_content.append(&home_section(
+                "Suas playlists",
+                "Playlists criadas neste computador",
+                local_playlists,
+                &self.event_tx,
+            ));
+        }
 
-        if youtube.syncing {
+        if youtube_home && youtube.syncing {
             self.home_content.append(&home_syncing_hint());
         }
     }
