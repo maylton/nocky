@@ -439,8 +439,7 @@ searchbar entry {
 }
 
 .collection-card {
-  min-width: 128px;
-  max-width: 128px;
+  min-width: 156px;
   padding: 6px;
   border-radius: 12px;
   background-color: transparent;
@@ -452,7 +451,7 @@ searchbar entry {
 }
 
 .collection-card-button {
-  min-width: 148px;
+  min-width: 176px;
   min-height: 184px;
   padding: 0;
   border-radius: 13px;

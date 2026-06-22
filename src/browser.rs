@@ -3,9 +3,9 @@ use crate::{
     model::Track,
     youtube::{YouTubeCollectionEntry, YouTubeItem, YouTubeLibraryCache},
 };
-use gtk::{gdk, gio::prelude::ListModelExt, prelude::*};
+use gtk::{gdk, gio::prelude::ListModelExt, glib, prelude::*};
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     fs,
@@ -118,8 +118,8 @@ pub struct LibraryBrowser {
     home_content: gtk::Box,
     queue: gtk::ListBox,
     queue_title: gtk::Label,
-    albums_grid: gtk::Grid,
-    artists_grid: gtk::Grid,
+    albums_grid: gtk::FlowBox,
+    artists_grid: gtk::FlowBox,
     playlists_list: gtk::ListBox,
     playlist_model: gtk::StringList,
     playlist_dropdown: gtk::DropDown,
@@ -1200,20 +1200,27 @@ fn compare_text(left: &str, right: &str) -> Ordering {
     left.to_lowercase().cmp(&right.to_lowercase())
 }
 
-const COLLECTION_GRID_COLUMNS: i32 = 5;
+const COLLECTION_CARD_MIN_WIDTH: i32 = 156;
+const COLLECTION_CARD_MIN_HEIGHT: i32 = 210;
+const COLLECTION_ARTWORK_MIN_SIZE: i32 = 124;
+const COLLECTION_ARTWORK_MAX_SIZE: i32 = 188;
 
-fn collection_grid() -> gtk::Grid {
-    let grid = gtk::Grid::new();
+fn collection_grid() -> gtk::FlowBox {
+    let grid = gtk::FlowBox::new();
     grid.set_column_spacing(14);
     grid.set_row_spacing(18);
+    grid.set_min_children_per_line(2);
+    grid.set_max_children_per_line(8);
+    grid.set_homogeneous(true);
+    grid.set_selection_mode(gtk::SelectionMode::None);
     grid.set_halign(gtk::Align::Start);
     grid.set_valign(gtk::Align::Start);
-    grid.set_hexpand(false);
+    grid.set_hexpand(true);
     grid.add_css_class("collection-grid");
     grid
 }
 
-fn collection_page(title: &str, subtitle: &str, icon_name: &str, grid: &gtk::Grid) -> gtk::Box {
+fn collection_page(title: &str, subtitle: &str, icon_name: &str, grid: &gtk::FlowBox) -> gtk::Box {
     let header = collection_page_header(title, subtitle, icon_name);
     let scroll = gtk::ScrolledWindow::new();
     scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
@@ -1255,10 +1262,8 @@ fn collection_page_header(title: &str, subtitle: &str, icon_name: &str) -> gtk::
     header
 }
 
-fn append_collection_grid_card(grid: &gtk::Grid, position: i32, button: gtk::Button) {
-    let column = position % COLLECTION_GRID_COLUMNS;
-    let row = position / COLLECTION_GRID_COLUMNS;
-    grid.attach(&button, column, row, 1, 1);
+fn append_collection_grid_card(grid: &gtk::FlowBox, _position: i32, button: gtk::Button) {
+    grid.insert(&button, -1);
 }
 
 fn collection_button(
@@ -1268,9 +1273,12 @@ fn collection_button(
 ) -> gtk::Button {
     let button = gtk::Button::new();
     button.set_child(Some(&card));
-    button.set_width_request(148);
-    button.set_height_request(184);
-    button.set_halign(gtk::Align::Start);
+    button.set_size_request(
+        COLLECTION_CARD_MIN_WIDTH + 20,
+        COLLECTION_CARD_MIN_HEIGHT + 12,
+    );
+    button.set_hexpand(true);
+    button.set_halign(gtk::Align::Fill);
     button.set_valign(gtk::Align::Start);
     button.add_css_class("flat");
     button.add_css_class("collection-card-button");
@@ -1305,27 +1313,26 @@ fn collection_card(
     _detail: &str,
     online: bool,
 ) -> gtk::Box {
-    let artwork = artwork(cover_path, 112);
+    let artwork = artwork(cover_path, COLLECTION_ARTWORK_MIN_SIZE);
     let title_label = gtk::Label::new(Some(title));
     title_label.set_xalign(0.0);
     title_label.set_single_line_mode(true);
     title_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    title_label.set_width_chars(15);
-    title_label.set_max_width_chars(15);
+    title_label.set_width_chars(18);
+    title_label.set_max_width_chars(18);
     title_label.add_css_class("collection-card-title");
     let subtitle_label = gtk::Label::new(Some(subtitle));
     subtitle_label.set_xalign(0.0);
     subtitle_label.set_single_line_mode(true);
     subtitle_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    subtitle_label.set_width_chars(15);
-    subtitle_label.set_max_width_chars(15);
+    subtitle_label.set_width_chars(18);
+    subtitle_label.set_max_width_chars(18);
     subtitle_label.add_css_class("dim-label");
     let card = gtk::Box::new(gtk::Orientation::Vertical, 6);
-    card.set_width_request(128);
-    card.set_height_request(162);
-    card.set_hexpand(false);
+    card.set_size_request(COLLECTION_CARD_MIN_WIDTH, COLLECTION_CARD_MIN_HEIGHT);
+    card.set_hexpand(true);
     card.set_vexpand(false);
-    card.set_halign(gtk::Align::Start);
+    card.set_halign(gtk::Align::Fill);
     card.set_valign(gtk::Align::Start);
     card.add_css_class("collection-card");
     if online {
@@ -1334,6 +1341,7 @@ fn collection_card(
     card.append(&artwork);
     card.append(&title_label);
     card.append(&subtitle_label);
+    bind_responsive_collection_artwork(&card, &artwork, cover_path.map(Path::to_path_buf));
     card
 }
 
@@ -1374,6 +1382,52 @@ fn artwork(path: Option<&Path>, size: i32) -> gtk::Stack {
         stack.set_visible_child_name("placeholder");
     }
     stack
+}
+
+fn bind_responsive_collection_artwork(
+    card: &gtk::Box,
+    artwork: &gtk::Stack,
+    cover_path: Option<PathBuf>,
+) {
+    let card = card.clone();
+    let artwork = artwork.clone();
+    let current_size = Rc::new(Cell::new(COLLECTION_ARTWORK_MIN_SIZE));
+    let observed_card = card.clone();
+    card.add_tick_callback(move |_, _| {
+        let width = observed_card.width().max(COLLECTION_CARD_MIN_WIDTH);
+        let target = responsive_collection_artwork_size(width);
+        if target == current_size.get() {
+            return glib::ControlFlow::Continue;
+        }
+
+        current_size.set(target);
+        artwork.set_size_request(target, target);
+        if let Some(placeholder) = artwork
+            .first_child()
+            .and_then(|child| child.downcast::<gtk::Image>().ok())
+        {
+            placeholder.set_pixel_size(target / 3);
+        }
+        if let Some(path) = cover_path.as_deref().filter(|path| path.is_file()) {
+            if let Some(picture) = artwork
+                .last_child()
+                .and_then(|child| child.downcast::<gtk::Picture>().ok())
+            {
+                picture.set_size_request(target, target);
+                if let Some(texture) = cached_square_texture(path, target) {
+                    picture.set_paintable(Some(&texture));
+                    artwork.set_visible_child_name("picture");
+                }
+            }
+        }
+
+        glib::ControlFlow::Continue
+    });
+}
+
+fn responsive_collection_artwork_size(card_width: i32) -> i32 {
+    let raw = (card_width - 16).clamp(COLLECTION_ARTWORK_MIN_SIZE, COLLECTION_ARTWORK_MAX_SIZE);
+    raw - raw % 8
 }
 
 fn cached_square_texture(path: &Path, size: i32) -> Option<gdk::Texture> {
@@ -1648,7 +1702,7 @@ fn clear_list_box(list: &gtk::ListBox) {
     }
 }
 
-fn clear_grid(grid: &gtk::Grid) {
+fn clear_grid(grid: &gtk::FlowBox) {
     while let Some(child) = grid.first_child() {
         grid.remove(&child);
     }
