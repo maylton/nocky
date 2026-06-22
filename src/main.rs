@@ -22,13 +22,13 @@ use model::{Track, TrackData};
 use playback::{PlaybackEngine, PlaybackEvent};
 use std::{
     cell::{Cell, RefCell},
-    collections::{hash_map::DefaultHasher, HashMap, HashSet},
+    collections::{hash_map::DefaultHasher, HashMap, HashSet, VecDeque},
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
     rc::Rc,
     sync::{
         mpsc::{self, Receiver, Sender},
-        Arc,
+        Arc, Mutex,
     },
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -988,16 +988,44 @@ impl AppController {
         self.youtube_playlist_prefetching.set(true);
         let sender = self.background_tx.clone();
         thread::spawn(move || {
-            let mut cached = HashMap::new();
-            for playlist in playlists {
-                let browse_id = playlist.browse_id.clone();
-                match bridge.playlist(&playlist) {
-                    Ok(mut items) => {
+            // Playlist requests are independent. A small worker pool prevents the
+            // previous sequential 10s + 10s + 10s startup behavior without
+            // flooding YouTube or spawning an unbounded number of helpers.
+            let worker_count = playlists.len().min(3);
+            let work = Arc::new(Mutex::new(playlists.into_iter().collect::<VecDeque<_>>()));
+            let (result_tx, result_rx) = mpsc::channel();
+            let mut workers = Vec::with_capacity(worker_count);
+
+            for _ in 0..worker_count {
+                let bridge = bridge.clone();
+                let work = work.clone();
+                let result_tx = result_tx.clone();
+                workers.push(thread::spawn(move || loop {
+                    let playlist = match work.lock() {
+                        Ok(mut queue) => queue.pop_front(),
+                        Err(_) => None,
+                    };
+                    let Some(playlist) = playlist else {
+                        break;
+                    };
+
+                    let browse_id = playlist.browse_id.clone();
+                    let result = bridge.playlist(&playlist).map(|mut items| {
                         cache_items_for_browser(&mut items);
-                        if !items.is_empty() {
-                            cached.insert(browse_id, items);
-                        }
+                        items
+                    });
+                    let _ = result_tx.send((playlist, browse_id, result));
+                }));
+            }
+            drop(result_tx);
+
+            let mut cached = HashMap::new();
+            for (playlist, browse_id, result) in result_rx {
+                match result {
+                    Ok(items) if !items.is_empty() => {
+                        cached.insert(browse_id, items);
                     }
+                    Ok(_) => {}
                     Err(error) => {
                         eprintln!(
                             "Could not pre-cache YouTube playlist '{}': {error}",
@@ -1006,6 +1034,10 @@ impl AppController {
                     }
                 }
             }
+            for worker in workers {
+                let _ = worker.join();
+            }
+
             let _ = sender.send(BackgroundMessage::YouTubePlaylistsCached(Ok(cached)));
         });
     }
@@ -1019,34 +1051,40 @@ impl AppController {
         if browse_id.is_empty() {
             return;
         }
+
+        let route = BrowserRoute::YouTubePlaylist {
+            title: playlist.title.clone(),
+            browse_id: browse_id.clone(),
+        };
+        let cached = self
+            .youtube_library
+            .borrow()
+            .playlist_tracks
+            .get(&browse_id)
+            .map(|items| !items.is_empty())
+            .unwrap_or(false);
+        if cached {
+            self.navigate_browser(route);
+            return;
+        }
+
+        {
+            let mut library = self.youtube_library.borrow_mut();
+            library.playlist_tracks.remove(&browse_id);
+            library.playlist_loading.insert(browse_id.clone());
+        }
+        // Change pages before starting or queueing the network request. The user
+        // immediately sees the playlist title and a loading row instead of
+        // remaining on the previous page for several seconds.
+        self.navigate_browser(route);
+
         if self.youtube_playlist_loading.get() {
             self.youtube_pending_playlist.replace(Some(playlist));
             return;
         }
+
         let request_id = self.youtube_playlist_request_id.get().wrapping_add(1);
         self.youtube_playlist_request_id.set(request_id);
-        let use_cache = cacheable_youtube_playlist(&playlist);
-        if use_cache {
-            let cached = self
-                .youtube_library
-                .borrow()
-                .playlist_tracks
-                .get(&browse_id)
-                .map(|items| !items.is_empty())
-                .unwrap_or(false);
-            if cached {
-                self.navigate_browser(BrowserRoute::YouTubePlaylist {
-                    title: playlist.title,
-                    browse_id,
-                });
-                return;
-            }
-            self.youtube_library
-                .borrow_mut()
-                .playlist_tracks
-                .remove(&browse_id);
-        }
-
         self.youtube_playlist_loading.set(true);
         let sender = self.background_tx.clone();
         thread::spawn(move || {
@@ -1060,6 +1098,16 @@ impl AppController {
                 result,
             });
         });
+    }
+
+    fn is_open_youtube_playlist(&self, browse_id: &str) -> bool {
+        matches!(
+            self.browser.route(),
+            BrowserRoute::YouTubePlaylist {
+                browse_id: current,
+                ..
+            } if current == browse_id
+        )
     }
 
     fn handle_youtube_events(&self) {
@@ -2240,38 +2288,39 @@ impl AppController {
                         }
                         self.youtube_playlist_loading.set(false);
                         let browse_id = playlist.browse_id.clone();
+                        self.youtube_library
+                            .borrow_mut()
+                            .playlist_loading
+                            .remove(&browse_id);
+
                         if items.is_empty() {
                             self.youtube_library
                                 .borrow_mut()
                                 .playlist_tracks
                                 .remove(&browse_id);
+                            if self.is_open_youtube_playlist(&browse_id) {
+                                self.refresh_browser();
+                            }
                             self.show_toast(
                                 "Esta playlist não retornou faixas reproduzíveis agora",
                             );
-                            let pending = self.youtube_pending_playlist.borrow_mut().take();
-                            if let Some(pending) = pending {
-                                self.load_youtube_playlist_for_browser(pending);
-                            }
-                            continue;
-                        }
-                        if cacheable_youtube_playlist(&playlist) {
-                            self.youtube_library
-                                .borrow_mut()
-                                .playlist_tracks
-                                .insert(browse_id.clone(), items);
-                            if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
-                                eprintln!("Could not save the YouTube playlist cache: {error}");
-                            }
                         } else {
                             self.youtube_library
                                 .borrow_mut()
                                 .playlist_tracks
                                 .insert(browse_id.clone(), items);
+                            if cacheable_youtube_playlist(&playlist) {
+                                if let Err(error) =
+                                    save_library_cache(&self.youtube_library.borrow())
+                                {
+                                    eprintln!("Could not save the YouTube playlist cache: {error}");
+                                }
+                            }
+                            if self.is_open_youtube_playlist(&browse_id) {
+                                self.refresh_browser();
+                            }
                         }
-                        self.navigate_browser(BrowserRoute::YouTubePlaylist {
-                            title: playlist.title,
-                            browse_id,
-                        });
+
                         let pending = self.youtube_pending_playlist.borrow_mut().take();
                         if let Some(pending) = pending {
                             self.load_youtube_playlist_for_browser(pending);
@@ -2282,6 +2331,14 @@ impl AppController {
                             continue;
                         }
                         self.youtube_playlist_loading.set(false);
+                        let browse_id = playlist.browse_id.clone();
+                        self.youtube_library
+                            .borrow_mut()
+                            .playlist_loading
+                            .remove(&browse_id);
+                        if self.is_open_youtube_playlist(&browse_id) {
+                            self.refresh_browser();
+                        }
                         self.show_toast(&format!("Não foi possível carregar a playlist: {error}"));
                         let pending = self.youtube_pending_playlist.borrow_mut().take();
                         if let Some(pending) = pending {

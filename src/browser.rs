@@ -7,7 +7,7 @@ use gtk::{gdk, gio::prelude::ListModelExt, glib, prelude::*};
 use std::{
     cell::{Cell, RefCell},
     cmp::Ordering,
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     fs,
     path::{Path, PathBuf},
     rc::Rc,
@@ -125,6 +125,7 @@ pub struct LibraryBrowser {
     playlist_dropdown: gtk::DropDown,
     route: RefCell<BrowserRoute>,
     visible_tracks: Rc<RefCell<Vec<VisibleTrack>>>,
+    queue_render_generation: Rc<Cell<u64>>,
     playlist_names: Rc<RefCell<Vec<String>>>,
     playlist_row_refs: Rc<RefCell<Vec<Option<PlaylistRef>>>>,
     event_tx: Sender<BrowserEvent>,
@@ -135,6 +136,7 @@ impl LibraryBrowser {
     pub fn new() -> Self {
         let (event_tx, events) = mpsc::channel();
         let visible_tracks = Rc::new(RefCell::new(Vec::new()));
+        let queue_render_generation = Rc::new(Cell::new(0_u64));
         let playlist_names = Rc::new(RefCell::new(Vec::new()));
         let playlist_row_refs = Rc::new(RefCell::new(Vec::new()));
 
@@ -354,6 +356,7 @@ impl LibraryBrowser {
             playlist_dropdown,
             route: RefCell::new(BrowserRoute::All),
             visible_tracks,
+            queue_render_generation,
             playlist_names,
             playlist_row_refs,
             event_tx,
@@ -452,7 +455,15 @@ impl LibraryBrowser {
         query: &str,
         route: &BrowserRoute,
     ) {
+        let render_token = self.queue_render_generation.get().wrapping_add(1);
+        self.queue_render_generation.set(render_token);
         clear_list_box(&self.queue);
+
+        if let BrowserRoute::YouTubePlaylist { browse_id, .. } = route {
+            self.rebuild_youtube_playlist_queue(youtube, query, route, browse_id, render_token);
+            return;
+        }
+
         let query = query.trim().to_lowercase();
         let mut entries = Vec::new();
 
@@ -575,6 +586,94 @@ impl LibraryBrowser {
             self.queue.append(&empty_row(message));
         }
         self.visible_tracks.replace(entries);
+    }
+
+    fn rebuild_youtube_playlist_queue(
+        &self,
+        youtube: &YouTubeLibraryCache,
+        query: &str,
+        route: &BrowserRoute,
+        browse_id: &str,
+        render_token: u64,
+    ) {
+        self.queue_title.set_text(&route_title(route));
+        self.visible_tracks.borrow_mut().clear();
+
+        let query = query.trim().to_lowercase();
+        let mut items = youtube
+            .playlist_tracks
+            .get(browse_id)
+            .cloned()
+            .unwrap_or_default();
+        if !query.is_empty() {
+            items.retain(|item| {
+                format!("{} {} {}", item.title, item.artist, item.album)
+                    .to_lowercase()
+                    .contains(&query)
+            });
+        }
+
+        if items.is_empty() {
+            let row = if youtube.playlist_loading.contains(browse_id) {
+                loading_row("Carregando playlist do YouTube Music…")
+            } else {
+                empty_row("Esta playlist ainda está vazia")
+            };
+            self.queue.append(&row);
+            return;
+        }
+
+        let liked_ids = youtube
+            .liked
+            .iter()
+            .map(|item| item.video_id.clone())
+            .collect::<HashSet<_>>();
+
+        // Paint the first screen immediately, then yield between later batches
+        // so large playlists do not freeze animations or input.
+        let first_batch = items.len().min(32);
+        for item in items.drain(..first_batch) {
+            let number = self.visible_tracks.borrow().len() + 1;
+            let liked = liked_ids.contains(&item.video_id);
+            self.queue.append(&youtube_track_row(number, &item, liked));
+            self.visible_tracks
+                .borrow_mut()
+                .push(VisibleTrack::YouTube(item));
+        }
+
+        if items.is_empty() {
+            return;
+        }
+
+        let pending = Rc::new(RefCell::new(items.into_iter().collect::<VecDeque<_>>()));
+        let queue = self.queue.clone();
+        let visible_tracks = self.visible_tracks.clone();
+        let generation = self.queue_render_generation.clone();
+
+        glib::idle_add_local(move || {
+            if generation.get() != render_token {
+                return glib::ControlFlow::Break;
+            }
+
+            for _ in 0..24 {
+                let item = pending.borrow_mut().pop_front();
+                let Some(item) = item else {
+                    return glib::ControlFlow::Break;
+                };
+                let number = visible_tracks.borrow().len() + 1;
+                let liked = liked_ids.contains(&item.video_id);
+                queue.append(&youtube_track_row(number, &item, liked));
+                visible_tracks
+                    .borrow_mut()
+                    .push(VisibleTrack::YouTube(item));
+            }
+
+            if pending.borrow().is_empty() {
+                glib::ControlFlow::Break
+            } else {
+                glib::ControlFlow::Continue
+            }
+        });
     }
 
     fn rebuild_home(&self, tracks: &[Track], config: &AppConfig, youtube: &YouTubeLibraryCache) {
@@ -1660,6 +1759,26 @@ fn empty_row(message: &str) -> gtk::ListBoxRow {
     row.set_activatable(false);
     row.set_selectable(false);
     row.set_child(Some(&label));
+    row
+}
+
+fn loading_row(message: &str) -> gtk::ListBoxRow {
+    let spinner = gtk::Spinner::new();
+    spinner.start();
+    let label = gtk::Label::new(Some(message));
+    label.add_css_class("dim-label");
+
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    content.set_halign(gtk::Align::Center);
+    content.set_margin_top(30);
+    content.set_margin_bottom(30);
+    content.append(&spinner);
+    content.append(&label);
+
+    let row = gtk::ListBoxRow::new();
+    row.set_activatable(false);
+    row.set_selectable(false);
+    row.set_child(Some(&content));
     row
 }
 

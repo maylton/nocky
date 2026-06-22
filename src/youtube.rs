@@ -96,6 +96,7 @@ pub struct YouTubeLibraryCache {
     pub suggested_albums: Vec<YouTubeItem>,
     pub suggested_artists: Vec<YouTubeItem>,
     pub playlist_tracks: HashMap<String, Vec<YouTubeItem>>,
+    pub playlist_loading: HashSet<String>,
     pub albums: Vec<YouTubeCollectionEntry>,
     pub artists: Vec<YouTubeCollectionEntry>,
 }
@@ -115,6 +116,7 @@ impl YouTubeLibraryCache {
         self.suggested_albums.clear();
         self.suggested_artists.clear();
         self.playlist_tracks.clear();
+        self.playlist_loading.clear();
         self.albums.clear();
         self.artists.clear();
     }
@@ -136,6 +138,8 @@ impl YouTubeLibraryCache {
             .collect::<HashSet<_>>();
         self.playlist_tracks
             .retain(|browse_id, _| valid_playlists.contains(browse_id));
+        self.playlist_loading
+            .retain(|browse_id| valid_playlists.contains(browse_id));
         self.rebuild_collections();
     }
 
@@ -300,7 +304,11 @@ impl YouTubeBridge {
                 "video_id": playlist.video_id,
                 "playlist_kind": playlist.playlist_kind,
                 "params": playlist.params,
-                "limit": 300,
+                // Loading hundreds of entries before the first paint made
+                // cold playlist navigation unnecessarily slow. A larger,
+                // paginated model can be introduced later; 120 covers the
+                // common case while cutting response and render time sharply.
+                "limit": 120,
             }),
         )
     }
@@ -1140,6 +1148,7 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
         suggested_albums: cache.suggested_albums,
         suggested_artists: cache.suggested_artists,
         playlist_tracks,
+        playlist_loading: HashSet::new(),
         albums: cache.albums,
         artists: cache.artists,
     };
