@@ -86,6 +86,7 @@ enum BackgroundMessage {
     YouTubeDisconnected(Result<YouTubeStatus, String>),
     YouTubeLibrarySynced(Result<YouTubeLibrarySnapshot, String>),
     YouTubeBrowserPlaylist {
+        request_id: u64,
         playlist: YouTubeItem,
         result: Result<Vec<YouTubeItem>, String>,
     },
@@ -134,6 +135,7 @@ struct AppController {
     youtube_recovery_in_progress: Cell<bool>,
     youtube_recovery_attempted: Cell<bool>,
     youtube_recovery_resume_us: Cell<i64>,
+    youtube_playlist_request_id: Cell<u64>,
     youtube_bridge: Option<Arc<YouTubeBridge>>,
     youtube_library: RefCell<YouTubeLibraryCache>,
 
@@ -588,6 +590,7 @@ impl AppController {
             youtube_recovery_in_progress: Cell::new(false),
             youtube_recovery_attempted: Cell::new(false),
             youtube_recovery_resume_us: Cell::new(0),
+            youtube_playlist_request_id: Cell::new(0),
             youtube_bridge,
             youtube_library: RefCell::new(load_library_cache()),
             sidebar: sidebar_parts.revealer,
@@ -982,6 +985,8 @@ impl AppController {
         if browse_id.is_empty() {
             return;
         }
+        let request_id = self.youtube_playlist_request_id.get().wrapping_add(1);
+        self.youtube_playlist_request_id.set(request_id);
         if self
             .youtube_library
             .borrow()
@@ -1002,7 +1007,11 @@ impl AppController {
                 cache_items_for_browser(&mut items);
                 items
             });
-            let _ = sender.send(BackgroundMessage::YouTubeBrowserPlaylist { playlist, result });
+            let _ = sender.send(BackgroundMessage::YouTubeBrowserPlaylist {
+                request_id,
+                playlist,
+                result,
+            });
         });
     }
 
@@ -2179,8 +2188,15 @@ impl AppController {
                         ));
                     }
                 },
-                BackgroundMessage::YouTubeBrowserPlaylist { playlist, result } => match result {
+                BackgroundMessage::YouTubeBrowserPlaylist {
+                    request_id,
+                    playlist,
+                    result,
+                } => match result {
                     Ok(items) => {
+                        if request_id != self.youtube_playlist_request_id.get() {
+                            continue;
+                        }
                         let browse_id = playlist.browse_id.clone();
                         self.youtube_library
                             .borrow_mut()
@@ -2195,6 +2211,9 @@ impl AppController {
                         });
                     }
                     Err(error) => {
+                        if request_id != self.youtube_playlist_request_id.get() {
+                            continue;
+                        }
                         self.show_toast(&format!("Não foi possível carregar a playlist: {error}"))
                     }
                 },
