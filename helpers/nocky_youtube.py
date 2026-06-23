@@ -1027,7 +1027,30 @@ def command_collection(payload: dict[str, Any]) -> list[dict[str, Any]]:
     client = _create_client(authenticated=True)
     result_type = str(payload.get("result_type") or "").strip().lower()
     browse_id = str(payload.get("browse_id") or "").strip()
+    title = str(payload.get("title") or "").strip()
     limit = max(1, min(200, int(payload.get("limit") or 120)))
+
+    if not browse_id and title:
+        filter_name = "artists" if result_type == "artist" else "albums"
+        results = client.search(title, filter=filter_name, limit=5)
+        candidates = [
+            item
+            for result in results
+            if isinstance(result, dict)
+            if (item := _search_item(result))
+            if item.get("result_type") == result_type
+        ]
+        exact = next(
+            (
+                item
+                for item in candidates
+                if _text(item.get("title")).casefold() == title.casefold()
+            ),
+            None,
+        )
+        selected = exact or (candidates[0] if candidates else None)
+        browse_id = _text((selected or {}).get("browse_id"))
+
     if not browse_id:
         return []
 
@@ -1089,6 +1112,79 @@ def command_collection(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return tracks
 
 
+def command_artist(payload: dict[str, Any]) -> dict[str, Any]:
+    client = _create_client(authenticated=True)
+    browse_id = str(payload.get("browse_id") or "").strip()
+    title = str(payload.get("title") or "").strip()
+    limit = max(1, min(250, int(payload.get("limit") or 160)))
+
+    if not browse_id and title:
+        results = client.search(title, filter="artists", limit=5)
+        candidates = [
+            item
+            for result in results
+            if isinstance(result, dict)
+            if (item := _artist_item(result))
+        ]
+        exact = next(
+            (
+                item
+                for item in candidates
+                if _text(item.get("title")).casefold() == title.casefold()
+            ),
+            None,
+        )
+        selected = exact or (candidates[0] if candidates else None)
+        browse_id = _text((selected or {}).get("browse_id"))
+
+    if not browse_id:
+        raise RuntimeError("No YouTube Music artist could be resolved")
+
+    data = client.get_artist(browse_id)
+    artist_name = _text(data.get("name")) or title or "YouTube Music artist"
+    profile = _artist_item(
+        {
+            "title": artist_name,
+            "browseId": browse_id,
+            "subscribers": data.get("subscribers") or data.get("monthlyListeners"),
+            "thumbnails": data.get("thumbnails") or [],
+        }
+    )
+    if profile is None:
+        raise RuntimeError("YouTube Music returned no artist profile")
+
+    releases: list[dict[str, Any]] = []
+    for section_name in ("albums", "singles"):
+        section = data.get(section_name) or {}
+        for result in section.get("results") or []:
+            if isinstance(result, dict):
+                item = _album_item(result, artist_name)
+                if item:
+                    releases.append(item)
+
+        section_browse_id = _text(section.get("browseId") or section.get("browse_id"))
+        section_params = _text(section.get("params"))
+        if section_browse_id and section_params:
+            try:
+                expanded = client.get_artist_albums(
+                    section_browse_id,
+                    section_params,
+                    limit=limit,
+                )
+                for result in expanded or []:
+                    if isinstance(result, dict):
+                        item = _album_item(result, artist_name)
+                        if item:
+                            releases.append(item)
+            except Exception as error:
+                print(
+                    f"Nocky artist release expansion skipped for {artist_name}: {error}",
+                    file=sys.stderr,
+                )
+
+    return {"profile": profile, "albums": _dedupe(releases)[:limit]}
+
+
 def command_resolve(payload: dict[str, Any]) -> dict[str, Any]:
     return _resolve_stream(str(payload.get("video_id") or payload.get("url") or ""), bool(payload.get("force")))
 
@@ -1104,6 +1200,7 @@ COMMANDS = {
     "playlists": command_playlists,
     "playlist": command_playlist,
     "collection": command_collection,
+    "artist": command_artist,
     "resolve": command_resolve,
 }
 

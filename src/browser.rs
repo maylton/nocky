@@ -404,6 +404,10 @@ impl LibraryBrowser {
                 self.rebuild_artists(tracks, youtube, query);
                 self.root.set_visible_child_name("artists");
             }
+            BrowserRoute::YouTubeArtist(title) => {
+                self.rebuild_artist_albums(youtube, &title, query);
+                self.root.set_visible_child_name("albums");
+            }
             BrowserRoute::Playlists => {
                 self.rebuild_playlists(config, youtube, query);
                 self.root.set_visible_child_name("playlists");
@@ -1005,18 +1009,25 @@ impl LibraryBrowser {
             if !query.is_empty() && !artist_entry.title.to_lowercase().contains(&query) {
                 continue;
             }
+            let key = youtube_collection_key("artist", &artist_entry.title);
+            let source = youtube
+                .artist_profiles
+                .get(&key)
+                .unwrap_or(&artist_entry.source);
             append_collection_grid_card(
                 &self.artists_grid,
                 position,
                 collection_event_button(
                     collection_card(
-                        artist_entry.cached_cover(),
+                        source
+                            .cached_cover()
+                            .or_else(|| artist_entry.cached_cover()),
                         &artist_entry.title,
                         &artist_entry.subtitle,
                         &artist_entry.detail,
                         true,
                     ),
-                    BrowserEvent::OpenYouTubeCollection(artist_entry.source.clone()),
+                    BrowserEvent::OpenYouTubeCollection(source.clone()),
                     &self.event_tx,
                 ),
             );
@@ -1033,6 +1044,62 @@ impl LibraryBrowser {
                         "Carregando artistas do YouTube Music",
                     ),
                     BrowserRoute::Artists,
+                    &self.event_tx,
+                ),
+            );
+        }
+    }
+
+    fn rebuild_artist_albums(&self, youtube: &YouTubeLibraryCache, artist: &str, query: &str) {
+        clear_grid(&self.albums_grid);
+        let key = youtube_collection_key("artist", artist);
+        let query = query.trim().to_lowercase();
+        let mut position = 0;
+
+        if let Some(albums) = youtube.artist_albums.get(&key) {
+            for album in albums {
+                let haystack =
+                    format!("{} {} {}", album.title, album.artist, album.subtitle).to_lowercase();
+                if !query.is_empty() && !haystack.contains(&query) {
+                    continue;
+                }
+                append_collection_grid_card(
+                    &self.albums_grid,
+                    position,
+                    collection_event_button(
+                        collection_card(
+                            album.cached_cover(),
+                            &album.title,
+                            if album.subtitle.is_empty() {
+                                artist
+                            } else {
+                                &album.subtitle
+                            },
+                            "YouTube Music • lançamento do artista",
+                            true,
+                        ),
+                        BrowserEvent::OpenYouTubeCollection(album.clone()),
+                        &self.event_tx,
+                    ),
+                );
+                position += 1;
+            }
+        }
+
+        if position == 0 {
+            append_collection_grid_card(
+                &self.albums_grid,
+                position,
+                collection_button(
+                    collection_placeholder(
+                        if youtube.artist_loading.contains(&key) {
+                            "Carregando discografia..."
+                        } else {
+                            "Nenhum álbum encontrado"
+                        },
+                        artist,
+                    ),
+                    BrowserRoute::YouTubeArtist(artist.to_string()),
                     &self.event_tx,
                 ),
             );
@@ -1189,7 +1256,9 @@ fn home_artist_cards(tracks: &[Track], youtube: &YouTubeLibraryCache) -> Vec<Hom
     }
 
     for artist in youtube.artists.iter().take(12) {
-        cards.push(youtube_artist_home_card(artist));
+        let key = youtube_collection_key("artist", &artist.title);
+        let source = youtube.artist_profiles.get(&key).unwrap_or(&artist.source);
+        cards.push(youtube_artist_home_card_from_source(artist, source));
     }
 
     cards.truncate(18);
@@ -1205,12 +1274,18 @@ fn youtube_album_home_card(entry: &YouTubeCollectionEntry) -> HomeCard {
     }
 }
 
-fn youtube_artist_home_card(entry: &YouTubeCollectionEntry) -> HomeCard {
+fn youtube_artist_home_card_from_source(
+    entry: &YouTubeCollectionEntry,
+    source: &YouTubeItem,
+) -> HomeCard {
     HomeCard::YouTubeArtist {
-        item: entry.source.clone(),
+        item: source.clone(),
         subtitle: entry.subtitle.clone(),
         detail: entry.detail.clone(),
-        cover_path: entry.cached_cover().map(Path::to_path_buf),
+        cover_path: source
+            .cached_cover()
+            .or_else(|| entry.cached_cover())
+            .map(Path::to_path_buf),
     }
 }
 

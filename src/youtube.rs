@@ -65,6 +65,13 @@ pub fn youtube_collection_cache_key(item: &YouTubeItem) -> String {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
+pub struct YouTubeArtistOverview {
+    pub profile: YouTubeItem,
+    pub albums: Vec<YouTubeItem>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct YouTubeStatus {
     pub connected: bool,
     pub account: String,
@@ -113,6 +120,9 @@ pub struct YouTubeLibraryCache {
     pub playlist_loading: HashSet<String>,
     pub collection_tracks: HashMap<String, Vec<YouTubeItem>>,
     pub collection_loading: HashSet<String>,
+    pub artist_profiles: HashMap<String, YouTubeItem>,
+    pub artist_albums: HashMap<String, Vec<YouTubeItem>>,
+    pub artist_loading: HashSet<String>,
     pub albums: Vec<YouTubeCollectionEntry>,
     pub artists: Vec<YouTubeCollectionEntry>,
 }
@@ -135,6 +145,9 @@ impl YouTubeLibraryCache {
         self.playlist_loading.clear();
         self.collection_tracks.clear();
         self.collection_loading.clear();
+        self.artist_profiles.clear();
+        self.artist_albums.clear();
+        self.artist_loading.clear();
         self.albums.clear();
         self.artists.clear();
     }
@@ -181,7 +194,7 @@ impl YouTubeLibraryCache {
     }
 }
 
-const LIBRARY_CACHE_VERSION: u32 = 4;
+const LIBRARY_CACHE_VERSION: u32 = 5;
 const BROWSER_COVER_SIZE: u32 = 512;
 const PLAYER_COVER_SIZE: u32 = 1200;
 
@@ -199,6 +212,8 @@ struct PersistedYouTubeLibraryCache {
     suggested_artists: Vec<YouTubeItem>,
     playlist_tracks: HashMap<String, Vec<YouTubeItem>>,
     collection_tracks: HashMap<String, Vec<YouTubeItem>>,
+    artist_profiles: HashMap<String, YouTubeItem>,
+    artist_albums: HashMap<String, Vec<YouTubeItem>>,
     albums: Vec<YouTubeCollectionEntry>,
     artists: Vec<YouTubeCollectionEntry>,
 }
@@ -349,8 +364,20 @@ impl YouTubeBridge {
             json!({
                 "result_type": item.result_type,
                 "browse_id": item.browse_id,
+                "title": item.title,
                 "params": item.params,
                 "limit": 120,
+            }),
+        )
+    }
+
+    pub fn artist_overview(&self, item: &YouTubeItem) -> Result<YouTubeArtistOverview, String> {
+        self.run(
+            "artist",
+            json!({
+                "browse_id": item.browse_id,
+                "title": item.title,
+                "limit": 160,
             }),
         )
     }
@@ -1214,6 +1241,9 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
         playlist_loading: HashSet::new(),
         collection_tracks,
         collection_loading: HashSet::new(),
+        artist_profiles: cache.artist_profiles,
+        artist_albums: cache.artist_albums,
+        artist_loading: HashSet::new(),
         albums: cache.albums,
         artists: cache.artists,
     };
@@ -1261,6 +1291,8 @@ pub fn save_library_cache(cache: &YouTubeLibraryCache) -> Result<(), String> {
         suggested_artists: cache.suggested_artists.clone(),
         playlist_tracks,
         collection_tracks,
+        artist_profiles: cache.artist_profiles.clone(),
+        artist_albums: cache.artist_albums.clone(),
         albums: cache.albums.clone(),
         artists: cache.artists.clone(),
     };

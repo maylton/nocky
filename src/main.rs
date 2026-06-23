@@ -11,6 +11,8 @@ mod theme;
 mod visualizer;
 mod youtube;
 
+use crate::youtube::YouTubeArtistOverview;
+
 use adw::prelude::*;
 use browser::{BrowserEvent, BrowserRoute, LibraryBrowser};
 use config::{AppLanguage, BlurMode, StartupSource};
@@ -99,6 +101,10 @@ enum BackgroundMessage {
         item: YouTubeItem,
         key: String,
         result: Result<Vec<YouTubeItem>, String>,
+    },
+    YouTubeArtistOverview {
+        key: String,
+        result: Result<YouTubeArtistOverview, String>,
     },
     YouTubePlaylistsCached(Result<HashMap<String, Vec<YouTubeItem>>, String>),
     YouTubeCollectionsCached(Result<HashMap<String, Vec<YouTubeItem>>, String>),
@@ -1132,6 +1138,38 @@ impl AppController {
         };
         let key = youtube_collection_cache_key(&item);
 
+        if item.result_type == "artist" {
+            let cached = self
+                .youtube_library
+                .borrow()
+                .artist_albums
+                .contains_key(&key);
+            if cached {
+                self.navigate_browser(route);
+                return;
+            }
+
+            let Some(bridge) = self.youtube_bridge.clone() else {
+                self.show_toast("As dependências do YouTube Music não estão instaladas");
+                return;
+            };
+            self.youtube_library
+                .borrow_mut()
+                .artist_loading
+                .insert(key.clone());
+            self.navigate_browser(route);
+            let sender = self.background_tx.clone();
+            thread::spawn(move || {
+                let result = bridge.artist_overview(&item).map(|mut overview| {
+                    cache_items_for_browser(std::slice::from_mut(&mut overview.profile));
+                    cache_items_for_browser(&mut overview.albums);
+                    overview
+                });
+                let _ = sender.send(BackgroundMessage::YouTubeArtistOverview { key, result });
+            });
+            return;
+        }
+
         let cached = self
             .youtube_library
             .borrow()
@@ -1139,7 +1177,7 @@ impl AppController {
             .get(&key)
             .map(|items| !items.is_empty())
             .unwrap_or(false);
-        if cached || item.browse_id.is_empty() {
+        if cached {
             self.navigate_browser(route);
             return;
         }
@@ -2492,6 +2530,29 @@ impl AppController {
                         }
                     }
                 },
+                BackgroundMessage::YouTubeArtistOverview { key, result } => {
+                    self.youtube_library
+                        .borrow_mut()
+                        .artist_loading
+                        .remove(&key);
+                    match result {
+                        Ok(overview) => {
+                            let mut library = self.youtube_library.borrow_mut();
+                            library
+                                .artist_profiles
+                                .insert(key.clone(), overview.profile);
+                            library.artist_albums.insert(key.clone(), overview.albums);
+                            drop(library);
+                            if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
+                                eprintln!("Could not save YouTube artist details: {error}");
+                            }
+                        }
+                        Err(error) => {
+                            eprintln!("Could not load YouTube artist details: {error}");
+                        }
+                    }
+                    self.refresh_browser();
+                }
                 BackgroundMessage::YouTubeBrowserCollection { item, key, result } => {
                     self.youtube_library
                         .borrow_mut()
