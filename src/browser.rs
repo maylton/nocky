@@ -211,10 +211,10 @@ impl LibraryBrowser {
             &albums_grid,
         );
 
-        let artists_grid = collection_grid();
+        let artists_grid = artist_list_grid();
         let artists_page = collection_page(
             "ARTISTAS",
-            "Artistas encontrados na biblioteca local e na conta conectada",
+            "Selecione um artista para abrir sua discografia",
             "avatar-default-symbolic",
             &artists_grid,
         );
@@ -253,7 +253,10 @@ impl LibraryBrowser {
             });
         }
 
-        let create_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let create_row = gtk::Box::new(gtk::Orientation::Vertical, 8);
+        create_row.set_hexpand(true);
+        playlist_entry.set_hexpand(true);
+        create_button.set_hexpand(true);
         create_row.append(&playlist_entry);
         create_row.append(&create_button);
 
@@ -284,11 +287,17 @@ impl LibraryBrowser {
             });
         }
 
-        let playlist_select_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let playlist_select_row = gtk::Box::new(gtk::Orientation::Vertical, 8);
+        playlist_select_row.set_hexpand(true);
+        playlist_dropdown.set_hexpand(true);
+        delete_button.set_hexpand(true);
         playlist_select_row.append(&playlist_dropdown);
         playlist_select_row.append(&delete_button);
 
-        let action_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let action_row = gtk::Box::new(gtk::Orientation::Vertical, 8);
+        action_row.set_hexpand(true);
+        add_button.set_hexpand(true);
+        remove_button.set_hexpand(true);
         action_row.append(&add_button);
         action_row.append(&remove_button);
 
@@ -968,84 +977,62 @@ impl LibraryBrowser {
         let query = query.trim().to_lowercase();
         let mut position = 0;
 
-        let mut local_groups: BTreeMap<String, Vec<&Track>> = BTreeMap::new();
-        for track in tracks {
-            local_groups
-                .entry(track.artist.clone())
-                .or_default()
-                .push(track);
-        }
-        for (artist, artist_tracks) in local_groups {
+        let mut local_names = tracks
+            .iter()
+            .map(|track| track.artist.trim())
+            .filter(|artist| !artist.is_empty())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        local_names.sort_by(|left, right| compare_text(left, right));
+
+        for artist in local_names {
             if !query.is_empty() && !artist.to_lowercase().contains(&query) {
                 continue;
             }
-            let albums = artist_tracks
-                .iter()
-                .map(|track| track.album.as_str())
-                .collect::<BTreeSet<_>>()
-                .len();
-            let cover = artist_tracks
-                .iter()
-                .find_map(|track| track.cover_path.as_deref());
+
             append_collection_grid_card(
                 &self.artists_grid,
                 position,
-                collection_button(
-                    collection_card(
-                        cover,
-                        &artist,
-                        &format!("{albums} álbuns"),
-                        &format!("Local • {} faixas", artist_tracks.len()),
-                        false,
-                    ),
-                    BrowserRoute::Artist(artist),
+                artist_list_button(
+                    &artist,
+                    BrowserEvent::Navigate(BrowserRoute::Artist(artist.clone())),
                     &self.event_tx,
                 ),
             );
             position += 1;
         }
 
-        for artist_entry in &youtube.artists {
+        let mut online_artists = youtube.artists.iter().collect::<Vec<_>>();
+        online_artists.sort_by(|left, right| compare_text(&left.title, &right.title));
+
+        for artist_entry in online_artists {
             if !query.is_empty() && !artist_entry.title.to_lowercase().contains(&query) {
                 continue;
             }
-            let key = youtube_collection_key("artist", &artist_entry.title);
-            let source = youtube
-                .artist_profiles
-                .get(&key)
-                .unwrap_or(&artist_entry.source);
+
             append_collection_grid_card(
                 &self.artists_grid,
                 position,
-                collection_event_button(
-                    collection_card(
-                        source
-                            .cached_cover()
-                            .or_else(|| artist_entry.cached_cover()),
-                        &artist_entry.title,
-                        &artist_entry.subtitle,
-                        &artist_entry.detail,
-                        true,
-                    ),
-                    BrowserEvent::OpenYouTubeCollection(source.clone()),
+                artist_list_button(
+                    &artist_entry.title,
+                    BrowserEvent::OpenYouTubeCollection(artist_entry.source.clone()),
                     &self.event_tx,
                 ),
             );
             position += 1;
         }
 
-        if position == 0 && youtube.syncing {
+        if position == 0 {
             append_collection_grid_card(
                 &self.artists_grid,
                 position,
-                collection_button(
-                    collection_placeholder(
-                        "Sincronizando...",
-                        "Carregando artistas do YouTube Music",
-                    ),
-                    BrowserRoute::Artists,
-                    &self.event_tx,
-                ),
+                artist_list_placeholder(if youtube.syncing {
+                    "Sincronizando artistas…"
+                } else {
+                    "Nenhum artista encontrado"
+                }),
             );
         }
     }
@@ -1505,6 +1492,77 @@ const COLLECTION_CARD_MAX_WIDTH: i32 = 220;
 const COLLECTION_CARD_MIN_HEIGHT: i32 = 210;
 const COLLECTION_ARTWORK_MIN_SIZE: i32 = 124;
 const COLLECTION_ARTWORK_MAX_SIZE: i32 = 216;
+
+fn artist_list_grid() -> gtk::FlowBox {
+    let list = gtk::FlowBox::new();
+    list.set_column_spacing(0);
+    list.set_row_spacing(4);
+    list.set_min_children_per_line(1);
+    list.set_max_children_per_line(1);
+    list.set_homogeneous(false);
+    list.set_selection_mode(gtk::SelectionMode::None);
+    list.set_halign(gtk::Align::Fill);
+    list.set_valign(gtk::Align::Start);
+    list.set_hexpand(true);
+    list.add_css_class("artist-list");
+    list
+}
+
+fn artist_list_button(
+    artist: &str,
+    event: BrowserEvent,
+    event_tx: &Sender<BrowserEvent>,
+) -> gtk::Button {
+    let name = gtk::Label::new(Some(artist));
+    name.set_xalign(0.0);
+    name.set_hexpand(true);
+    name.set_ellipsize(gtk::pango::EllipsizeMode::End);
+
+    let arrow = gtk::Image::from_icon_name("go-next-symbolic");
+    arrow.set_pixel_size(16);
+    arrow.add_css_class("dim-label");
+
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    row.set_margin_start(14);
+    row.set_margin_end(14);
+    row.set_margin_top(10);
+    row.set_margin_bottom(10);
+    row.append(&name);
+    row.append(&arrow);
+
+    let button = gtk::Button::new();
+    button.set_child(Some(&row));
+    button.set_hexpand(true);
+    button.set_halign(gtk::Align::Fill);
+    button.add_css_class("flat");
+    button.add_css_class("artist-list-button");
+
+    let sender = event_tx.clone();
+    button.connect_clicked(move |_| {
+        let _ = sender.send(event.clone());
+    });
+
+    button
+}
+
+fn artist_list_placeholder(message: &str) -> gtk::Button {
+    let label = gtk::Label::new(Some(message));
+    label.set_xalign(0.0);
+    label.set_hexpand(true);
+    label.set_margin_start(14);
+    label.set_margin_end(14);
+    label.set_margin_top(12);
+    label.set_margin_bottom(12);
+    label.add_css_class("dim-label");
+
+    let button = gtk::Button::new();
+    button.set_child(Some(&label));
+    button.set_hexpand(true);
+    button.set_sensitive(false);
+    button.add_css_class("flat");
+    button.add_css_class("artist-list-button");
+    button
+}
 
 fn collection_grid() -> gtk::FlowBox {
     let grid = gtk::FlowBox::new();

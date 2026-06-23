@@ -1112,6 +1112,41 @@ def command_collection(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return tracks
 
 
+def _artist_release_items(
+    results: Any,
+    artist_name: str,
+) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    for result in results or []:
+        if not isinstance(result, dict):
+            continue
+        item = _album_item(result, artist_name)
+        if item is None:
+            continue
+        if not item.get("artist"):
+            item["artist"] = artist_name
+        if not item.get("subtitle"):
+            item["subtitle"] = artist_name
+        output.append(item)
+    return output
+
+
+def _get_all_artist_releases(
+    client: Any,
+    browse_id: str,
+    params: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    try:
+        return client.get_artist_albums(
+            browse_id,
+            params,
+            limit=limit,
+        ) or []
+    except TypeError:
+        return client.get_artist_albums(browse_id, params) or []
+
+
 def command_artist(payload: dict[str, Any]) -> dict[str, Any]:
     client = _create_client(authenticated=True)
     browse_id = str(payload.get("browse_id") or "").strip()
@@ -1154,35 +1189,53 @@ def command_artist(payload: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("YouTube Music returned no artist profile")
 
     releases: list[dict[str, Any]] = []
+    expansion_errors: list[str] = []
+
     for section_name in ("albums", "singles"):
         section = data.get(section_name) or {}
-        for result in section.get("results") or []:
-            if isinstance(result, dict):
-                item = _album_item(result, artist_name)
-                if item:
-                    releases.append(item)
+        if not isinstance(section, dict):
+            continue
 
-        section_browse_id = _text(section.get("browseId") or section.get("browse_id"))
+        releases.extend(
+            _artist_release_items(
+                section.get("results") or section.get("items"),
+                artist_name,
+            )
+        )
+
+        section_browse_id = _text(
+            section.get("browseId")
+            or section.get("browse_id")
+            or browse_id
+        )
         section_params = _text(section.get("params"))
-        if section_browse_id and section_params:
-            try:
-                expanded = client.get_artist_albums(
-                    section_browse_id,
-                    section_params,
-                    limit=limit,
-                )
-                for result in expanded or []:
-                    if isinstance(result, dict):
-                        item = _album_item(result, artist_name)
-                        if item:
-                            releases.append(item)
-            except Exception as error:
-                print(
-                    f"Nocky artist release expansion skipped for {artist_name}: {error}",
-                    file=sys.stderr,
-                )
+        if not section_browse_id or not section_params:
+            continue
 
-    return {"profile": profile, "albums": _dedupe(releases)[:limit]}
+        try:
+            expanded = _get_all_artist_releases(
+                client,
+                section_browse_id,
+                section_params,
+                limit,
+            )
+            releases.extend(_artist_release_items(expanded, artist_name))
+        except Exception as error:
+            expansion_errors.append(f"{section_name}: {error}")
+
+    releases = _dedupe(releases)[:limit]
+
+    if not releases:
+        details = "; ".join(expansion_errors)
+        suffix = f" ({details})" if details else ""
+        raise RuntimeError(
+            f"No albums or singles were returned for {artist_name}{suffix}"
+        )
+
+    return {
+        "profile": profile,
+        "albums": releases,
+    }
 
 
 def command_resolve(payload: dict[str, Any]) -> dict[str, Any]:

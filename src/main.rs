@@ -1293,6 +1293,73 @@ impl AppController {
         });
     }
 
+    fn prefetch_home_artist_profiles(&self) {
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            return;
+        };
+
+        let artists = {
+            let mut library = self.youtube_library.borrow_mut();
+            let candidates = library
+                .artists
+                .iter()
+                .take(12)
+                .filter_map(|entry| {
+                    let key = youtube_collection_key("artist", &entry.title);
+                    let missing = !library.artist_profiles.contains_key(&key);
+                    let idle = !library.artist_loading.contains(&key);
+
+                    (missing && idle).then(|| (key, entry.source.clone()))
+                })
+                .collect::<Vec<_>>();
+
+            for (key, _) in &candidates {
+                library.artist_loading.insert(key.clone());
+            }
+
+            candidates
+        };
+
+        if artists.is_empty() {
+            return;
+        }
+
+        let sender = self.background_tx.clone();
+        thread::spawn(move || {
+            let worker_count = artists.len().min(3);
+            let work = Arc::new(Mutex::new(artists.into_iter().collect::<VecDeque<_>>()));
+            let mut workers = Vec::with_capacity(worker_count);
+
+            for _ in 0..worker_count {
+                let bridge = bridge.clone();
+                let work = work.clone();
+                let sender = sender.clone();
+
+                workers.push(thread::spawn(move || loop {
+                    let next = match work.lock() {
+                        Ok(mut queue) => queue.pop_front(),
+                        Err(_) => None,
+                    };
+                    let Some((key, item)) = next else {
+                        break;
+                    };
+
+                    let result = bridge.artist_overview(&item).map(|mut overview| {
+                        cache_items_for_browser(std::slice::from_mut(&mut overview.profile));
+                        cache_items_for_browser(&mut overview.albums);
+                        overview
+                    });
+
+                    let _ = sender.send(BackgroundMessage::YouTubeArtistOverview { key, result });
+                }));
+            }
+
+            for worker in workers {
+                let _ = worker.join();
+            }
+        });
+    }
+
     fn handle_youtube_events(&self) {
         while let Some(event) = self.youtube_page.try_recv() {
             let Some(bridge) = self.youtube_bridge.clone() else {
@@ -2389,6 +2456,7 @@ impl AppController {
                                 );
                             } else {
                                 self.prefetch_youtube_playlist_cache();
+                                self.prefetch_home_artist_profiles();
                             }
                         } else {
                             self.youtube_library.borrow_mut().clear();
@@ -2549,6 +2617,9 @@ impl AppController {
                         }
                         Err(error) => {
                             eprintln!("Could not load YouTube artist details: {error}");
+                            self.show_toast(&format!(
+                                "Não foi possível carregar os álbuns do artista: {error}"
+                            ));
                         }
                     }
                     self.refresh_browser();
