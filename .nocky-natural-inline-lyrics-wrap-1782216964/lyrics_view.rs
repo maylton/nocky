@@ -346,24 +346,20 @@ fn inline_page() -> InlinePage {
     let mut labels = Vec::with_capacity(INLINE_SLOTS);
     for index in 0..INLINE_SLOTS {
         let label = gtk::Label::new(None);
+        label.set_wrap(true);
+        label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+        label.set_single_line_mode(false);
+        label.set_ellipsize(gtk::pango::EllipsizeMode::End);
         label.set_justify(gtk::Justification::Center);
         label.set_halign(gtk::Align::Center);
         label.set_hexpand(false);
         label.set_width_request(360);
-        label.set_width_chars(-1);
-        label.set_max_width_chars(-1);
-
+        label.set_width_chars(1);
+        label.set_max_width_chars(38);
         if index == INLINE_CENTER {
-            label.set_wrap(true);
-            label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
-            label.set_single_line_mode(false);
-            label.set_ellipsize(gtk::pango::EllipsizeMode::End);
             label.set_lines(2);
             label.set_size_request(-1, 44);
         } else {
-            label.set_wrap(false);
-            label.set_single_line_mode(true);
-            label.set_ellipsize(gtk::pango::EllipsizeMode::End);
             label.set_lines(1);
             label.set_size_request(-1, 22);
         }

@@ -233,12 +233,8 @@ struct AppController {
     footer_favorite_icon: gtk::Image,
     footer_favorite_button: gtk::Button,
     progress: gtk::Scale,
-    home_progress_stack: gtk::Stack,
-    home_wave_progress: WaveProgress,
     elapsed: gtk::Label,
     duration: gtk::Label,
-    footer_progress_stack: gtk::Stack,
-    footer_traditional_progress: gtk::Scale,
     footer_progress: WaveProgress,
     footer_elapsed: gtk::Label,
     footer_duration: gtk::Label,
@@ -321,7 +317,7 @@ impl AppController {
 
         let sidebar_button = gtk::ToggleButton::builder()
             .icon_name("sidebar-show-symbolic")
-            .active(false)
+            .active(true)
             .tooltip_text(tr(Message::SidebarToggle))
             .build();
         header.pack_start(&sidebar_button);
@@ -432,14 +428,10 @@ impl AppController {
         hero_cover_slot.set_orientation(gtk::Orientation::Vertical);
         hero_cover_slot.set_vexpand(false);
         hero_cover_slot.set_hexpand(true);
-        hero_cover_slot.set_margin_top(0);
-        hero_cover_slot.set_margin_bottom(0);
-        hero_cover_slot.set_height_request(328);
-        hero_cover_slot.set_width_request(384);
-        hero_cover_slot.set_valign(gtk::Align::Start);
+        hero_cover_slot.set_margin_top(28);
+        hero_cover_slot.set_margin_bottom(20);
         hero_cover_slot.set_center_widget(Some(&hero_cover.stack));
         hero_cover_slot.add_css_class("hero-cover-slot");
-        hero_cover_slot.add_css_class("stable-player-cover-slot");
 
         let elapsed = gtk::Label::new(Some("0:00"));
         elapsed.add_css_class("time-label");
@@ -449,18 +441,6 @@ impl AppController {
         progress.set_draw_value(false);
         progress.set_hexpand(true);
         progress.add_css_class("progress-scale");
-
-        let home_wave_progress = WaveProgress::new();
-        home_wave_progress
-            .widget()
-            .add_css_class("home-wave-progress");
-
-        let home_progress_stack = gtk::Stack::new();
-        home_progress_stack.set_hexpand(true);
-        home_progress_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
-        home_progress_stack.set_transition_duration(160);
-        home_progress_stack.add_named(&progress, Some("classic"));
-        home_progress_stack.add_named(home_wave_progress.widget(), Some("m3"));
 
         let time_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         elapsed.set_hexpand(true);
@@ -505,103 +485,22 @@ impl AppController {
         let visualizer = SpectrumVisualizer::new();
         let lyrics = LyricsPresenter::new();
 
-        // stable_home_player_layout_v1
-        // stable_standby_slots_v1
-        let visualizer_widget = visualizer.widget().clone();
-        visualizer_widget.set_size_request(384, 74);
-        visualizer_widget.set_hexpand(false);
-        visualizer_widget.set_halign(gtk::Align::Center);
-        visualizer_widget.set_vexpand(false);
-        visualizer_widget.set_valign(gtk::Align::Center);
-
-        let visualizer_slot = gtk::CenterBox::new();
-        visualizer_slot.set_orientation(gtk::Orientation::Vertical);
-        visualizer_slot.set_size_request(384, 74);
-        visualizer_slot.set_hexpand(false);
-        visualizer_slot.set_halign(gtk::Align::Center);
-        visualizer_slot.set_vexpand(false);
-        visualizer_slot.set_valign(gtk::Align::Start);
-        visualizer_slot.set_center_widget(Some(&visualizer_widget));
-        visualizer_slot.add_css_class("stable-visualizer-slot");
-
-        let inline_lyrics_widget = lyrics.inline_widget().clone();
-        inline_lyrics_widget.set_size_request(384, 158);
-        inline_lyrics_widget.set_hexpand(false);
-        inline_lyrics_widget.set_halign(gtk::Align::Center);
-        inline_lyrics_widget.set_vexpand(false);
-        inline_lyrics_widget.set_valign(gtk::Align::Center);
-
-        let lyrics_slot = gtk::CenterBox::new();
-        lyrics_slot.set_orientation(gtk::Orientation::Vertical);
-        lyrics_slot.set_size_request(384, 158);
-        lyrics_slot.set_hexpand(false);
-        lyrics_slot.set_halign(gtk::Align::Center);
-        lyrics_slot.set_vexpand(false);
-        lyrics_slot.set_valign(gtk::Align::Start);
-        lyrics_slot.set_center_widget(Some(&inline_lyrics_widget));
-        lyrics_slot.add_css_class("stable-lyrics-slot");
-
-        title_row.set_height_request(34);
-        title_row.set_vexpand(false);
-        title_row.set_valign(gtk::Align::Center);
-
-        artist.set_height_request(22);
-        artist.set_vexpand(false);
-        album.set_height_request(22);
-        album.set_vexpand(false);
-
-        home_progress_stack.set_height_request(22);
-        home_progress_stack.set_vexpand(false);
-
-        time_row.set_height_request(18);
-        time_row.set_vexpand(false);
-
-        controls.set_height_request(52);
-        controls.set_vexpand(false);
-        controls.set_valign(gtk::Align::Center);
-
-        let metadata_block = gtk::Box::new(gtk::Orientation::Vertical, 6);
-        metadata_block.set_height_request(92);
-        metadata_block.set_width_request(384);
-        metadata_block.set_vexpand(false);
-        metadata_block.set_valign(gtk::Align::Start);
-        metadata_block.add_css_class("stable-player-metadata");
-        metadata_block.append(&title_row);
-        metadata_block.append(&artist);
-        metadata_block.append(&album);
-
-        let transport_block = gtk::Box::new(gtk::Orientation::Vertical, 6);
-        transport_block.set_height_request(116);
-        transport_block.set_width_request(384);
-        transport_block.set_vexpand(false);
-        transport_block.set_valign(gtk::Align::Start);
-        transport_block.add_css_class("stable-player-transport");
-        transport_block.append(&home_progress_stack);
-        transport_block.append(&time_row);
-        transport_block.append(&controls);
-
-        let now_content = gtk::Box::new(gtk::Orientation::Vertical, 12);
-        now_content.set_width_request(384);
-        now_content.set_hexpand(false);
-        now_content.set_halign(gtk::Align::Center);
-        now_content.set_vexpand(false);
-        now_content.set_valign(gtk::Align::Start);
-        now_content.add_css_class("stable-player-content");
-        now_content.append(&now_header);
-        now_content.append(&hero_cover_slot);
-        now_content.append(&metadata_block);
-        now_content.append(&transport_block);
-        now_content.append(&visualizer_slot);
-        now_content.append(&lyrics_slot);
-
-        let now_card = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        now_card.set_size_request(420, -1);
+        let now_card = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        now_card.set_size_request(380, -1);
         now_card.set_hexpand(false);
         now_card.set_vexpand(true);
         now_card.set_valign(gtk::Align::Fill);
         now_card.add_css_class("now-playing-card");
-        now_card.add_css_class("stable-home-player");
-        now_card.append(&now_content);
+        now_card.append(&now_header);
+        now_card.append(&hero_cover_slot);
+        now_card.append(&title_row);
+        now_card.append(&artist);
+        now_card.append(&album);
+        now_card.append(&progress);
+        now_card.append(&time_row);
+        now_card.append(&controls);
+        now_card.append(visualizer.widget());
+        now_card.append(lyrics.inline_widget());
 
         let browser = LibraryBrowser::new();
 
@@ -724,7 +623,6 @@ impl AppController {
         footer_now_playing.set_size_request(350, 56);
         footer_now_playing.add_css_class("flat");
         footer_now_playing.add_css_class("footer-now-playing-button");
-        footer_now_playing.set_tooltip_text(Some("Abrir fila de reprodução"));
 
         let footer_shuffle = gtk::ToggleButton::builder()
             .icon_name("media-playlist-shuffle-symbolic")
@@ -759,7 +657,6 @@ impl AppController {
         footer_repeat.add_css_class("footer-control");
 
         let footer_transport = gtk::Box::new(gtk::Orientation::Horizontal, 7);
-        footer_transport.set_margin_top(8);
         footer_transport.set_halign(gtk::Align::Center);
         footer_transport.append(&footer_shuffle);
         footer_transport.append(&footer_previous);
@@ -768,20 +665,6 @@ impl AppController {
         footer_transport.append(&footer_repeat);
 
         let footer_progress = WaveProgress::new();
-
-        let footer_traditional_progress =
-            gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 1.0, 0.001);
-        footer_traditional_progress.set_draw_value(false);
-        footer_traditional_progress.set_hexpand(true);
-        footer_traditional_progress.add_css_class("footer-classic-progress");
-
-        let footer_progress_stack = gtk::Stack::new();
-        footer_progress_stack.set_hexpand(true);
-        footer_progress_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
-        footer_progress_stack.set_transition_duration(160);
-        footer_progress_stack.add_named(&footer_traditional_progress, Some("classic"));
-        footer_progress_stack.add_named(footer_progress.widget(), Some("m3"));
-
         let footer_elapsed = gtk::Label::new(Some("0:00"));
         footer_elapsed.add_css_class("time-label");
         let footer_duration = gtk::Label::new(Some("0:00"));
@@ -790,7 +673,7 @@ impl AppController {
         let footer_progress_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         footer_progress_row.set_hexpand(true);
         footer_progress_row.append(&footer_elapsed);
-        footer_progress_row.append(&footer_progress_stack);
+        footer_progress_row.append(footer_progress.widget());
         footer_progress_row.append(&footer_duration);
 
         let footer_center = gtk::Box::new(gtk::Orientation::Vertical, 2);
@@ -821,7 +704,6 @@ impl AppController {
         volume.add_css_class("footer-volume");
 
         let right_controls = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        right_controls.set_margin_top(8);
         right_controls.set_halign(gtk::Align::End);
         right_controls.set_size_request(220, 56);
         right_controls.append(&lyrics_button);
@@ -929,12 +811,8 @@ impl AppController {
             footer_favorite_icon,
             footer_favorite_button: footer_favorite.clone(),
             progress,
-            home_progress_stack,
-            home_wave_progress,
             elapsed,
             duration,
-            footer_progress_stack,
-            footer_traditional_progress,
             footer_progress,
             footer_elapsed,
             footer_duration,
@@ -957,40 +835,6 @@ impl AppController {
         controller.apply_home_preferences();
         controller.apply_volume_icon();
         controller.install_footer_adaptive();
-
-        controller.sidebar_button.set_active(false);
-        controller.sidebar.set_reveal_child(false);
-
-        // home_tab_navigation_v1
-        {
-            let weak = Rc::downgrade(&controller);
-            controller
-                .views
-                .connect_visible_child_name_notify(move |stack| {
-                    if stack.visible_child_name().as_deref() == Some("music") {
-                        if let Some(controller) = weak.upgrade() {
-                            controller.open_library_home();
-                        }
-                    }
-                });
-        }
-
-        {
-            let weak = Rc::downgrade(&controller);
-            let switcher_for_click = switcher.clone();
-            let click = gtk::GestureClick::new();
-            click.set_button(1);
-            click.set_propagation_phase(gtk::PropagationPhase::Capture);
-            click.connect_released(move |_, _, x, _| {
-                let width = switcher_for_click.width().max(1) as f64;
-                if x <= width / 2.0 {
-                    if let Some(controller) = weak.upgrade() {
-                        controller.open_library_home();
-                    }
-                }
-            });
-            switcher.add_controller(click);
-        }
 
         {
             let weak = Rc::downgrade(&controller);
@@ -1132,7 +976,10 @@ impl AppController {
             let weak = Rc::downgrade(&controller);
             footer_now_playing.connect_clicked(move |_| {
                 if let Some(controller) = weak.upgrade() {
-                    controller.show_footer_playback_queue();
+                    controller.views.set_visible_child_name("music");
+                    if controller.lyrics_button.is_active() {
+                        controller.lyrics_button.set_active(false);
+                    }
                 }
             });
         }
@@ -1157,22 +1004,6 @@ impl AppController {
         {
             let weak = Rc::downgrade(&controller);
             controller.footer_progress.connect_seek(move |fraction| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
-                if !controller.player.is_seekable() {
-                    return;
-                }
-                let duration = controller.player.duration_us();
-                if duration > 0 {
-                    controller.seek_to((fraction * duration as f64) as i64, true);
-                }
-            });
-        }
-
-        {
-            let weak = Rc::downgrade(&controller);
-            controller.home_wave_progress.connect_seek(move |fraction| {
                 let Some(controller) = weak.upgrade() else {
                     return;
                 };
@@ -1370,23 +1201,6 @@ impl AppController {
 
         {
             let weak = Rc::downgrade(self);
-            self.footer_traditional_progress
-                .connect_value_changed(move |scale| {
-                    let Some(controller) = weak.upgrade() else {
-                        return;
-                    };
-                    if controller.updating_progress.get() || !controller.player.is_seekable() {
-                        return;
-                    }
-                    let duration = controller.player.duration_us();
-                    if duration > 0 {
-                        controller.seek_to((scale.value() * duration as f64) as i64, true);
-                    }
-                });
-        }
-
-        {
-            let weak = Rc::downgrade(self);
             let mut progress_ticks = 0_u8;
             glib::timeout_add_local(Duration::from_millis(50), move || {
                 let Some(controller) = weak.upgrade() else {
@@ -1425,200 +1239,6 @@ impl AppController {
                 glib::ControlFlow::Continue
             });
         }
-    }
-
-    fn open_library_home(&self) {
-        self.search_query.replace(String::new());
-        self.search_entry.set_text("");
-        self.views.set_visible_child_name("music");
-
-        if self.lyrics_button.is_active() {
-            self.lyrics_button.set_active(false);
-        }
-
-        self.navigate_browser(BrowserRoute::All);
-    }
-
-    fn show_footer_playback_queue(self: &Rc<Self>) {
-        let popover = gtk::Popover::new();
-        popover.set_has_arrow(true);
-        popover.set_autohide(true);
-        popover.set_position(gtk::PositionType::Top);
-        popover.set_parent(&self.footer_now_playing);
-        popover.add_css_class("queue-popover");
-
-        let content = gtk::Box::new(gtk::Orientation::Vertical, 10);
-        content.set_margin_top(12);
-        content.set_margin_bottom(12);
-        content.set_margin_start(12);
-        content.set_margin_end(12);
-        content.set_size_request(390, -1);
-        content.add_css_class("queue-popover-content");
-
-        let heading = gtk::Label::new(Some("Fila de reprodução"));
-        heading.set_xalign(0.0);
-        heading.add_css_class("title-3");
-        content.append(&heading);
-
-        let list = gtk::ListBox::new();
-        list.set_selection_mode(gtk::SelectionMode::None);
-        list.add_css_class("queue-popover-list");
-
-        let mut rows = 0_usize;
-
-        match self.playback_source.get() {
-            PlaybackSource::Local => {
-                let state = self.state.borrow();
-
-                for index in &state.playback_queue {
-                    let Some(track) = state.tracks.get(*index) else {
-                        continue;
-                    };
-
-                    let line = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-                    line.set_margin_top(8);
-                    line.set_margin_bottom(8);
-                    line.set_margin_start(10);
-                    line.set_margin_end(10);
-
-                    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
-                    text.set_hexpand(true);
-
-                    let title = gtk::Label::new(Some(&track.title));
-                    title.set_xalign(0.0);
-                    title.set_ellipsize(gtk::pango::EllipsizeMode::End);
-                    title.add_css_class("heading");
-
-                    let artist = gtk::Label::new(Some(&track.artist));
-                    artist.set_xalign(0.0);
-                    artist.set_ellipsize(gtk::pango::EllipsizeMode::End);
-                    artist.add_css_class("dim-label");
-
-                    text.append(&title);
-                    text.append(&artist);
-                    line.append(&text);
-
-                    let button = gtk::Button::new();
-                    button.set_hexpand(true);
-                    button.set_halign(gtk::Align::Fill);
-                    button.set_child(Some(&line));
-                    button.add_css_class("flat");
-                    button.add_css_class("queue-popover-row");
-
-                    if state.current == Some(*index) {
-                        let playing = gtk::Image::from_icon_name("audio-volume-high-symbolic");
-                        playing.add_css_class("accent");
-                        line.append(&playing);
-                        button.add_css_class("active");
-                    }
-
-                    let selected = *index;
-                    let weak = Rc::downgrade(self);
-                    let queue_popover = popover.clone();
-                    button.connect_clicked(move |_| {
-                        if let Some(controller) = weak.upgrade() {
-                            controller.select_track(selected, true);
-                            queue_popover.popdown();
-                        }
-                    });
-
-                    list.append(&button);
-                    rows += 1;
-                }
-            }
-            PlaybackSource::YouTube => {
-                let youtube_state = self.youtube_state.borrow();
-
-                if let Some(state) = youtube_state.as_ref() {
-                    let queue = Rc::new(state.queue.clone());
-                    let current = state.current;
-
-                    for (position, item) in queue.iter().cloned().enumerate() {
-                        let line = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-                        line.set_margin_top(8);
-                        line.set_margin_bottom(8);
-                        line.set_margin_start(10);
-                        line.set_margin_end(10);
-
-                        let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
-                        text.set_hexpand(true);
-
-                        let title = gtk::Label::new(Some(&item.title));
-                        title.set_xalign(0.0);
-                        title.set_ellipsize(gtk::pango::EllipsizeMode::End);
-                        title.add_css_class("heading");
-
-                        let artist_text = if item.artist.is_empty() {
-                            "YouTube Music"
-                        } else {
-                            item.artist.as_str()
-                        };
-                        let artist = gtk::Label::new(Some(artist_text));
-                        artist.set_xalign(0.0);
-                        artist.set_ellipsize(gtk::pango::EllipsizeMode::End);
-                        artist.add_css_class("dim-label");
-
-                        text.append(&title);
-                        text.append(&artist);
-                        line.append(&text);
-
-                        let button = gtk::Button::new();
-                        button.set_hexpand(true);
-                        button.set_halign(gtk::Align::Fill);
-                        button.set_child(Some(&line));
-                        button.add_css_class("flat");
-                        button.add_css_class("queue-popover-row");
-
-                        if position == current {
-                            let playing = gtk::Image::from_icon_name("audio-volume-high-symbolic");
-                            playing.add_css_class("accent");
-                            line.append(&playing);
-                            button.add_css_class("active");
-                        }
-
-                        let weak = Rc::downgrade(self);
-                        let queue_for_click = queue.clone();
-                        let item_for_click = item.clone();
-                        let queue_popover = popover.clone();
-                        button.connect_clicked(move |_| {
-                            if let Some(controller) = weak.upgrade() {
-                                controller.resolve_youtube_track(
-                                    item_for_click.clone(),
-                                    queue_for_click.as_ref().clone(),
-                                    position,
-                                    false,
-                                );
-                                queue_popover.popdown();
-                            }
-                        });
-
-                        list.append(&button);
-                        rows += 1;
-                    }
-                }
-            }
-            PlaybackSource::None => {}
-        }
-
-        if rows == 0 {
-            let empty = gtk::Label::new(Some("A fila está vazia"));
-            empty.set_margin_top(18);
-            empty.set_margin_bottom(18);
-            empty.add_css_class("dim-label");
-            list.append(&empty);
-        }
-
-        let scroll = gtk::ScrolledWindow::new();
-        scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-        scroll.set_min_content_width(390);
-        scroll.set_max_content_height(420);
-        scroll.set_propagate_natural_height(true);
-        scroll.set_child(Some(&list));
-        scroll.add_css_class("queue-popover-scroll");
-
-        content.append(&scroll);
-        popover.set_child(Some(&content));
-        popover.popup();
     }
 
     fn refresh_youtube_status(&self) {
@@ -2726,17 +2346,6 @@ impl AppController {
         }));
     }
 
-    fn apply_progress_style(&self) {
-        let use_m3 = self.config.borrow().use_m3_progress;
-        let child = if use_m3 { "m3" } else { "classic" };
-        self.home_progress_stack.set_visible_child_name(child);
-        self.footer_progress_stack.set_visible_child_name(child);
-
-        let animate = use_m3 && self.player.is_playing();
-        self.home_wave_progress.set_playing(animate);
-        self.footer_progress.set_playing(animate);
-    }
-
     fn apply_translations(&self) {
         let language = self.config.borrow().language;
         let tr = |message| i18n::text(language, message);
@@ -2893,8 +2502,6 @@ impl AppController {
         self._theme.set_noctalia_enabled(config.noctalia_theme_sync);
         self._theme
             .set_blur_preferences(config.blur_mode, config.blur_opacity);
-        drop(config);
-        self.apply_progress_style();
     }
 
     fn show_settings_dialog(self: &Rc<Self>) {
@@ -2995,13 +2602,6 @@ impl AppController {
             self.tr(Message::HomeLyrics),
             self.tr(Message::HomeLyricsDescription),
             &lyrics,
-        ));
-
-        let m3_progress = settings_switch(config.use_m3_progress);
-        content.append(&settings_switch_row(
-            self.tr(Message::M3Progress),
-            self.tr(Message::M3ProgressDescription),
-            &m3_progress,
         ));
 
         let auto_lyrics = settings_switch(config.auto_download_lyrics);
@@ -3122,10 +2722,9 @@ impl AppController {
         for (switch, setting) in [
             (&visualizer, 0_u8),
             (&lyrics, 1),
-            (&m3_progress, 2),
-            (&auto_lyrics, 3),
-            (&youtube_sync, 4),
-            (&noctalia, 5),
+            (&auto_lyrics, 2),
+            (&youtube_sync, 3),
+            (&noctalia, 4),
         ] {
             let weak = Rc::downgrade(self);
             switch.connect_active_notify(move |switch| {
@@ -3138,9 +2737,8 @@ impl AppController {
                     match setting {
                         0 => config.show_home_visualizer = active,
                         1 => config.show_home_lyrics = active,
-                        2 => config.use_m3_progress = active,
-                        3 => config.auto_download_lyrics = active,
-                        4 => config.youtube_auto_sync = active,
+                        2 => config.auto_download_lyrics = active,
+                        3 => config.youtube_auto_sync = active,
                         _ => config.noctalia_theme_sync = active,
                     }
                 }
@@ -4497,9 +4095,7 @@ impl AppController {
         self.hero_play_icon.set_icon_name(Some(icon));
         self.visualizer
             .set_active(playing && self.visualizer.widget().is_visible());
-        let animate_m3 = playing && self.config.borrow().use_m3_progress;
-        self.home_wave_progress.set_playing(animate_m3);
-        self.footer_progress.set_playing(animate_m3);
+        self.footer_progress.set_playing(playing);
     }
 
     fn begin_listening_session(&self, id: String) {
@@ -4571,9 +4167,6 @@ impl AppController {
 
         self.updating_progress.set(true);
         self.progress.set_value(fraction.clamp(0.0, 1.0));
-        self.footer_traditional_progress
-            .set_value(fraction.clamp(0.0, 1.0));
-        self.home_wave_progress.set_fraction(fraction);
         self.footer_progress.set_fraction(fraction);
         self.updating_progress.set(false);
         let elapsed = format_time(timestamp);
@@ -4651,8 +4244,6 @@ impl AppController {
         self.footer_elapsed.set_text("0:00");
         self.footer_duration.set_text("0:00");
         self.progress.set_value(0.0);
-        self.footer_traditional_progress.set_value(0.0);
-        self.home_wave_progress.set_fraction(0.0);
         self.footer_progress.set_fraction(0.0);
         self.update_play_icons(false);
         self.last_mpris_position.set(0);

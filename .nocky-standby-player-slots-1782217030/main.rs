@@ -506,40 +506,19 @@ impl AppController {
         let lyrics = LyricsPresenter::new();
 
         // stable_home_player_layout_v1
-        // stable_standby_slots_v1
         let visualizer_widget = visualizer.widget().clone();
         visualizer_widget.set_size_request(384, 74);
         visualizer_widget.set_hexpand(false);
         visualizer_widget.set_halign(gtk::Align::Center);
         visualizer_widget.set_vexpand(false);
-        visualizer_widget.set_valign(gtk::Align::Center);
-
-        let visualizer_slot = gtk::CenterBox::new();
-        visualizer_slot.set_orientation(gtk::Orientation::Vertical);
-        visualizer_slot.set_size_request(384, 74);
-        visualizer_slot.set_hexpand(false);
-        visualizer_slot.set_halign(gtk::Align::Center);
-        visualizer_slot.set_vexpand(false);
-        visualizer_slot.set_valign(gtk::Align::Start);
-        visualizer_slot.set_center_widget(Some(&visualizer_widget));
-        visualizer_slot.add_css_class("stable-visualizer-slot");
+        visualizer_widget.set_valign(gtk::Align::Start);
 
         let inline_lyrics_widget = lyrics.inline_widget().clone();
         inline_lyrics_widget.set_size_request(384, 158);
         inline_lyrics_widget.set_hexpand(false);
         inline_lyrics_widget.set_halign(gtk::Align::Center);
         inline_lyrics_widget.set_vexpand(false);
-        inline_lyrics_widget.set_valign(gtk::Align::Center);
-
-        let lyrics_slot = gtk::CenterBox::new();
-        lyrics_slot.set_orientation(gtk::Orientation::Vertical);
-        lyrics_slot.set_size_request(384, 158);
-        lyrics_slot.set_hexpand(false);
-        lyrics_slot.set_halign(gtk::Align::Center);
-        lyrics_slot.set_vexpand(false);
-        lyrics_slot.set_valign(gtk::Align::Start);
-        lyrics_slot.set_center_widget(Some(&inline_lyrics_widget));
-        lyrics_slot.add_css_class("stable-lyrics-slot");
+        inline_lyrics_widget.set_valign(gtk::Align::Start);
 
         title_row.set_height_request(34);
         title_row.set_vexpand(false);
@@ -591,8 +570,8 @@ impl AppController {
         now_content.append(&hero_cover_slot);
         now_content.append(&metadata_block);
         now_content.append(&transport_block);
-        now_content.append(&visualizer_slot);
-        now_content.append(&lyrics_slot);
+        now_content.append(&visualizer_widget);
+        now_content.append(&inline_lyrics_widget);
 
         let now_card = gtk::Box::new(gtk::Orientation::Vertical, 0);
         now_card.set_size_request(420, -1);

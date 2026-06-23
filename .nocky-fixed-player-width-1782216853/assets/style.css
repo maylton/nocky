@@ -810,30 +810,3 @@ button.queue-popover-row.active {
 .stable-player-transport {
   min-height: 116px;
 }
-
-
-/* Fixed Home player width */
-.stable-home-player {
-  min-width: 420px;
-}
-
-.stable-player-content,
-.stable-player-cover-slot,
-.stable-player-metadata,
-.stable-player-transport,
-.inline-lyrics-panel {
-  min-width: 384px;
-  max-width: 384px;
-}
-
-
-/* Stable standby slots */
-.stable-visualizer-slot {
-  min-width: 384px;
-  min-height: 74px;
-}
-
-.stable-lyrics-slot {
-  min-width: 384px;
-  min-height: 158px;
-}

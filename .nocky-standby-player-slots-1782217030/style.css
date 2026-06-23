@@ -825,15 +825,3 @@ button.queue-popover-row.active {
   min-width: 384px;
   max-width: 384px;
 }
-
-
-/* Stable standby slots */
-.stable-visualizer-slot {
-  min-width: 384px;
-  min-height: 74px;
-}
-
-.stable-lyrics-slot {
-  min-width: 384px;
-  min-height: 158px;
-}

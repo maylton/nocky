@@ -432,14 +432,10 @@ impl AppController {
         hero_cover_slot.set_orientation(gtk::Orientation::Vertical);
         hero_cover_slot.set_vexpand(false);
         hero_cover_slot.set_hexpand(true);
-        hero_cover_slot.set_margin_top(0);
-        hero_cover_slot.set_margin_bottom(0);
-        hero_cover_slot.set_height_request(328);
-        hero_cover_slot.set_width_request(384);
-        hero_cover_slot.set_valign(gtk::Align::Start);
+        hero_cover_slot.set_margin_top(28);
+        hero_cover_slot.set_margin_bottom(20);
         hero_cover_slot.set_center_widget(Some(&hero_cover.stack));
         hero_cover_slot.add_css_class("hero-cover-slot");
-        hero_cover_slot.add_css_class("stable-player-cover-slot");
 
         let elapsed = gtk::Label::new(Some("0:00"));
         elapsed.add_css_class("time-label");
@@ -505,103 +501,22 @@ impl AppController {
         let visualizer = SpectrumVisualizer::new();
         let lyrics = LyricsPresenter::new();
 
-        // stable_home_player_layout_v1
-        // stable_standby_slots_v1
-        let visualizer_widget = visualizer.widget().clone();
-        visualizer_widget.set_size_request(384, 74);
-        visualizer_widget.set_hexpand(false);
-        visualizer_widget.set_halign(gtk::Align::Center);
-        visualizer_widget.set_vexpand(false);
-        visualizer_widget.set_valign(gtk::Align::Center);
-
-        let visualizer_slot = gtk::CenterBox::new();
-        visualizer_slot.set_orientation(gtk::Orientation::Vertical);
-        visualizer_slot.set_size_request(384, 74);
-        visualizer_slot.set_hexpand(false);
-        visualizer_slot.set_halign(gtk::Align::Center);
-        visualizer_slot.set_vexpand(false);
-        visualizer_slot.set_valign(gtk::Align::Start);
-        visualizer_slot.set_center_widget(Some(&visualizer_widget));
-        visualizer_slot.add_css_class("stable-visualizer-slot");
-
-        let inline_lyrics_widget = lyrics.inline_widget().clone();
-        inline_lyrics_widget.set_size_request(384, 158);
-        inline_lyrics_widget.set_hexpand(false);
-        inline_lyrics_widget.set_halign(gtk::Align::Center);
-        inline_lyrics_widget.set_vexpand(false);
-        inline_lyrics_widget.set_valign(gtk::Align::Center);
-
-        let lyrics_slot = gtk::CenterBox::new();
-        lyrics_slot.set_orientation(gtk::Orientation::Vertical);
-        lyrics_slot.set_size_request(384, 158);
-        lyrics_slot.set_hexpand(false);
-        lyrics_slot.set_halign(gtk::Align::Center);
-        lyrics_slot.set_vexpand(false);
-        lyrics_slot.set_valign(gtk::Align::Start);
-        lyrics_slot.set_center_widget(Some(&inline_lyrics_widget));
-        lyrics_slot.add_css_class("stable-lyrics-slot");
-
-        title_row.set_height_request(34);
-        title_row.set_vexpand(false);
-        title_row.set_valign(gtk::Align::Center);
-
-        artist.set_height_request(22);
-        artist.set_vexpand(false);
-        album.set_height_request(22);
-        album.set_vexpand(false);
-
-        home_progress_stack.set_height_request(22);
-        home_progress_stack.set_vexpand(false);
-
-        time_row.set_height_request(18);
-        time_row.set_vexpand(false);
-
-        controls.set_height_request(52);
-        controls.set_vexpand(false);
-        controls.set_valign(gtk::Align::Center);
-
-        let metadata_block = gtk::Box::new(gtk::Orientation::Vertical, 6);
-        metadata_block.set_height_request(92);
-        metadata_block.set_width_request(384);
-        metadata_block.set_vexpand(false);
-        metadata_block.set_valign(gtk::Align::Start);
-        metadata_block.add_css_class("stable-player-metadata");
-        metadata_block.append(&title_row);
-        metadata_block.append(&artist);
-        metadata_block.append(&album);
-
-        let transport_block = gtk::Box::new(gtk::Orientation::Vertical, 6);
-        transport_block.set_height_request(116);
-        transport_block.set_width_request(384);
-        transport_block.set_vexpand(false);
-        transport_block.set_valign(gtk::Align::Start);
-        transport_block.add_css_class("stable-player-transport");
-        transport_block.append(&home_progress_stack);
-        transport_block.append(&time_row);
-        transport_block.append(&controls);
-
-        let now_content = gtk::Box::new(gtk::Orientation::Vertical, 12);
-        now_content.set_width_request(384);
-        now_content.set_hexpand(false);
-        now_content.set_halign(gtk::Align::Center);
-        now_content.set_vexpand(false);
-        now_content.set_valign(gtk::Align::Start);
-        now_content.add_css_class("stable-player-content");
-        now_content.append(&now_header);
-        now_content.append(&hero_cover_slot);
-        now_content.append(&metadata_block);
-        now_content.append(&transport_block);
-        now_content.append(&visualizer_slot);
-        now_content.append(&lyrics_slot);
-
-        let now_card = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        now_card.set_size_request(420, -1);
+        let now_card = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        now_card.set_size_request(380, -1);
         now_card.set_hexpand(false);
         now_card.set_vexpand(true);
         now_card.set_valign(gtk::Align::Fill);
         now_card.add_css_class("now-playing-card");
-        now_card.add_css_class("stable-home-player");
-        now_card.append(&now_content);
+        now_card.append(&now_header);
+        now_card.append(&hero_cover_slot);
+        now_card.append(&title_row);
+        now_card.append(&artist);
+        now_card.append(&album);
+        now_card.append(&home_progress_stack);
+        now_card.append(&time_row);
+        now_card.append(&controls);
+        now_card.append(visualizer.widget());
+        now_card.append(lyrics.inline_widget());
 
         let browser = LibraryBrowser::new();
 

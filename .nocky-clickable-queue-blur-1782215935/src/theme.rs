@@ -200,12 +200,6 @@ window.background.noctalia-window > toastoverlay:backdrop,
   background-color: @nm_surface;
   background-image: none;
 }
-
-popover.queue-popover > contents,
-popover.queue-popover > arrow {
-  background-color: @nm_surface_alt;
-  background-image: none;
-}
 "#,
             );
             return;
@@ -257,12 +251,6 @@ window.background.noctalia-window > toastoverlay:backdrop {{
 .player-bar,
 .player-bar:backdrop {{
   background-color: alpha(@nm_surface_alt, {footer:.3});
-}}
-
-popover.queue-popover > contents,
-popover.queue-popover > arrow {{
-  background-color: alpha(@nm_surface_alt, {card:.3});
-  background-image: none;
 }}
 
 window.noctalia-window scrolledwindow,

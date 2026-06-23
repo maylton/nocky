@@ -1,6 +1,5 @@
 mod browser;
 mod config;
-mod i18n;
 mod library;
 mod listening_history;
 mod lyrics;
@@ -11,7 +10,6 @@ mod mpris;
 mod playback;
 mod theme;
 mod visualizer;
-mod wave_progress;
 mod youtube;
 
 use crate::youtube::YouTubeArtistOverview;
@@ -21,7 +19,6 @@ use browser::{BrowserEvent, BrowserRoute, LibraryBrowser};
 use config::{AppLanguage, BlurMode, StartupSource};
 use gtk::prelude::FileExt;
 use gtk::{gdk, gio, glib};
-use i18n::Message;
 use listening_history::{ListeningHistory, ListeningSource};
 use lyrics::LyricLine;
 use lyrics_view::LyricsPresenter;
@@ -41,7 +38,6 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use visualizer::SpectrumVisualizer;
-use wave_progress::WaveProgress;
 use youtube::{
     cache_items_for_browser, cacheable_youtube_playlist, clear_library_cache, download_cover,
     load_library_cache, save_library_cache, youtube_collection_cache_key, youtube_collection_key,
@@ -135,16 +131,10 @@ enum BackgroundMessage {
 struct SidebarParts {
     revealer: gtk::Revealer,
     all_button: gtk::Button,
-    all_label: gtk::Label,
     albums_button: gtk::Button,
-    albums_label: gtk::Label,
     artists_button: gtk::Button,
-    artists_label: gtk::Label,
     playlists_button: gtk::Button,
-    playlists_label: gtk::Label,
     liked_button: gtk::Button,
-    liked_label: gtk::Label,
-    section_label: gtk::Label,
 }
 
 struct AppController {
@@ -182,25 +172,12 @@ struct AppController {
     youtube_library: RefCell<YouTubeLibraryCache>,
 
     sidebar: gtk::Revealer,
-    sidebar_button: gtk::ToggleButton,
     sidebar_all: gtk::Button,
-    sidebar_all_label: gtk::Label,
     sidebar_albums: gtk::Button,
-    sidebar_albums_label: gtk::Label,
     sidebar_artists: gtk::Button,
-    sidebar_artists_label: gtk::Label,
     sidebar_playlists: gtk::Button,
-    sidebar_playlists_label: gtk::Label,
     sidebar_liked: gtk::Button,
-    sidebar_liked_label: gtk::Label,
-    sidebar_section_label: gtk::Label,
-    search_button: gtk::ToggleButton,
-    folder_button: gtk::Button,
-    menu_button: gtk::MenuButton,
-    search_entry: gtk::SearchEntry,
     views: adw::ViewStack,
-    music_page: adw::ViewStackPage,
-    lyrics_page: adw::ViewStackPage,
     browser: LibraryBrowser,
     lyrics: LyricsPresenter,
     youtube_page: Rc<YouTubePage>,
@@ -208,50 +185,20 @@ struct AppController {
     title: gtk::Label,
     artist: gtk::Label,
     album: gtk::Label,
-    now_heading: gtk::Label,
-    favorite_button: gtk::Button,
-    previous_button: gtk::Button,
-    hero_play_button: gtk::Button,
-    next_button: gtk::Button,
     mini_title: gtk::Label,
     mini_artist: gtk::Label,
-    footer_source: gtk::Label,
-    footer_now_playing: gtk::Button,
-    footer_center: gtk::Box,
-    footer_right_controls: gtk::Box,
     music_stack: gtk::Stack,
-    empty_title: gtk::Label,
-    empty_text: gtk::Label,
-    empty_add: gtk::Button,
     hero_cover: CoverView,
     mini_cover: CoverView,
-    player_bar: gtk::CenterBox,
 
     play_icon: gtk::Image,
     hero_play_icon: gtk::Image,
     favorite_icon: gtk::Image,
-    footer_favorite_icon: gtk::Image,
-    footer_favorite_button: gtk::Button,
     progress: gtk::Scale,
-    home_progress_stack: gtk::Stack,
-    home_wave_progress: WaveProgress,
     elapsed: gtk::Label,
     duration: gtk::Label,
-    footer_progress_stack: gtk::Stack,
-    footer_traditional_progress: gtk::Scale,
-    footer_progress: WaveProgress,
-    footer_elapsed: gtk::Label,
-    footer_duration: gtk::Label,
     volume: gtk::Scale,
-    mute_icon: gtk::Image,
-    mute_button: gtk::Button,
-    volume_before_mute: Cell<f64>,
     lyrics_button: gtk::ToggleButton,
-    footer_previous: gtk::Button,
-    footer_play_button: gtk::Button,
-    footer_next: gtk::Button,
-    footer_repeat_button: gtk::ToggleButton,
-    footer_shuffle_button: gtk::ToggleButton,
     repeat_button: gtk::ToggleButton,
     shuffle_button: gtk::ToggleButton,
     visualizer: SpectrumVisualizer,
@@ -287,7 +234,6 @@ impl AppController {
     fn new(app: &adw::Application) -> Rc<Self> {
         let theme = theme::ThemeBridge::install();
         let config = config::AppConfig::load();
-        let tr = |message: Message| i18n::text(config.language, message);
         theme.set_noctalia_enabled(config.noctalia_theme_sync);
         theme.set_blur_preferences(config.blur_mode, config.blur_opacity);
         let player = PlaybackEngine::new(config.volume.clamp(0.0, 1.0))
@@ -321,8 +267,8 @@ impl AppController {
 
         let sidebar_button = gtk::ToggleButton::builder()
             .icon_name("sidebar-show-symbolic")
-            .active(false)
-            .tooltip_text(tr(Message::SidebarToggle))
+            .active(true)
+            .tooltip_text("Show or hide the sidebar")
             .build();
         header.pack_start(&sidebar_button);
 
@@ -338,17 +284,36 @@ impl AppController {
 
         let search_button = gtk::ToggleButton::builder()
             .icon_name("system-search-symbolic")
-            .tooltip_text(tr(Message::SearchLibrary))
+            .tooltip_text("Search the library")
             .build();
         header.pack_end(&search_button);
 
         let folder_button = gtk::Button::builder()
             .icon_name("folder-open-symbolic")
-            .tooltip_text(tr(Message::ChooseMusicFolderTooltip))
+            .tooltip_text("Choose the music folder")
             .build();
         header.pack_end(&folder_button);
 
-        let menu = build_main_menu(config.language);
+        let menu = gio::Menu::new();
+        let library_section = gio::Menu::new();
+        library_section.append(Some("Choose Music Folder…"), Some("app.choose-library"));
+        library_section.append(Some("Rescan Library"), Some("app.rescan"));
+        library_section.append(
+            Some("Download Lyrics for Current Track"),
+            Some("app.download-lyrics"),
+        );
+        library_section.append(
+            Some("Toggle Automatic Lyrics"),
+            Some("app.toggle-auto-lyrics"),
+        );
+        menu.append_section(None, &library_section);
+
+        let app_section = gio::Menu::new();
+        app_section.append(Some("Settings"), Some("app.settings"));
+        app_section.append(Some("About Nocky"), Some("app.about"));
+        app_section.append(Some("Quit"), Some("app.quit"));
+        menu.append_section(None, &app_section);
+
         let menu_button = gtk::MenuButton::builder()
             .icon_name("open-menu-symbolic")
             .menu_model(&menu)
@@ -358,7 +323,7 @@ impl AppController {
 
         let search_bar = gtk::SearchBar::new();
         let search_entry = gtk::SearchEntry::builder()
-            .placeholder_text(tr(Message::SearchPlaceholder))
+            .placeholder_text("Buscar faixa, álbum, artista ou playlist")
             .hexpand(true)
             .build();
         search_bar.set_child(Some(&search_entry));
@@ -372,10 +337,10 @@ impl AppController {
         body.set_hexpand(true);
         shell.append(&body);
 
-        let sidebar_parts = build_sidebar(config.language);
+        let sidebar_parts = build_sidebar();
         body.append(&sidebar_parts.revealer);
 
-        let title = gtk::Label::new(Some(tr(Message::IntegratedMusic)));
+        let title = gtk::Label::new(Some("Sua música, naturalmente integrada"));
         title.set_xalign(0.0);
         title.set_wrap(false);
         title.set_single_line_mode(true);
@@ -384,7 +349,7 @@ impl AppController {
         title.set_ellipsize(gtk::pango::EllipsizeMode::End);
         title.add_css_class("hero-title");
 
-        let artist = gtk::Label::new(Some(tr(Message::NoTrackSelected)));
+        let artist = gtk::Label::new(Some("Nenhuma faixa selecionada"));
         artist.set_xalign(0.0);
         artist.set_single_line_mode(true);
         artist.set_width_chars(28);
@@ -392,7 +357,7 @@ impl AppController {
         artist.set_ellipsize(gtk::pango::EllipsizeMode::End);
         artist.add_css_class("hero-artist");
 
-        let album = gtk::Label::new(Some(tr(Message::ChooseFolderToStart)));
+        let album = gtk::Label::new(Some("Escolha uma pasta de músicas para começar"));
         album.set_xalign(0.0);
         album.set_single_line_mode(true);
         album.set_width_chars(28);
@@ -406,10 +371,10 @@ impl AppController {
         favorite.set_child(Some(&favorite_icon));
         favorite.add_css_class("flat");
         favorite.add_css_class("card-icon-button");
-        favorite.set_tooltip_text(Some(tr(Message::FavoriteTooltip)));
+        favorite.set_tooltip_text(Some("Add or remove from liked songs"));
         favorite.add_css_class("like-button");
 
-        let now_heading = gtk::Label::new(Some(tr(Message::NowPlaying)));
+        let now_heading = gtk::Label::new(Some("Reproduzindo agora"));
         now_heading.set_xalign(0.0);
         now_heading.set_hexpand(true);
         now_heading.add_css_class("now-heading");
@@ -432,14 +397,10 @@ impl AppController {
         hero_cover_slot.set_orientation(gtk::Orientation::Vertical);
         hero_cover_slot.set_vexpand(false);
         hero_cover_slot.set_hexpand(true);
-        hero_cover_slot.set_margin_top(0);
-        hero_cover_slot.set_margin_bottom(0);
-        hero_cover_slot.set_height_request(328);
-        hero_cover_slot.set_width_request(384);
-        hero_cover_slot.set_valign(gtk::Align::Start);
+        hero_cover_slot.set_margin_top(28);
+        hero_cover_slot.set_margin_bottom(20);
         hero_cover_slot.set_center_widget(Some(&hero_cover.stack));
         hero_cover_slot.add_css_class("hero-cover-slot");
-        hero_cover_slot.add_css_class("stable-player-cover-slot");
 
         let elapsed = gtk::Label::new(Some("0:00"));
         elapsed.add_css_class("time-label");
@@ -450,18 +411,6 @@ impl AppController {
         progress.set_hexpand(true);
         progress.add_css_class("progress-scale");
 
-        let home_wave_progress = WaveProgress::new();
-        home_wave_progress
-            .widget()
-            .add_css_class("home-wave-progress");
-
-        let home_progress_stack = gtk::Stack::new();
-        home_progress_stack.set_hexpand(true);
-        home_progress_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
-        home_progress_stack.set_transition_duration(160);
-        home_progress_stack.add_named(&progress, Some("classic"));
-        home_progress_stack.add_named(home_wave_progress.widget(), Some("m3"));
-
         let time_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         elapsed.set_hexpand(true);
         elapsed.set_xalign(0.0);
@@ -471,11 +420,11 @@ impl AppController {
 
         let repeat = gtk::ToggleButton::builder()
             .icon_name("media-playlist-repeat-symbolic")
-            .tooltip_text(tr(Message::RepeatTrack))
+            .tooltip_text("Repeat current track")
             .build();
         repeat.add_css_class("media-control");
         let previous = gtk::Button::from_icon_name("media-skip-backward-symbolic");
-        previous.set_tooltip_text(Some(tr(Message::PreviousTrack)));
+        previous.set_tooltip_text(Some("Previous track"));
         previous.add_css_class("media-control");
 
         let hero_play_icon = gtk::Image::from_icon_name("media-playback-start-symbolic");
@@ -483,14 +432,14 @@ impl AppController {
         let hero_play_button = gtk::Button::new();
         hero_play_button.set_child(Some(&hero_play_icon));
         hero_play_button.add_css_class("shell-play-button");
-        hero_play_button.set_tooltip_text(Some(tr(Message::PlayPause)));
+        hero_play_button.set_tooltip_text(Some("Play or pause"));
 
         let next = gtk::Button::from_icon_name("media-skip-forward-symbolic");
-        next.set_tooltip_text(Some(tr(Message::NextTrack)));
+        next.set_tooltip_text(Some("Next track"));
         next.add_css_class("media-control");
         let shuffle = gtk::ToggleButton::builder()
             .icon_name("media-playlist-shuffle-symbolic")
-            .tooltip_text(tr(Message::Shuffle))
+            .tooltip_text("Shuffle")
             .build();
         shuffle.add_css_class("media-control");
 
@@ -505,103 +454,22 @@ impl AppController {
         let visualizer = SpectrumVisualizer::new();
         let lyrics = LyricsPresenter::new();
 
-        // stable_home_player_layout_v1
-        // stable_standby_slots_v1
-        let visualizer_widget = visualizer.widget().clone();
-        visualizer_widget.set_size_request(384, 74);
-        visualizer_widget.set_hexpand(false);
-        visualizer_widget.set_halign(gtk::Align::Center);
-        visualizer_widget.set_vexpand(false);
-        visualizer_widget.set_valign(gtk::Align::Center);
-
-        let visualizer_slot = gtk::CenterBox::new();
-        visualizer_slot.set_orientation(gtk::Orientation::Vertical);
-        visualizer_slot.set_size_request(384, 74);
-        visualizer_slot.set_hexpand(false);
-        visualizer_slot.set_halign(gtk::Align::Center);
-        visualizer_slot.set_vexpand(false);
-        visualizer_slot.set_valign(gtk::Align::Start);
-        visualizer_slot.set_center_widget(Some(&visualizer_widget));
-        visualizer_slot.add_css_class("stable-visualizer-slot");
-
-        let inline_lyrics_widget = lyrics.inline_widget().clone();
-        inline_lyrics_widget.set_size_request(384, 158);
-        inline_lyrics_widget.set_hexpand(false);
-        inline_lyrics_widget.set_halign(gtk::Align::Center);
-        inline_lyrics_widget.set_vexpand(false);
-        inline_lyrics_widget.set_valign(gtk::Align::Center);
-
-        let lyrics_slot = gtk::CenterBox::new();
-        lyrics_slot.set_orientation(gtk::Orientation::Vertical);
-        lyrics_slot.set_size_request(384, 158);
-        lyrics_slot.set_hexpand(false);
-        lyrics_slot.set_halign(gtk::Align::Center);
-        lyrics_slot.set_vexpand(false);
-        lyrics_slot.set_valign(gtk::Align::Start);
-        lyrics_slot.set_center_widget(Some(&inline_lyrics_widget));
-        lyrics_slot.add_css_class("stable-lyrics-slot");
-
-        title_row.set_height_request(34);
-        title_row.set_vexpand(false);
-        title_row.set_valign(gtk::Align::Center);
-
-        artist.set_height_request(22);
-        artist.set_vexpand(false);
-        album.set_height_request(22);
-        album.set_vexpand(false);
-
-        home_progress_stack.set_height_request(22);
-        home_progress_stack.set_vexpand(false);
-
-        time_row.set_height_request(18);
-        time_row.set_vexpand(false);
-
-        controls.set_height_request(52);
-        controls.set_vexpand(false);
-        controls.set_valign(gtk::Align::Center);
-
-        let metadata_block = gtk::Box::new(gtk::Orientation::Vertical, 6);
-        metadata_block.set_height_request(92);
-        metadata_block.set_width_request(384);
-        metadata_block.set_vexpand(false);
-        metadata_block.set_valign(gtk::Align::Start);
-        metadata_block.add_css_class("stable-player-metadata");
-        metadata_block.append(&title_row);
-        metadata_block.append(&artist);
-        metadata_block.append(&album);
-
-        let transport_block = gtk::Box::new(gtk::Orientation::Vertical, 6);
-        transport_block.set_height_request(116);
-        transport_block.set_width_request(384);
-        transport_block.set_vexpand(false);
-        transport_block.set_valign(gtk::Align::Start);
-        transport_block.add_css_class("stable-player-transport");
-        transport_block.append(&home_progress_stack);
-        transport_block.append(&time_row);
-        transport_block.append(&controls);
-
-        let now_content = gtk::Box::new(gtk::Orientation::Vertical, 12);
-        now_content.set_width_request(384);
-        now_content.set_hexpand(false);
-        now_content.set_halign(gtk::Align::Center);
-        now_content.set_vexpand(false);
-        now_content.set_valign(gtk::Align::Start);
-        now_content.add_css_class("stable-player-content");
-        now_content.append(&now_header);
-        now_content.append(&hero_cover_slot);
-        now_content.append(&metadata_block);
-        now_content.append(&transport_block);
-        now_content.append(&visualizer_slot);
-        now_content.append(&lyrics_slot);
-
-        let now_card = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        now_card.set_size_request(420, -1);
+        let now_card = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        now_card.set_size_request(380, -1);
         now_card.set_hexpand(false);
         now_card.set_vexpand(true);
         now_card.set_valign(gtk::Align::Fill);
         now_card.add_css_class("now-playing-card");
-        now_card.add_css_class("stable-home-player");
-        now_card.append(&now_content);
+        now_card.append(&now_header);
+        now_card.append(&hero_cover_slot);
+        now_card.append(&title_row);
+        now_card.append(&artist);
+        now_card.append(&album);
+        now_card.append(&progress);
+        now_card.append(&time_row);
+        now_card.append(&controls);
+        now_card.append(visualizer.widget());
+        now_card.append(lyrics.inline_widget());
 
         let browser = LibraryBrowser::new();
 
@@ -621,13 +489,15 @@ impl AppController {
         let empty_icon = gtk::Image::from_icon_name("folder-music-symbolic");
         empty_icon.set_pixel_size(64);
         empty_icon.add_css_class("empty-icon");
-        let empty_title = gtk::Label::new(Some(tr(Message::EmptyLibraryTitle)));
+        let empty_title = gtk::Label::new(Some("Escolha sua biblioteca musical"));
         empty_title.add_css_class("title-2");
-        let empty_text = gtk::Label::new(Some(tr(Message::EmptyLibraryDescription)));
+        let empty_text = gtk::Label::new(Some(
+            "Nocky scans the selected folder recursively and remembers it for the next launch.",
+        ));
         empty_text.set_wrap(true);
         empty_text.set_justify(gtk::Justification::Center);
         empty_text.add_css_class("dim-label");
-        let empty_add = gtk::Button::with_label(tr(Message::ChooseFolderAction));
+        let empty_add = gtk::Button::with_label("Escolher pasta de músicas");
         empty_add.add_css_class("suggested-action");
         empty_add.add_css_class("pill");
         empty_state.append(&empty_icon);
@@ -642,198 +512,95 @@ impl AppController {
         music_stack.add_named(&dashboard, Some("library"));
         music_stack.set_visible_child_name("empty");
 
-        let music_page = views.add_titled_with_icon(
+        views.add_titled_with_icon(
             &music_stack,
             Some("music"),
-            tr(Message::MusicTab),
+            "Music",
             "folder-music-symbolic",
         );
-        let lyrics_page = views.add_titled_with_icon(
+        views.add_titled_with_icon(
             lyrics.full_widget(),
             Some("lyrics"),
-            tr(Message::LyricsTab),
+            "Lyrics",
             "audio-input-microphone-symbolic",
         );
 
         let youtube_page = YouTubePage::new();
         body.append(&views);
 
-        let mini_cover = build_cover(54);
-        let mini_title = gtk::Label::new(Some(tr(Message::NothingPlaying)));
+        let mini_cover = build_cover(46);
+        let mini_title = gtk::Label::new(Some("Nada reproduzindo"));
         mini_title.set_xalign(0.0);
         mini_title.set_ellipsize(gtk::pango::EllipsizeMode::End);
         mini_title.add_css_class("now-title");
-        mini_title.set_hexpand(true);
-
-        let footer_favorite_icon = gtk::Image::from_icon_name("emblem-favorite-symbolic");
-        footer_favorite_icon.set_opacity(0.28);
-        let footer_favorite = gtk::Button::new();
-        footer_favorite.set_child(Some(&footer_favorite_icon));
-        footer_favorite.add_css_class("flat");
-        footer_favorite.add_css_class("footer-control");
-        footer_favorite.add_css_class("footer-favorite-button");
-        footer_favorite.set_tooltip_text(Some(tr(Message::FavoriteTooltip)));
-
         let mini_artist = gtk::Label::new(Some("Nocky"));
         mini_artist.set_xalign(0.0);
         mini_artist.set_ellipsize(gtk::pango::EllipsizeMode::End);
         mini_artist.add_css_class("dim-label");
-        mini_artist.set_hexpand(false);
-        mini_artist.set_width_chars(-1);
-        mini_artist.set_max_width_chars(18);
-
-        let footer_source = gtk::Label::new(Some(tr(Message::SourceNone)));
-        footer_source.add_css_class("source-badge");
-        footer_source.add_css_class("footer-source-badge");
-        footer_source.set_valign(gtk::Align::Center);
-
-        let mini_title_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        mini_title_row.set_halign(gtk::Align::Start);
-        mini_title_row.add_css_class("footer-title-row");
-        mini_title_row.append(&mini_title);
-
-        let mini_artist_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        mini_artist_row.set_halign(gtk::Align::Start);
-        mini_artist_row.add_css_class("footer-artist-row");
-        mini_artist_row.append(&mini_artist);
-
-        let mini_action_row = gtk::Box::new(gtk::Orientation::Horizontal, 5);
-        mini_action_row.set_halign(gtk::Align::Start);
-        mini_action_row.set_valign(gtk::Align::Center);
-        mini_action_row.add_css_class("footer-action-row");
-        mini_action_row.append(&footer_favorite);
-        mini_action_row.append(&footer_source);
-
-        let mini_text = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        mini_title.set_width_chars(30);
+        mini_title.set_max_width_chars(30);
+        mini_artist.set_width_chars(30);
+        mini_artist.set_max_width_chars(30);
+        let mini_text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+        mini_text.set_width_request(270);
         mini_text.set_hexpand(false);
-        mini_text.set_halign(gtk::Align::Start);
-        mini_text.set_valign(gtk::Align::Center);
         mini_text.add_css_class("footer-meta");
-        mini_text.append(&mini_title_row);
-        mini_text.append(&mini_artist_row);
-        mini_text.append(&mini_action_row);
-
-        let now_playing_content = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        now_playing_content.set_halign(gtk::Align::Start);
-        now_playing_content.set_valign(gtk::Align::Center);
-        now_playing_content.append(&mini_cover.stack);
-        now_playing_content.append(&mini_text);
-
-        let footer_now_playing = gtk::Button::new();
-        footer_now_playing.set_child(Some(&now_playing_content));
-        footer_now_playing.set_size_request(350, 56);
-        footer_now_playing.add_css_class("flat");
-        footer_now_playing.add_css_class("footer-now-playing-button");
-        footer_now_playing.set_tooltip_text(Some("Abrir fila de reprodução"));
-
-        let footer_shuffle = gtk::ToggleButton::builder()
-            .icon_name("media-playlist-shuffle-symbolic")
-            .tooltip_text(tr(Message::Shuffle))
-            .build();
-        footer_shuffle.add_css_class("flat");
-        footer_shuffle.add_css_class("footer-control");
+        mini_text.append(&mini_title);
+        mini_text.append(&mini_artist);
+        let now_playing = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+        now_playing.set_size_request(370, 46);
+        now_playing.set_hexpand(false);
+        now_playing.append(&mini_cover.stack);
+        now_playing.append(&mini_text);
 
         let footer_previous = gtk::Button::from_icon_name("media-skip-backward-symbolic");
-        footer_previous.set_tooltip_text(Some(tr(Message::PreviousTrack)));
+        footer_previous.set_tooltip_text(Some("Faixa anterior"));
         footer_previous.add_css_class("flat");
         footer_previous.add_css_class("footer-control");
 
         let play_icon = gtk::Image::from_icon_name("media-playback-start-symbolic");
-        play_icon.set_pixel_size(20);
         let play = gtk::Button::new();
         play.set_child(Some(&play_icon));
         play.add_css_class("flat");
         play.add_css_class("mini-play-button");
-        play.set_tooltip_text(Some(tr(Message::PlayPause)));
+        play.set_tooltip_text(Some("Reproduzir ou pausar"));
 
         let footer_next = gtk::Button::from_icon_name("media-skip-forward-symbolic");
-        footer_next.set_tooltip_text(Some(tr(Message::NextTrack)));
+        footer_next.set_tooltip_text(Some("Próxima faixa"));
         footer_next.add_css_class("flat");
         footer_next.add_css_class("footer-control");
 
-        let footer_repeat = gtk::ToggleButton::builder()
-            .icon_name("media-playlist-repeat-symbolic")
-            .tooltip_text(tr(Message::RepeatTrack))
-            .build();
-        footer_repeat.add_css_class("flat");
-        footer_repeat.add_css_class("footer-control");
-
-        let footer_transport = gtk::Box::new(gtk::Orientation::Horizontal, 7);
-        footer_transport.set_margin_top(8);
+        let footer_transport = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         footer_transport.set_halign(gtk::Align::Center);
-        footer_transport.append(&footer_shuffle);
+        footer_transport.set_valign(gtk::Align::Center);
         footer_transport.append(&footer_previous);
         footer_transport.append(&play);
         footer_transport.append(&footer_next);
-        footer_transport.append(&footer_repeat);
-
-        let footer_progress = WaveProgress::new();
-
-        let footer_traditional_progress =
-            gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 1.0, 0.001);
-        footer_traditional_progress.set_draw_value(false);
-        footer_traditional_progress.set_hexpand(true);
-        footer_traditional_progress.add_css_class("footer-classic-progress");
-
-        let footer_progress_stack = gtk::Stack::new();
-        footer_progress_stack.set_hexpand(true);
-        footer_progress_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
-        footer_progress_stack.set_transition_duration(160);
-        footer_progress_stack.add_named(&footer_traditional_progress, Some("classic"));
-        footer_progress_stack.add_named(footer_progress.widget(), Some("m3"));
-
-        let footer_elapsed = gtk::Label::new(Some("0:00"));
-        footer_elapsed.add_css_class("time-label");
-        let footer_duration = gtk::Label::new(Some("0:00"));
-        footer_duration.add_css_class("time-label");
-
-        let footer_progress_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        footer_progress_row.set_hexpand(true);
-        footer_progress_row.append(&footer_elapsed);
-        footer_progress_row.append(&footer_progress_stack);
-        footer_progress_row.append(&footer_duration);
-
-        let footer_center = gtk::Box::new(gtk::Orientation::Vertical, 2);
-        footer_center.set_size_request(500, 60);
-        footer_center.set_halign(gtk::Align::Center);
-        footer_center.append(&footer_transport);
-        footer_center.append(&footer_progress_row);
 
         let lyrics_button = gtk::ToggleButton::builder()
             .icon_name("audio-input-microphone-symbolic")
-            .tooltip_text(tr(Message::LyricsTooltip))
+            .tooltip_text("Lyrics")
             .build();
         lyrics_button.add_css_class("flat");
         lyrics_button.add_css_class("footer-control");
         lyrics_button.add_css_class("footer-lyrics-button");
-
-        let mute_icon = gtk::Image::from_icon_name("audio-volume-high-symbolic");
-        let mute_button = gtk::Button::new();
-        mute_button.set_child(Some(&mute_icon));
-        mute_button.add_css_class("flat");
-        mute_button.add_css_class("footer-control");
-        mute_button.set_tooltip_text(Some(tr(Message::Mute)));
-
+        let volume_icon = gtk::Image::from_icon_name("audio-volume-high-symbolic");
         let volume = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 1.0, 0.01);
         volume.set_draw_value(false);
         volume.set_value(config.volume.clamp(0.0, 1.0));
-        volume.set_size_request(112, -1);
-        volume.add_css_class("footer-volume");
-
-        let right_controls = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        right_controls.set_margin_top(8);
+        volume.set_size_request(110, -1);
+        let right_controls = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         right_controls.set_halign(gtk::Align::End);
-        right_controls.set_size_request(220, 56);
+        right_controls.set_size_request(176, 46);
         right_controls.append(&lyrics_button);
-        right_controls.append(&mute_button);
+        right_controls.append(&volume_icon);
         right_controls.append(&volume);
 
         let player_bar = gtk::CenterBox::new();
-        player_bar.set_height_request(88);
+        player_bar.set_height_request(66);
         player_bar.add_css_class("player-bar");
-        player_bar.add_css_class("player-bar-v2");
-        player_bar.set_start_widget(Some(&footer_now_playing));
-        player_bar.set_center_widget(Some(&footer_center));
+        player_bar.set_start_widget(Some(&now_playing));
+        player_bar.set_center_widget(Some(&footer_transport));
         player_bar.set_end_widget(Some(&right_controls));
         shell.append(&player_bar);
 
@@ -845,7 +612,6 @@ impl AppController {
             .map(|duration| duration.as_nanos() as u64)
             .unwrap_or(0x9e37_79b9_7f4a_7c15);
 
-        let initial_volume = config.volume.clamp(0.15, 1.0);
         let controller = Rc::new(Self {
             window,
             toast_overlay,
@@ -880,117 +646,37 @@ impl AppController {
             youtube_bridge,
             youtube_library: RefCell::new(load_library_cache()),
             sidebar: sidebar_parts.revealer,
-            sidebar_button: sidebar_button.clone(),
             sidebar_all: sidebar_parts.all_button,
-            sidebar_all_label: sidebar_parts.all_label,
             sidebar_albums: sidebar_parts.albums_button,
-            sidebar_albums_label: sidebar_parts.albums_label,
             sidebar_artists: sidebar_parts.artists_button,
-            sidebar_artists_label: sidebar_parts.artists_label,
             sidebar_playlists: sidebar_parts.playlists_button,
-            sidebar_playlists_label: sidebar_parts.playlists_label,
             sidebar_liked: sidebar_parts.liked_button,
-            sidebar_liked_label: sidebar_parts.liked_label,
-            sidebar_section_label: sidebar_parts.section_label,
-            search_button: search_button.clone(),
-            folder_button: folder_button.clone(),
-            menu_button: menu_button.clone(),
-            search_entry: search_entry.clone(),
             views,
-            music_page,
-            lyrics_page,
             browser,
             lyrics,
             youtube_page,
             title,
             artist,
             album,
-            now_heading,
-            favorite_button: favorite.clone(),
-            previous_button: previous.clone(),
-            hero_play_button: hero_play_button.clone(),
-            next_button: next.clone(),
             mini_title,
             mini_artist,
-            footer_source,
-            footer_now_playing: footer_now_playing.clone(),
-            footer_center,
-            footer_right_controls: right_controls,
             music_stack,
-            empty_title,
-            empty_text,
-            empty_add: empty_add.clone(),
             hero_cover,
             mini_cover,
-            player_bar: player_bar.clone(),
             play_icon,
             hero_play_icon,
             favorite_icon,
-            footer_favorite_icon,
-            footer_favorite_button: footer_favorite.clone(),
             progress,
-            home_progress_stack,
-            home_wave_progress,
             elapsed,
             duration,
-            footer_progress_stack,
-            footer_traditional_progress,
-            footer_progress,
-            footer_elapsed,
-            footer_duration,
             volume,
-            mute_icon,
-            mute_button: mute_button.clone(),
-            volume_before_mute: Cell::new(initial_volume),
             lyrics_button,
-            footer_previous: footer_previous.clone(),
-            footer_play_button: play.clone(),
-            footer_next: footer_next.clone(),
-            footer_repeat_button: footer_repeat.clone(),
-            footer_shuffle_button: footer_shuffle.clone(),
             repeat_button: repeat.clone(),
             shuffle_button: shuffle.clone(),
             visualizer,
             _theme: theme,
         });
-        controller.apply_translations();
         controller.apply_home_preferences();
-        controller.apply_volume_icon();
-        controller.install_footer_adaptive();
-
-        controller.sidebar_button.set_active(false);
-        controller.sidebar.set_reveal_child(false);
-
-        // home_tab_navigation_v1
-        {
-            let weak = Rc::downgrade(&controller);
-            controller
-                .views
-                .connect_visible_child_name_notify(move |stack| {
-                    if stack.visible_child_name().as_deref() == Some("music") {
-                        if let Some(controller) = weak.upgrade() {
-                            controller.open_library_home();
-                        }
-                    }
-                });
-        }
-
-        {
-            let weak = Rc::downgrade(&controller);
-            let switcher_for_click = switcher.clone();
-            let click = gtk::GestureClick::new();
-            click.set_button(1);
-            click.set_propagation_phase(gtk::PropagationPhase::Capture);
-            click.connect_released(move |_, _, x, _| {
-                let width = switcher_for_click.width().max(1) as f64;
-                if x <= width / 2.0 {
-                    if let Some(controller) = weak.upgrade() {
-                        controller.open_library_home();
-                    }
-                }
-            });
-            switcher.add_controller(click);
-        }
 
         {
             let weak = Rc::downgrade(&controller);
@@ -1130,64 +816,6 @@ impl AppController {
 
         {
             let weak = Rc::downgrade(&controller);
-            footer_now_playing.connect_clicked(move |_| {
-                if let Some(controller) = weak.upgrade() {
-                    controller.show_footer_playback_queue();
-                }
-            });
-        }
-
-        {
-            let weak = Rc::downgrade(&controller);
-            mute_button.connect_clicked(move |_| {
-                if let Some(controller) = weak.upgrade() {
-                    let current = controller.volume.value();
-                    if current > 0.001 {
-                        controller.volume_before_mute.set(current);
-                        controller.volume.set_value(0.0);
-                    } else {
-                        controller
-                            .volume
-                            .set_value(controller.volume_before_mute.get().clamp(0.15, 1.0));
-                    }
-                }
-            });
-        }
-
-        {
-            let weak = Rc::downgrade(&controller);
-            controller.footer_progress.connect_seek(move |fraction| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
-                if !controller.player.is_seekable() {
-                    return;
-                }
-                let duration = controller.player.duration_us();
-                if duration > 0 {
-                    controller.seek_to((fraction * duration as f64) as i64, true);
-                }
-            });
-        }
-
-        {
-            let weak = Rc::downgrade(&controller);
-            controller.home_wave_progress.connect_seek(move |fraction| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
-                if !controller.player.is_seekable() {
-                    return;
-                }
-                let duration = controller.player.duration_us();
-                if duration > 0 {
-                    controller.seek_to((fraction * duration as f64) as i64, true);
-                }
-            });
-        }
-
-        {
-            let weak = Rc::downgrade(&controller);
             previous.connect_clicked(move |_| {
                 if let Some(controller) = weak.upgrade() {
                     controller.previous_track();
@@ -1209,21 +837,7 @@ impl AppController {
             repeat.connect_toggled(move |button| {
                 if let Some(controller) = weak.upgrade() {
                     let enabled = button.is_active();
-                    if controller.footer_repeat_button.is_active() != enabled {
-                        controller.footer_repeat_button.set_active(enabled);
-                    }
                     controller.mpris.send(mpris::MprisUpdate::Loop(enabled));
-                }
-            });
-        }
-        {
-            let weak = Rc::downgrade(&controller);
-            footer_repeat.connect_toggled(move |button| {
-                if let Some(controller) = weak.upgrade() {
-                    let enabled = button.is_active();
-                    if controller.repeat_button.is_active() != enabled {
-                        controller.repeat_button.set_active(enabled);
-                    }
                 }
             });
         }
@@ -1233,29 +847,15 @@ impl AppController {
             shuffle.connect_toggled(move |button| {
                 if let Some(controller) = weak.upgrade() {
                     let enabled = button.is_active();
-                    if controller.footer_shuffle_button.is_active() != enabled {
-                        controller.footer_shuffle_button.set_active(enabled);
-                    }
                     controller.shuffle_enabled.set(enabled);
                     controller.mpris.send(mpris::MprisUpdate::Shuffle(enabled));
                 }
             });
         }
+
         {
             let weak = Rc::downgrade(&controller);
-            footer_shuffle.connect_toggled(move |button| {
-                if let Some(controller) = weak.upgrade() {
-                    let enabled = button.is_active();
-                    if controller.shuffle_button.is_active() != enabled {
-                        controller.shuffle_button.set_active(enabled);
-                    }
-                }
-            });
-        }
-
-        for button in [&favorite, &footer_favorite] {
-            let weak = Rc::downgrade(&controller);
-            button.connect_clicked(move |_| {
+            favorite.connect_clicked(move |_| {
                 if let Some(controller) = weak.upgrade() {
                     controller.toggle_favorite();
                 }
@@ -1329,10 +929,6 @@ impl AppController {
                     let value = scale.value().clamp(0.0, 1.0);
                     controller.player.set_volume(value);
                     controller.config.borrow_mut().volume = value;
-                    if value > 0.001 {
-                        controller.volume_before_mute.set(value);
-                    }
-                    controller.apply_volume_icon();
                     controller.mpris.send(mpris::MprisUpdate::Volume(value));
 
                     if let Some(source) = pending_save.borrow_mut().take() {
@@ -1366,23 +962,6 @@ impl AppController {
                     controller.seek_to((scale.value() * duration as f64) as i64, true);
                 }
             });
-        }
-
-        {
-            let weak = Rc::downgrade(self);
-            self.footer_traditional_progress
-                .connect_value_changed(move |scale| {
-                    let Some(controller) = weak.upgrade() else {
-                        return;
-                    };
-                    if controller.updating_progress.get() || !controller.player.is_seekable() {
-                        return;
-                    }
-                    let duration = controller.player.duration_us();
-                    if duration > 0 {
-                        controller.seek_to((scale.value() * duration as f64) as i64, true);
-                    }
-                });
         }
 
         {
@@ -1425,200 +1004,6 @@ impl AppController {
                 glib::ControlFlow::Continue
             });
         }
-    }
-
-    fn open_library_home(&self) {
-        self.search_query.replace(String::new());
-        self.search_entry.set_text("");
-        self.views.set_visible_child_name("music");
-
-        if self.lyrics_button.is_active() {
-            self.lyrics_button.set_active(false);
-        }
-
-        self.navigate_browser(BrowserRoute::All);
-    }
-
-    fn show_footer_playback_queue(self: &Rc<Self>) {
-        let popover = gtk::Popover::new();
-        popover.set_has_arrow(true);
-        popover.set_autohide(true);
-        popover.set_position(gtk::PositionType::Top);
-        popover.set_parent(&self.footer_now_playing);
-        popover.add_css_class("queue-popover");
-
-        let content = gtk::Box::new(gtk::Orientation::Vertical, 10);
-        content.set_margin_top(12);
-        content.set_margin_bottom(12);
-        content.set_margin_start(12);
-        content.set_margin_end(12);
-        content.set_size_request(390, -1);
-        content.add_css_class("queue-popover-content");
-
-        let heading = gtk::Label::new(Some("Fila de reprodução"));
-        heading.set_xalign(0.0);
-        heading.add_css_class("title-3");
-        content.append(&heading);
-
-        let list = gtk::ListBox::new();
-        list.set_selection_mode(gtk::SelectionMode::None);
-        list.add_css_class("queue-popover-list");
-
-        let mut rows = 0_usize;
-
-        match self.playback_source.get() {
-            PlaybackSource::Local => {
-                let state = self.state.borrow();
-
-                for index in &state.playback_queue {
-                    let Some(track) = state.tracks.get(*index) else {
-                        continue;
-                    };
-
-                    let line = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-                    line.set_margin_top(8);
-                    line.set_margin_bottom(8);
-                    line.set_margin_start(10);
-                    line.set_margin_end(10);
-
-                    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
-                    text.set_hexpand(true);
-
-                    let title = gtk::Label::new(Some(&track.title));
-                    title.set_xalign(0.0);
-                    title.set_ellipsize(gtk::pango::EllipsizeMode::End);
-                    title.add_css_class("heading");
-
-                    let artist = gtk::Label::new(Some(&track.artist));
-                    artist.set_xalign(0.0);
-                    artist.set_ellipsize(gtk::pango::EllipsizeMode::End);
-                    artist.add_css_class("dim-label");
-
-                    text.append(&title);
-                    text.append(&artist);
-                    line.append(&text);
-
-                    let button = gtk::Button::new();
-                    button.set_hexpand(true);
-                    button.set_halign(gtk::Align::Fill);
-                    button.set_child(Some(&line));
-                    button.add_css_class("flat");
-                    button.add_css_class("queue-popover-row");
-
-                    if state.current == Some(*index) {
-                        let playing = gtk::Image::from_icon_name("audio-volume-high-symbolic");
-                        playing.add_css_class("accent");
-                        line.append(&playing);
-                        button.add_css_class("active");
-                    }
-
-                    let selected = *index;
-                    let weak = Rc::downgrade(self);
-                    let queue_popover = popover.clone();
-                    button.connect_clicked(move |_| {
-                        if let Some(controller) = weak.upgrade() {
-                            controller.select_track(selected, true);
-                            queue_popover.popdown();
-                        }
-                    });
-
-                    list.append(&button);
-                    rows += 1;
-                }
-            }
-            PlaybackSource::YouTube => {
-                let youtube_state = self.youtube_state.borrow();
-
-                if let Some(state) = youtube_state.as_ref() {
-                    let queue = Rc::new(state.queue.clone());
-                    let current = state.current;
-
-                    for (position, item) in queue.iter().cloned().enumerate() {
-                        let line = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-                        line.set_margin_top(8);
-                        line.set_margin_bottom(8);
-                        line.set_margin_start(10);
-                        line.set_margin_end(10);
-
-                        let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
-                        text.set_hexpand(true);
-
-                        let title = gtk::Label::new(Some(&item.title));
-                        title.set_xalign(0.0);
-                        title.set_ellipsize(gtk::pango::EllipsizeMode::End);
-                        title.add_css_class("heading");
-
-                        let artist_text = if item.artist.is_empty() {
-                            "YouTube Music"
-                        } else {
-                            item.artist.as_str()
-                        };
-                        let artist = gtk::Label::new(Some(artist_text));
-                        artist.set_xalign(0.0);
-                        artist.set_ellipsize(gtk::pango::EllipsizeMode::End);
-                        artist.add_css_class("dim-label");
-
-                        text.append(&title);
-                        text.append(&artist);
-                        line.append(&text);
-
-                        let button = gtk::Button::new();
-                        button.set_hexpand(true);
-                        button.set_halign(gtk::Align::Fill);
-                        button.set_child(Some(&line));
-                        button.add_css_class("flat");
-                        button.add_css_class("queue-popover-row");
-
-                        if position == current {
-                            let playing = gtk::Image::from_icon_name("audio-volume-high-symbolic");
-                            playing.add_css_class("accent");
-                            line.append(&playing);
-                            button.add_css_class("active");
-                        }
-
-                        let weak = Rc::downgrade(self);
-                        let queue_for_click = queue.clone();
-                        let item_for_click = item.clone();
-                        let queue_popover = popover.clone();
-                        button.connect_clicked(move |_| {
-                            if let Some(controller) = weak.upgrade() {
-                                controller.resolve_youtube_track(
-                                    item_for_click.clone(),
-                                    queue_for_click.as_ref().clone(),
-                                    position,
-                                    false,
-                                );
-                                queue_popover.popdown();
-                            }
-                        });
-
-                        list.append(&button);
-                        rows += 1;
-                    }
-                }
-            }
-            PlaybackSource::None => {}
-        }
-
-        if rows == 0 {
-            let empty = gtk::Label::new(Some("A fila está vazia"));
-            empty.set_margin_top(18);
-            empty.set_margin_bottom(18);
-            empty.add_css_class("dim-label");
-            list.append(&empty);
-        }
-
-        let scroll = gtk::ScrolledWindow::new();
-        scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-        scroll.set_min_content_width(390);
-        scroll.set_max_content_height(420);
-        scroll.set_propagate_natural_height(true);
-        scroll.set_child(Some(&list));
-        scroll.add_css_class("queue-popover-scroll");
-
-        content.append(&scroll);
-        popover.set_child(Some(&content));
-        popover.popup();
     }
 
     fn refresh_youtube_status(&self) {
@@ -2368,7 +1753,6 @@ impl AppController {
 
         self.state.borrow_mut().current = None;
         self.playback_source.set(PlaybackSource::YouTube);
-        self.update_footer_source();
         self.begin_listening_session(format!("youtube:{}", item.video_id));
         self.youtube_state.replace(Some(YouTubePlaybackState {
             queue,
@@ -2401,9 +1785,6 @@ impl AppController {
         self.favorite_icon
             .set_icon_name(Some("emblem-favorite-symbolic"));
         self.favorite_icon.set_opacity(0.28);
-        self.footer_favorite_icon
-            .set_icon_name(Some("emblem-favorite-symbolic"));
-        self.footer_favorite_icon.set_opacity(0.28);
 
         if recovering && !preserved_lyrics.is_empty() {
             self.rebuild_youtube_lyrics(&preserved_lyrics);
@@ -2595,9 +1976,9 @@ impl AppController {
                     };
                     controller.save_config();
                     controller.show_toast(if enabled {
-                        controller.tr(Message::AutomaticLyricsEnabled)
+                        "Automatic lyrics enabled"
                     } else {
-                        controller.tr(Message::AutomaticLyricsDisabled)
+                        "Automatic lyrics disabled"
                     });
                     if enabled {
                         if let Some(item) = controller
@@ -2629,17 +2010,14 @@ impl AppController {
 
         let about = gio::SimpleAction::new("about", None);
         {
-            let weak = Rc::downgrade(self);
+            let window = self.window.clone();
             about.connect_activate(move |_, _| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
                 let dialog = gtk::AboutDialog::builder()
-                    .transient_for(&controller.window)
+                    .transient_for(&window)
                     .modal(true)
                     .program_name("Nocky")
                     .version(env!("CARGO_PKG_VERSION"))
-                    .comments(controller.tr(Message::AboutDescription))
+                    .comments("A native GTK4/libadwaita music player designed for Noctalia Shell.")
                     .license_type(gtk::License::Gpl30)
                     .build();
                 dialog.present();
@@ -2691,195 +2069,6 @@ impl AppController {
         }
     }
 
-    fn tr(&self, message: Message) -> &'static str {
-        i18n::text(self.config.borrow().language, message)
-    }
-
-    fn update_footer_source(&self) {
-        self.footer_source.remove_css_class("youtube-source-badge");
-        match self.playback_source.get() {
-            PlaybackSource::Local => self.footer_source.set_text(self.tr(Message::SourceLocal)),
-            PlaybackSource::YouTube => {
-                self.footer_source.set_text(self.tr(Message::SourceYoutube));
-                self.footer_source.add_css_class("youtube-source-badge");
-            }
-            PlaybackSource::None => self.footer_source.set_text(self.tr(Message::SourceNone)),
-        }
-    }
-
-    fn apply_volume_icon(&self) {
-        let value = self.volume.value();
-        let icon = if value <= 0.001 {
-            "audio-volume-muted-symbolic"
-        } else if value < 0.34 {
-            "audio-volume-low-symbolic"
-        } else if value < 0.67 {
-            "audio-volume-medium-symbolic"
-        } else {
-            "audio-volume-high-symbolic"
-        };
-        self.mute_icon.set_icon_name(Some(icon));
-        self.mute_button.set_tooltip_text(Some(if value <= 0.001 {
-            self.tr(Message::Unmute)
-        } else {
-            self.tr(Message::Mute)
-        }));
-    }
-
-    fn apply_progress_style(&self) {
-        let use_m3 = self.config.borrow().use_m3_progress;
-        let child = if use_m3 { "m3" } else { "classic" };
-        self.home_progress_stack.set_visible_child_name(child);
-        self.footer_progress_stack.set_visible_child_name(child);
-
-        let animate = use_m3 && self.player.is_playing();
-        self.home_wave_progress.set_playing(animate);
-        self.footer_progress.set_playing(animate);
-    }
-
-    fn apply_translations(&self) {
-        let language = self.config.borrow().language;
-        let tr = |message| i18n::text(language, message);
-
-        self.sidebar_button
-            .set_tooltip_text(Some(tr(Message::SidebarToggle)));
-        self.search_button
-            .set_tooltip_text(Some(tr(Message::SearchLibrary)));
-        self.folder_button
-            .set_tooltip_text(Some(tr(Message::ChooseMusicFolderTooltip)));
-        self.search_entry
-            .set_placeholder_text(Some(tr(Message::SearchPlaceholder)));
-        self.menu_button
-            .set_menu_model(Some(&build_main_menu(language)));
-
-        self.sidebar_all_label.set_text(tr(Message::Library));
-        self.sidebar_albums_label.set_text(tr(Message::Albums));
-        self.sidebar_artists_label.set_text(tr(Message::Artists));
-        self.sidebar_playlists_label
-            .set_text(tr(Message::Playlists));
-        self.sidebar_liked_label.set_text(tr(Message::LikedSongs));
-        self.sidebar_section_label
-            .set_text(tr(Message::LocalCollection));
-
-        self.now_heading.set_text(tr(Message::NowPlaying));
-        self.favorite_button
-            .set_tooltip_text(Some(tr(Message::FavoriteTooltip)));
-        self.footer_favorite_button
-            .set_tooltip_text(Some(tr(Message::FavoriteTooltip)));
-        self.previous_button
-            .set_tooltip_text(Some(tr(Message::PreviousTrack)));
-        self.hero_play_button
-            .set_tooltip_text(Some(tr(Message::PlayPause)));
-        self.next_button
-            .set_tooltip_text(Some(tr(Message::NextTrack)));
-        self.repeat_button
-            .set_tooltip_text(Some(tr(Message::RepeatTrack)));
-        self.shuffle_button
-            .set_tooltip_text(Some(tr(Message::Shuffle)));
-
-        self.footer_previous
-            .set_tooltip_text(Some(tr(Message::PreviousTrack)));
-        self.footer_play_button
-            .set_tooltip_text(Some(tr(Message::PlayPause)));
-        self.footer_next
-            .set_tooltip_text(Some(tr(Message::NextTrack)));
-        self.footer_repeat_button
-            .set_tooltip_text(Some(tr(Message::RepeatTrack)));
-        self.footer_shuffle_button
-            .set_tooltip_text(Some(tr(Message::Shuffle)));
-        self.lyrics_button
-            .set_tooltip_text(Some(tr(Message::LyricsTooltip)));
-
-        self.music_page.set_title(Some(tr(Message::MusicTab)));
-        self.lyrics_page.set_title(Some(tr(Message::LyricsTab)));
-        self.empty_title.set_text(tr(Message::EmptyLibraryTitle));
-        self.empty_text
-            .set_text(tr(Message::EmptyLibraryDescription));
-        self.empty_add.set_label(tr(Message::ChooseFolderAction));
-
-        if self.playback_source.get() == PlaybackSource::None {
-            self.title.set_text(tr(Message::IntegratedMusic));
-            self.artist.set_text(tr(Message::NoTrackSelected));
-            self.album.set_text(tr(Message::ChooseFolderToStart));
-            self.mini_title.set_text(tr(Message::NothingPlaying));
-        }
-
-        self.update_footer_source();
-        self.apply_volume_icon();
-    }
-
-    fn install_footer_adaptive(&self) {
-        let mode = Rc::new(Cell::new(u8::MAX));
-        let mode_state = mode.clone();
-        let now_playing = self.footer_now_playing.clone();
-        let center = self.footer_center.clone();
-        let right = self.footer_right_controls.clone();
-        let source = self.footer_source.clone();
-        let artist = self.mini_artist.clone();
-        let elapsed = self.footer_elapsed.clone();
-        let duration = self.footer_duration.clone();
-        let shuffle = self.footer_shuffle_button.clone();
-        let repeat = self.footer_repeat_button.clone();
-        let volume = self.volume.clone();
-
-        self.player_bar.add_tick_callback(move |bar, _| {
-            let width = bar.width();
-            let next_mode = if width >= 1040 {
-                0
-            } else if width >= 790 {
-                1
-            } else {
-                2
-            };
-
-            if mode_state.get() == next_mode {
-                return glib::ControlFlow::Continue;
-            }
-            mode_state.set(next_mode);
-
-            match next_mode {
-                0 => {
-                    now_playing.set_size_request(350, 56);
-                    center.set_size_request(500, 60);
-                    right.set_size_request(220, 56);
-                    source.set_visible(true);
-                    artist.set_visible(true);
-                    elapsed.set_visible(true);
-                    duration.set_visible(true);
-                    shuffle.set_visible(true);
-                    repeat.set_visible(true);
-                    volume.set_visible(true);
-                }
-                1 => {
-                    now_playing.set_size_request(280, 56);
-                    center.set_size_request(390, 60);
-                    right.set_size_request(98, 56);
-                    source.set_visible(false);
-                    artist.set_visible(true);
-                    elapsed.set_visible(false);
-                    duration.set_visible(false);
-                    shuffle.set_visible(true);
-                    repeat.set_visible(true);
-                    volume.set_visible(false);
-                }
-                _ => {
-                    now_playing.set_size_request(190, 56);
-                    center.set_size_request(190, 60);
-                    right.set_size_request(92, 56);
-                    source.set_visible(false);
-                    artist.set_visible(false);
-                    elapsed.set_visible(false);
-                    duration.set_visible(false);
-                    shuffle.set_visible(false);
-                    repeat.set_visible(false);
-                    volume.set_visible(false);
-                }
-            }
-
-            glib::ControlFlow::Continue
-        });
-    }
-
     fn apply_home_preferences(&self) {
         let config = self.config.borrow();
         self.visualizer
@@ -2893,18 +2082,16 @@ impl AppController {
         self._theme.set_noctalia_enabled(config.noctalia_theme_sync);
         self._theme
             .set_blur_preferences(config.blur_mode, config.blur_opacity);
-        drop(config);
-        self.apply_progress_style();
     }
 
     fn show_settings_dialog(self: &Rc<Self>) {
         let dialog = gtk::Dialog::builder()
             .transient_for(&self.window)
             .modal(true)
-            .title(self.tr(Message::SettingsTitle))
+            .title(self.tr("settings_title"))
             .default_width(560)
             .build();
-        dialog.add_button(self.tr(Message::Close), gtk::ResponseType::Close);
+        dialog.add_button(self.tr("close"), gtk::ResponseType::Close);
         dialog.connect_response(|dialog, _| dialog.close());
 
         let content = dialog.content_area();
@@ -2914,10 +2101,10 @@ impl AppController {
         content.set_margin_start(22);
         content.set_margin_end(22);
 
-        let title = gtk::Label::new(Some(self.tr(Message::SettingsTitle)));
+        let title = gtk::Label::new(Some(self.tr("settings_title")));
         title.set_xalign(0.0);
         title.add_css_class("title-2");
-        let description = gtk::Label::new(Some(self.tr(Message::SettingsDescription)));
+        let description = gtk::Label::new(Some(self.tr("settings_description")));
         description.set_xalign(0.0);
         description.set_wrap(true);
         description.add_css_class("dim-label");
@@ -2936,13 +2123,12 @@ impl AppController {
             AppLanguage::Spanish => 2,
         });
         content.append(&settings_dropdown_row(
-            self.tr(Message::Language),
-            self.tr(Message::LanguageDescription),
+            self.tr("language"),
+            self.tr("language_description"),
             &language,
         ));
 
-        let source =
-            gtk::DropDown::from_strings(&[self.tr(Message::LocalLibrary), "YouTube Music"]);
+        let source = gtk::DropDown::from_strings(&["Local library", "YouTube Music"]);
         source.set_selected(
             match config.startup_source.unwrap_or(StartupSource::YouTube) {
                 StartupSource::Local => 0,
@@ -2950,15 +2136,15 @@ impl AppController {
             },
         );
         content.append(&settings_dropdown_row(
-            self.tr(Message::HomeSource),
-            self.tr(Message::HomeSourceDescription),
+            self.tr("home_source"),
+            self.tr("home_source_description"),
             &source,
         ));
 
         let blur_mode = gtk::DropDown::from_strings(&[
-            self.tr(Message::BlurCustom),
-            self.tr(Message::BlurNoctalia),
-            self.tr(Message::BlurOff),
+            self.tr("blur_custom"),
+            self.tr("blur_noctalia"),
+            self.tr("blur_off"),
         ]);
         blur_mode.set_selected(match config.blur_mode {
             BlurMode::Custom => 0,
@@ -2966,8 +2152,8 @@ impl AppController {
             BlurMode::Off => 2,
         });
         content.append(&settings_dropdown_row(
-            self.tr(Message::WindowBlur),
-            self.tr(Message::WindowBlurDescription),
+            self.tr("window_blur"),
+            self.tr("window_blur_description"),
             &blur_mode,
         ));
 
@@ -2976,8 +2162,8 @@ impl AppController {
         blur_opacity.set_value(config.blur_opacity.clamp(0.45, 0.95) * 100.0);
         blur_opacity.set_value_pos(gtk::PositionType::Right);
         let blur_opacity_row = settings_scale_row(
-            self.tr(Message::BlurOpacity),
-            self.tr(Message::BlurOpacityDescription),
+            self.tr("blur_opacity"),
+            self.tr("blur_opacity_description"),
             &blur_opacity,
         );
         blur_opacity_row.set_visible(config.blur_mode == BlurMode::Custom);
@@ -2985,57 +2171,49 @@ impl AppController {
 
         let visualizer = settings_switch(config.show_home_visualizer);
         content.append(&settings_switch_row(
-            self.tr(Message::HomeVisualizer),
-            self.tr(Message::HomeVisualizerDescription),
+            self.tr("home_visualizer"),
+            self.tr("home_visualizer_description"),
             &visualizer,
         ));
 
         let lyrics = settings_switch(config.show_home_lyrics);
         content.append(&settings_switch_row(
-            self.tr(Message::HomeLyrics),
-            self.tr(Message::HomeLyricsDescription),
+            self.tr("home_lyrics"),
+            self.tr("home_lyrics_description"),
             &lyrics,
-        ));
-
-        let m3_progress = settings_switch(config.use_m3_progress);
-        content.append(&settings_switch_row(
-            self.tr(Message::M3Progress),
-            self.tr(Message::M3ProgressDescription),
-            &m3_progress,
         ));
 
         let auto_lyrics = settings_switch(config.auto_download_lyrics);
         content.append(&settings_switch_row(
-            self.tr(Message::AutoLyrics),
-            self.tr(Message::AutoLyricsDescription),
+            self.tr("auto_lyrics"),
+            self.tr("auto_lyrics_description"),
             &auto_lyrics,
         ));
 
         let youtube_sync = settings_switch(config.youtube_auto_sync);
         content.append(&settings_switch_row(
-            self.tr(Message::YoutubeSync),
-            self.tr(Message::YoutubeSyncDescription),
+            self.tr("youtube_sync"),
+            self.tr("youtube_sync_description"),
             &youtube_sync,
         ));
 
-        let youtube_button = gtk::Button::with_label(self.tr(Message::YoutubeManageAction));
+        let youtube_button = gtk::Button::with_label(self.tr("youtube_manage_action"));
         youtube_button.add_css_class("suggested-action");
         content.append(&settings_button_row(
-            self.tr(Message::YoutubeManage),
-            self.tr(Message::YoutubeManageDescription),
+            self.tr("youtube_manage"),
+            self.tr("youtube_manage_description"),
             &youtube_button,
         ));
 
         let noctalia = settings_switch(config.noctalia_theme_sync);
         content.append(&settings_switch_row(
-            self.tr(Message::NoctaliaSync),
-            self.tr(Message::NoctaliaSyncDescription),
+            self.tr("noctalia_sync"),
+            self.tr("noctalia_sync_description"),
             &noctalia,
         ));
 
         {
             let weak = Rc::downgrade(self);
-            let dialog = dialog.clone();
             language.connect_selected_notify(move |dropdown| {
                 let Some(controller) = weak.upgrade() else {
                     return;
@@ -3046,10 +2224,6 @@ impl AppController {
                     _ => AppLanguage::Portuguese,
                 };
                 controller.save_config();
-                controller.apply_translations();
-                dialog.close();
-                let controller = controller.clone();
-                glib::idle_add_local_once(move || controller.show_settings_dialog());
             });
         }
         {
@@ -3122,10 +2296,9 @@ impl AppController {
         for (switch, setting) in [
             (&visualizer, 0_u8),
             (&lyrics, 1),
-            (&m3_progress, 2),
-            (&auto_lyrics, 3),
-            (&youtube_sync, 4),
-            (&noctalia, 5),
+            (&auto_lyrics, 2),
+            (&youtube_sync, 3),
+            (&noctalia, 4),
         ] {
             let weak = Rc::downgrade(self);
             switch.connect_active_notify(move |switch| {
@@ -3138,9 +2311,8 @@ impl AppController {
                     match setting {
                         0 => config.show_home_visualizer = active,
                         1 => config.show_home_lyrics = active,
-                        2 => config.use_m3_progress = active,
-                        3 => config.auto_download_lyrics = active,
-                        4 => config.youtube_auto_sync = active,
+                        2 => config.auto_download_lyrics = active,
+                        3 => config.youtube_auto_sync = active,
                         _ => config.noctalia_theme_sync = active,
                     }
                 }
@@ -3160,7 +2332,7 @@ impl AppController {
             .default_width(760)
             .default_height(620)
             .build();
-        dialog.add_button(self.tr(Message::Close), gtk::ResponseType::Close);
+        dialog.add_button(self.tr("close"), gtk::ResponseType::Close);
 
         let content = dialog.content_area();
         content.set_spacing(0);
@@ -3178,14 +2350,18 @@ impl AppController {
         dialog.present();
     }
 
+    fn tr(&self, key: &str) -> &'static str {
+        translate(self.config.borrow().language, key)
+    }
+
     fn show_startup_source_dialog(self: &Rc<Self>, first_run: bool) {
         let dialog = gtk::Dialog::builder()
             .transient_for(&self.window)
             .modal(true)
             .title(if first_run {
-                self.tr(Message::StartupWelcome)
+                "Boas-vindas ao Nocky"
             } else {
-                self.tr(Message::StartupSourceTitle)
+                "Fonte da Home"
             })
             .default_width(480)
             .build();
@@ -3198,25 +2374,31 @@ impl AppController {
         content.set_margin_end(22);
 
         let title = gtk::Label::new(Some(if first_run {
-            self.tr(Message::StartupQuestion)
+            "Qual fonte a Home deve mostrar?"
         } else {
-            self.tr(Message::StartupChoose)
+            "Escolha o que aparece na Home"
         }));
         title.set_wrap(true);
         title.set_xalign(0.0);
         title.add_css_class("title-2");
 
-        let description = gtk::Label::new(Some(self.tr(Message::StartupDescription)));
+        let description = gtk::Label::new(Some(
+            "O Nocky sempre abre na Home. Esta escolha controla se a Home mostra músicas locais ou sua biblioteca conectada do YouTube Music.",
+        ));
         description.set_wrap(true);
         description.set_xalign(0.0);
         description.add_css_class("dim-label");
 
-        let local_button = gtk::Button::with_label(self.tr(Message::UseLocalLibrary));
-        local_button.set_tooltip_text(Some(self.tr(Message::UseLocalLibraryTooltip)));
+        let local_button = gtk::Button::with_label("Usar biblioteca local");
+        local_button.set_tooltip_text(Some(
+            "Mostra álbuns, artistas, playlists e curtidas salvas neste computador",
+        ));
         local_button.add_css_class("source-choice-button");
 
-        let youtube_button = gtk::Button::with_label(self.tr(Message::UseYoutubeMusic));
-        youtube_button.set_tooltip_text(Some(self.tr(Message::UseYoutubeMusicTooltip)));
+        let youtube_button = gtk::Button::with_label("Usar YouTube Music");
+        youtube_button.set_tooltip_text(Some(
+            "Mostra sua biblioteca online conectada na Home e mantém a busca do YouTube disponível",
+        ));
         youtube_button.add_css_class("source-choice-button");
         youtube_button.add_css_class("suggested-action");
 
@@ -3229,7 +2411,7 @@ impl AppController {
         content.append(&choices);
 
         if !first_run {
-            dialog.add_button(self.tr(Message::Cancel), gtk::ResponseType::Cancel);
+            dialog.add_button("Cancelar", gtk::ResponseType::Cancel);
             dialog.connect_response(|dialog, _| dialog.close());
         }
 
@@ -3265,7 +2447,7 @@ impl AppController {
 
     fn choose_library_folder(self: &Rc<Self>) {
         let dialog = gtk::FileDialog::builder()
-            .title(self.tr(Message::ChooseFolderAction))
+            .title("Escolha sua pasta de músicas")
             .accept_label("Selecionar")
             .modal(true)
             .build();
@@ -3964,7 +3146,6 @@ impl AppController {
         }
 
         self.playback_source.set(PlaybackSource::Local);
-        self.update_footer_source();
         if let Some(index) = self.state.borrow().current {
             if let Some(track) = self.state.borrow().tracks.get(index) {
                 self.begin_listening_session(format!("local:{}", track.path.display()));
@@ -4081,9 +3262,9 @@ impl AppController {
         self.update_favorite_icon(&path);
         self.refresh_browser();
         self.show_toast(if liked {
-            self.tr(Message::AddedLiked)
+            "Added to liked songs"
         } else {
-            self.tr(Message::RemovedLiked)
+            "Removed from liked songs"
         });
     }
 
@@ -4092,10 +3273,6 @@ impl AppController {
         self.favorite_icon
             .set_icon_name(Some("emblem-favorite-symbolic"));
         self.favorite_icon
-            .set_opacity(if liked { 0.98 } else { 0.28 });
-        self.footer_favorite_icon
-            .set_icon_name(Some("emblem-favorite-symbolic"));
-        self.footer_favorite_icon
             .set_opacity(if liked { 0.98 } else { 0.28 });
     }
 
@@ -4497,9 +3674,6 @@ impl AppController {
         self.hero_play_icon.set_icon_name(Some(icon));
         self.visualizer
             .set_active(playing && self.visualizer.widget().is_visible());
-        let animate_m3 = playing && self.config.borrow().use_m3_progress;
-        self.home_wave_progress.set_playing(animate_m3);
-        self.footer_progress.set_playing(animate_m3);
     }
 
     fn begin_listening_session(&self, id: String) {
@@ -4571,17 +3745,9 @@ impl AppController {
 
         self.updating_progress.set(true);
         self.progress.set_value(fraction.clamp(0.0, 1.0));
-        self.footer_traditional_progress
-            .set_value(fraction.clamp(0.0, 1.0));
-        self.home_wave_progress.set_fraction(fraction);
-        self.footer_progress.set_fraction(fraction);
         self.updating_progress.set(false);
-        let elapsed = format_time(timestamp);
-        let duration_text = format_time(duration);
-        self.elapsed.set_text(&elapsed);
-        self.duration.set_text(&duration_text);
-        self.footer_elapsed.set_text(&elapsed);
-        self.footer_duration.set_text(&duration_text);
+        self.elapsed.set_text(&format_time(timestamp));
+        self.duration.set_text(&format_time(duration));
         self.highlight_lyric(timestamp);
 
         let previous = self.last_mpris_position.get();
@@ -4632,12 +3798,11 @@ impl AppController {
         self.playback_source.set(PlaybackSource::None);
         self.youtube_state.replace(None);
         self.reset_youtube_recovery();
-        self.title.set_text(self.tr(Message::IntegratedMusic));
-        self.artist.set_text(self.tr(Message::NoTrackSelected));
+        self.title.set_text("Sua música, naturalmente integrada");
+        self.artist.set_text("Nenhuma faixa selecionada");
         self.album.set_text(message);
-        self.mini_title.set_text(self.tr(Message::NothingPlaying));
+        self.mini_title.set_text("Nada reproduzindo");
         self.mini_artist.set_text("Nocky");
-        self.update_footer_source();
         self.lyrics.show_state(
             "As letras aparecerão aqui",
             Some("Reproduza uma música com letras sincronizadas para acompanhar cada verso."),
@@ -4648,12 +3813,7 @@ impl AppController {
         self.mini_cover.set_path(None);
         self.elapsed.set_text("0:00");
         self.duration.set_text("0:00");
-        self.footer_elapsed.set_text("0:00");
-        self.footer_duration.set_text("0:00");
         self.progress.set_value(0.0);
-        self.footer_traditional_progress.set_value(0.0);
-        self.home_wave_progress.set_fraction(0.0);
-        self.footer_progress.set_fraction(0.0);
         self.update_play_icons(false);
         self.last_mpris_position.set(0);
         self.mpris.send(mpris::MprisUpdate::ClearMetadata);
@@ -4783,8 +3943,7 @@ fn redact_stream_url(message: &str) -> String {
     redacted
 }
 
-fn build_sidebar(language: AppLanguage) -> SidebarParts {
-    let tr = |message| i18n::text(language, message);
+fn build_sidebar() -> SidebarParts {
     let content = gtk::Box::new(gtk::Orientation::Vertical, 6);
     content.set_size_request(252, -1);
     content.set_margin_top(12);
@@ -4793,27 +3952,22 @@ fn build_sidebar(language: AppLanguage) -> SidebarParts {
     content.set_margin_end(10);
     content.add_css_class("sidebar-content");
 
-    let (all_button, all_label) = sidebar_row("view-list-symbolic", tr(Message::Library), true);
-    let (albums_button, albums_label) =
-        sidebar_row("folder-music-symbolic", tr(Message::Albums), false);
-    let (artists_button, artists_label) =
-        sidebar_row("avatar-default-symbolic", tr(Message::Artists), false);
-    let (playlists_button, playlists_label) =
-        sidebar_row("view-list-symbolic", tr(Message::Playlists), false);
+    let all_button = sidebar_row("view-list-symbolic", "Biblioteca", true);
+    let albums_button = sidebar_row("folder-music-symbolic", "Álbuns", false);
+    let artists_button = sidebar_row("avatar-default-symbolic", "Artistas", false);
+    let playlists_button = sidebar_row("view-list-symbolic", "Playlists", false);
     content.append(&all_button);
     content.append(&albums_button);
     content.append(&artists_button);
     content.append(&playlists_button);
 
-    let section = gtk::Label::new(Some(tr(Message::LocalCollection)));
+    let section = gtk::Label::new(Some("COLEÇÃO LOCAL"));
     section.set_xalign(0.0);
     section.set_margin_top(18);
     section.set_margin_start(10);
     section.add_css_class("section-title");
     content.append(&section);
-
-    let (liked_button, liked_label) =
-        sidebar_row("emblem-favorite-symbolic", tr(Message::LikedSongs), false);
+    let liked_button = sidebar_row("emblem-favorite-symbolic", "Músicas curtidas", false);
     content.append(&liked_button);
 
     let spacer = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -4830,16 +3984,10 @@ fn build_sidebar(language: AppLanguage) -> SidebarParts {
     SidebarParts {
         revealer,
         all_button,
-        all_label,
         albums_button,
-        albums_label,
         artists_button,
-        artists_label,
         playlists_button,
-        playlists_label,
         liked_button,
-        liked_label,
-        section_label: section,
     }
 }
 
@@ -4942,7 +4090,155 @@ fn settings_button_row(title: &str, subtitle: &str, button: &gtk::Button) -> gtk
     row
 }
 
-fn sidebar_row(icon_name: &str, text: &str, active: bool) -> (gtk::Button, gtk::Label) {
+fn translate(language: AppLanguage, key: &str) -> &'static str {
+    match language {
+        AppLanguage::Portuguese => match key {
+            "settings_title" => "Configurações",
+            "settings_description" => "Ajuste a Home, integrações e idioma do Nocky.",
+            "language" => "Idioma",
+            "language_description" => "Escolha o idioma preferido para as configurações.",
+            "home_source" => "Fonte da Home",
+            "home_source_description" => {
+                "Escolha se a Home mostra a biblioteca local ou o YouTube Music."
+            }
+            "home_visualizer" => "Visualizador na Home",
+            "home_visualizer_description" => {
+                "Mostra ou oculta o espectro de áudio no painel reproduzindo agora."
+            }
+            "home_lyrics" => "Letras na Home",
+            "home_lyrics_description" => {
+                "Mostra ou oculta a prévia sincronizada de letras na Home."
+            }
+            "auto_lyrics" => "Buscar letras automaticamente",
+            "auto_lyrics_description" => {
+                "Procura letras sincronizadas para músicas locais e do YouTube."
+            }
+            "youtube_sync" => "Sincronização automática do YouTube",
+            "youtube_sync_description" => {
+                "Atualiza biblioteca, curtidas e playlists ao abrir o app."
+            }
+            "youtube_manage" => "YouTube Music",
+            "youtube_manage_description" => {
+                "Conecte a conta, sincronize manualmente e use a busca do YouTube Music."
+            }
+            "youtube_manage_action" => "Gerenciar",
+            "noctalia_sync" => "Sincronizar com Noctalia Shell",
+            "noctalia_sync_description" => {
+                "Aplica o CSS gerado pelo Noctalia em ~/.config/nocky/theme.css."
+            }
+            "window_blur" => "Desfoque da janela",
+            "window_blur_description" => {
+                "Escolha o vidro do Nocky, a aparência sincronizada do Noctalia ou uma janela opaca."
+            }
+            "blur_custom" => "Desfoque",
+            "blur_noctalia" => "Desfoque do Noctalia",
+            "blur_off" => "Desativado",
+            "blur_opacity" => "Transparência do vidro",
+            "blur_opacity_description" => {
+                "Controla a transparência usada no modo Desfoque."
+            }
+            "settings_saved" => "Configurações salvas",
+            "close" => "Fechar",
+            _ => "Nocky",
+        },
+        AppLanguage::English => match key {
+            "settings_title" => "Settings",
+            "settings_description" => "Tune Nocky's Home, integrations, and language.",
+            "language" => "Language",
+            "language_description" => "Choose the preferred language for settings.",
+            "home_source" => "Home source",
+            "home_source_description" => {
+                "Choose whether Home shows your local library or YouTube Music."
+            }
+            "home_visualizer" => "Home visualizer",
+            "home_visualizer_description" => {
+                "Show or hide the audio spectrum in the now-playing panel."
+            }
+            "home_lyrics" => "Home lyrics",
+            "home_lyrics_description" => "Show or hide the synchronized lyrics preview on Home.",
+            "auto_lyrics" => "Fetch lyrics automatically",
+            "auto_lyrics_description" => "Search synchronized lyrics for local and YouTube tracks.",
+            "youtube_sync" => "Automatic YouTube sync",
+            "youtube_sync_description" => {
+                "Refresh library, liked songs, and playlists when the app opens."
+            }
+            "youtube_manage" => "YouTube Music",
+            "youtube_manage_description" => {
+                "Connect your account, sync manually, and use YouTube Music search."
+            }
+            "youtube_manage_action" => "Manage",
+            "noctalia_sync" => "Sync with Noctalia Shell",
+            "noctalia_sync_description" => {
+                "Apply the CSS generated by Noctalia at ~/.config/nocky/theme.css."
+            }
+            "window_blur" => "Window blur",
+            "window_blur_description" => {
+                "Use Nocky's glass, follow Noctalia's appearance, or keep the window opaque."
+            }
+            "blur_custom" => "Blur",
+            "blur_noctalia" => "Noctalia blur",
+            "blur_off" => "Off",
+            "blur_opacity" => "Glass transparency",
+            "blur_opacity_description" => {
+                "Controls the transparency used by the Blur mode."
+            }
+            "settings_saved" => "Settings saved",
+            "close" => "Close",
+            _ => "Nocky",
+        },
+        AppLanguage::Spanish => match key {
+            "settings_title" => "Configuración",
+            "settings_description" => "Ajusta la Home, las integraciones y el idioma de Nocky.",
+            "language" => "Idioma",
+            "language_description" => "Elige el idioma preferido para la configuración.",
+            "home_source" => "Fuente de Home",
+            "home_source_description" => {
+                "Elige si Home muestra la biblioteca local o YouTube Music."
+            }
+            "home_visualizer" => "Visualizador en Home",
+            "home_visualizer_description" => {
+                "Muestra u oculta el espectro de audio en el panel de reproducción."
+            }
+            "home_lyrics" => "Letras en Home",
+            "home_lyrics_description" => {
+                "Muestra u oculta la vista previa de letras sincronizadas en Home."
+            }
+            "auto_lyrics" => "Buscar letras automáticamente",
+            "auto_lyrics_description" => {
+                "Busca letras sincronizadas para canciones locales y de YouTube."
+            }
+            "youtube_sync" => "Sincronización automática de YouTube",
+            "youtube_sync_description" => {
+                "Actualiza biblioteca, favoritos y playlists al abrir la app."
+            }
+            "youtube_manage" => "YouTube Music",
+            "youtube_manage_description" => {
+                "Conecta la cuenta, sincroniza manualmente y usa la búsqueda de YouTube Music."
+            }
+            "youtube_manage_action" => "Gestionar",
+            "noctalia_sync" => "Sincronizar con Noctalia Shell",
+            "noctalia_sync_description" => {
+                "Aplica el CSS generado por Noctalia en ~/.config/nocky/theme.css."
+            }
+            "window_blur" => "Desenfoque de la ventana",
+            "window_blur_description" => {
+                "Usa el cristal de Nocky, sigue la apariencia de Noctalia o deja la ventana opaca."
+            }
+            "blur_custom" => "Desenfoque",
+            "blur_noctalia" => "Desenfoque de Noctalia",
+            "blur_off" => "Desactivado",
+            "blur_opacity" => "Transparencia del cristal",
+            "blur_opacity_description" => {
+                "Controla la transparencia usada por el modo Desenfoque."
+            }
+            "settings_saved" => "Configuración guardada",
+            "close" => "Cerrar",
+            _ => "Nocky",
+        },
+    }
+}
+
+fn sidebar_row(icon_name: &str, text: &str, active: bool) -> gtk::Button {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     content.set_margin_top(7);
     content.set_margin_bottom(7);
@@ -4960,36 +4256,7 @@ fn sidebar_row(icon_name: &str, text: &str, active: bool) -> (gtk::Button, gtk::
     if active {
         button.add_css_class("active");
     }
-    (button, label)
-}
-
-fn build_main_menu(language: AppLanguage) -> gio::Menu {
-    let tr = |message| i18n::text(language, message);
-    let menu = gio::Menu::new();
-
-    let library_section = gio::Menu::new();
-    library_section.append(
-        Some(tr(Message::MenuChooseMusicFolder)),
-        Some("app.choose-library"),
-    );
-    library_section.append(Some(tr(Message::MenuRescanLibrary)), Some("app.rescan"));
-    library_section.append(
-        Some(tr(Message::MenuDownloadLyrics)),
-        Some("app.download-lyrics"),
-    );
-    library_section.append(
-        Some(tr(Message::MenuToggleAutomaticLyrics)),
-        Some("app.toggle-auto-lyrics"),
-    );
-    menu.append_section(None, &library_section);
-
-    let app_section = gio::Menu::new();
-    app_section.append(Some(tr(Message::MenuSettings)), Some("app.settings"));
-    app_section.append(Some(tr(Message::MenuAbout)), Some("app.about"));
-    app_section.append(Some(tr(Message::MenuQuit)), Some("app.quit"));
-    menu.append_section(None, &app_section);
-
-    menu
+    button
 }
 
 #[derive(Clone)]

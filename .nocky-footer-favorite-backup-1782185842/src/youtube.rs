@@ -324,16 +324,6 @@ impl YouTubeBridge {
         self.run("liked", json!({ "limit": 200 }))
     }
 
-    pub fn rate_song(&self, video_id: &str, liked: bool) -> Result<bool, String> {
-        self.run(
-            "rate",
-            json!({
-                "video_id": video_id,
-                "liked": liked,
-            }),
-        )
-    }
-
     pub fn playlists(&self) -> Result<Vec<YouTubeItem>, String> {
         self.run("playlists", json!({ "limit": 150, "home_limit": 8 }))
     }
