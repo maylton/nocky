@@ -5,20 +5,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Playlist {
     pub name: String,
     pub tracks: Vec<PathBuf>,
-}
-
-impl Default for Playlist {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            tracks: Vec::new(),
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]

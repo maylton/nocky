@@ -55,7 +55,6 @@ pub enum Message {
     LocalLibrary,
     AddedLiked,
     RemovedLiked,
-    SelectTrackFirst,
     AutomaticLyricsEnabled,
     AutomaticLyricsDisabled,
     SettingsTitle,
@@ -92,10 +91,10 @@ pub enum Message {
     BlurOff,
     BlurOpacity,
     BlurOpacityDescription,
-    Close,
 }
 
-pub const ALL_MESSAGES: &[Message] = &[
+#[cfg(test)]
+const ALL_MESSAGES: &[Message] = &[
     Message::SidebarToggle,
     Message::SearchLibrary,
     Message::ChooseMusicFolderTooltip,
@@ -149,7 +148,6 @@ pub const ALL_MESSAGES: &[Message] = &[
     Message::LocalLibrary,
     Message::AddedLiked,
     Message::RemovedLiked,
-    Message::SelectTrackFirst,
     Message::AutomaticLyricsEnabled,
     Message::AutomaticLyricsDisabled,
     Message::SettingsTitle,
@@ -186,7 +184,6 @@ pub const ALL_MESSAGES: &[Message] = &[
     Message::BlurOff,
     Message::BlurOpacity,
     Message::BlurOpacityDescription,
-    Message::Close,
 ];
 
 pub fn text(language: AppLanguage, message: Message) -> &'static str {
@@ -245,7 +242,6 @@ pub fn text(language: AppLanguage, message: Message) -> &'static str {
             Message::LocalLibrary => "Biblioteca local",
             Message::AddedLiked => "Adicionada às músicas curtidas",
             Message::RemovedLiked => "Removida das músicas curtidas",
-            Message::SelectTrackFirst => "Selecione uma faixa primeiro",
             Message::AutomaticLyricsEnabled => "Busca automática de letras ativada",
             Message::AutomaticLyricsDisabled => "Busca automática de letras desativada",
             Message::SettingsTitle => "Configurações",
@@ -282,7 +278,6 @@ pub fn text(language: AppLanguage, message: Message) -> &'static str {
             Message::BlurOff => "Desativado",
             Message::BlurOpacity => "Transparência do vidro",
             Message::BlurOpacityDescription => "Controla a transparência usada no modo Desfoque.",
-            Message::Close => "Fechar",
         },
         AppLanguage::English => match message {
             Message::SidebarToggle => "Show or hide the sidebar",
@@ -338,7 +333,6 @@ pub fn text(language: AppLanguage, message: Message) -> &'static str {
             Message::LocalLibrary => "Local library",
             Message::AddedLiked => "Added to liked songs",
             Message::RemovedLiked => "Removed from liked songs",
-            Message::SelectTrackFirst => "Select a track first",
             Message::AutomaticLyricsEnabled => "Automatic lyrics enabled",
             Message::AutomaticLyricsDisabled => "Automatic lyrics disabled",
             Message::SettingsTitle => "Settings",
@@ -375,7 +369,6 @@ pub fn text(language: AppLanguage, message: Message) -> &'static str {
             Message::BlurOff => "Off",
             Message::BlurOpacity => "Glass transparency",
             Message::BlurOpacityDescription => "Controls the transparency used by Blur mode.",
-            Message::Close => "Close",
         },
         AppLanguage::Spanish => match message {
             Message::SidebarToggle => "Mostrar u ocultar la barra lateral",
@@ -431,7 +424,6 @@ pub fn text(language: AppLanguage, message: Message) -> &'static str {
             Message::LocalLibrary => "Biblioteca local",
             Message::AddedLiked => "Añadida a canciones favoritas",
             Message::RemovedLiked => "Eliminada de canciones favoritas",
-            Message::SelectTrackFirst => "Selecciona una canción primero",
             Message::AutomaticLyricsEnabled => "Letras automáticas activadas",
             Message::AutomaticLyricsDisabled => "Letras automáticas desactivadas",
             Message::SettingsTitle => "Configuración",
@@ -468,7 +460,6 @@ pub fn text(language: AppLanguage, message: Message) -> &'static str {
             Message::BlurOff => "Desactivado",
             Message::BlurOpacity => "Transparencia del cristal",
             Message::BlurOpacityDescription => "Controla la transparencia usada por el modo Desenfoque.",
-            Message::Close => "Cerrar",
         },
     }
 }

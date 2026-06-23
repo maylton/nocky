@@ -722,10 +722,7 @@ fn is_blur_block_start(line: &str) -> bool {
 }
 
 fn apply_niri_blur_line(settings: &mut NiriBlur, line: &str) {
-    let body = line
-        .replace("blur", " ")
-        .replace('{', " ")
-        .replace('}', " ");
+    let body = line.replace("blur", " ").replace(['{', '}'], " ");
 
     for statement in body.split(';') {
         let tokens = statement.split_whitespace().collect::<Vec<_>>();

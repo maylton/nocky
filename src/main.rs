@@ -72,7 +72,6 @@ struct YouTubePlaybackState {
     queue: Vec<YouTubeItem>,
     current: usize,
     item: YouTubeItem,
-    stream: YouTubeStream,
     cover_path: Option<PathBuf>,
     lyrics: Vec<LyricLine>,
 }
@@ -128,7 +127,7 @@ enum BackgroundMessage {
         request_id: u64,
         queue: Vec<YouTubeItem>,
         index: usize,
-        item: YouTubeItem,
+        item: Box<YouTubeItem>,
         result: Result<(YouTubeStream, Option<PathBuf>), String>,
     },
 }
@@ -1417,7 +1416,7 @@ impl AppController {
                 } else {
                     10
                 };
-                if progress_ticks % cadence == 0 {
+                if progress_ticks.is_multiple_of(cadence) {
                     controller.refresh_progress();
                 }
                 glib::ControlFlow::Continue
@@ -2268,7 +2267,7 @@ impl AppController {
                 request_id,
                 queue,
                 index,
-                item,
+                item: Box::new(item),
                 result,
             });
         });
@@ -2387,7 +2386,6 @@ impl AppController {
             queue,
             current: index,
             item: item.clone(),
-            stream: stream.clone(),
             cover_path: cover_path.clone(),
             lyrics: preserved_lyrics.clone(),
         }));
@@ -2998,17 +2996,23 @@ impl AppController {
     }
 
     fn show_settings_dialog(self: &Rc<Self>) {
-        let dialog = gtk::Dialog::builder()
-            .transient_for(&self.window)
-            .modal(true)
+        let dialog = adw::Dialog::builder()
             .title(self.tr(Message::SettingsTitle))
-            .default_width(560)
+            .content_width(560)
+            .content_height(680)
             .build();
-        dialog.add_button(self.tr(Message::Close), gtk::ResponseType::Close);
-        dialog.connect_response(|dialog, _| dialog.close());
 
-        let content = dialog.content_area();
-        content.set_spacing(14);
+        let toolbar = adw::ToolbarView::new();
+        toolbar.add_top_bar(&adw::HeaderBar::new());
+
+        let scrolled = gtk::ScrolledWindow::new();
+        scrolled.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+        scrolled.set_vexpand(true);
+
+        let content = gtk::Box::new(gtk::Orientation::Vertical, 14);
+        scrolled.set_child(Some(&content));
+        toolbar.set_content(Some(&scrolled));
+        dialog.set_child(Some(&toolbar));
         content.set_margin_top(22);
         content.set_margin_bottom(22);
         content.set_margin_start(22);
@@ -3306,33 +3310,29 @@ impl AppController {
             });
         }
 
-        dialog.present();
+        dialog.present(Some(&self.window));
     }
 
     fn show_youtube_settings_dialog(self: &Rc<Self>) {
-        let dialog = gtk::Dialog::builder()
-            .transient_for(&self.window)
-            .modal(true)
+        let dialog = adw::Dialog::builder()
             .title("YouTube Music")
-            .default_width(760)
-            .default_height(620)
+            .content_width(760)
+            .content_height(620)
             .build();
-        dialog.add_button(self.tr(Message::Close), gtk::ResponseType::Close);
 
-        let content = dialog.content_area();
-        content.set_spacing(0);
-        content.set_margin_top(0);
-        content.set_margin_bottom(0);
-        content.set_margin_start(0);
-        content.set_margin_end(0);
-        content.append(self.youtube_page.root());
+        let toolbar = adw::ToolbarView::new();
+        toolbar.add_top_bar(&adw::HeaderBar::new());
+
+        let host = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        host.append(self.youtube_page.root());
+        toolbar.set_content(Some(&host));
+        dialog.set_child(Some(&toolbar));
 
         let youtube_root = self.youtube_page.root().clone();
-        dialog.connect_response(move |dialog, _| {
-            dialog.content_area().remove(&youtube_root);
-            dialog.close();
+        dialog.connect_closed(move |_| {
+            host.remove(&youtube_root);
         });
-        dialog.present();
+        dialog.present(Some(&self.window));
     }
 
     fn show_onboarding_wizard(self: &Rc<Self>) {
@@ -3381,19 +3381,18 @@ impl AppController {
     }
 
     fn show_startup_source_dialog(self: &Rc<Self>, first_run: bool) {
-        let dialog = gtk::Dialog::builder()
-            .transient_for(&self.window)
-            .modal(true)
+        let dialog = adw::Dialog::builder()
             .title(if first_run {
                 self.tr(Message::StartupWelcome)
             } else {
                 self.tr(Message::StartupSourceTitle)
             })
-            .default_width(480)
+            .content_width(480)
             .build();
+        dialog.set_can_close(!first_run);
 
-        let content = dialog.content_area();
-        content.set_spacing(14);
+        let content = gtk::Box::new(gtk::Orientation::Vertical, 14);
+        dialog.set_child(Some(&content));
         content.set_margin_top(22);
         content.set_margin_bottom(22);
         content.set_margin_start(22);
@@ -3431,8 +3430,14 @@ impl AppController {
         content.append(&choices);
 
         if !first_run {
-            dialog.add_button(self.tr(Message::Cancel), gtk::ResponseType::Cancel);
-            dialog.connect_response(|dialog, _| dialog.close());
+            let cancel_button = gtk::Button::with_label(self.tr(Message::Cancel));
+            cancel_button.set_halign(gtk::Align::End);
+            content.append(&cancel_button);
+
+            let dialog = dialog.clone();
+            cancel_button.connect_clicked(move |_| {
+                dialog.close();
+            });
         }
 
         {
@@ -3456,7 +3461,7 @@ impl AppController {
             });
         }
 
-        dialog.present();
+        dialog.present(Some(&self.window));
     }
 
     fn load_saved_library(self: &Rc<Self>) {
@@ -3922,7 +3927,7 @@ impl AppController {
                     }
                     match result {
                         Ok((stream, cover)) => {
-                            self.apply_youtube_track(queue, index, item, stream, cover)
+                            self.apply_youtube_track(queue, index, *item, stream, cover)
                         }
                         Err(error) => {
                             self.show_error(&error);
@@ -5306,15 +5311,6 @@ fn mpris_youtube_track_id(video_id: &str) -> String {
 
 fn format_time(microseconds: i64) -> String {
     let total_seconds = (microseconds / 1_000_000).max(0);
-    let minutes = total_seconds / 60;
-    let seconds = total_seconds % 60;
-    format!("{minutes}:{seconds:02}")
-}
-
-fn format_duration_seconds(total_seconds: u64) -> String {
-    if total_seconds == 0 {
-        return "—".to_string();
-    }
     let minutes = total_seconds / 60;
     let seconds = total_seconds % 60;
     format!("{minutes}:{seconds:02}")

@@ -11,7 +11,6 @@ type SeekCallback = Box<dyn Fn(f64)>;
 pub struct WaveProgress {
     area: gtk::DrawingArea,
     fraction: Rc<Cell<f64>>,
-    phase: Rc<Cell<f64>>,
     playing: Rc<Cell<bool>>,
     callbacks: Rc<RefCell<Vec<SeekCallback>>>,
 }
@@ -86,7 +85,6 @@ impl WaveProgress {
         Self {
             area,
             fraction,
-            phase,
             playing,
             callbacks,
         }
