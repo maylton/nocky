@@ -8,7 +8,12 @@ use std::{
 
 const INLINE_SLOTS: usize = 5;
 const INLINE_CENTER: usize = INLINE_SLOTS / 2;
+const INLINE_PANEL_WIDTH: i32 = 384;
+const INLINE_PANEL_HEIGHT: i32 = 158;
+const INLINE_PAGE_HEIGHT: i32 = 136;
 const INLINE_TEXT_WIDTH: i32 = 360;
+const INLINE_FOCUSED_HEIGHT: i32 = 44;
+const INLINE_SECONDARY_HEIGHT: i32 = 22;
 const SCROLL_DURATION: Duration = Duration::from_millis(220);
 
 #[derive(Clone)]
@@ -24,6 +29,7 @@ struct LyricsPresenterInner {
     full_box: gtk::Box,
     full_labels: RefCell<Vec<gtk::Label>>,
     inline_stack: gtk::Stack,
+    inline_viewport: gtk::ScrolledWindow,
     inline_pages: Vec<InlinePage>,
     inline_visible: Cell<usize>,
     scroll_generation: Rc<Cell<u64>>,
@@ -60,13 +66,30 @@ impl LyricsPresenter {
         inline_stack.set_margin_bottom(2);
         inline_stack.set_vexpand(false);
         inline_stack.set_valign(gtk::Align::Center);
-        inline_stack.set_size_request(384, 158);
+        inline_stack.set_size_request(INLINE_PANEL_WIDTH, INLINE_PANEL_HEIGHT);
         inline_stack.set_hexpand(false);
         inline_stack.set_halign(gtk::Align::Center);
+        inline_stack.set_overflow(gtk::Overflow::Hidden);
         inline_stack.add_css_class("inline-lyrics-panel");
         inline_stack.add_named(&page_a.root, Some("lyrics-a"));
         inline_stack.add_named(&page_b.root, Some("lyrics-b"));
         inline_stack.set_visible_child_name("lyrics-a");
+
+        let inline_viewport = gtk::ScrolledWindow::new();
+        inline_viewport.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Never);
+        inline_viewport.set_propagate_natural_width(false);
+        inline_viewport.set_propagate_natural_height(false);
+        inline_viewport.set_min_content_width(INLINE_PANEL_WIDTH);
+        inline_viewport.set_max_content_width(INLINE_PANEL_WIDTH);
+        inline_viewport.set_min_content_height(INLINE_PANEL_HEIGHT);
+        inline_viewport.set_max_content_height(INLINE_PANEL_HEIGHT);
+        inline_viewport.set_size_request(INLINE_PANEL_WIDTH, INLINE_PANEL_HEIGHT);
+        inline_viewport.set_hexpand(false);
+        inline_viewport.set_halign(gtk::Align::Center);
+        inline_viewport.set_vexpand(false);
+        inline_viewport.set_valign(gtk::Align::Center);
+        inline_viewport.set_child(Some(&inline_stack));
+        inline_viewport.add_css_class("inline-lyrics-viewport");
 
         let presenter = Self {
             inner: Rc::new(LyricsPresenterInner {
@@ -77,6 +100,7 @@ impl LyricsPresenter {
                 full_box,
                 full_labels: RefCell::new(Vec::new()),
                 inline_stack,
+                inline_viewport,
                 inline_pages: vec![page_a, page_b],
                 inline_visible: Cell::new(0),
                 scroll_generation: Rc::new(Cell::new(0)),
@@ -96,8 +120,8 @@ impl LyricsPresenter {
         &self.inner.full_scroll
     }
 
-    pub fn inline_widget(&self) -> &gtk::Stack {
-        &self.inner.inline_stack
+    pub fn inline_widget(&self) -> &gtk::ScrolledWindow {
+        &self.inner.inline_viewport
     }
 
     pub fn set_lines(&self, lines: &[LyricLine]) {
@@ -342,11 +366,12 @@ impl LyricsPresenter {
 
 fn inline_page() -> InlinePage {
     let root = gtk::Box::new(gtk::Orientation::Vertical, 4);
-    root.set_size_request(384, 136);
+    root.set_size_request(INLINE_PANEL_WIDTH, INLINE_PAGE_HEIGHT);
     root.set_hexpand(false);
     root.set_halign(gtk::Align::Center);
     root.set_vexpand(false);
     root.set_valign(gtk::Align::Center);
+    root.set_overflow(gtk::Overflow::Hidden);
     root.add_css_class("inline-lyrics-page");
 
     let mut labels = Vec::with_capacity(INLINE_SLOTS);
@@ -355,9 +380,10 @@ fn inline_page() -> InlinePage {
         label.set_justify(gtk::Justification::Center);
         label.set_halign(gtk::Align::Center);
         label.set_hexpand(false);
-        label.set_width_request(360);
+        label.set_width_request(INLINE_TEXT_WIDTH);
         label.set_width_chars(-1);
         label.set_max_width_chars(-1);
+        label.set_overflow(gtk::Overflow::Hidden);
 
         if index == INLINE_CENTER {
             label.set_wrap(false);
@@ -365,13 +391,13 @@ fn inline_page() -> InlinePage {
             label.set_single_line_mode(true);
             label.set_ellipsize(gtk::pango::EllipsizeMode::None);
             label.set_lines(1);
-            label.set_size_request(-1, 44);
+            label.set_size_request(INLINE_TEXT_WIDTH, INLINE_FOCUSED_HEIGHT);
         } else {
             label.set_wrap(false);
             label.set_single_line_mode(true);
             label.set_ellipsize(gtk::pango::EllipsizeMode::End);
             label.set_lines(1);
-            label.set_size_request(-1, 22);
+            label.set_size_request(INLINE_TEXT_WIDTH, INLINE_SECONDARY_HEIGHT);
         }
         label.add_css_class("inline-lyric-line");
         match index {
@@ -385,8 +411,24 @@ fn inline_page() -> InlinePage {
     InlinePage { root, labels }
 }
 
+fn normalize_inline_text(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn should_wrap_inline(focused: bool, natural_width: i32) -> bool {
+    focused && natural_width > INLINE_TEXT_WIDTH
+}
+
 fn set_inline_label_text(label: &gtk::Label, text: &str, focused: bool) {
-    let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let normalized = normalize_inline_text(text);
+    label.set_size_request(
+        INLINE_TEXT_WIDTH,
+        if focused {
+            INLINE_FOCUSED_HEIGHT
+        } else {
+            INLINE_SECONDARY_HEIGHT
+        },
+    );
 
     let natural_width = if normalized.is_empty() {
         0
@@ -394,7 +436,7 @@ fn set_inline_label_text(label: &gtk::Label, text: &str, focused: bool) {
         label.create_pango_layout(Some(&normalized)).pixel_size().0
     };
 
-    let should_wrap = focused && natural_width > INLINE_TEXT_WIDTH;
+    let should_wrap = should_wrap_inline(focused, natural_width);
 
     label.set_wrap(should_wrap);
     label.set_single_line_mode(!should_wrap);
@@ -443,4 +485,33 @@ fn animations_enabled() -> bool {
     gtk::Settings::default()
         .map(|settings| settings.property::<bool>("gtk-enable-animations"))
         .unwrap_or(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inline_text_normalization_removes_hidden_layout_changes() {
+        assert_eq!(
+            normalize_inline_text("  one\n\ttwo   three  "),
+            "one two three"
+        );
+    }
+
+    #[test]
+    fn only_the_focused_line_can_wrap() {
+        assert!(!should_wrap_inline(false, INLINE_TEXT_WIDTH + 200));
+        assert!(!should_wrap_inline(true, INLINE_TEXT_WIDTH));
+        assert!(should_wrap_inline(true, INLINE_TEXT_WIDTH + 1));
+    }
+
+    #[test]
+    fn inline_geometry_is_constant() {
+        assert_eq!(INLINE_PANEL_WIDTH, 384);
+        assert_eq!(INLINE_PANEL_HEIGHT, 158);
+        assert_eq!(INLINE_PAGE_HEIGHT, 136);
+        assert_eq!(INLINE_FOCUSED_HEIGHT, 44);
+        assert_eq!(INLINE_SECONDARY_HEIGHT, 22);
+    }
 }

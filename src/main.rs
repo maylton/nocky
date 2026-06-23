@@ -379,25 +379,32 @@ impl AppController {
         title.set_xalign(0.0);
         title.set_wrap(false);
         title.set_single_line_mode(true);
-        title.set_width_chars(28);
-        title.set_max_width_chars(28);
+        title.set_hexpand(true);
+        title.set_width_request(330);
+        title.set_width_chars(-1);
+        title.set_max_width_chars(32);
         title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        title.set_overflow(gtk::Overflow::Hidden);
         title.add_css_class("hero-title");
 
         let artist = gtk::Label::new(Some(tr(Message::NoTrackSelected)));
         artist.set_xalign(0.0);
         artist.set_single_line_mode(true);
-        artist.set_width_chars(28);
-        artist.set_max_width_chars(28);
+        artist.set_width_request(384);
+        artist.set_width_chars(-1);
+        artist.set_max_width_chars(40);
         artist.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        artist.set_overflow(gtk::Overflow::Hidden);
         artist.add_css_class("hero-artist");
 
         let album = gtk::Label::new(Some(tr(Message::ChooseFolderToStart)));
         album.set_xalign(0.0);
         album.set_single_line_mode(true);
-        album.set_width_chars(28);
-        album.set_max_width_chars(28);
+        album.set_width_request(384);
+        album.set_width_chars(-1);
+        album.set_max_width_chars(40);
         album.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        album.set_overflow(gtk::Overflow::Hidden);
         album.add_css_class("dim-label");
 
         let favorite_icon = gtk::Image::from_icon_name("emblem-favorite-symbolic");
@@ -408,6 +415,9 @@ impl AppController {
         favorite.add_css_class("card-icon-button");
         favorite.set_tooltip_text(Some(tr(Message::FavoriteTooltip)));
         favorite.add_css_class("like-button");
+        favorite.set_size_request(34, 34);
+        favorite.set_hexpand(false);
+        favorite.set_vexpand(false);
 
         let now_heading = gtk::Label::new(Some(tr(Message::NowPlaying)));
         now_heading.set_xalign(0.0);
@@ -420,7 +430,10 @@ impl AppController {
         now_header.append(&headphones);
 
         let title_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        title_row.set_width_request(320);
+        title_row.set_size_request(384, 34);
+        title_row.set_hexpand(false);
+        title_row.set_vexpand(false);
+        title_row.set_overflow(gtk::Overflow::Hidden);
         title_row.append(&title);
         title_row.append(&favorite);
 
@@ -522,6 +535,7 @@ impl AppController {
         visualizer_slot.set_vexpand(false);
         visualizer_slot.set_valign(gtk::Align::Start);
         visualizer_slot.set_center_widget(Some(&visualizer_widget));
+        visualizer_slot.set_overflow(gtk::Overflow::Hidden);
         visualizer_slot.add_css_class("stable-visualizer-slot");
 
         let inline_lyrics_widget = lyrics.inline_widget().clone();
@@ -539,6 +553,7 @@ impl AppController {
         lyrics_slot.set_vexpand(false);
         lyrics_slot.set_valign(gtk::Align::Start);
         lyrics_slot.set_center_widget(Some(&inline_lyrics_widget));
+        lyrics_slot.set_overflow(gtk::Overflow::Hidden);
         lyrics_slot.add_css_class("stable-lyrics-slot");
 
         title_row.set_height_request(34);
@@ -561,20 +576,22 @@ impl AppController {
         controls.set_valign(gtk::Align::Center);
 
         let metadata_block = gtk::Box::new(gtk::Orientation::Vertical, 6);
-        metadata_block.set_height_request(92);
-        metadata_block.set_width_request(384);
+        metadata_block.set_size_request(384, 92);
+        metadata_block.set_hexpand(false);
         metadata_block.set_vexpand(false);
         metadata_block.set_valign(gtk::Align::Start);
+        metadata_block.set_overflow(gtk::Overflow::Hidden);
         metadata_block.add_css_class("stable-player-metadata");
         metadata_block.append(&title_row);
         metadata_block.append(&artist);
         metadata_block.append(&album);
 
         let transport_block = gtk::Box::new(gtk::Orientation::Vertical, 6);
-        transport_block.set_height_request(116);
-        transport_block.set_width_request(384);
+        transport_block.set_size_request(384, 116);
+        transport_block.set_hexpand(false);
         transport_block.set_vexpand(false);
         transport_block.set_valign(gtk::Align::Start);
+        transport_block.set_overflow(gtk::Overflow::Hidden);
         transport_block.add_css_class("stable-player-transport");
         transport_block.append(&home_progress_stack);
         transport_block.append(&time_row);
@@ -586,6 +603,7 @@ impl AppController {
         now_content.set_halign(gtk::Align::Center);
         now_content.set_vexpand(false);
         now_content.set_valign(gtk::Align::Start);
+        now_content.set_overflow(gtk::Overflow::Hidden);
         now_content.add_css_class("stable-player-content");
         now_content.append(&now_header);
         now_content.append(&hero_cover_slot);
@@ -599,6 +617,7 @@ impl AppController {
         now_card.set_hexpand(false);
         now_card.set_vexpand(true);
         now_card.set_valign(gtk::Align::Fill);
+        now_card.set_overflow(gtk::Overflow::Hidden);
         now_card.add_css_class("now-playing-card");
         now_card.add_css_class("stable-home-player");
         now_card.append(&now_content);
@@ -611,6 +630,7 @@ impl AppController {
         dashboard.set_margin_start(24);
         dashboard.set_margin_end(24);
         dashboard.set_vexpand(true);
+        dashboard.set_valign(gtk::Align::Fill);
         dashboard.append(&now_card);
         dashboard.append(browser.root());
 
