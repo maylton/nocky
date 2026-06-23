@@ -29,7 +29,7 @@ use lyrics::LyricLine;
 use lyrics_view::LyricsPresenter;
 use model::{Track, TrackData};
 use playback::{PlaybackEngine, PlaybackEvent};
-use player_view::PlayerView;
+use player_view::{PlayerView, PlayerViewHandle};
 use std::{
     cell::{Cell, RefCell},
     collections::{hash_map::DefaultHasher, HashMap, HashSet, VecDeque},
@@ -206,6 +206,7 @@ struct AppController {
     browser: LibraryBrowser,
     lyrics: LyricsPresenter,
     youtube_page: Rc<YouTubePage>,
+    player_view: PlayerViewHandle,
 
     title: gtk::Label,
     artist: gtk::Label,
@@ -378,6 +379,7 @@ impl AppController {
         body.append(&sidebar_parts.revealer);
 
         let PlayerView {
+            handle: player_view,
             root: now_card,
             title,
             artist,
@@ -701,6 +703,7 @@ impl AppController {
             browser,
             lyrics,
             youtube_page,
+            player_view,
             title,
             artist,
             album,
@@ -2189,17 +2192,19 @@ impl AppController {
             lyrics: preserved_lyrics.clone(),
         }));
 
-        self.title.set_text(&item.title);
-        self.artist.set_text(if item.artist.is_empty() {
-            "YouTube Music"
-        } else {
-            &item.artist
-        });
-        self.album.set_text(if item.album.is_empty() {
-            "YouTube Music"
-        } else {
-            &item.album
-        });
+        self.player_view.set_metadata(
+            &item.title,
+            if item.artist.is_empty() {
+                "YouTube Music"
+            } else {
+                &item.artist
+            },
+            if item.album.is_empty() {
+                "YouTube Music"
+            } else {
+                &item.album
+            },
+        );
         self.mini_title.set_text(&item.title);
         self.mini_artist.set_text(if item.artist.is_empty() {
             "YouTube Music"
@@ -2208,9 +2213,7 @@ impl AppController {
         });
         self.hero_cover.set_path(cover_path.as_deref());
         self.mini_cover.set_path(cover_path.as_deref());
-        self.favorite_icon
-            .set_icon_name(Some("emblem-favorite-symbolic"));
-        self.favorite_icon.set_opacity(0.28);
+        self.player_view.set_favorite(false);
         self.footer_favorite_icon
             .set_icon_name(Some("emblem-favorite-symbolic"));
         self.footer_favorite_icon.set_opacity(0.28);
@@ -2782,9 +2785,7 @@ impl AppController {
             .set_visible(config.show_home_visualizer);
         self.visualizer
             .set_active(config.show_home_visualizer && self.player.is_playing());
-        self.lyrics
-            .inline_widget()
-            .set_visible(config.show_home_lyrics);
+        self.player_view.set_lyrics_visible(config.show_home_lyrics);
         self._theme.set_noctalia_enabled(
             config.noctalia_theme_sync && self._theme.noctalia_shell_detected(),
         );
@@ -4495,6 +4496,7 @@ impl AppController {
     }
 
     fn update_play_icons(&self, playing: bool) {
+        self.player_view.set_playing(playing);
         let icon = if playing {
             "media-playback-pause-symbolic"
         } else {

@@ -9,7 +9,45 @@ use crate::{
 };
 use gtk::prelude::*;
 
+#[derive(Clone)]
+pub(crate) struct PlayerViewHandle {
+    title: gtk::Label,
+    artist: gtk::Label,
+    album: gtk::Label,
+    favorite_icon: gtk::Image,
+    hero_play_icon: gtk::Image,
+    lyrics: LyricsPresenter,
+}
+
+impl PlayerViewHandle {
+    pub(crate) fn set_metadata(&self, title: &str, artist: &str, album: &str) {
+        self.title.set_text(title);
+        self.artist.set_text(artist);
+        self.album.set_text(album);
+    }
+
+    pub(crate) fn set_favorite(&self, active: bool) {
+        self.favorite_icon
+            .set_icon_name(Some("emblem-favorite-symbolic"));
+        self.favorite_icon
+            .set_opacity(if active { 1.0 } else { 0.28 });
+    }
+
+    pub(crate) fn set_playing(&self, playing: bool) {
+        self.hero_play_icon.set_icon_name(Some(if playing {
+            "media-playback-pause-symbolic"
+        } else {
+            "media-playback-start-symbolic"
+        }));
+    }
+
+    pub(crate) fn set_lyrics_visible(&self, visible: bool) {
+        self.lyrics.inline_widget().set_visible(visible);
+    }
+}
+
 pub(crate) struct PlayerView {
+    pub(crate) handle: PlayerViewHandle,
     pub(crate) root: gtk::Box,
     pub(crate) title: gtk::Label,
     pub(crate) artist: gtk::Label,
@@ -284,7 +322,17 @@ impl PlayerView {
         now_card.add_css_class("stable-home-player");
         now_card.append(&now_content);
 
+        let handle = PlayerViewHandle {
+            title: title.clone(),
+            artist: artist.clone(),
+            album: album.clone(),
+            favorite_icon: favorite_icon.clone(),
+            hero_play_icon: hero_play_icon.clone(),
+            lyrics: lyrics.clone(),
+        };
+
         Self {
+            handle,
             root: now_card,
             title,
             artist,
