@@ -57,9 +57,9 @@ impl ListeningHistory {
         }
     }
 
-    pub fn record(
+    pub fn record_progress(
         &mut self,
-        track_id: String,
+        session_id: String,
         artist: String,
         album: String,
         source: ListeningSource,
@@ -69,15 +69,39 @@ impl ListeningHistory {
         if listened_seconds < 30 && !completed {
             return false;
         }
-        self.events.push(PlayEvent {
-            track_id,
-            artist,
-            album,
-            source,
-            played_at: now_unix(),
-            listened_seconds,
-            completed,
-        });
+
+        let now = now_unix();
+        if let Some(event) = self
+            .events
+            .iter_mut()
+            .rev()
+            .find(|event| event.track_id == session_id && event.source == source)
+        {
+            let next_seconds = event.listened_seconds.max(listened_seconds);
+            let next_completed = event.completed || completed;
+            let changed =
+                next_seconds != event.listened_seconds || next_completed != event.completed;
+            if !changed {
+                return false;
+            }
+
+            event.artist = artist;
+            event.album = album;
+            event.listened_seconds = next_seconds;
+            event.completed = next_completed;
+            event.played_at = now;
+        } else {
+            self.events.push(PlayEvent {
+                track_id: session_id,
+                artist,
+                album,
+                source,
+                played_at: now,
+                listened_seconds,
+                completed,
+            });
+        }
+
         if self.events.len() > MAX_EVENTS {
             self.events.drain(..self.events.len() - MAX_EVENTS);
         }
@@ -278,5 +302,57 @@ mod tests {
         let local = history.ranked_artists(ListeningSource::Local, 10);
         assert_eq!(local.len(), 1);
         assert_eq!(local[0].0, "Local Artist");
+    }
+}
+
+#[cfg(test)]
+mod session_progress_tests {
+    use super::*;
+
+    #[test]
+    fn updates_the_same_playback_session() {
+        let mut history = ListeningHistory::default();
+
+        assert!(history.record_progress(
+            "youtube:abc:session-1".to_string(),
+            "Artist".to_string(),
+            "Album".to_string(),
+            ListeningSource::YouTube,
+            30,
+            false,
+        ));
+        assert!(history.record_progress(
+            "youtube:abc:session-1".to_string(),
+            "Artist".to_string(),
+            "Album".to_string(),
+            ListeningSource::YouTube,
+            180,
+            true,
+        ));
+
+        let ranked = history.ranked_artists(ListeningSource::YouTube, 10);
+        assert_eq!(ranked.len(), 1);
+        assert_eq!(ranked[0].1.play_count, 1);
+        assert_eq!(ranked[0].1.total_listened_seconds, 180);
+    }
+
+    #[test]
+    fn separate_sessions_count_as_separate_plays() {
+        let mut history = ListeningHistory::default();
+
+        for session in ["session-1", "session-2"] {
+            assert!(history.record_progress(
+                session.to_string(),
+                "Artist".to_string(),
+                "Album".to_string(),
+                ListeningSource::Local,
+                45,
+                false,
+            ));
+        }
+
+        let ranked = history.ranked_artists(ListeningSource::Local, 10);
+        assert_eq!(ranked[0].1.play_count, 2);
+        assert_eq!(ranked[0].1.total_listened_seconds, 90);
     }
 }

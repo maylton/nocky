@@ -127,6 +127,9 @@ impl AppController {
         cover_path: Option<PathBuf>,
     ) {
         let recovering = self.youtube_recovery_in_progress.replace(false);
+        if !recovering {
+            self.maybe_record_listening();
+        }
         let (preserved_lyrics, preserved_cover) = if recovering {
             self.youtube_state
                 .borrow()
@@ -167,7 +170,9 @@ impl AppController {
         self.state.borrow_mut().current = None;
         self.playback_source.set(PlaybackSource::YouTube);
         self.update_footer_source();
-        self.begin_listening_session(format!("youtube:{}", item.video_id));
+        if !recovering {
+            self.begin_listening_session(format!("youtube:{}", item.video_id));
+        }
         self.youtube_state.replace(Some(YouTubePlaybackState {
             queue,
             current: index,

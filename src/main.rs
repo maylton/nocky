@@ -101,7 +101,7 @@ struct AppController {
     config: RefCell<config::AppConfig>,
     listening_history: RefCell<ListeningHistory>,
     listening_session_id: RefCell<Option<String>>,
-    listening_session_recorded: Cell<bool>,
+    listening_session_last_saved_seconds: Cell<u64>,
     updating_progress: Cell<bool>,
     scanning: Cell<bool>,
     shuffle_enabled: Cell<bool>,
@@ -593,7 +593,7 @@ impl AppController {
             config: RefCell::new(config),
             listening_history: RefCell::new(ListeningHistory::load()),
             listening_session_id: RefCell::new(None),
-            listening_session_recorded: Cell::new(false),
+            listening_session_last_saved_seconds: Cell::new(0),
             updating_progress: Cell::new(false),
             scanning: Cell::new(false),
             shuffle_enabled: Cell::new(false),
@@ -2842,6 +2842,8 @@ impl AppController {
     }
 
     fn select_track(&self, index: usize, autoplay: bool) {
+        self.maybe_record_listening();
+
         let track = {
             let state = self.state.borrow();
             let Some(track) = state.tracks.get(index).cloned() else {
@@ -3120,6 +3122,8 @@ impl AppController {
     }
 
     fn pause_current(&self) {
+        self.maybe_record_listening();
+
         match self.player.pause() {
             Ok(()) => {
                 self.update_play_icons(false);
@@ -3162,6 +3166,8 @@ impl AppController {
     }
 
     fn handle_end_of_stream(&self) {
+        self.maybe_record_listening();
+
         if self.repeat_button.is_active() {
             self.seek_to(0, true);
             self.play_current();
@@ -3374,23 +3380,36 @@ impl AppController {
     }
 
     fn begin_listening_session(&self, id: String) {
-        self.listening_session_id.replace(Some(id));
-        self.listening_session_recorded.set(false);
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or_default();
+        self.listening_session_id
+            .replace(Some(format!("{id}:{nonce}")));
+        self.listening_session_last_saved_seconds.set(0);
     }
 
     fn maybe_record_listening(&self) {
-        if self.listening_session_recorded.get() || !self.player.is_playing() {
-            return;
-        }
         let listened_seconds = (self.player.position_us().max(0) / 1_000_000) as u64;
         let duration_seconds = (self.player.duration_us().max(0) / 1_000_000) as u64;
         let completed =
             duration_seconds > 0 && listened_seconds.saturating_mul(2) >= duration_seconds;
+
         if listened_seconds < 30 && !completed {
             return;
         }
 
-        let recorded = match self.playback_source.get() {
+        let previous = self.listening_session_last_saved_seconds.get();
+        let checkpoint_due = previous == 0 || listened_seconds >= previous.saturating_add(15);
+        if !completed && !checkpoint_due {
+            return;
+        }
+
+        let Some(session_id) = self.listening_session_id.borrow().clone() else {
+            return;
+        };
+
+        let updated = match self.playback_source.get() {
             PlaybackSource::Local => {
                 let state = self.state.borrow();
                 let Some(index) = state.current else {
@@ -3399,8 +3418,8 @@ impl AppController {
                 let Some(track) = state.tracks.get(index) else {
                     return;
                 };
-                self.listening_history.borrow_mut().record(
-                    track.path.to_string_lossy().into_owned(),
+                self.listening_history.borrow_mut().record_progress(
+                    session_id,
                     track.artist.clone(),
                     track.album.clone(),
                     ListeningSource::Local,
@@ -3413,8 +3432,8 @@ impl AppController {
                 let Some(state) = state.as_ref() else {
                     return;
                 };
-                self.listening_history.borrow_mut().record(
-                    state.item.video_id.clone(),
+                self.listening_history.borrow_mut().record_progress(
+                    session_id,
                     state.item.artist.clone(),
                     state.item.album.clone(),
                     ListeningSource::YouTube,
@@ -3424,9 +3443,15 @@ impl AppController {
             }
             PlaybackSource::None => false,
         };
-        if recorded {
-            self.listening_session_recorded.set(true);
-            self.refresh_browser();
+
+        if updated {
+            self.listening_session_last_saved_seconds
+                .set(listened_seconds);
+            if matches!(self.browser.route(), BrowserRoute::All)
+                && self.search_query.borrow().trim().is_empty()
+            {
+                self.refresh_browser();
+            }
         }
     }
 

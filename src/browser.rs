@@ -1517,7 +1517,9 @@ fn ranked_home_album_cards(
     }
 
     let fallback = home_album_cards(tracks, youtube);
+    let catalog = youtube_catalog(youtube);
     let mut cards = Vec::new();
+
     for (name, stats) in ranked {
         match source {
             ListeningSource::Local => {
@@ -1528,6 +1530,7 @@ fn ranked_home_album_cards(
                 if album_tracks.is_empty() {
                     continue;
                 }
+
                 let artists = album_tracks
                     .iter()
                     .map(|track| track.artist.as_str())
@@ -1536,6 +1539,7 @@ fn ranked_home_album_cards(
                     .collect::<Vec<_>>()
                     .join(", ");
                 let fallback_detail = format!("Local • {} faixas", album_tracks.len());
+
                 cards.push(HomeCard::LocalAlbum {
                     title: name,
                     subtitle: artists,
@@ -1557,7 +1561,39 @@ fn ranked_home_album_cards(
                         detail: listening_rank_detail(&stats, &entry.detail),
                         cover_path: entry.cached_cover().map(Path::to_path_buf),
                     });
+                    continue;
                 }
+
+                let matching = catalog
+                    .iter()
+                    .filter(|item| item.album.eq_ignore_ascii_case(&name))
+                    .collect::<Vec<_>>();
+                let Some(first) = matching.first() else {
+                    continue;
+                };
+                let artists = matching
+                    .iter()
+                    .map(|item| item.artist.as_str())
+                    .filter(|artist| !artist.is_empty())
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let source_item = YouTubeItem {
+                    result_type: "album".to_string(),
+                    title: name.clone(),
+                    album: name.clone(),
+                    artist: artists.clone(),
+                    ..YouTubeItem::default()
+                };
+                let fallback_detail = format!("YouTube Music • {} faixas", matching.len());
+
+                cards.push(HomeCard::YouTubeAlbum {
+                    item: source_item,
+                    subtitle: artists,
+                    detail: listening_rank_detail(&stats, &fallback_detail),
+                    cover_path: first.cached_cover().map(Path::to_path_buf),
+                });
             }
         }
     }
@@ -1573,6 +1609,7 @@ fn ranked_home_artist_cards(
 ) -> Vec<HomeCard> {
     let ranked = history.ranked_artists(source, 12);
     let fallback = home_artist_cards(tracks, youtube);
+    let catalog = youtube_catalog(youtube);
     let mut cards = Vec::new();
 
     for (name, stats) in ranked {
@@ -1585,6 +1622,7 @@ fn ranked_home_artist_cards(
                 if artist_tracks.is_empty() {
                     continue;
                 }
+
                 let fallback_detail = format!("Local • {} faixas", artist_tracks.len());
                 cards.push(HomeCard::LocalArtist {
                     title: name,
@@ -1607,7 +1645,36 @@ fn ranked_home_artist_cards(
                         detail: listening_rank_detail(&stats, &entry.detail),
                         cover_path: entry.cached_cover().map(Path::to_path_buf),
                     });
+                    continue;
                 }
+
+                let matching = catalog
+                    .iter()
+                    .filter(|item| item.artist.eq_ignore_ascii_case(&name))
+                    .collect::<Vec<_>>();
+                let Some(first) = matching.first() else {
+                    continue;
+                };
+                let album_count = matching
+                    .iter()
+                    .map(|item| item.album.trim())
+                    .filter(|album| !album.is_empty())
+                    .collect::<BTreeSet<_>>()
+                    .len();
+                let source_item = YouTubeItem {
+                    result_type: "artist".to_string(),
+                    title: name.clone(),
+                    artist: name.clone(),
+                    ..YouTubeItem::default()
+                };
+                let fallback_detail = format!("YouTube Music • {} faixas", matching.len());
+
+                cards.push(HomeCard::YouTubeArtist {
+                    item: source_item,
+                    subtitle: format!("{album_count} álbuns"),
+                    detail: listening_rank_detail(&stats, &fallback_detail),
+                    cover_path: first.cached_cover().map(Path::to_path_buf),
+                });
             }
         }
     }
