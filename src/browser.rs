@@ -1,7 +1,7 @@
 use crate::{
     config::AppConfig,
     model::Track,
-    youtube::{YouTubeCollectionEntry, YouTubeItem, YouTubeLibraryCache},
+    youtube::{youtube_collection_key, YouTubeCollectionEntry, YouTubeItem, YouTubeLibraryCache},
 };
 use gtk::{gdk, gio::prelude::ListModelExt, glib, prelude::*};
 use std::{
@@ -61,6 +61,7 @@ pub enum BrowserEvent {
         index: usize,
     },
     OpenYouTubePlaylist(YouTubeItem),
+    OpenYouTubeCollection(YouTubeItem),
     Navigate(BrowserRoute),
     CreatePlaylist(String),
     AddCurrentToPlaylist(String),
@@ -89,7 +90,7 @@ enum HomeCard {
         cover_path: Option<std::path::PathBuf>,
     },
     YouTubeAlbum {
-        title: String,
+        item: YouTubeItem,
         subtitle: String,
         detail: String,
         cover_path: Option<PathBuf>,
@@ -101,7 +102,7 @@ enum HomeCard {
         cover_path: Option<PathBuf>,
     },
     YouTubeArtist {
-        title: String,
+        item: YouTubeItem,
         subtitle: String,
         detail: String,
         cover_path: Option<std::path::PathBuf>,
@@ -464,6 +465,14 @@ impl LibraryBrowser {
             return;
         }
 
+        if matches!(
+            route,
+            BrowserRoute::YouTubeAlbum(_) | BrowserRoute::YouTubeArtist(_)
+        ) {
+            self.rebuild_youtube_collection_queue(youtube, query, route, render_token);
+            return;
+        }
+
         let query = query.trim().to_lowercase();
         let mut entries = Vec::new();
 
@@ -676,6 +685,125 @@ impl LibraryBrowser {
         });
     }
 
+    fn rebuild_youtube_collection_queue(
+        &self,
+        youtube: &YouTubeLibraryCache,
+        query: &str,
+        route: &BrowserRoute,
+        render_token: u64,
+    ) {
+        self.queue_title.set_text(&route_title(route));
+        self.visible_tracks.borrow_mut().clear();
+
+        let (kind, title) = match route {
+            BrowserRoute::YouTubeAlbum(title) => ("album", title.as_str()),
+            BrowserRoute::YouTubeArtist(title) => ("artist", title.as_str()),
+            _ => return,
+        };
+        let key = youtube_collection_key(kind, title);
+        let catalog = youtube_catalog(youtube);
+        let mut items = youtube
+            .collection_tracks
+            .get(&key)
+            .cloned()
+            .unwrap_or_else(|| {
+                catalog
+                    .into_iter()
+                    .filter(|item| {
+                        if kind == "artist" {
+                            item.artist.eq_ignore_ascii_case(title)
+                        } else {
+                            item.album.eq_ignore_ascii_case(title)
+                        }
+                    })
+                    .collect()
+            });
+
+        let query = query.trim().to_lowercase();
+        if !query.is_empty() {
+            items.retain(|item| {
+                format!("{} {} {}", item.title, item.artist, item.album)
+                    .to_lowercase()
+                    .contains(&query)
+            });
+        }
+
+        if items.is_empty() {
+            let row = if youtube.collection_loading.contains(&key) {
+                loading_row(if kind == "artist" {
+                    "Carregando faixas do artista…"
+                } else {
+                    "Carregando faixas do álbum…"
+                })
+            } else if kind == "artist" {
+                empty_row("Nenhuma faixa disponível para este artista")
+            } else {
+                empty_row("Nenhuma faixa disponível para este álbum")
+            };
+            self.queue.append(&row);
+            return;
+        }
+
+        self.append_youtube_rows_progressively(youtube, items, render_token);
+    }
+
+    fn append_youtube_rows_progressively(
+        &self,
+        youtube: &YouTubeLibraryCache,
+        mut items: Vec<YouTubeItem>,
+        render_token: u64,
+    ) {
+        let liked_ids = youtube
+            .liked
+            .iter()
+            .map(|item| item.video_id.clone())
+            .collect::<HashSet<_>>();
+
+        let first_batch = items.len().min(32);
+        for item in items.drain(..first_batch) {
+            let number = self.visible_tracks.borrow().len() + 1;
+            let liked = liked_ids.contains(&item.video_id);
+            self.queue.append(&youtube_track_row(number, &item, liked));
+            self.visible_tracks
+                .borrow_mut()
+                .push(VisibleTrack::YouTube(item));
+        }
+
+        if items.is_empty() {
+            return;
+        }
+
+        let pending = Rc::new(RefCell::new(items.into_iter().collect::<VecDeque<_>>()));
+        let queue = self.queue.clone();
+        let visible_tracks = self.visible_tracks.clone();
+        let generation = self.queue_render_generation.clone();
+
+        glib::idle_add_local(move || {
+            if generation.get() != render_token {
+                return glib::ControlFlow::Break;
+            }
+
+            for _ in 0..24 {
+                let item = pending.borrow_mut().pop_front();
+                let Some(item) = item else {
+                    return glib::ControlFlow::Break;
+                };
+                let number = visible_tracks.borrow().len() + 1;
+                let liked = liked_ids.contains(&item.video_id);
+                queue.append(&youtube_track_row(number, &item, liked));
+                visible_tracks
+                    .borrow_mut()
+                    .push(VisibleTrack::YouTube(item));
+            }
+
+            if pending.borrow().is_empty() {
+                glib::ControlFlow::Break
+            } else {
+                glib::ControlFlow::Continue
+            }
+        });
+    }
+
     fn rebuild_home(&self, tracks: &[Track], config: &AppConfig, youtube: &YouTubeLibraryCache) {
         while let Some(child) = self.home_content.first_child() {
             self.home_content.remove(&child);
@@ -800,7 +928,7 @@ impl LibraryBrowser {
             append_collection_grid_card(
                 &self.albums_grid,
                 position,
-                collection_button(
+                collection_event_button(
                     collection_card(
                         album_entry.cached_cover(),
                         &album_entry.title,
@@ -808,7 +936,7 @@ impl LibraryBrowser {
                         &album_entry.detail,
                         true,
                     ),
-                    BrowserRoute::YouTubeAlbum(album_entry.title.clone()),
+                    BrowserEvent::OpenYouTubeCollection(album_entry.source.clone()),
                     &self.event_tx,
                 ),
             );
@@ -880,7 +1008,7 @@ impl LibraryBrowser {
             append_collection_grid_card(
                 &self.artists_grid,
                 position,
-                collection_button(
+                collection_event_button(
                     collection_card(
                         artist_entry.cached_cover(),
                         &artist_entry.title,
@@ -888,7 +1016,7 @@ impl LibraryBrowser {
                         &artist_entry.detail,
                         true,
                     ),
-                    BrowserRoute::YouTubeArtist(artist_entry.title.clone()),
+                    BrowserEvent::OpenYouTubeCollection(artist_entry.source.clone()),
                     &self.event_tx,
                 ),
             );
@@ -1070,7 +1198,7 @@ fn home_artist_cards(tracks: &[Track], youtube: &YouTubeLibraryCache) -> Vec<Hom
 
 fn youtube_album_home_card(entry: &YouTubeCollectionEntry) -> HomeCard {
     HomeCard::YouTubeAlbum {
-        title: entry.title.clone(),
+        item: entry.source.clone(),
         subtitle: entry.subtitle.clone(),
         detail: entry.detail.clone(),
         cover_path: entry.cached_cover().map(Path::to_path_buf),
@@ -1079,7 +1207,7 @@ fn youtube_album_home_card(entry: &YouTubeCollectionEntry) -> HomeCard {
 
 fn youtube_artist_home_card(entry: &YouTubeCollectionEntry) -> HomeCard {
     HomeCard::YouTubeArtist {
-        title: entry.title.clone(),
+        item: entry.source.clone(),
         subtitle: entry.subtitle.clone(),
         detail: entry.detail.clone(),
         cover_path: entry.cached_cover().map(Path::to_path_buf),
@@ -1175,19 +1303,19 @@ fn home_card_button(card: HomeCard, event_tx: &Sender<BrowserEvent>) -> gtk::But
             false,
         ),
         HomeCard::YouTubeAlbum {
-            title,
+            item,
             subtitle,
             detail,
             cover_path,
         }
         | HomeCard::YouTubeArtist {
-            title,
+            item,
             subtitle,
             detail,
             cover_path,
         } => (
             cover_path.as_deref(),
-            title.as_str(),
+            item.title.as_str(),
             subtitle.as_str(),
             detail.as_str(),
             true,
@@ -1222,15 +1350,11 @@ fn home_card_button(card: HomeCard, event_tx: &Sender<BrowserEvent>) -> gtk::But
             HomeCard::LocalAlbum { title, .. } => {
                 BrowserEvent::Navigate(BrowserRoute::Album(title))
             }
-            HomeCard::YouTubeAlbum { title, .. } => {
-                BrowserEvent::Navigate(BrowserRoute::YouTubeAlbum(title))
-            }
+            HomeCard::YouTubeAlbum { item, .. } => BrowserEvent::OpenYouTubeCollection(item),
             HomeCard::LocalArtist { title, .. } => {
                 BrowserEvent::Navigate(BrowserRoute::Artist(title))
             }
-            HomeCard::YouTubeArtist { title, .. } => {
-                BrowserEvent::Navigate(BrowserRoute::YouTubeArtist(title))
-            }
+            HomeCard::YouTubeArtist { item, .. } => BrowserEvent::OpenYouTubeCollection(item),
             HomeCard::LocalPlaylist { title, .. } => {
                 BrowserEvent::Navigate(BrowserRoute::Playlist(title))
             }
@@ -1388,6 +1512,31 @@ fn collection_button(
     let sender = event_tx.clone();
     button.connect_clicked(move |_| {
         let _ = sender.send(BrowserEvent::Navigate(route.clone()));
+    });
+
+    button
+}
+
+fn collection_event_button(
+    card: gtk::Box,
+    event: BrowserEvent,
+    event_tx: &Sender<BrowserEvent>,
+) -> gtk::Button {
+    let button = gtk::Button::new();
+    button.set_child(Some(&card));
+    button.set_size_request(
+        COLLECTION_CARD_MAX_WIDTH + 20,
+        COLLECTION_CARD_MIN_HEIGHT + 12,
+    );
+    button.set_hexpand(true);
+    button.set_halign(gtk::Align::Fill);
+    button.set_valign(gtk::Align::Start);
+    button.add_css_class("flat");
+    button.add_css_class("collection-card-button");
+
+    let sender = event_tx.clone();
+    button.connect_clicked(move |_| {
+        let _ = sender.send(event.clone());
     });
 
     button

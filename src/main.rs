@@ -36,8 +36,9 @@ use std::{
 use visualizer::SpectrumVisualizer;
 use youtube::{
     cache_items_for_browser, cacheable_youtube_playlist, clear_library_cache, download_cover,
-    load_library_cache, save_library_cache, YouTubeBridge, YouTubeItem, YouTubeLibraryCache,
-    YouTubeLibrarySnapshot, YouTubePage, YouTubePageEvent, YouTubeStatus, YouTubeStream,
+    load_library_cache, save_library_cache, youtube_collection_cache_key, youtube_collection_key,
+    YouTubeBridge, YouTubeItem, YouTubeLibraryCache, YouTubeLibrarySnapshot, YouTubePage,
+    YouTubePageEvent, YouTubeStatus, YouTubeStream,
 };
 
 const APP_ID: &str = "io.github.maylton.Nocky";
@@ -94,7 +95,13 @@ enum BackgroundMessage {
         playlist: YouTubeItem,
         result: Result<Vec<YouTubeItem>, String>,
     },
+    YouTubeBrowserCollection {
+        item: YouTubeItem,
+        key: String,
+        result: Result<Vec<YouTubeItem>, String>,
+    },
     YouTubePlaylistsCached(Result<HashMap<String, Vec<YouTubeItem>>, String>),
+    YouTubeCollectionsCached(Result<HashMap<String, Vec<YouTubeItem>>, String>),
     YouTubeItems {
         title: String,
         result: Result<Vec<YouTubeItem>, String>,
@@ -140,6 +147,7 @@ struct AppController {
     youtube_recovery_attempted: Cell<bool>,
     youtube_recovery_resume_us: Cell<i64>,
     youtube_playlist_request_id: Cell<u64>,
+    youtube_collection_prefetching: Cell<bool>,
     youtube_playlist_loading: Cell<bool>,
     youtube_playlist_prefetching: Cell<bool>,
     youtube_pending_playlist: RefCell<Option<YouTubeItem>>,
@@ -610,6 +618,7 @@ impl AppController {
             youtube_recovery_attempted: Cell::new(false),
             youtube_recovery_resume_us: Cell::new(0),
             youtube_playlist_request_id: Cell::new(0),
+            youtube_collection_prefetching: Cell::new(false),
             youtube_playlist_loading: Cell::new(false),
             youtube_playlist_prefetching: Cell::new(false),
             youtube_pending_playlist: RefCell::new(None),
@@ -1026,6 +1035,10 @@ impl AppController {
                         cached.insert(browse_id, items);
                     }
                     Ok(_) => {}
+                    Err(error)
+                        if error.contains(
+                            "No playable tracks were returned for this YouTube Music playlist",
+                        ) => {}
                     Err(error) => {
                         eprintln!(
                             "Could not pre-cache YouTube playlist '{}': {error}",
@@ -1108,6 +1121,138 @@ impl AppController {
                 ..
             } if current == browse_id
         )
+    }
+
+    fn load_youtube_collection_for_browser(&self, item: YouTubeItem) {
+        let title = item.title.clone();
+        let route = if item.result_type == "artist" {
+            BrowserRoute::YouTubeArtist(title)
+        } else {
+            BrowserRoute::YouTubeAlbum(title)
+        };
+        let key = youtube_collection_cache_key(&item);
+
+        let cached = self
+            .youtube_library
+            .borrow()
+            .collection_tracks
+            .get(&key)
+            .map(|items| !items.is_empty())
+            .unwrap_or(false);
+        if cached || item.browse_id.is_empty() {
+            self.navigate_browser(route);
+            return;
+        }
+
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            self.show_toast("As dependências do YouTube Music não estão instaladas");
+            return;
+        };
+
+        self.youtube_library
+            .borrow_mut()
+            .collection_loading
+            .insert(key.clone());
+        self.navigate_browser(route);
+
+        let sender = self.background_tx.clone();
+        thread::spawn(move || {
+            let result = bridge.collection(&item).map(|mut items| {
+                cache_items_for_browser(&mut items);
+                items
+            });
+            let _ = sender.send(BackgroundMessage::YouTubeBrowserCollection { item, key, result });
+        });
+    }
+
+    fn is_open_youtube_collection(&self, key: &str) -> bool {
+        match self.browser.route() {
+            BrowserRoute::YouTubeAlbum(title) => youtube_collection_key("album", &title) == key,
+            BrowserRoute::YouTubeArtist(title) => youtube_collection_key("artist", &title) == key,
+            _ => false,
+        }
+    }
+
+    fn prefetch_youtube_collection_cache(&self) {
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            return;
+        };
+        if self.youtube_collection_prefetching.get() {
+            return;
+        }
+
+        let collections = {
+            let library = self.youtube_library.borrow();
+            let mut seen = HashSet::new();
+            library
+                .suggested_albums
+                .iter()
+                .take(6)
+                .chain(library.suggested_artists.iter().take(6))
+                .filter(|item| !item.browse_id.is_empty())
+                .filter(|item| {
+                    let key = youtube_collection_cache_key(item);
+                    seen.insert(key.clone()) && !library.collection_tracks.contains_key(&key)
+                })
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        if collections.is_empty() {
+            return;
+        }
+
+        self.youtube_collection_prefetching.set(true);
+        let sender = self.background_tx.clone();
+        thread::spawn(move || {
+            let worker_count = collections.len().min(3);
+            let work = Arc::new(Mutex::new(collections.into_iter().collect::<VecDeque<_>>()));
+            let (result_tx, result_rx) = mpsc::channel();
+            let mut workers = Vec::with_capacity(worker_count);
+
+            for _ in 0..worker_count {
+                let bridge = bridge.clone();
+                let work = work.clone();
+                let result_tx = result_tx.clone();
+                workers.push(thread::spawn(move || loop {
+                    let item = match work.lock() {
+                        Ok(mut queue) => queue.pop_front(),
+                        Err(_) => None,
+                    };
+                    let Some(item) = item else {
+                        break;
+                    };
+
+                    let key = youtube_collection_cache_key(&item);
+                    let result = bridge.collection(&item).map(|mut items| {
+                        cache_items_for_browser(&mut items);
+                        items
+                    });
+                    let _ = result_tx.send((item, key, result));
+                }));
+            }
+            drop(result_tx);
+
+            let mut cached = HashMap::new();
+            for (item, key, result) in result_rx {
+                match result {
+                    Ok(items) if !items.is_empty() => {
+                        cached.insert(key, items);
+                    }
+                    Ok(_) => {}
+                    Err(error) => {
+                        eprintln!(
+                            "Could not pre-cache YouTube {} '{}': {error}",
+                            item.result_type, item.title
+                        );
+                    }
+                }
+            }
+            for worker in workers {
+                let _ = worker.join();
+            }
+
+            let _ = sender.send(BackgroundMessage::YouTubeCollectionsCached(Ok(cached)));
+        });
     }
 
     fn handle_youtube_events(&self) {
@@ -2261,6 +2406,7 @@ impl AppController {
                             .set_loading(false, "Library synchronized with Nocky");
                         self.refresh_browser();
                         self.prefetch_youtube_playlist_cache();
+                        self.prefetch_youtube_collection_cache();
                         if notify {
                             self.show_toast(&format!(
                                 "YouTube Music sincronizado: {} faixas, {} curtidas e {} playlists",
@@ -2344,6 +2490,71 @@ impl AppController {
                         if let Some(pending) = pending {
                             self.load_youtube_playlist_for_browser(pending);
                         }
+                    }
+                },
+                BackgroundMessage::YouTubeBrowserCollection { item, key, result } => {
+                    self.youtube_library
+                        .borrow_mut()
+                        .collection_loading
+                        .remove(&key);
+                    match result {
+                        Ok(items) if !items.is_empty() => {
+                            self.youtube_library
+                                .borrow_mut()
+                                .collection_tracks
+                                .insert(key.clone(), items);
+                            if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
+                                eprintln!("Could not save the YouTube collection cache: {error}");
+                            }
+                        }
+                        Ok(_) => {
+                            self.youtube_library
+                                .borrow_mut()
+                                .collection_tracks
+                                .remove(&key);
+                            self.show_toast(if item.result_type == "artist" {
+                                "Este artista não retornou faixas reproduzíveis agora"
+                            } else {
+                                "Este álbum não retornou faixas reproduzíveis agora"
+                            });
+                        }
+                        Err(error) => {
+                            self.youtube_library
+                                .borrow_mut()
+                                .collection_tracks
+                                .remove(&key);
+                            self.show_toast(&format!(
+                                "Não foi possível carregar {}: {error}",
+                                if item.result_type == "artist" {
+                                    "o artista"
+                                } else {
+                                    "o álbum"
+                                }
+                            ));
+                        }
+                    }
+                    if self.is_open_youtube_collection(&key) {
+                        self.refresh_browser();
+                    }
+                }
+                BackgroundMessage::YouTubeCollectionsCached(result) => match result {
+                    Ok(cached) => {
+                        self.youtube_collection_prefetching.set(false);
+                        if cached.is_empty() {
+                            continue;
+                        }
+                        self.youtube_library
+                            .borrow_mut()
+                            .collection_tracks
+                            .extend(cached);
+                        if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
+                            eprintln!("Could not save the YouTube collection cache: {error}");
+                        }
+                        self.refresh_browser();
+                    }
+                    Err(error) => {
+                        self.youtube_collection_prefetching.set(false);
+                        eprintln!("Could not pre-cache YouTube collections: {error}");
                     }
                 },
                 BackgroundMessage::YouTubePlaylistsCached(result) => match result {
@@ -2530,6 +2741,9 @@ impl AppController {
                 }
                 BrowserEvent::OpenYouTubePlaylist(item) => {
                     self.load_youtube_playlist_for_browser(item);
+                }
+                BrowserEvent::OpenYouTubeCollection(item) => {
+                    self.load_youtube_collection_for_browser(item);
                 }
                 BrowserEvent::Navigate(route) => self.navigate_browser(route),
                 BrowserEvent::CreatePlaylist(name) => {

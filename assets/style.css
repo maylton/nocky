@@ -368,7 +368,6 @@ searchbar entry {
 
 .footer-meta {
   min-width: 270px;
-  max-width: 270px;
 }
 
 .queue-list image {
@@ -487,7 +486,6 @@ searchbar entry {
 
 .collection-grid flowboxchild {
   min-width: 176px;
-  max-width: 240px;
   border-radius: 12px;
   padding: 0;
 }

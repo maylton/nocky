@@ -1023,6 +1023,72 @@ def command_playlist(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return _dedupe(tracks)
 
 
+def command_collection(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    client = _create_client(authenticated=True)
+    result_type = str(payload.get("result_type") or "").strip().lower()
+    browse_id = str(payload.get("browse_id") or "").strip()
+    limit = max(1, min(200, int(payload.get("limit") or 120)))
+    if not browse_id:
+        return []
+
+    tracks: list[dict[str, Any]] = []
+    if result_type == "album":
+        data = client.get_album(browse_id)
+        tracks = [
+            item
+            for result in (data.get("tracks") or [])
+            if isinstance(result, dict)
+            if (item := _song_item(result))
+        ]
+    elif result_type == "artist":
+        data = client.get_artist(browse_id)
+        songs = data.get("songs") or {}
+        tracks = [
+            item
+            for result in (songs.get("results") or [])
+            if isinstance(result, dict)
+            if (item := _song_item(result))
+        ]
+
+        songs_browse_id = _text(songs.get("browseId") or songs.get("browse_id"))
+        if songs_browse_id:
+            try:
+                playlist = client.get_playlist(songs_browse_id, limit=limit)
+                expanded = [
+                    item
+                    for result in (playlist.get("tracks") or [])
+                    if isinstance(result, dict)
+                    if (item := _song_item(result))
+                ]
+                if expanded:
+                    tracks = expanded
+            except Exception as error:
+                print(
+                    f"Nocky artist songs expansion skipped for {browse_id}: {error}",
+                    file=sys.stderr,
+                )
+
+        if not tracks:
+            radio_id = _text(data.get("radioId") or data.get("shuffleId"))
+            if radio_id:
+                tracks = _playlist_tracks_from_watch(
+                    client,
+                    radio_id,
+                    "",
+                    limit,
+                    True,
+                )
+    else:
+        raise RuntimeError("Unsupported YouTube collection type")
+
+    tracks = _dedupe(tracks)[:limit]
+    if not tracks:
+        raise RuntimeError(
+            f"No playable tracks were returned for this YouTube Music {result_type}"
+        )
+    return tracks
+
+
 def command_resolve(payload: dict[str, Any]) -> dict[str, Any]:
     return _resolve_stream(str(payload.get("video_id") or payload.get("url") or ""), bool(payload.get("force")))
 
@@ -1037,6 +1103,7 @@ COMMANDS = {
     "home": command_home,
     "playlists": command_playlists,
     "playlist": command_playlist,
+    "collection": command_collection,
     "resolve": command_resolve,
 }
 
@@ -1044,7 +1111,7 @@ COMMANDS = {
 def main() -> int:
     try:
         if len(sys.argv) != 2 or sys.argv[1] not in COMMANDS:
-            raise RuntimeError("Usage: nocky_youtube.py <status|connect|disconnect|search|library|liked|home|playlists|playlist|resolve>")
+            raise RuntimeError("Usage: nocky_youtube.py <status|connect|disconnect|search|library|liked|home|playlists|playlist|collection|resolve>")
         payload = _read_input()
         result = COMMANDS[sys.argv[1]](payload)
         _emit({"ok": True, "result": result})
