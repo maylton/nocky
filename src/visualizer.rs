@@ -1,4 +1,4 @@
-use gtk::{gdk, glib, prelude::*};
+use gtk::{glib, prelude::*};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -317,10 +317,13 @@ fn draw_spectrum(
         return;
     }
 
+    // material_visualizer_palette_v1
+    // The theme assigns the visualizer semantic color through CSS.
+    // Noctalia uses accent_color and Material uses the artwork-derived
+    // m3_primary token. Reading the computed color keeps Cairo synced
+    // with live palette changes without coupling this widget to a theme.
     let style = widget.style_context();
-    let accent = style
-        .lookup_color("accent_color")
-        .unwrap_or_else(|| gdk::RGBA::new(0.34, 0.82, 0.96, 1.0));
+    let accent = style.color();
 
     let width = f64::from(width);
     let height = f64::from(height);

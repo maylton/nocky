@@ -227,6 +227,25 @@ popover.queue-popover > arrow {
   background-color: @nm_surface_alt;
   background-image: none;
 }
+
+/* material_carousel_playing_blur_polish_v1: opaque Material mode */
+window.background.noctalia-window.theme-material-expressive,
+window.background.noctalia-window.theme-material-expressive:backdrop,
+window.noctalia-window.theme-material-expressive,
+window.noctalia-window.theme-material-expressive:backdrop,
+window.theme-material-expressive,
+window.theme-material-expressive:backdrop,
+window.theme-material-expressive > toastoverlay,
+window.theme-material-expressive > toastoverlay:backdrop {
+  background-color: @m3_surface;
+  background-image: none;
+}
+
+window.theme-material-expressive .app-shell,
+window.theme-material-expressive .app-shell:backdrop {
+  background-color: @m3_surface;
+  background-image: none;
+}
 "#,
             );
             return;
@@ -297,6 +316,130 @@ window.noctalia-window viewport:backdrop {{
 window.noctalia-window searchbar,
 window.noctalia-window searchbar:backdrop {{
   background-color: alpha(@nm_surface_alt, {header:.3});
+}}
+
+/* material_carousel_playing_blur_polish_v1: translucent Material mode */
+window.background.noctalia-window.theme-material-expressive,
+window.background.noctalia-window.theme-material-expressive:backdrop,
+window.noctalia-window.theme-material-expressive,
+window.noctalia-window.theme-material-expressive:backdrop,
+window.theme-material-expressive,
+window.theme-material-expressive:backdrop,
+window.theme-material-expressive > toastoverlay,
+window.theme-material-expressive > toastoverlay:backdrop {{
+  background-color: transparent;
+  background-image: none;
+}}
+
+window.theme-material-expressive .app-shell,
+window.theme-material-expressive .app-shell:backdrop {{
+  background-color: alpha(@m3_surface, {surface:.3});
+  background-image: none;
+}}
+
+window.theme-material-expressive .expressive-header,
+window.theme-material-expressive .expressive-header:backdrop,
+window.theme-material-expressive .noctalia-header,
+window.theme-material-expressive .noctalia-header:backdrop {{
+  background-color: alpha(@m3_surface_container, {header:.3});
+}}
+
+window.theme-material-expressive .sidebar,
+window.theme-material-expressive .sidebar:backdrop,
+window.theme-material-expressive .search-section-card,
+window.theme-material-expressive .search-section-card:backdrop {{
+  background-color: alpha(@m3_surface_container_low, {panel:.3});
+}}
+
+window.theme-material-expressive .now-playing-card,
+window.theme-material-expressive .now-playing-card:backdrop,
+window.theme-material-expressive .expressive-player-card,
+window.theme-material-expressive .expressive-player-card:backdrop,
+window.theme-material-expressive .collection-card,
+window.theme-material-expressive .collection-card:backdrop {{
+  background-color: alpha(@m3_surface_container, {card:.3});
+}}
+
+window.theme-material-expressive .library-panel,
+window.theme-material-expressive .library-panel:backdrop,
+window.theme-material-expressive .home-section,
+window.theme-material-expressive .home-section:backdrop,
+window.theme-material-expressive .collection-page,
+window.theme-material-expressive .collection-page:backdrop {{
+  background-color: alpha(@m3_surface_container_low, {panel:.3});
+}}
+
+window.theme-material-expressive .player-bar,
+window.theme-material-expressive .player-bar:backdrop,
+window.theme-material-expressive .expressive-footer,
+window.theme-material-expressive .expressive-footer:backdrop {{
+  background-color: alpha(@m3_surface_container_low, {footer:.3});
+}}
+
+window.theme-material-expressive scrolledwindow,
+window.theme-material-expressive scrolledwindow:backdrop,
+window.theme-material-expressive viewport,
+window.theme-material-expressive viewport:backdrop {{
+  background-color: transparent;
+  background-image: none;
+}}
+
+window.theme-material-expressive searchbar,
+window.theme-material-expressive searchbar:backdrop {{
+  background-color: alpha(@m3_surface_container, {header:.3});
+}}
+
+/* material_carousel_indicator_blur_runtime_v2 */
+window.theme-material-expressive.material-blur-enabled,
+window.theme-material-expressive.material-blur-enabled:backdrop,
+window.background.noctalia-window.theme-material-expressive.material-blur-enabled,
+window.background.noctalia-window.theme-material-expressive.material-blur-enabled:backdrop,
+window.noctalia-window.theme-material-expressive.material-blur-enabled,
+window.noctalia-window.theme-material-expressive.material-blur-enabled:backdrop,
+window.theme-material-expressive.material-blur-enabled > toastoverlay,
+window.theme-material-expressive.material-blur-enabled > toastoverlay:backdrop {{
+  background-color: transparent;
+  background-image: none;
+}}
+
+window.theme-material-expressive.material-blur-enabled .app-shell,
+window.theme-material-expressive.material-blur-enabled .app-shell:backdrop {{
+  background-color: rgba(17, 19, 24, {surface:.3});
+  background-image: none;
+}}
+
+window.theme-material-expressive.material-blur-enabled .expressive-header,
+window.theme-material-expressive.material-blur-enabled .expressive-header:backdrop {{
+  background-color: rgba(29, 31, 37, {header:.3});
+}}
+
+window.theme-material-expressive.material-blur-enabled .sidebar,
+window.theme-material-expressive.material-blur-enabled .sidebar:backdrop,
+window.theme-material-expressive.material-blur-enabled .library-panel,
+window.theme-material-expressive.material-blur-enabled .library-panel:backdrop,
+window.theme-material-expressive.material-blur-enabled .home-section,
+window.theme-material-expressive.material-blur-enabled .home-section:backdrop {{
+  background-color: rgba(23, 25, 31, {panel:.3});
+}}
+
+window.theme-material-expressive.material-blur-enabled .now-playing-card,
+window.theme-material-expressive.material-blur-enabled .now-playing-card:backdrop,
+window.theme-material-expressive.material-blur-enabled .collection-card,
+window.theme-material-expressive.material-blur-enabled .collection-card:backdrop {{
+  background-color: rgba(29, 31, 37, {card:.3});
+}}
+
+window.theme-material-expressive.material-blur-enabled .player-bar,
+window.theme-material-expressive.material-blur-enabled .player-bar:backdrop,
+window.theme-material-expressive.material-blur-enabled .expressive-footer,
+window.theme-material-expressive.material-blur-enabled .expressive-footer:backdrop {{
+  background-color: rgba(23, 25, 31, {footer:.3});
+}}
+
+window.theme-material-expressive.material-blur-enabled scrolledwindow,
+window.theme-material-expressive.material-blur-enabled viewport {{
+  background-color: transparent;
+  background-image: none;
 }}
 "#
         ));

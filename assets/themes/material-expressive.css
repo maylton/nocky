@@ -83,3 +83,2388 @@ window.theme-material-expressive .hero-artist,
 window.theme-material-expressive .time-label {
   color: @m3_on_surface_variant;
 }
+/* material_expressive_player_v1 */
+
+@define-color m3_primary_container #303969;
+@define-color m3_on_primary_container #dce1ff;
+@define-color m3_tertiary #efb8d2;
+@define-color m3_tertiary_container #603b54;
+@define-color m3_on_tertiary_container #ffd8ed;
+@define-color m3_surface_container_low #191b20;
+@define-color m3_surface_container_highest #33353b;
+
+/* Hero surface and layered hierarchy */
+window.theme-material-expressive .expressive-player-card {
+  padding: 20px;
+  border-radius: 40px;
+  border: 1px solid alpha(@m3_outline, 0.28);
+  background-color: @m3_surface_container;
+  background-image:
+    radial-gradient(circle at 18% 4%, alpha(@m3_primary, 0.18), transparent 42%),
+    linear-gradient(145deg, alpha(@m3_tertiary, 0.07), transparent 58%);
+  box-shadow: 0 14px 38px alpha(black, 0.28);
+}
+
+window.theme-material-expressive .expressive-player-content {
+  color: @m3_on_surface;
+}
+
+/* Compact status header */
+window.theme-material-expressive .player-now-header {
+  min-height: 42px;
+  padding: 3px 4px 3px 12px;
+  border-radius: 22px;
+  background-color: alpha(@m3_secondary_container, 0.72);
+  border: 1px solid alpha(@m3_outline, 0.18);
+}
+
+window.theme-material-expressive .player-eyebrow {
+  color: @m3_on_secondary_container;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.75px;
+}
+
+window.theme-material-expressive .player-header-actions {
+  padding: 2px;
+  border-radius: 19px;
+  background-color: alpha(@m3_surface, 0.30);
+}
+
+window.theme-material-expressive .player-header-icon,
+window.theme-material-expressive .player-secondary-action {
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 18px;
+  color: @m3_on_secondary_container;
+}
+
+window.theme-material-expressive .player-secondary-action:hover {
+  background-color: alpha(@m3_primary, 0.16);
+}
+
+window.theme-material-expressive .player-secondary-action:checked {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+}
+
+/* Artwork becomes the main expressive visual anchor */
+window.theme-material-expressive .player-artwork-slot {
+  min-height: 316px;
+  padding-top: 10px;
+  padding-bottom: 4px;
+}
+
+window.theme-material-expressive .player-artwork,
+window.theme-material-expressive .player-artwork .album-cover,
+window.theme-material-expressive .player-artwork .cover-picture {
+  border-radius: 32px;
+}
+
+window.theme-material-expressive .player-artwork {
+  border: 2px solid alpha(@m3_primary, 0.34);
+  background-color: @m3_surface_container_high;
+  box-shadow:
+    0 14px 34px alpha(black, 0.34),
+    0 0 0 6px alpha(@m3_primary, 0.06);
+}
+
+/* Tonal metadata container */
+window.theme-material-expressive .player-metadata-surface {
+  min-height: 92px;
+  padding: 13px 15px;
+  border-radius: 26px;
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  border: 1px solid alpha(@m3_primary, 0.24);
+}
+
+window.theme-material-expressive .player-track-title {
+  color: @m3_on_primary_container;
+  font-size: 1.32rem;
+  font-weight: 850;
+  letter-spacing: -0.35px;
+}
+
+window.theme-material-expressive .player-artist {
+  color: alpha(@m3_on_primary_container, 0.82);
+  font-size: 0.98rem;
+  font-weight: 650;
+}
+
+window.theme-material-expressive .player-album {
+  color: alpha(@m3_on_primary_container, 0.66);
+  font-size: 0.82rem;
+}
+
+window.theme-material-expressive .player-favorite-action {
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 19px;
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_on_primary_container, 0.08);
+}
+
+window.theme-material-expressive .player-favorite-action:hover {
+  background-color: alpha(@m3_on_primary_container, 0.16);
+}
+
+/* Transport surface and action hierarchy */
+window.theme-material-expressive .player-transport-surface {
+  min-height: 122px;
+  padding: 12px 14px 10px 14px;
+  border-radius: 28px;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.20);
+}
+
+window.theme-material-expressive .player-time-row {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+window.theme-material-expressive .player-elapsed,
+window.theme-material-expressive .player-duration {
+  color: @m3_on_surface_variant;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+window.theme-material-expressive .player-transport-controls {
+  min-height: 70px;
+  padding: 3px 6px;
+}
+
+window.theme-material-expressive .player-primary-control {
+  min-width: 68px;
+  min-height: 68px;
+  border-radius: 23px;
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  box-shadow: 0 8px 22px alpha(@m3_primary, 0.26);
+  transition:
+    border-radius 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+window.theme-material-expressive .player-primary-control:hover {
+  border-radius: 34px;
+  background-color: shade(@m3_primary, 1.06);
+  box-shadow: 0 10px 26px alpha(@m3_primary, 0.34);
+}
+
+window.theme-material-expressive .player-primary-control:active {
+  border-radius: 18px;
+  background-color: shade(@m3_primary, 0.94);
+}
+
+window.theme-material-expressive .player-skip-control {
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 24px;
+  color: @m3_on_secondary_container;
+  background-color: alpha(@m3_secondary_container, 0.86);
+}
+
+window.theme-material-expressive .player-skip-control:hover {
+  background-color: shade(@m3_secondary_container, 1.12);
+}
+
+window.theme-material-expressive .player-mode-control {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 15px;
+  color: @m3_on_surface_variant;
+  background-color: alpha(@m3_surface_container_highest, 0.72);
+  transition:
+    border-radius 180ms ease,
+    background-color 180ms ease;
+}
+
+window.theme-material-expressive .player-mode-control:hover {
+  border-radius: 22px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_highest;
+}
+
+window.theme-material-expressive .player-mode-control:checked {
+  border-radius: 22px;
+  color: @m3_on_tertiary_container;
+  background-color: @m3_tertiary_container;
+}
+
+/* Supporting content stays calm but visibly grouped */
+window.theme-material-expressive .player-visualizer-surface,
+window.theme-material-expressive .player-lyrics-surface {
+  border-radius: 24px;
+  background-color: alpha(@m3_surface_container_low, 0.72);
+  border: 1px solid alpha(@m3_outline, 0.14);
+}
+
+window.theme-material-expressive .player-lyrics-surface {
+  padding: 4px 8px;
+}
+
+window.theme-material-expressive .player-visualizer-surface {
+  padding: 2px 6px;
+}
+/* material_expressive_footer_v1 */
+
+window.theme-material-expressive .expressive-footer {
+  min-height: 92px;
+  margin: 0 12px 12px 12px;
+  padding: 10px 12px;
+  border: 1px solid alpha(@m3_outline, 0.24);
+  border-radius: 30px;
+  background-color: @m3_surface_container_low;
+  background-image:
+    radial-gradient(circle at 4% 50%, alpha(@m3_primary, 0.14), transparent 32%),
+    linear-gradient(110deg, transparent 48%, alpha(@m3_tertiary, 0.055));
+  box-shadow: 0 10px 28px alpha(black, 0.24);
+}
+
+window.theme-material-expressive .footer-info-card {
+  min-height: 60px;
+  padding: 4px 12px 4px 5px;
+  border-radius: 24px;
+  border: 1px solid alpha(@m3_primary, 0.22);
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .footer-info-card:hover {
+  background-color: shade(@m3_primary_container, 1.06);
+}
+
+window.theme-material-expressive .footer-artwork,
+window.theme-material-expressive .footer-artwork .mini-cover,
+window.theme-material-expressive .footer-artwork .cover-picture {
+  border-radius: 18px;
+}
+
+window.theme-material-expressive .footer-artwork {
+  border: 1px solid alpha(@m3_primary, 0.34);
+  box-shadow: 0 5px 16px alpha(black, 0.26);
+}
+
+window.theme-material-expressive .footer-metadata {
+  margin-left: 3px;
+}
+
+window.theme-material-expressive .footer-track-title {
+  color: @m3_on_primary_container;
+  font-size: 0.96rem;
+  font-weight: 820;
+  letter-spacing: -0.16px;
+}
+
+window.theme-material-expressive .footer-track-artist {
+  color: alpha(@m3_on_primary_container, 0.76);
+  font-size: 0.79rem;
+  font-weight: 560;
+}
+
+window.theme-material-expressive .footer-favorite-action {
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 15px;
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_on_primary_container, 0.08);
+}
+
+window.theme-material-expressive .footer-favorite-action:hover {
+  background-color: alpha(@m3_on_primary_container, 0.16);
+}
+
+window.theme-material-expressive .footer-source-pill {
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 12px;
+  color: @m3_on_tertiary_container;
+  background-color: @m3_tertiary_container;
+  border: 1px solid alpha(@m3_tertiary, 0.20);
+  font-size: 0.68rem;
+  font-weight: 720;
+}
+
+window.theme-material-expressive .footer-center-surface {
+  padding: 3px 10px 5px 10px;
+}
+
+window.theme-material-expressive .footer-transport-controls {
+  min-height: 58px;
+  padding: 4px 9px;
+  border-radius: 29px;
+  background-color: alpha(@m3_surface_container_high, 0.90);
+  border: 1px solid alpha(@m3_outline, 0.17);
+}
+
+window.theme-material-expressive .footer-primary-control {
+  min-width: 54px;
+  min-height: 54px;
+  border-radius: 18px;
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  box-shadow: 0 6px 18px alpha(@m3_primary, 0.28);
+}
+
+window.theme-material-expressive .footer-primary-control:hover {
+  border-radius: 27px;
+  background-color: shade(@m3_primary, 1.06);
+}
+
+window.theme-material-expressive .footer-primary-control:active {
+  border-radius: 15px;
+  background-color: shade(@m3_primary, 0.94);
+}
+
+window.theme-material-expressive .footer-skip-control {
+  min-width: 42px;
+  min-height: 42px;
+  border-radius: 21px;
+  color: @m3_on_secondary_container;
+  background-color: @m3_secondary_container;
+}
+
+window.theme-material-expressive .footer-mode-control {
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 14px;
+  color: @m3_on_surface_variant;
+  background-color: alpha(@m3_surface_container_highest, 0.76);
+}
+
+window.theme-material-expressive .footer-mode-control:checked {
+  border-radius: 20px;
+  color: @m3_on_tertiary_container;
+  background-color: @m3_tertiary_container;
+}
+
+window.theme-material-expressive .footer-progress-row {
+  min-height: 22px;
+  padding: 0 5px;
+}
+
+window.theme-material-expressive .footer-progress-stack,
+window.theme-material-expressive .footer-progress-wave {
+  min-height: 22px;
+  color: @m3_primary;
+}
+
+window.theme-material-expressive scale.footer-progress-track trough {
+  min-height: 5px;
+  border-radius: 3px;
+  background-color: alpha(@m3_on_surface_variant, 0.20);
+}
+
+window.theme-material-expressive scale.footer-progress-track trough highlight {
+  min-height: 5px;
+  border-radius: 3px;
+  background-color: @m3_primary;
+}
+
+window.theme-material-expressive .footer-utility-group {
+  min-height: 58px;
+  padding: 4px 8px;
+  border-radius: 24px;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.18);
+}
+
+window.theme-material-expressive .footer-utility-action {
+  min-width: 42px;
+  min-height: 42px;
+  border-radius: 15px;
+  color: @m3_on_surface_variant;
+  background-color: alpha(@m3_surface_container_highest, 0.64);
+}
+
+window.theme-material-expressive .footer-utility-action:checked {
+  border-radius: 21px;
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+}
+
+window.theme-material-expressive scale.footer-volume-control trough {
+  min-height: 5px;
+  border-radius: 3px;
+  background-color: alpha(@m3_on_surface_variant, 0.20);
+}
+
+window.theme-material-expressive scale.footer-volume-control trough highlight {
+  min-height: 5px;
+  border-radius: 3px;
+  background-color: @m3_primary;
+}
+
+window.theme-material-expressive scale.footer-volume-control slider {
+  min-width: 16px;
+  min-height: 16px;
+  border-radius: 8px;
+  background-color: @m3_primary;
+  border: 2px solid @m3_surface_container_high;
+}
+
+window.theme-material-expressive .expressive-footer.footer-mode-compact {
+  min-height: 78px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+  border-radius: 27px;
+}
+
+window.theme-material-expressive .footer-mode-compact .footer-transport-controls {
+  min-height: 52px;
+  padding: 3px 7px;
+}
+
+window.theme-material-expressive .footer-mode-compact .footer-primary-control {
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 16px;
+}
+
+window.theme-material-expressive .footer-mode-compact .footer-skip-control {
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 19px;
+}
+
+window.theme-material-expressive .footer-mode-compact .footer-utility-group {
+  min-height: 52px;
+  padding: 3px 5px;
+}
+
+window.theme-material-expressive .footer-mode-compact .footer-info-card {
+  min-height: 56px;
+  border-radius: 22px;
+}
+/* material_expressive_footer_refinement_v1 */
+
+window.theme-material-expressive .expressive-footer {
+  min-height: 78px;
+  margin: 0 8px 8px 8px;
+  padding: 6px 10px;
+  border-radius: 26px;
+}
+
+window.theme-material-expressive .expressive-footer.footer-mode-full {
+  min-height: 84px;
+}
+
+window.theme-material-expressive .footer-info-card {
+  min-height: 52px;
+  padding: 3px 10px 3px 4px;
+  border-radius: 20px;
+}
+
+window.theme-material-expressive .footer-artwork,
+window.theme-material-expressive .footer-artwork .mini-cover,
+window.theme-material-expressive .footer-artwork .cover-picture {
+  border-radius: 15px;
+}
+
+window.theme-material-expressive .footer-track-title {
+  font-size: 0.91rem;
+}
+
+window.theme-material-expressive .footer-track-artist {
+  font-size: 0.76rem;
+}
+
+window.theme-material-expressive .footer-source-pill {
+  min-height: 21px;
+  padding: 0 8px;
+  border-radius: 11px;
+  font-size: 0.64rem;
+}
+
+window.theme-material-expressive .footer-center-surface {
+  padding: 0 8px 2px 8px;
+}
+
+window.theme-material-expressive .footer-transport-controls {
+  min-height: 50px;
+  padding: 3px 7px;
+  border-radius: 25px;
+}
+
+window.theme-material-expressive .footer-primary-control {
+  min-width: 50px;
+  min-height: 50px;
+  border-radius: 17px;
+}
+
+window.theme-material-expressive .footer-primary-control:hover {
+  border-radius: 25px;
+}
+
+window.theme-material-expressive .footer-skip-control {
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 20px;
+}
+
+window.theme-material-expressive .footer-mode-control {
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 13px;
+}
+
+window.theme-material-expressive .footer-mode-control:hover,
+window.theme-material-expressive .footer-mode-control:checked {
+  border-radius: 19px;
+}
+
+window.theme-material-expressive .footer-progress-row {
+  min-height: 18px;
+  padding: 0 4px;
+}
+
+window.theme-material-expressive .footer-progress-stack,
+window.theme-material-expressive .footer-progress-wave {
+  min-height: 18px;
+}
+
+window.theme-material-expressive .footer-progress-row .time-label {
+  font-size: 0.66rem;
+}
+
+window.theme-material-expressive .footer-utility-group {
+  min-height: 50px;
+  padding: 3px 6px;
+  border-radius: 21px;
+}
+
+window.theme-material-expressive .footer-utility-action {
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 13px;
+}
+
+window.theme-material-expressive .footer-utility-action:hover,
+window.theme-material-expressive .footer-utility-action:checked {
+  border-radius: 19px;
+}
+
+window.theme-material-expressive .expressive-footer.footer-mode-compact {
+  min-height: 68px;
+  padding: 5px 8px;
+  border-radius: 24px;
+}
+
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-info-card {
+  min-height: 50px;
+  border-radius: 19px;
+}
+
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-transport-controls {
+  min-height: 48px;
+  padding: 2px 6px;
+  border-radius: 24px;
+}
+
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-primary-control {
+  min-width: 46px;
+  min-height: 46px;
+  border-radius: 16px;
+}
+
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-primary-control:hover {
+  border-radius: 23px;
+}
+
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-skip-control {
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 18px;
+}
+
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-utility-group {
+  min-height: 48px;
+  padding: 0;
+  border-color: transparent;
+  background-color: transparent;
+}
+
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-utility-action {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 22px;
+  background-color: @m3_surface_container_high;
+}
+/* material_footer_player_progress_refinement_v1 */
+
+window.theme-material-expressive .expressive-footer.footer-mode-full .footer-center-surface {
+  padding-top: 6px;
+  padding-bottom: 1px;
+}
+
+window.theme-material-expressive .expressive-footer.footer-mode-full .footer-transport-controls {
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+window.theme-material-expressive .expressive-footer.footer-mode-full .footer-progress-row {
+  margin-top: 4px;
+  min-height: 17px;
+}
+
+window.theme-material-expressive .expressive-footer.footer-mode-full .footer-progress-stack,
+window.theme-material-expressive .expressive-footer.footer-mode-full .footer-progress-wave {
+  min-height: 17px;
+}
+
+/* Main player progress should visually match the wave progress endpoint. */
+window.theme-material-expressive .player-progress-wave {
+  color: @m3_primary;
+}
+
+window.theme-material-expressive scale.player-progress-track trough {
+  min-height: 6px;
+  border-radius: 999px;
+  background-color: alpha(@m3_on_surface_variant, 0.22);
+}
+
+window.theme-material-expressive scale.player-progress-track trough highlight {
+  min-height: 6px;
+  border-radius: 999px;
+  background-color: @m3_primary;
+}
+
+window.theme-material-expressive scale.player-progress-track slider {
+  min-width: 14px;
+  min-height: 14px;
+  border-radius: 999px;
+  background-color: @m3_primary;
+  border: 2px solid @m3_surface_container_high;
+  box-shadow: none;
+}
+/* material_footer_compact_volume_polish_v1 */
+
+/* Compact transport must share the same visual baseline as both side cards. */
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-center-surface {
+  min-height: 52px;
+  padding: 0;
+  margin: 0;
+}
+
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-transport-controls {
+  min-height: 48px;
+  margin-top: 2px;
+  margin-bottom: 0;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  border-radius: 24px;
+}
+
+/* Keep the compact utility button on the same baseline as transport controls. */
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-utility-group {
+  min-height: 48px;
+  margin-top: 2px;
+  margin-bottom: 0;
+  padding: 0;
+}
+
+/* Volume uses the same straight Material track language as classic progress. */
+window.theme-material-expressive scale.footer-volume-control trough {
+  min-height: 6px;
+  border-radius: 999px;
+  background-color: alpha(@m3_on_surface_variant, 0.22);
+}
+
+window.theme-material-expressive scale.footer-volume-control trough highlight {
+  min-height: 6px;
+  border-radius: 999px;
+  background-color: @m3_primary;
+}
+
+window.theme-material-expressive scale.footer-volume-control slider {
+  min-width: 14px;
+  min-height: 14px;
+  margin: -4px;
+  border-radius: 999px;
+  background-color: @m3_primary;
+  border: 2px solid @m3_surface_container_high;
+  box-shadow: none;
+}
+
+window.theme-material-expressive scale.footer-volume-control:hover slider {
+  min-width: 16px;
+  min-height: 16px;
+  margin: -5px;
+}
+/* remove_compact_footer_transport_v1 */
+
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-utility-group {
+  min-width: 96px;
+  padding-left: 3px;
+  padding-right: 3px;
+}
+
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-center-surface {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+}
+/* material_expressive_navigation_v1 */
+
+window.theme-material-expressive .expressive-header {
+  min-height: 58px;
+  margin: 8px 8px 0 8px;
+  padding: 4px 8px;
+  border-radius: 26px;
+  border: 1px solid alpha(@m3_outline, 0.22);
+  background-color: @m3_surface_container;
+  box-shadow: 0 6px 18px alpha(black, 0.16);
+}
+
+window.theme-material-expressive .header-brand {
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 17px;
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  font-weight: 850;
+  letter-spacing: 1.1px;
+}
+
+window.theme-material-expressive .header-navigation-button,
+window.theme-material-expressive .header-action-button {
+  min-width: 42px;
+  min-height: 42px;
+  padding: 0;
+  border-radius: 16px;
+  color: @m3_on_surface_variant;
+  background-color: transparent;
+  box-shadow: none;
+  transition:
+    border-radius 180ms ease,
+    background-color 180ms ease;
+}
+
+window.theme-material-expressive .header-navigation-button:hover,
+window.theme-material-expressive .header-action-button:hover {
+  border-radius: 21px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+}
+
+window.theme-material-expressive .header-navigation-button:checked,
+window.theme-material-expressive .header-action-button:checked {
+  border-radius: 21px;
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+}
+
+window.theme-material-expressive .header-view-switcher {
+  min-height: 42px;
+  padding: 3px;
+  border-radius: 21px;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.16);
+}
+
+window.theme-material-expressive .header-view-switcher button {
+  min-height: 36px;
+  border-radius: 18px;
+  color: @m3_on_surface_variant;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .header-view-switcher button:hover {
+  color: @m3_on_surface;
+  background-color: alpha(@m3_primary, 0.10);
+}
+
+window.theme-material-expressive .header-view-switcher button:checked {
+  color: @m3_on_secondary_container;
+  background-color: @m3_secondary_container;
+}
+
+window.theme-material-expressive .expressive-search-bar {
+  margin: 6px 12px 0 12px;
+  padding: 5px 8px;
+  border-radius: 22px;
+  background-color: @m3_surface_container_low;
+  border: 1px solid alpha(@m3_outline, 0.16);
+}
+
+window.theme-material-expressive .expressive-search-entry {
+  min-height: 42px;
+  border-radius: 21px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.18);
+}
+
+window.theme-material-expressive .expressive-search-entry:focus {
+  border-color: @m3_primary;
+  box-shadow: 0 0 0 2px alpha(@m3_primary, 0.18);
+}
+
+window.theme-material-expressive .expressive-body {
+  background-color: @m3_surface;
+}
+
+window.theme-material-expressive .navigation-rail-revealer {
+  background-color: transparent;
+}
+
+window.theme-material-expressive .sidebar {
+  min-width: 220px;
+  margin: 8px 0 8px 8px;
+  padding: 10px 8px;
+  border-radius: 28px;
+  border: 1px solid alpha(@m3_outline, 0.18);
+  background-color: @m3_surface_container_low;
+  box-shadow: 0 8px 22px alpha(black, 0.14);
+}
+
+window.theme-material-expressive button.sidebar-row {
+  min-height: 48px;
+  margin: 2px 0;
+  padding: 0 12px;
+  border-radius: 18px;
+  color: @m3_on_surface_variant;
+  background-color: transparent;
+  box-shadow: none;
+  font-weight: 620;
+  transition:
+    border-radius 180ms ease,
+    background-color 180ms ease;
+}
+
+window.theme-material-expressive button.sidebar-row:hover {
+  border-radius: 24px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+}
+
+window.theme-material-expressive button.sidebar-row.active,
+window.theme-material-expressive button.sidebar-row:checked {
+  border-radius: 24px;
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  font-weight: 760;
+}
+
+window.theme-material-expressive .sidebar .section-title,
+window.theme-material-expressive .sidebar .sidebar-section-label {
+  margin: 12px 10px 6px 10px;
+  color: @m3_on_surface_variant;
+  font-size: 0.69rem;
+  font-weight: 820;
+  letter-spacing: 1.15px;
+}
+
+window.theme-material-expressive .expressive-dashboard {
+  border-radius: 30px;
+}
+
+window.theme-material-expressive .expressive-empty-state {
+  margin: 28px;
+  padding: 36px;
+  border-radius: 32px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  border: 1px solid alpha(@m3_outline, 0.18);
+}
+
+window.theme-material-expressive .expressive-empty-state .empty-icon {
+  color: @m3_primary;
+}
+
+window.theme-material-expressive .expressive-empty-action {
+  min-height: 46px;
+  padding: 0 20px;
+  border-radius: 23px;
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  box-shadow: 0 6px 16px alpha(@m3_primary, 0.22);
+}
+/* material_search_bar_separator_cleanup_v1 */
+
+/*
+ * Keep the collapsed SearchBar dimensionless. The previous container border
+ * remained visible as a thin separator between the header and the content.
+ * The actual SearchEntry keeps the Material surface when search is opened.
+ */
+window.theme-material-expressive .expressive-search-bar {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .expressive-search-entry {
+  margin: 6px 12px 0 12px;
+}
+/* material_expressive_library_cards_v1 */
+
+/* Section hierarchy */
+window.theme-material-expressive .home-section {
+  margin: 0 0 8px 0;
+  padding: 14px 14px 12px 14px;
+  border-radius: 28px;
+  background-color: alpha(@m3_surface_container_low, 0.72);
+  border: 1px solid alpha(@m3_outline, 0.14);
+}
+
+window.theme-material-expressive .home-section-heading {
+  padding: 0 4px 4px 4px;
+}
+
+window.theme-material-expressive .home-section-title,
+window.theme-material-expressive .collection-page-title {
+  color: @m3_on_surface;
+  font-weight: 820;
+  letter-spacing: -0.28px;
+}
+
+window.theme-material-expressive .home-carousel-scroll,
+window.theme-material-expressive .home-carousel {
+  background-color: transparent;
+}
+
+/* Album, artist, playlist and mix cards */
+window.theme-material-expressive .home-card-button,
+window.theme-material-expressive .collection-card-button {
+  padding: 0;
+  border-radius: 26px;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .home-card-button:hover,
+window.theme-material-expressive .collection-card-button:hover {
+  background-color: transparent;
+}
+
+window.theme-material-expressive .collection-card {
+  padding: 9px;
+  border-radius: 24px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  border: 1px solid alpha(@m3_outline, 0.18);
+  box-shadow: 0 5px 16px alpha(black, 0.13);
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+window.theme-material-expressive .home-card-button:hover .collection-card,
+window.theme-material-expressive .collection-card-button:hover .collection-card {
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.34);
+  box-shadow: 0 9px 24px alpha(black, 0.22);
+}
+
+window.theme-material-expressive .home-card-button:active .collection-card,
+window.theme-material-expressive .collection-card-button:active .collection-card {
+  background-color: @m3_secondary_container;
+  border-color: alpha(@m3_primary, 0.46);
+}
+
+window.theme-material-expressive .youtube-collection-card {
+  background-image:
+    linear-gradient(145deg, alpha(@m3_tertiary, 0.075), transparent 58%);
+}
+
+window.theme-material-expressive .collection-artwork,
+window.theme-material-expressive .expressive-artwork {
+  border-radius: 19px;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.18);
+  box-shadow: 0 5px 14px alpha(black, 0.18);
+}
+
+window.theme-material-expressive .collection-card-title,
+window.theme-material-expressive .expressive-card-title {
+  color: @m3_on_surface;
+  font-weight: 760;
+  font-size: 0.93rem;
+}
+
+window.theme-material-expressive .collection-card .dim-label,
+window.theme-material-expressive .expressive-card-subtitle {
+  color: @m3_on_surface_variant;
+  font-size: 0.78rem;
+}
+
+/* Collection pages */
+window.theme-material-expressive .collection-page,
+window.theme-material-expressive .expressive-library-page {
+  margin: 10px 12px 12px 12px;
+  padding: 16px;
+  border-radius: 30px;
+  background-color: @m3_surface_container_low;
+  border: 1px solid alpha(@m3_outline, 0.16);
+}
+
+window.theme-material-expressive .collection-page-header,
+window.theme-material-expressive .expressive-page-header {
+  min-height: 58px;
+  padding: 7px 12px;
+  border-radius: 22px;
+  background-color: @m3_surface_container;
+  border: 1px solid alpha(@m3_outline, 0.15);
+}
+
+window.theme-material-expressive .collection-page-icon {
+  min-width: 42px;
+  min-height: 42px;
+  border-radius: 16px;
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+}
+
+/* Artist rows */
+window.theme-material-expressive .artist-list-button {
+  min-height: 50px;
+  margin: 3px 0;
+  border-radius: 19px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  border: 1px solid alpha(@m3_outline, 0.14);
+  box-shadow: none;
+}
+
+window.theme-material-expressive .artist-list-button:hover {
+  border-radius: 25px;
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.28);
+}
+
+/* Track and playlist rows */
+window.theme-material-expressive .queue-list,
+window.theme-material-expressive .playlist-list {
+  background-color: transparent;
+}
+
+window.theme-material-expressive .queue-list row.media-list-row,
+window.theme-material-expressive .playlist-list row.playlist-card-row {
+  min-height: 58px;
+  margin: 3px 2px;
+  border-radius: 18px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  border: 1px solid alpha(@m3_outline, 0.13);
+  transition:
+    border-radius 180ms ease,
+    background-color 180ms ease;
+}
+
+window.theme-material-expressive .queue-list row.media-list-row:hover,
+window.theme-material-expressive .playlist-list row.playlist-card-row:hover {
+  border-radius: 24px;
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.26);
+}
+
+window.theme-material-expressive .queue-list row.media-list-row:selected,
+window.theme-material-expressive .playlist-list row.playlist-card-row:selected {
+  border-radius: 24px;
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  border-color: alpha(@m3_primary, 0.34);
+}
+
+window.theme-material-expressive row.youtube-media-row,
+window.theme-material-expressive row.youtube-playlist-row {
+  background-image:
+    linear-gradient(100deg, alpha(@m3_tertiary, 0.06), transparent 48%);
+}
+
+window.theme-material-expressive .track-title {
+  color: @m3_on_surface;
+  font-weight: 690;
+}
+
+window.theme-material-expressive .track-number {
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 14px;
+  color: @m3_on_surface_variant;
+  background-color: alpha(@m3_surface_container_highest, 0.72);
+}
+
+window.theme-material-expressive .source-badge {
+  min-height: 23px;
+  padding: 0 8px;
+  border-radius: 12px;
+  color: @m3_on_secondary_container;
+  background-color: @m3_secondary_container;
+  font-size: 0.67rem;
+  font-weight: 720;
+}
+
+window.theme-material-expressive .youtube-source-badge {
+  color: @m3_on_tertiary_container;
+  background-color: @m3_tertiary_container;
+}
+
+window.theme-material-expressive row.list-section-row {
+  margin-top: 8px;
+  background-color: transparent;
+  border: none;
+}
+
+window.theme-material-expressive row.list-section-row .section-title {
+  color: @m3_on_surface_variant;
+  font-size: 0.69rem;
+  font-weight: 820;
+  letter-spacing: 1.05px;
+}
+
+/* Search results */
+window.theme-material-expressive .search-result-button {
+  margin: 3px 0;
+  padding: 5px 8px;
+  border-radius: 19px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  border: 1px solid alpha(@m3_outline, 0.14);
+  box-shadow: none;
+}
+
+window.theme-material-expressive .search-result-button:hover {
+  border-radius: 25px;
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.28);
+}
+
+window.theme-material-expressive .search-result-button .collection-artwork {
+  border-radius: 15px;
+}
+
+/* Playlist management controls */
+window.theme-material-expressive .playlist-editor-surface {
+  padding: 12px;
+  border-radius: 24px;
+  background-color: @m3_surface_container;
+  border: 1px solid alpha(@m3_outline, 0.15);
+}
+
+window.theme-material-expressive .playlist-editor-entry,
+window.theme-material-expressive .playlist-editor-dropdown {
+  min-height: 44px;
+  border-radius: 20px;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.18);
+}
+
+window.theme-material-expressive .playlist-editor-action {
+  min-height: 42px;
+  border-radius: 19px;
+}
+
+window.theme-material-expressive .playlist-create-action {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+}
+/* material_search_surfaces_sidebar_collapse_v1 */
+
+/* A collapsed navigation rail must be dimensionless. */
+window.theme-material-expressive
+  .navigation-rail-revealer.sidebar-collapsed {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+window.theme-material-expressive
+  .navigation-rail-revealer.sidebar-collapsed
+  .sidebar {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+/* Search gets dedicated tonal surfaces instead of generic dark panels. */
+window.theme-material-expressive .search-results-page {
+  padding: 10px 12px 18px 12px;
+  background-color: transparent;
+}
+
+window.theme-material-expressive .search-section-card {
+  margin: 0 0 6px 0;
+  padding: 13px;
+  border-radius: 28px;
+  background-color: alpha(@m3_primary_container, 0.30);
+  background-image:
+    linear-gradient(130deg, alpha(@m3_primary, 0.055), transparent 54%);
+  border: 1px solid alpha(@m3_primary, 0.24);
+  box-shadow: 0 6px 18px alpha(black, 0.14);
+}
+
+window.theme-material-expressive .search-section-heading {
+  padding: 0 3px 5px 3px;
+}
+
+window.theme-material-expressive .search-section-heading .home-section-title {
+  color: @m3_on_primary_container;
+}
+
+window.theme-material-expressive .search-section-heading .dim-label {
+  color: alpha(@m3_on_primary_container, 0.68);
+}
+
+window.theme-material-expressive .search-results-surface {
+  padding: 5px;
+  border-radius: 22px;
+  background-color: alpha(@m3_surface_container, 0.84);
+  border: 1px solid alpha(@m3_outline, 0.14);
+}
+
+window.theme-material-expressive .search-results-surface row {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .search-results-surface row:hover,
+window.theme-material-expressive .search-results-surface row:selected {
+  background-color: transparent;
+}
+
+window.theme-material-expressive .search-result-button {
+  margin: 3px 1px;
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.18);
+}
+
+window.theme-material-expressive .search-result-button:hover {
+  background-color: @m3_surface_container_highest;
+  border-color: alpha(@m3_primary, 0.38);
+}
+
+window.theme-material-expressive .search-result-row {
+  min-height: 54px;
+}
+
+window.theme-material-expressive .search-source-badge {
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 12px;
+  color: @m3_on_tertiary_container;
+  background-color: @m3_tertiary_container;
+  font-size: 0.67rem;
+  font-weight: 720;
+}
+
+window.theme-material-expressive .search-result-arrow {
+  color: @m3_on_surface_variant;
+}
+
+window.theme-material-expressive
+  .search-results-surface
+  row.media-list-row {
+  margin: 3px 1px;
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.16);
+}
+
+window.theme-material-expressive
+  .search-results-surface
+  row.media-list-row:hover {
+  background-color: @m3_surface_container_highest;
+  border-color: alpha(@m3_primary, 0.34);
+}
+/* material_expressive_remaining_interface_v1 */
+
+/* Dialog surfaces */
+.theme-material-expressive.settings-dialog,
+.theme-material-expressive.youtube-settings-dialog,
+.theme-material-expressive.startup-dialog {
+  color: @m3_on_surface;
+  background-color: @m3_surface;
+}
+
+.theme-material-expressive .material-dialog-toolbar {
+  color: @m3_on_surface;
+  background-color: @m3_surface;
+}
+
+.theme-material-expressive .material-dialog-toolbar headerbar {
+  min-height: 56px;
+  padding: 4px 10px;
+  border-radius: 0 0 24px 24px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  border-bottom: 1px solid alpha(@m3_outline, 0.18);
+  box-shadow: none;
+}
+
+.theme-material-expressive .settings-content,
+.theme-material-expressive .startup-dialog-content {
+  padding: 2px;
+  color: @m3_on_surface;
+}
+
+.theme-material-expressive .settings-title,
+.theme-material-expressive .startup-dialog-title {
+  color: @m3_on_surface;
+  font-weight: 850;
+  letter-spacing: -0.3px;
+}
+
+.theme-material-expressive .settings-description,
+.theme-material-expressive .startup-dialog-description {
+  color: @m3_on_surface_variant;
+}
+
+/* Settings rows and controls */
+.theme-material-expressive .settings-surface-row {
+  min-height: 72px;
+  padding: 12px 14px;
+  margin: 2px 0;
+  border-radius: 22px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  border: 1px solid alpha(@m3_outline, 0.15);
+}
+
+.theme-material-expressive .settings-surface-row:hover {
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.24);
+}
+
+.theme-material-expressive .settings-row-text {
+  padding-right: 12px;
+}
+
+.theme-material-expressive .settings-row-title {
+  color: @m3_on_surface;
+  font-weight: 720;
+}
+
+.theme-material-expressive .settings-row-subtitle {
+  color: @m3_on_surface_variant;
+  font-size: 0.79rem;
+}
+
+.theme-material-expressive .settings-dropdown,
+.theme-material-expressive dropdown.settings-dropdown > button,
+.theme-material-expressive .settings-row-action {
+  min-height: 42px;
+  border-radius: 19px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.19);
+  box-shadow: none;
+}
+
+.theme-material-expressive dropdown.settings-dropdown > button:hover,
+.theme-material-expressive .settings-row-action:hover {
+  border-radius: 22px;
+  background-color: @m3_surface_container_highest;
+  border-color: alpha(@m3_primary, 0.32);
+}
+
+.theme-material-expressive .settings-primary-action {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  border-color: transparent;
+}
+
+.theme-material-expressive .settings-scale trough {
+  min-height: 6px;
+  border-radius: 999px;
+  background-color: alpha(@m3_on_surface_variant, 0.22);
+}
+
+.theme-material-expressive .settings-scale trough highlight {
+  min-height: 6px;
+  border-radius: 999px;
+  background-color: @m3_primary;
+}
+
+.theme-material-expressive .settings-scale slider {
+  min-width: 16px;
+  min-height: 16px;
+  margin: -5px;
+  border-radius: 999px;
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  border: 2px solid @m3_surface_container;
+  box-shadow: none;
+}
+
+/* Switches */
+.theme-material-expressive switch.settings-switch,
+.theme-material-expressive switch {
+  min-width: 48px;
+  min-height: 28px;
+  border-radius: 999px;
+  color: @m3_on_surface_variant;
+  background-color: @m3_surface_container_highest;
+  border: 1px solid alpha(@m3_outline, 0.30);
+  box-shadow: none;
+}
+
+.theme-material-expressive switch slider {
+  min-width: 20px;
+  min-height: 20px;
+  margin: 3px;
+  border-radius: 999px;
+  background-color: @m3_on_surface_variant;
+  box-shadow: none;
+}
+
+.theme-material-expressive switch:checked {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  border-color: transparent;
+}
+
+.theme-material-expressive switch:checked slider {
+  background-color: @m3_on_primary;
+}
+
+/* Startup choice dialog */
+.theme-material-expressive .startup-choice-group {
+  padding: 8px;
+  border-radius: 26px;
+  background-color: @m3_surface_container_low;
+  border: 1px solid alpha(@m3_outline, 0.16);
+}
+
+.theme-material-expressive .source-choice-button {
+  min-height: 54px;
+  padding: 0 18px;
+  border-radius: 22px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.18);
+  box-shadow: none;
+}
+
+.theme-material-expressive .source-choice-button:hover {
+  border-radius: 27px;
+  background-color: @m3_surface_container_highest;
+  border-color: alpha(@m3_primary, 0.32);
+}
+
+.theme-material-expressive .source-choice-button.suggested-action {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  border-color: transparent;
+}
+
+.theme-material-expressive .startup-cancel-action {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 20px;
+}
+
+/* Generic menus, popovers and dropdown lists */
+.theme-material-expressive popover.background > contents,
+.theme-material-expressive popover > contents {
+  padding: 7px;
+  border-radius: 22px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.22);
+  box-shadow: 0 12px 30px alpha(black, 0.30);
+}
+
+.theme-material-expressive popover modelbutton,
+.theme-material-expressive popover button,
+.theme-material-expressive popover listview row {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 16px;
+  color: @m3_on_surface;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.theme-material-expressive popover modelbutton:hover,
+.theme-material-expressive popover button:hover,
+.theme-material-expressive popover listview row:hover {
+  border-radius: 20px;
+  background-color: @m3_surface_container_highest;
+}
+
+.theme-material-expressive popover modelbutton:checked,
+.theme-material-expressive popover listview row:selected {
+  color: @m3_on_secondary_container;
+  background-color: @m3_secondary_container;
+}
+
+.theme-material-expressive popover separator {
+  min-height: 1px;
+  margin: 5px 8px;
+  background-color: alpha(@m3_outline, 0.18);
+}
+
+.theme-material-expressive dropdown > button,
+.theme-material-expressive combobox > button {
+  min-height: 42px;
+  border-radius: 19px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.18);
+  box-shadow: none;
+}
+
+.theme-material-expressive dropdown > button:hover,
+.theme-material-expressive combobox > button:hover {
+  background-color: @m3_surface_container_highest;
+  border-color: alpha(@m3_primary, 0.30);
+}
+
+/* Entries, text views and spin controls */
+.theme-material-expressive entry,
+.theme-material-expressive spinbutton,
+.theme-material-expressive textview,
+.theme-material-expressive textview text {
+  min-height: 42px;
+  border-radius: 19px;
+  color: @m3_on_surface;
+  caret-color: @m3_primary;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.18);
+  box-shadow: none;
+}
+
+.theme-material-expressive entry:focus,
+.theme-material-expressive spinbutton:focus,
+.theme-material-expressive textview:focus {
+  border-color: @m3_primary;
+  box-shadow: 0 0 0 2px alpha(@m3_primary, 0.17);
+}
+
+.theme-material-expressive entry selection,
+.theme-material-expressive textview text selection {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+}
+
+/* Generic buttons and destructive actions inside dialogs */
+.theme-material-expressive .suggested-action {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  border-color: transparent;
+}
+
+.theme-material-expressive .destructive-action {
+  border-radius: 20px;
+}
+
+.theme-material-expressive button.pill {
+  min-height: 40px;
+  padding: 0 17px;
+  border-radius: 20px;
+}
+
+/* Playback queue and remaining list surfaces */
+.theme-material-expressive .expressive-media-list,
+.theme-material-expressive .queue-list,
+.theme-material-expressive .playlist-list {
+  padding: 5px;
+  border-radius: 24px;
+  color: @m3_on_surface;
+  background-color: alpha(@m3_surface_container_low, 0.78);
+  border: 1px solid alpha(@m3_outline, 0.14);
+}
+
+.theme-material-expressive .expressive-media-list row,
+.theme-material-expressive .queue-list row,
+.theme-material-expressive .playlist-list row {
+  color: @m3_on_surface;
+}
+
+.theme-material-expressive .expressive-media-list row:selected,
+.theme-material-expressive .queue-list row:selected,
+.theme-material-expressive .playlist-list row:selected {
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+}
+
+.theme-material-expressive .expressive-media-list row:selected .dim-label,
+.theme-material-expressive .queue-list row:selected .dim-label,
+.theme-material-expressive .playlist-list row:selected .dim-label {
+  color: alpha(@m3_on_primary_container, 0.72);
+}
+
+/* Scrollbars */
+.theme-material-expressive scrollbar {
+  background-color: transparent;
+}
+
+.theme-material-expressive scrollbar slider {
+  min-width: 8px;
+  min-height: 34px;
+  border-radius: 999px;
+  background-color: alpha(@m3_on_surface_variant, 0.32);
+  border: none;
+}
+
+.theme-material-expressive scrollbar slider:hover {
+  background-color: alpha(@m3_primary, 0.62);
+}
+
+/* Tooltips and toasts */
+.theme-material-expressive tooltip.background,
+.theme-material-expressive tooltip {
+  border-radius: 14px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_highest;
+  border: 1px solid alpha(@m3_outline, 0.20);
+}
+
+.theme-material-expressive toast {
+  border-radius: 20px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_highest;
+  border: 1px solid alpha(@m3_outline, 0.20);
+}
+
+/* Check and radio controls */
+.theme-material-expressive checkbutton check,
+.theme-material-expressive checkbutton radio {
+  min-width: 20px;
+  min-height: 20px;
+  border-radius: 7px;
+  color: @m3_on_primary;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.34);
+  box-shadow: none;
+}
+
+.theme-material-expressive checkbutton check:checked,
+.theme-material-expressive checkbutton radio:checked {
+  background-color: @m3_primary;
+  border-color: @m3_primary;
+}
+/* organized_settings_milestone_v1 */
+
+.theme-material-expressive .settings-content {
+  padding: 4px 6px 12px 6px;
+}
+
+.theme-material-expressive .settings-hero {
+  min-height: 96px;
+  padding: 16px 18px;
+  border-radius: 30px;
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  background-image:
+    linear-gradient(125deg, alpha(@m3_primary, 0.12), transparent 58%);
+  border: 1px solid alpha(@m3_primary, 0.28);
+  box-shadow: 0 8px 24px alpha(black, 0.18);
+}
+
+.theme-material-expressive .settings-hero-icon-container {
+  min-width: 58px;
+  min-height: 58px;
+  border-radius: 22px;
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+}
+
+.theme-material-expressive .settings-hero-icon {
+  color: @m3_on_primary;
+}
+
+.theme-material-expressive .settings-hero-copy {
+  padding-left: 2px;
+}
+
+.theme-material-expressive .settings-hero .settings-title {
+  color: @m3_on_primary_container;
+  font-size: 1.36rem;
+}
+
+.theme-material-expressive .settings-hero .settings-description {
+  color: alpha(@m3_on_primary_container, 0.74);
+}
+
+.theme-material-expressive .settings-version-badge {
+  min-height: 30px;
+  padding: 0 11px;
+  border-radius: 15px;
+  color: @m3_on_tertiary_container;
+  background-color: @m3_tertiary_container;
+  border: 1px solid alpha(@m3_tertiary, 0.22);
+  font-size: 0.72rem;
+  font-weight: 780;
+}
+
+.theme-material-expressive .settings-group {
+  padding: 12px;
+  border-radius: 28px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  border: 1px solid alpha(@m3_outline, 0.17);
+  box-shadow: 0 5px 16px alpha(black, 0.11);
+}
+
+.theme-material-expressive .settings-group-header {
+  min-height: 52px;
+  padding: 2px 6px 10px 6px;
+}
+
+.theme-material-expressive .settings-group-icon-container {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 17px;
+  color: @m3_on_secondary_container;
+  background-color: @m3_secondary_container;
+}
+
+.theme-material-expressive .settings-group-icon {
+  color: @m3_on_secondary_container;
+}
+
+.theme-material-expressive .settings-group-copy {
+  padding-left: 2px;
+}
+
+.theme-material-expressive .settings-group-title {
+  color: @m3_on_surface;
+  font-size: 1.02rem;
+  font-weight: 820;
+  letter-spacing: -0.12px;
+}
+
+.theme-material-expressive .settings-group-description {
+  color: @m3_on_surface_variant;
+  font-size: 0.78rem;
+}
+
+.theme-material-expressive .settings-group-rows {
+  padding: 3px;
+  border-radius: 22px;
+  background-color: alpha(@m3_surface, 0.22);
+}
+
+.theme-material-expressive .settings-group .settings-surface-row {
+  min-height: 68px;
+  margin: 2px 0;
+  padding: 10px 12px;
+  border-radius: 19px;
+  background-color: @m3_surface_container;
+  border-color: alpha(@m3_outline, 0.13);
+}
+
+.theme-material-expressive .settings-group .settings-surface-row:hover {
+  border-radius: 23px;
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.25);
+}
+/* material_final_polish_v1 */
+
+/* Settings/dialog backdrop: use a tonal scrim instead of a plain black field. */
+.theme-material-expressive.settings-dialog,
+.theme-material-expressive.youtube-settings-dialog,
+.theme-material-expressive.startup-dialog,
+window.theme-material-expressive.settings-dialog,
+window.theme-material-expressive.youtube-settings-dialog,
+window.theme-material-expressive.startup-dialog {
+  background-color: alpha(@m3_surface, 0.78);
+  background-image:
+    linear-gradient(140deg, alpha(@m3_primary, 0.07), transparent 62%);
+}
+
+.theme-material-expressive.settings-dialog .material-dialog-toolbar,
+.theme-material-expressive.youtube-settings-dialog .material-dialog-toolbar,
+.theme-material-expressive.startup-dialog .material-dialog-toolbar,
+.theme-material-expressive.settings-dialog scrolledwindow,
+.theme-material-expressive.youtube-settings-dialog scrolledwindow,
+.theme-material-expressive.startup-dialog scrolledwindow,
+.theme-material-expressive.settings-dialog viewport,
+.theme-material-expressive.youtube-settings-dialog viewport,
+.theme-material-expressive.startup-dialog viewport,
+.theme-material-expressive.settings-dialog clamp,
+.theme-material-expressive.youtube-settings-dialog clamp,
+.theme-material-expressive.startup-dialog clamp,
+.theme-material-expressive.settings-dialog .settings-content,
+.theme-material-expressive.youtube-settings-dialog .settings-content,
+.theme-material-expressive.startup-dialog .startup-dialog-content,
+.theme-material-expressive.youtube-settings-dialog .youtube-settings-host {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+}
+
+/* Thin down the card stroke/spacing a touch. */
+window.theme-material-expressive .collection-card {
+  padding: 7px;
+  border-radius: 22px;
+  border-width: 1px;
+  box-shadow: 0 4px 12px alpha(black, 0.11);
+}
+
+window.theme-material-expressive .home-card-button:hover .collection-card,
+window.theme-material-expressive .collection-card-button:hover .collection-card {
+  box-shadow: 0 7px 18px alpha(black, 0.18);
+}
+
+window.theme-material-expressive .collection-artwork,
+window.theme-material-expressive .expressive-artwork {
+  border-radius: 17px;
+  box-shadow: 0 4px 10px alpha(black, 0.15);
+}
+
+/* Prevent the visualizer card from showing a second contour inside. */
+window.theme-material-expressive .player-visualizer-surface {
+  padding: 2px 5px;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .player-visualizer-surface .stable-visualizer-slot,
+window.theme-material-expressive .player-visualizer-surface > box,
+window.theme-material-expressive .player-visualizer-surface frame,
+window.theme-material-expressive .player-visualizer-surface frame > border,
+window.theme-material-expressive .player-visualizer-surface viewport {
+  border: none;
+  outline: none;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+}
+
+/* Remove the remaining blue background from the search dropdown/open search area. */
+window.theme-material-expressive .expressive-search-bar,
+window.theme-material-expressive .expressive-search-bar > box,
+window.theme-material-expressive .expressive-search-bar > revealer,
+window.theme-material-expressive .expressive-search-bar > revealer > box,
+window.theme-material-expressive .expressive-search-bar box,
+window.theme-material-expressive .expressive-search-bar revealer {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* Popover arrows and menu shells should follow the Material surface too. */
+.theme-material-expressive popover.background > arrow,
+.theme-material-expressive popover > arrow {
+  color: @m3_surface_container_high;
+  background-color: @m3_surface_container_high;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+}
+
+.theme-material-expressive popover.background.menu > contents,
+.theme-material-expressive popover.menu > contents,
+.theme-material-expressive popover.background.modelbutton > contents {
+  background-color: @m3_surface_container_high;
+  background-image: none;
+}
+/* material_final_polish_v2 */
+
+/* Keep cards exactly as they were before the mistaken card-thinning patch. */
+window.theme-material-expressive .collection-card {
+  padding: 9px;
+  border-radius: 24px;
+  border-width: 1px;
+  box-shadow: 0 5px 16px alpha(black, 0.13);
+}
+
+window.theme-material-expressive .home-card-button:hover .collection-card,
+window.theme-material-expressive .collection-card-button:hover .collection-card {
+  box-shadow: 0 9px 24px alpha(black, 0.22);
+}
+
+window.theme-material-expressive .collection-artwork,
+window.theme-material-expressive .expressive-artwork {
+  border-radius: 19px;
+  box-shadow: 0 5px 14px alpha(black, 0.18);
+}
+
+/* Let Libadwaita show the app behind the modal scrim instead of a black field. */
+.theme-material-expressive.settings-dialog,
+.theme-material-expressive.youtube-settings-dialog,
+.theme-material-expressive.startup-dialog,
+window.theme-material-expressive.settings-dialog,
+window.theme-material-expressive.youtube-settings-dialog,
+window.theme-material-expressive.startup-dialog {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+}
+
+.theme-material-expressive.settings-dialog .material-dialog-toolbar,
+.theme-material-expressive.youtube-settings-dialog .material-dialog-toolbar,
+.theme-material-expressive.startup-dialog .material-dialog-toolbar {
+  border-radius: 30px;
+  color: @m3_on_surface;
+  background-color: @m3_surface;
+  border: 1px solid alpha(@m3_outline, 0.20);
+  box-shadow: 0 16px 42px alpha(black, 0.34);
+}
+
+.theme-material-expressive.settings-dialog scrolledwindow,
+.theme-material-expressive.youtube-settings-dialog scrolledwindow,
+.theme-material-expressive.startup-dialog scrolledwindow,
+.theme-material-expressive.settings-dialog viewport,
+.theme-material-expressive.youtube-settings-dialog viewport,
+.theme-material-expressive.startup-dialog viewport,
+.theme-material-expressive.settings-dialog clamp,
+.theme-material-expressive.youtube-settings-dialog clamp,
+.theme-material-expressive.startup-dialog clamp,
+.theme-material-expressive.settings-dialog .settings-content,
+.theme-material-expressive.youtube-settings-dialog .youtube-settings-host,
+.theme-material-expressive.startup-dialog .startup-dialog-content {
+  background-color: transparent;
+  background-image: none;
+}
+
+/* Thin horizontal carousel scrollbar — cards themselves remain unchanged. */
+window.theme-material-expressive scrollbar.horizontal,
+window.theme-material-expressive .home-carousel-scroll scrollbar.horizontal {
+  min-height: 8px;
+  background-color: transparent;
+}
+
+window.theme-material-expressive scrollbar.horizontal trough,
+window.theme-material-expressive .home-carousel-scroll scrollbar.horizontal trough {
+  min-height: 8px;
+  background-color: transparent;
+  border: none;
+}
+
+window.theme-material-expressive scrollbar.horizontal slider,
+window.theme-material-expressive .home-carousel-scroll scrollbar.horizontal slider {
+  min-width: 38px;
+  min-height: 4px;
+  margin: 2px 0;
+  border-radius: 999px;
+  background-color: alpha(@m3_on_surface_variant, 0.34);
+  border: none;
+  box-shadow: none;
+}
+
+window.theme-material-expressive scrollbar.horizontal slider:hover,
+window.theme-material-expressive .home-carousel-scroll scrollbar.horizontal slider:hover {
+  min-height: 5px;
+  margin: 1px 0 2px 0;
+  background-color: alpha(@m3_primary, 0.68);
+}
+
+/* Remove the inner contour so the visualizer has only one frame. */
+window.theme-material-expressive .player-visualizer-surface {
+  box-shadow: none;
+}
+
+window.theme-material-expressive .player-visualizer-surface > box,
+window.theme-material-expressive .player-visualizer-surface frame,
+window.theme-material-expressive .player-visualizer-surface frame > border,
+window.theme-material-expressive .player-visualizer-surface viewport,
+window.theme-material-expressive .player-visualizer-surface .stable-visualizer-slot {
+  border: none;
+  outline: none;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+}
+
+/* Remove the remaining blue shell behind the expanded search field. */
+window.theme-material-expressive searchbar,
+window.theme-material-expressive searchbar > revealer,
+window.theme-material-expressive searchbar > revealer > box,
+window.theme-material-expressive searchbar box,
+window.theme-material-expressive .expressive-search-bar,
+window.theme-material-expressive .expressive-search-bar > revealer,
+window.theme-material-expressive .expressive-search-bar > revealer > box,
+window.theme-material-expressive .expressive-search-bar box {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* Popover arrows should match the menu surface, not the old blue accent. */
+.theme-material-expressive popover.background > arrow,
+.theme-material-expressive popover > arrow {
+  color: @m3_surface_container_high;
+  background-color: @m3_surface_container_high;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+/* material_visualizer_single_outline_v1 */
+
+/* Keep only one contour around the visualizer card. */
+window.theme-material-expressive .player-visualizer-surface {
+  padding: 0;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .player-visualizer-surface > box,
+window.theme-material-expressive .player-visualizer-surface > widget,
+window.theme-material-expressive .player-visualizer-surface frame,
+window.theme-material-expressive .player-visualizer-surface frame > border,
+window.theme-material-expressive .player-visualizer-surface viewport,
+window.theme-material-expressive .player-visualizer-surface .stable-visualizer-slot,
+window.theme-material-expressive .player-visualizer-surface .visualizer-slot,
+window.theme-material-expressive .player-visualizer-surface .visualizer-frame,
+window.theme-material-expressive .player-visualizer-surface .visualizer-shell {
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background-color: transparent;
+  background-image: none;
+}
+
+/* Preserve the inner breathing room using layout padding instead of a nested border. */
+window.theme-material-expressive .player-visualizer-surface .stable-visualizer-slot,
+window.theme-material-expressive .player-visualizer-surface .visualizer-slot,
+window.theme-material-expressive .player-visualizer-surface .visualizer-frame,
+window.theme-material-expressive .player-visualizer-surface .visualizer-shell {
+  min-height: 72px;
+}
+
+window.theme-material-expressive .player-visualizer-surface .visualizer-bars,
+window.theme-material-expressive .player-visualizer-surface drawingarea,
+window.theme-material-expressive .player-visualizer-surface picture,
+window.theme-material-expressive .player-visualizer-surface image {
+  margin: 10px 16px;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+}
+/* material_visualizer_full_width_v1 */
+
+/*
+ * Metadata and transport end up near 414 px after their Material padding.
+ * Match that visual width while keeping the 384 px visualizer centered.
+ */
+window.theme-material-expressive .player-visualizer-surface {
+  min-width: 414px;
+  width: 414px;
+}
+
+window.theme-material-expressive
+  .player-visualizer-surface
+  .stable-visualizer-slot,
+window.theme-material-expressive
+  .player-visualizer-surface
+  .visualizer-slot {
+  min-width: 384px;
+  margin-left: 15px;
+  margin-right: 15px;
+}
+/* material_settings_corner_bleed_fix_v1 */
+
+/* Prevent the old Noctalia blue from bleeding through the rounded top corners. */
+window.theme-material-expressive.settings-dialog,
+window.theme-material-expressive.youtube-settings-dialog,
+window.theme-material-expressive.startup-dialog,
+.theme-material-expressive.settings-dialog,
+.theme-material-expressive.youtube-settings-dialog,
+.theme-material-expressive.startup-dialog {
+  background-color: @m3_surface;
+  background-image: none;
+  box-shadow: none;
+}
+
+window.theme-material-expressive.settings-dialog > *,
+window.theme-material-expressive.youtube-settings-dialog > *,
+window.theme-material-expressive.startup-dialog > *,
+.theme-material-expressive.settings-dialog > *,
+.theme-material-expressive.youtube-settings-dialog > *,
+.theme-material-expressive.startup-dialog > * {
+  background-color: transparent;
+  background-image: none;
+}
+
+.theme-material-expressive.settings-dialog .material-dialog-toolbar,
+.theme-material-expressive.youtube-settings-dialog .material-dialog-toolbar,
+.theme-material-expressive.startup-dialog .material-dialog-toolbar {
+  margin: 0;
+  padding: 10px 10px 0 10px;
+  border-radius: 0;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+.theme-material-expressive.settings-dialog .material-dialog-toolbar headerbar,
+.theme-material-expressive.youtube-settings-dialog .material-dialog-toolbar headerbar,
+.theme-material-expressive.startup-dialog .material-dialog-toolbar headerbar {
+  margin: 0;
+  border-radius: 24px;
+  background-color: @m3_surface_container;
+  background-image: none;
+  border: 1px solid alpha(@m3_outline, 0.18);
+  box-shadow: 0 10px 24px alpha(black, 0.20);
+}
+
+.theme-material-expressive.settings-dialog scrolledwindow,
+.theme-material-expressive.youtube-settings-dialog scrolledwindow,
+.theme-material-expressive.startup-dialog scrolledwindow,
+.theme-material-expressive.settings-dialog viewport,
+.theme-material-expressive.youtube-settings-dialog viewport,
+.theme-material-expressive.startup-dialog viewport,
+.theme-material-expressive.settings-dialog clamp,
+.theme-material-expressive.youtube-settings-dialog clamp,
+.theme-material-expressive.startup-dialog clamp {
+  background-color: transparent;
+  background-image: none;
+}
+/* material_lyrics_full_width_v1 */
+
+/*
+ * Match the visual width used by the other Material player surfaces.
+ * The existing 384 px lyrics widget remains centered by the CenterBox.
+ */
+window.theme-material-expressive .player-lyrics-surface {
+  min-width: 414px;
+  box-sizing: border-box;
+}
+
+window.theme-material-expressive .player-lyrics-surface > box,
+window.theme-material-expressive .player-lyrics-surface viewport,
+window.theme-material-expressive .player-lyrics-surface scrolledwindow {
+  min-width: 384px;
+  margin-left: 15px;
+  margin-right: 15px;
+}
+/* material_settings_opaque_surface_v1 */
+
+/*
+ * Settings is a separate window, not an in-window overlay. A transparent root
+ * may be composited as black, so keep the dialog root opaque with the current
+ * Material surface and reserve tonal contrast for its cards/header.
+ */
+window.settings-dialog.theme-material-expressive,
+window.youtube-settings-dialog.theme-material-expressive,
+window.startup-dialog.theme-material-expressive,
+.settings-dialog.theme-material-expressive,
+.youtube-settings-dialog.theme-material-expressive,
+.startup-dialog.theme-material-expressive,
+window.theme-material-expressive.settings-dialog,
+window.theme-material-expressive.youtube-settings-dialog,
+window.theme-material-expressive.startup-dialog {
+  color: @m3_on_surface;
+  background-color: @m3_surface;
+  background-image: none;
+  box-shadow: none;
+}
+
+window.settings-dialog.theme-material-expressive > *,
+window.youtube-settings-dialog.theme-material-expressive > *,
+window.startup-dialog.theme-material-expressive > *,
+.settings-dialog.theme-material-expressive > *,
+.youtube-settings-dialog.theme-material-expressive > *,
+.startup-dialog.theme-material-expressive > * {
+  background-color: @m3_surface;
+  background-image: none;
+}
+
+.settings-dialog.theme-material-expressive .material-dialog-toolbar,
+.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar,
+.startup-dialog.theme-material-expressive .material-dialog-toolbar {
+  color: @m3_on_surface;
+  background-color: @m3_surface;
+  background-image: none;
+}
+
+.settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.startup-dialog.theme-material-expressive .material-dialog-toolbar headerbar {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  background-image: none;
+  border-color: alpha(@m3_outline, 0.18);
+}
+
+.settings-dialog.theme-material-expressive scrolledwindow,
+.youtube-settings-dialog.theme-material-expressive scrolledwindow,
+.startup-dialog.theme-material-expressive scrolledwindow,
+.settings-dialog.theme-material-expressive viewport,
+.youtube-settings-dialog.theme-material-expressive viewport,
+.startup-dialog.theme-material-expressive viewport,
+.settings-dialog.theme-material-expressive clamp,
+.youtube-settings-dialog.theme-material-expressive clamp,
+.startup-dialog.theme-material-expressive clamp,
+.settings-dialog.theme-material-expressive .settings-content,
+.youtube-settings-dialog.theme-material-expressive .youtube-settings-host,
+.startup-dialog.theme-material-expressive .startup-dialog-content {
+  background-color: @m3_surface;
+  background-image: none;
+}
+
+.settings-dialog.theme-material-expressive .settings-group,
+.settings-dialog.theme-material-expressive .settings-hero {
+  background-clip: padding-box;
+}
+/* material_carousel_playing_blur_polish_v1 */
+
+/* Material carousel thumb: visible, tactile and slightly thinner. */
+window.theme-material-expressive
+  .home-carousel-scroll
+  scrollbar.horizontal {
+  min-height: 7px;
+  opacity: 1;
+  background-color: transparent;
+}
+
+window.theme-material-expressive
+  .home-carousel-scroll
+  scrollbar.horizontal
+  trough {
+  min-height: 7px;
+  background-color: transparent;
+  border: none;
+}
+
+window.theme-material-expressive
+  .home-carousel-scroll
+  scrollbar.horizontal
+  slider {
+  min-width: 40px;
+  min-height: 3px;
+  margin: 2px 0;
+  border-radius: 999px;
+  color: @m3_on_surface_variant;
+  background-color: alpha(@m3_on_surface_variant, 0.38);
+  border: none;
+  box-shadow: none;
+}
+
+window.theme-material-expressive
+  .home-carousel-scroll
+  scrollbar.horizontal
+  slider:hover {
+  min-height: 4px;
+  margin: 1px 0 2px 0;
+  background-color: alpha(@m3_primary, 0.76);
+}
+
+/* Track position / currently-playing indicator follows the artwork palette. */
+window.theme-material-expressive .track-position-indicator {
+  color: @m3_on_surface_variant;
+}
+
+window.theme-material-expressive row.media-list-row:selected .track-position-indicator,
+window.theme-material-expressive row.media-list-row.playing .track-position-indicator,
+window.theme-material-expressive row.media-list-row.current-track .track-position-indicator,
+window.theme-material-expressive row.media-list-row.now-playing .track-position-indicator,
+window.theme-material-expressive .track-playing-indicator,
+window.theme-material-expressive .playing-indicator,
+window.theme-material-expressive .current-track-indicator,
+window.theme-material-expressive .now-playing-indicator {
+  color: @m3_primary;
+  background-color: alpha(@m3_primary_container, 0.86);
+  border-radius: 999px;
+  -gtk-icon-shadow: 0 0 10px alpha(@m3_primary, 0.28);
+}
+/* material_carousel_indicator_blur_runtime_v2 */
+
+window.theme-material-expressive
+  .home-carousel-scroll.material-carousel-scroll
+  scrollbar.horizontal {
+  min-height: 7px;
+  opacity: 1;
+  background-color: transparent;
+}
+
+window.theme-material-expressive
+  .home-carousel-scroll.material-carousel-scroll
+  scrollbar.horizontal
+  trough {
+  min-height: 7px;
+  background-color: transparent;
+  border: none;
+}
+
+window.theme-material-expressive
+  .home-carousel-scroll.material-carousel-scroll
+  scrollbar.horizontal
+  slider {
+  min-width: 42px;
+  min-height: 3px;
+  margin: 2px 0;
+  border-radius: 999px;
+  color: @m3_on_surface_variant;
+  background-color: alpha(@m3_on_surface_variant, 0.42);
+  border: none;
+  box-shadow: none;
+}
+
+window.theme-material-expressive
+  .home-carousel-scroll.material-carousel-scroll
+  scrollbar.horizontal
+  slider:hover {
+  min-height: 4px;
+  margin: 1px 0 2px 0;
+  background-color: alpha(@m3_primary, 0.78);
+}
+
+window.theme-material-expressive .track-position-indicator {
+  color: @m3_on_surface_variant;
+}
+
+window.theme-material-expressive row.media-list-row:selected .track-position-indicator,
+window.theme-material-expressive row.media-list-row.playing .track-position-indicator,
+window.theme-material-expressive row.media-list-row.current-track .track-position-indicator,
+window.theme-material-expressive row.media-list-row.now-playing .track-position-indicator,
+window.theme-material-expressive row.media-list-row:selected .track-playing-indicator,
+window.theme-material-expressive row.media-list-row.playing .track-playing-indicator,
+window.theme-material-expressive row.media-list-row.current-track .track-playing-indicator,
+window.theme-material-expressive row.media-list-row.now-playing .track-playing-indicator {
+  color: @m3_primary;
+  background-color: alpha(@m3_primary_container, 0.88);
+  border-radius: 999px;
+  -gtk-icon-shadow: 0 0 10px alpha(@m3_primary, 0.30);
+}
+
+window.theme-material-expressive.material-blur-enabled,
+window.background.noctalia-window.theme-material-expressive.material-blur-enabled,
+window.noctalia-window.theme-material-expressive.material-blur-enabled {
+  background-color: transparent;
+  background-image: none;
+}
+
+window.theme-material-expressive.material-blur-enabled > toastoverlay {
+  background-color: transparent;
+  background-image: none;
+}

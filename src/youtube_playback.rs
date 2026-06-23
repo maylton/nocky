@@ -217,6 +217,8 @@ impl AppController {
         });
         self.hero_cover.set_path(cover_path.as_deref());
         self.mini_cover.set_path(cover_path.as_deref());
+        self.visual_theme_manager
+            .update_artwork(cover_path.as_deref());
         self.player_view.set_favorite(false);
         self.footer_favorite_icon
             .set_icon_name(Some("emblem-favorite-symbolic"));

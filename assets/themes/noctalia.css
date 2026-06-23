@@ -8,3 +8,77 @@ window.theme-noctalia .player-bar,
 window.theme-noctalia .library-panel {
   transition: background-color 180ms ease, border-color 180ms ease;
 }
+/* material_visualizer_palette_v1
+ * Preserve the visualizer original Noctalia accent while its Cairo
+ * renderer reads the computed semantic color from CSS.
+ */
+window.theme-noctalia .audio-visualizer {
+  color: @accent_color;
+}
+/* organized_settings_milestone_v1 */
+
+.theme-noctalia .settings-hero {
+  min-height: 92px;
+  padding: 16px 18px;
+  border-radius: 26px;
+  background-color: alpha(@accent_color, 0.10);
+  border: 1px solid alpha(@accent_color, 0.22);
+}
+
+.theme-noctalia .settings-hero-icon-container {
+  min-width: 56px;
+  min-height: 56px;
+  border-radius: 20px;
+  color: @accent_fg_color;
+  background-color: @accent_color;
+}
+
+.theme-noctalia .settings-version-badge {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 14px;
+  color: @accent_fg_color;
+  background-color: @accent_color;
+  font-size: 0.72rem;
+  font-weight: 760;
+}
+
+.theme-noctalia .settings-group {
+  padding: 11px;
+  border-radius: 24px;
+  background-color: alpha(@window_fg_color, 0.035);
+  border: 1px solid alpha(@window_fg_color, 0.09);
+}
+
+.theme-noctalia .settings-group-header {
+  min-height: 48px;
+  padding: 2px 6px 9px 6px;
+}
+
+.theme-noctalia .settings-group-icon-container {
+  min-width: 42px;
+  min-height: 42px;
+  border-radius: 16px;
+  color: @accent_color;
+  background-color: alpha(@accent_color, 0.12);
+}
+
+.theme-noctalia .settings-group-title {
+  font-size: 1rem;
+  font-weight: 780;
+}
+
+.theme-noctalia .settings-group-description {
+  opacity: 0.72;
+  font-size: 0.78rem;
+}
+
+.theme-noctalia .settings-group-rows {
+  padding: 2px;
+}
+
+.theme-noctalia .settings-group .settings-surface-row {
+  min-height: 66px;
+  margin: 2px 0;
+  border-radius: 18px;
+}

@@ -157,12 +157,16 @@ impl LibraryBrowser {
         let home_content = gtk::Box::new(gtk::Orientation::Vertical, 22);
         home_content.set_hexpand(true);
         home_content.set_vexpand(false);
+        // material_expressive_library_cards_v1
         home_content.add_css_class("library-home");
+        home_content.add_css_class("expressive-library-home");
 
         let search_content = gtk::Box::new(gtk::Orientation::Vertical, 22);
         search_content.set_hexpand(true);
         search_content.set_vexpand(false);
         search_content.add_css_class("library-home");
+        search_content.add_css_class("expressive-search-results");
+        search_content.add_css_class("search-results-page");
 
         let search_scroll = gtk::ScrolledWindow::new();
         search_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
@@ -182,6 +186,7 @@ impl LibraryBrowser {
         let queue = gtk::ListBox::new();
         queue.set_selection_mode(gtk::SelectionMode::Single);
         queue.add_css_class("queue-list");
+        queue.add_css_class("expressive-media-list");
 
         {
             let tx = event_tx.clone();
@@ -232,6 +237,7 @@ impl LibraryBrowser {
         tracks_page.set_hexpand(true);
         tracks_page.set_vexpand(true);
         tracks_page.add_css_class("library-panel");
+        tracks_page.add_css_class("expressive-library-page");
         tracks_page.append(&queue_title);
         tracks_page.append(&queue_scroll);
 
@@ -288,6 +294,11 @@ impl LibraryBrowser {
         let create_row = gtk::Box::new(gtk::Orientation::Vertical, 8);
         create_row.set_hexpand(true);
         playlist_entry.set_hexpand(true);
+        playlist_entry.add_css_class("playlist-editor-entry");
+        playlist_dropdown.add_css_class("playlist-editor-dropdown");
+        create_row.add_css_class("playlist-editor-surface");
+        create_button.add_css_class("playlist-editor-action");
+        create_button.add_css_class("playlist-create-action");
         create_button.set_hexpand(true);
         create_row.append(&playlist_entry);
         create_row.append(&create_button);
@@ -323,11 +334,16 @@ impl LibraryBrowser {
         playlist_select_row.set_hexpand(true);
         playlist_dropdown.set_hexpand(true);
         delete_button.set_hexpand(true);
+        playlist_select_row.add_css_class("playlist-editor-surface");
+        delete_button.add_css_class("playlist-editor-action");
         playlist_select_row.append(&playlist_dropdown);
         playlist_select_row.append(&delete_button);
 
         let action_row = gtk::Box::new(gtk::Orientation::Vertical, 8);
         action_row.set_hexpand(true);
+        action_row.add_css_class("playlist-editor-surface");
+        add_button.add_css_class("playlist-editor-action");
+        remove_button.add_css_class("playlist-editor-action");
         add_button.set_hexpand(true);
         remove_button.set_hexpand(true);
         action_row.append(&add_button);
@@ -336,6 +352,7 @@ impl LibraryBrowser {
         let playlists_list = gtk::ListBox::new();
         playlists_list.set_selection_mode(gtk::SelectionMode::Single);
         playlists_list.add_css_class("playlist-list");
+        playlists_list.add_css_class("expressive-media-list");
         {
             let tx = event_tx.clone();
             let refs = playlist_row_refs.clone();
@@ -584,6 +601,7 @@ impl LibraryBrowser {
         search_list.set_selection_mode(gtk::SelectionMode::Single);
         search_list.add_css_class("queue-list");
         search_list.add_css_class("search-results-list");
+        search_list.add_css_class("search-results-surface");
         let visible_entries = Rc::new(RefCell::new(Vec::<VisibleTrack>::new()));
         {
             let tx = self.event_tx.clone();
@@ -653,6 +671,7 @@ impl LibraryBrowser {
 
         let track_section = gtk::Box::new(gtk::Orientation::Vertical, 10);
         track_section.add_css_class("home-section");
+        track_section.add_css_class("search-section-card");
         track_section.append(&search_section_heading(
             "Faixas",
             track_matches.len().min(track_limit),
@@ -2003,6 +2022,7 @@ fn search_section_heading(title: &str, visible: usize, total: usize, loading: bo
     subtitle_label.add_css_class("dim-label");
 
     let heading = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    heading.add_css_class("search-section-heading");
     heading.append(&title_label);
     heading.append(&subtitle_label);
     heading
@@ -2047,12 +2067,14 @@ fn search_list_section(
     let visible = total.min(limit.get());
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
     section.add_css_class("home-section");
+    section.add_css_class("search-section-card");
     section.append(&search_section_heading(title, visible, total, loading));
 
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::None);
     list.add_css_class("boxed-list");
     list.add_css_class("search-results-list");
+    list.add_css_class("search-results-surface");
 
     if total == 0 {
         list.append(&empty_row(if loading {
@@ -2177,12 +2199,15 @@ fn search_collection_button(card: HomeCard, event_tx: &Sender<BrowserEvent>) -> 
 
     let source = gtk::Label::new(Some(if online { "YouTube" } else { "Local" }));
     source.add_css_class("pill");
+    source.add_css_class("search-source-badge");
 
     let arrow = gtk::Image::from_icon_name("go-next-symbolic");
     arrow.set_pixel_size(16);
     arrow.add_css_class("dim-label");
+    arrow.add_css_class("search-result-arrow");
 
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    row.add_css_class("search-result-row");
     row.set_margin_top(8);
     row.set_margin_bottom(8);
     row.set_margin_start(10);
@@ -2267,6 +2292,7 @@ fn home_section(
     subtitle_label.add_css_class("dim-label");
 
     let heading = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    heading.add_css_class("home-section-heading");
     heading.append(&title_label);
     heading.append(&subtitle_label);
 
@@ -2286,6 +2312,8 @@ fn home_section(
     scroll.set_min_content_height(190);
     scroll.set_child(Some(&rail));
     scroll.add_css_class("home-carousel-scroll");
+    scroll.add_css_class("material-carousel-scroll");
+    scroll.set_overlay_scrolling(false);
 
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
     section.add_css_class("home-section");
@@ -2344,11 +2372,13 @@ fn home_card_button(card: HomeCard, event_tx: &Sender<BrowserEvent>) -> gtk::But
 
     let card_widget = collection_card(cover_path, title, subtitle, detail, online);
     card_widget.add_css_class("home-card");
+    card_widget.add_css_class("expressive-collection-card");
 
     let button = gtk::Button::new();
     button.set_child(Some(&card_widget));
     button.add_css_class("flat");
     button.add_css_class("home-card-button");
+    button.add_css_class("expressive-collection-button");
 
     let sender = event_tx.clone();
     button.connect_clicked(move |_| {
@@ -2482,6 +2512,7 @@ fn artist_list_button(
     button.set_halign(gtk::Align::Fill);
     button.add_css_class("flat");
     button.add_css_class("artist-list-button");
+    button.add_css_class("expressive-list-card");
 
     let sender = event_tx.clone();
     button.connect_clicked(move |_| {
@@ -2562,6 +2593,7 @@ fn collection_page_header(title: &str, subtitle: &str, icon_name: &str) -> gtk::
 
     let header = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     header.add_css_class("collection-page-header");
+    header.add_css_class("expressive-page-header");
     header.append(&icon);
     header.append(&text);
     header
@@ -2587,6 +2619,7 @@ fn collection_button(
     button.set_valign(gtk::Align::Start);
     button.add_css_class("flat");
     button.add_css_class("collection-card-button");
+    button.add_css_class("expressive-collection-button");
 
     let sender = event_tx.clone();
     button.connect_clicked(move |_| {
@@ -2612,6 +2645,7 @@ fn collection_event_button(
     button.set_valign(gtk::Align::Start);
     button.add_css_class("flat");
     button.add_css_class("collection-card-button");
+    button.add_css_class("expressive-collection-button");
 
     let sender = event_tx.clone();
     button.connect_clicked(move |_| {
@@ -2651,6 +2685,7 @@ fn collection_card(
     title_label.set_width_chars(18);
     title_label.set_max_width_chars(18);
     title_label.add_css_class("collection-card-title");
+    title_label.add_css_class("expressive-card-title");
     let subtitle_label = gtk::Label::new(Some(subtitle));
     subtitle_label.set_xalign(0.0);
     subtitle_label.set_single_line_mode(true);
@@ -2658,6 +2693,7 @@ fn collection_card(
     subtitle_label.set_width_chars(18);
     subtitle_label.set_max_width_chars(18);
     subtitle_label.add_css_class("dim-label");
+    subtitle_label.add_css_class("expressive-card-subtitle");
     let card = gtk::Box::new(gtk::Orientation::Vertical, 6);
     card.set_size_request(COLLECTION_CARD_MAX_WIDTH, COLLECTION_CARD_MIN_HEIGHT);
     card.set_hexpand(true);
@@ -2665,6 +2701,7 @@ fn collection_card(
     card.set_halign(gtk::Align::Fill);
     card.set_valign(gtk::Align::Start);
     card.add_css_class("collection-card");
+    card.add_css_class("expressive-collection-card");
     if online {
         card.add_css_class("youtube-collection-card");
     }
@@ -2702,6 +2739,7 @@ fn artwork(path: Option<&Path>, size: i32) -> gtk::Stack {
     stack.add_named(&placeholder, Some("placeholder"));
     stack.add_named(&picture, Some("picture"));
     stack.add_css_class("collection-artwork");
+    stack.add_css_class("expressive-artwork");
 
     if let Some(path) = path.filter(|path| path.is_file()) {
         if let Some(texture) = cached_square_texture(path, size) {
@@ -2830,6 +2868,7 @@ fn track_row(number: usize, track: &Track, liked: bool) -> gtk::ListBoxRow {
     let number_label = gtk::Label::new(Some(&number.to_string()));
     number_label.set_width_chars(3);
     number_label.add_css_class("track-number");
+    number_label.add_css_class("track-position-indicator");
 
     let title = gtk::Label::new(Some(&track.title));
     title.set_xalign(0.0);
@@ -2871,6 +2910,7 @@ fn track_row(number: usize, track: &Track, liked: bool) -> gtk::ListBoxRow {
     content.append(&duration);
 
     let row = gtk::ListBoxRow::new();
+    row.add_css_class("media-list-row");
     row.set_child(Some(&content));
     row
 }
@@ -2879,6 +2919,7 @@ fn youtube_track_row(number: usize, item: &YouTubeItem, liked: bool) -> gtk::Lis
     let number_label = gtk::Label::new(Some(&number.to_string()));
     number_label.set_width_chars(3);
     number_label.add_css_class("track-number");
+    number_label.add_css_class("track-position-indicator");
 
     let title = gtk::Label::new(Some(&item.title));
     title.set_xalign(0.0);
@@ -2916,6 +2957,8 @@ fn youtube_track_row(number: usize, item: &YouTubeItem, liked: bool) -> gtk::Lis
     content.append(&duration);
 
     let row = gtk::ListBoxRow::new();
+    row.add_css_class("media-list-row");
+    row.add_css_class("youtube-media-row");
     row.add_css_class("youtube-track-row");
     row.set_child(Some(&content));
     row
@@ -2959,6 +3002,7 @@ fn playlist_row(name: &str, detail: &str, online: bool) -> gtk::ListBoxRow {
     content.append(&arrow);
 
     let row = gtk::ListBoxRow::new();
+    row.add_css_class("playlist-card-row");
     if online {
         row.add_css_class("youtube-playlist-row");
     }
@@ -2974,6 +3018,7 @@ fn section_row(text: &str) -> gtk::ListBoxRow {
     label.set_margin_start(12);
     label.add_css_class("section-title");
     let row = gtk::ListBoxRow::new();
+    row.add_css_class("list-section-row");
     row.set_activatable(false);
     row.set_selectable(false);
     row.set_child(Some(&label));

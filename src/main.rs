@@ -6,9 +6,11 @@ mod dialogs;
 mod i18n;
 mod library;
 mod listening_history;
+// material_dynamic_palette_v1
 mod lyrics;
 mod lyrics_provider;
 mod lyrics_view;
+mod material_palette;
 mod model;
 mod mpris;
 mod onboarding;
@@ -319,28 +321,34 @@ impl AppController {
 
         let header = adw::HeaderBar::new();
         header.add_css_class("noctalia-header");
+        header.add_css_class("expressive-header");
 
         let sidebar_button = gtk::ToggleButton::builder()
             .icon_name("sidebar-show-symbolic")
             .active(false)
             .tooltip_text(tr(Message::SidebarToggle))
             .build();
+        // material_expressive_navigation_v1
+        sidebar_button.add_css_class("header-navigation-button");
         header.pack_start(&sidebar_button);
 
         let brand = gtk::Label::new(Some("NOCKY"));
         brand.add_css_class("brand-title");
+        brand.add_css_class("header-brand");
         header.pack_start(&brand);
 
         let switcher = adw::ViewSwitcher::builder()
             .stack(&views)
             .policy(adw::ViewSwitcherPolicy::Wide)
             .build();
+        switcher.add_css_class("header-view-switcher");
         header.set_title_widget(Some(&switcher));
 
         let search_button = gtk::ToggleButton::builder()
             .icon_name("system-search-symbolic")
             .tooltip_text(tr(Message::SearchLibrary))
             .build();
+        search_button.add_css_class("header-action-button");
         header.pack_end(&search_button);
 
         let sync_button = gtk::Button::builder()
@@ -348,12 +356,14 @@ impl AppController {
             .tooltip_text("Sincronizar biblioteca")
             .build();
         sync_button.add_css_class("flat");
+        sync_button.add_css_class("header-action-button");
         header.pack_end(&sync_button);
 
         let folder_button = gtk::Button::builder()
             .icon_name("folder-open-symbolic")
             .tooltip_text(tr(Message::ChooseMusicFolderTooltip))
             .build();
+        folder_button.add_css_class("header-action-button");
         header.pack_end(&folder_button);
 
         let menu = build_main_menu(config.language);
@@ -361,14 +371,17 @@ impl AppController {
             .icon_name("open-menu-symbolic")
             .menu_model(&menu)
             .build();
+        menu_button.add_css_class("header-action-button");
         header.pack_end(&menu_button);
         shell.append(&header);
 
         let search_bar = gtk::SearchBar::new();
+        search_bar.add_css_class("expressive-search-bar");
         let search_entry = gtk::SearchEntry::builder()
             .placeholder_text(tr(Message::SearchPlaceholder))
             .hexpand(true)
             .build();
+        search_entry.add_css_class("expressive-search-entry");
         search_bar.set_child(Some(&search_entry));
         search_bar.connect_entry(&search_entry);
         search_bar.set_key_capture_widget(Some(&window));
@@ -378,9 +391,13 @@ impl AppController {
         let body = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         body.set_vexpand(true);
         body.set_hexpand(true);
+        body.add_css_class("expressive-body");
         shell.append(&body);
 
         let sidebar_parts = build_sidebar(config.language);
+        sidebar_parts
+            .revealer
+            .add_css_class("navigation-rail-revealer");
         body.append(&sidebar_parts.revealer);
 
         let PlayerView {
@@ -417,6 +434,7 @@ impl AppController {
         dashboard.set_margin_end(24);
         dashboard.set_vexpand(true);
         dashboard.set_valign(gtk::Align::Fill);
+        dashboard.add_css_class("expressive-dashboard");
         dashboard.append(&now_card);
         dashboard.append(browser.root());
 
@@ -424,6 +442,7 @@ impl AppController {
         empty_state.set_halign(gtk::Align::Center);
         empty_state.set_valign(gtk::Align::Center);
         empty_state.set_vexpand(true);
+        empty_state.add_css_class("expressive-empty-state");
         let empty_icon = gtk::Image::from_icon_name("folder-music-symbolic");
         empty_icon.set_pixel_size(64);
         empty_icon.add_css_class("empty-icon");
@@ -436,6 +455,7 @@ impl AppController {
         let empty_add = gtk::Button::with_label(tr(Message::ChooseFolderAction));
         empty_add.add_css_class("suggested-action");
         empty_add.add_css_class("pill");
+        empty_add.add_css_class("expressive-empty-action");
         empty_state.append(&empty_icon);
         empty_state.append(&empty_title);
         empty_state.append(&empty_text);
@@ -464,11 +484,15 @@ impl AppController {
         let youtube_page = YouTubePage::new();
         body.append(&views);
 
-        let mini_cover = build_cover(54);
+        // material_expressive_footer_v1
+        // material_expressive_footer_refinement_v1
+        let mini_cover = build_cover(50);
+        mini_cover.stack.add_css_class("footer-artwork");
         let mini_title = gtk::Label::new(Some(tr(Message::NothingPlaying)));
         mini_title.set_xalign(0.0);
         mini_title.set_ellipsize(gtk::pango::EllipsizeMode::End);
         mini_title.add_css_class("now-title");
+        mini_title.add_css_class("footer-track-title");
         mini_title.set_hexpand(true);
 
         let footer_favorite_icon = gtk::Image::from_icon_name("emblem-favorite-symbolic");
@@ -478,12 +502,14 @@ impl AppController {
         footer_favorite.add_css_class("flat");
         footer_favorite.add_css_class("footer-control");
         footer_favorite.add_css_class("footer-favorite-button");
+        footer_favorite.add_css_class("footer-favorite-action");
         footer_favorite.set_tooltip_text(Some(tr(Message::FavoriteTooltip)));
 
         let mini_artist = gtk::Label::new(Some("Nocky"));
         mini_artist.set_xalign(0.0);
         mini_artist.set_ellipsize(gtk::pango::EllipsizeMode::End);
         mini_artist.add_css_class("dim-label");
+        mini_artist.add_css_class("footer-track-artist");
         mini_artist.set_hexpand(false);
         mini_artist.set_width_chars(-1);
         mini_artist.set_max_width_chars(18);
@@ -491,6 +517,7 @@ impl AppController {
         let footer_source = gtk::Label::new(Some(tr(Message::SourceNone)));
         footer_source.add_css_class("source-badge");
         footer_source.add_css_class("footer-source-badge");
+        footer_source.add_css_class("footer-source-pill");
         footer_source.set_valign(gtk::Align::Center);
 
         let mini_title_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -515,6 +542,7 @@ impl AppController {
         mini_text.set_halign(gtk::Align::Start);
         mini_text.set_valign(gtk::Align::Center);
         mini_text.add_css_class("footer-meta");
+        mini_text.add_css_class("footer-metadata");
         mini_text.append(&mini_title_row);
         mini_text.append(&mini_artist_row);
         mini_text.append(&mini_action_row);
@@ -522,6 +550,7 @@ impl AppController {
         let now_playing_content = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         now_playing_content.set_halign(gtk::Align::Start);
         now_playing_content.set_valign(gtk::Align::Center);
+        now_playing_content.add_css_class("footer-track-content");
         now_playing_content.append(&mini_cover.stack);
         now_playing_content.append(&mini_text);
 
@@ -530,7 +559,9 @@ impl AppController {
         footer_now_playing.set_size_request(350, 56);
         footer_now_playing.add_css_class("flat");
         footer_now_playing.add_css_class("footer-now-playing-button");
+        footer_now_playing.add_css_class("footer-info-card");
         footer_now_playing.set_tooltip_text(Some("Abrir fila de reprodução"));
+        footer_now_playing.set_valign(gtk::Align::Center);
 
         let footer_shuffle = gtk::ToggleButton::builder()
             .icon_name("media-playlist-shuffle-symbolic")
@@ -538,11 +569,13 @@ impl AppController {
             .build();
         footer_shuffle.add_css_class("flat");
         footer_shuffle.add_css_class("footer-control");
+        footer_shuffle.add_css_class("footer-mode-control");
 
         let footer_previous = gtk::Button::from_icon_name("media-skip-backward-symbolic");
         footer_previous.set_tooltip_text(Some(tr(Message::PreviousTrack)));
         footer_previous.add_css_class("flat");
         footer_previous.add_css_class("footer-control");
+        footer_previous.add_css_class("footer-skip-control");
 
         let play_icon = gtk::Image::from_icon_name("media-playback-start-symbolic");
         play_icon.set_pixel_size(20);
@@ -550,12 +583,14 @@ impl AppController {
         play.set_child(Some(&play_icon));
         play.add_css_class("flat");
         play.add_css_class("mini-play-button");
+        play.add_css_class("footer-primary-control");
         play.set_tooltip_text(Some(tr(Message::PlayPause)));
 
         let footer_next = gtk::Button::from_icon_name("media-skip-forward-symbolic");
         footer_next.set_tooltip_text(Some(tr(Message::NextTrack)));
         footer_next.add_css_class("flat");
         footer_next.add_css_class("footer-control");
+        footer_next.add_css_class("footer-skip-control");
 
         let footer_repeat = gtk::ToggleButton::builder()
             .icon_name("media-playlist-repeat-symbolic")
@@ -563,10 +598,13 @@ impl AppController {
             .build();
         footer_repeat.add_css_class("flat");
         footer_repeat.add_css_class("footer-control");
+        footer_repeat.add_css_class("footer-mode-control");
 
         let footer_transport = gtk::Box::new(gtk::Orientation::Horizontal, 7);
-        footer_transport.set_margin_top(8);
+        footer_transport.set_margin_top(0);
         footer_transport.set_halign(gtk::Align::Center);
+        footer_transport.set_valign(gtk::Align::Center);
+        footer_transport.add_css_class("footer-transport-controls");
         footer_transport.append(&footer_shuffle);
         footer_transport.append(&footer_previous);
         footer_transport.append(&play);
@@ -574,15 +612,20 @@ impl AppController {
         footer_transport.append(&footer_repeat);
 
         let footer_progress = WaveProgress::new();
+        footer_progress
+            .widget()
+            .add_css_class("footer-progress-wave");
 
         let footer_traditional_progress =
             gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 1.0, 0.001);
         footer_traditional_progress.set_draw_value(false);
         footer_traditional_progress.set_hexpand(true);
         footer_traditional_progress.add_css_class("footer-classic-progress");
+        footer_traditional_progress.add_css_class("footer-progress-track");
 
         let footer_progress_stack = gtk::Stack::new();
         footer_progress_stack.set_hexpand(true);
+        footer_progress_stack.add_css_class("footer-progress-stack");
         footer_progress_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
         footer_progress_stack.set_transition_duration(160);
         footer_progress_stack.add_named(&footer_traditional_progress, Some("classic"));
@@ -595,6 +638,7 @@ impl AppController {
 
         let footer_progress_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         footer_progress_row.set_hexpand(true);
+        footer_progress_row.add_css_class("footer-progress-row");
         footer_progress_row.append(&footer_elapsed);
         footer_progress_row.append(&footer_progress_stack);
         footer_progress_row.append(&footer_duration);
@@ -602,6 +646,8 @@ impl AppController {
         let footer_center = gtk::Box::new(gtk::Orientation::Vertical, 2);
         footer_center.set_size_request(500, 60);
         footer_center.set_halign(gtk::Align::Center);
+        footer_center.set_valign(gtk::Align::Center);
+        footer_center.add_css_class("footer-center-surface");
         footer_center.append(&footer_transport);
         footer_center.append(&footer_progress_row);
 
@@ -612,23 +658,31 @@ impl AppController {
         lyrics_button.add_css_class("flat");
         lyrics_button.add_css_class("footer-control");
         lyrics_button.add_css_class("footer-lyrics-button");
+        lyrics_button.add_css_class("footer-utility-action");
+        lyrics_button.set_valign(gtk::Align::Center);
 
         let mute_icon = gtk::Image::from_icon_name("audio-volume-high-symbolic");
         let mute_button = gtk::Button::new();
         mute_button.set_child(Some(&mute_icon));
         mute_button.add_css_class("flat");
         mute_button.add_css_class("footer-control");
+        mute_button.add_css_class("footer-utility-action");
+        mute_button.set_valign(gtk::Align::Center);
         mute_button.set_tooltip_text(Some(tr(Message::Mute)));
 
         let volume = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 1.0, 0.01);
         volume.set_draw_value(false);
         volume.set_value(config.volume.clamp(0.0, 1.0));
-        volume.set_size_request(112, -1);
+        volume.set_size_request(96, -1);
+        volume.set_valign(gtk::Align::Center);
         volume.add_css_class("footer-volume");
+        volume.add_css_class("footer-volume-control");
 
         let right_controls = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         right_controls.set_margin_top(8);
         right_controls.set_halign(gtk::Align::End);
+        right_controls.set_valign(gtk::Align::Center);
+        right_controls.add_css_class("footer-utility-group");
         right_controls.set_size_request(220, 56);
         right_controls.append(&lyrics_button);
         right_controls.append(&mute_button);
@@ -638,6 +692,7 @@ impl AppController {
         player_bar.set_height_request(88);
         player_bar.add_css_class("player-bar");
         player_bar.add_css_class("player-bar-v2");
+        player_bar.add_css_class("expressive-footer");
         player_bar.set_start_widget(Some(&footer_now_playing));
         player_bar.set_center_widget(Some(&footer_center));
         player_bar.set_end_widget(Some(&right_controls));
@@ -766,6 +821,8 @@ impl AppController {
 
         controller.sidebar_button.set_active(false);
         controller.sidebar.set_reveal_child(false);
+        controller.sidebar.set_visible(false);
+        controller.sidebar.add_css_class("sidebar-collapsed");
 
         // home_tab_navigation_v1
         {
@@ -813,7 +870,19 @@ impl AppController {
             let weak = Rc::downgrade(&controller);
             sidebar_button.connect_toggled(move |button| {
                 if let Some(controller) = weak.upgrade() {
-                    controller.sidebar.set_reveal_child(button.is_active());
+                    let expanded = button.is_active();
+                    controller.sidebar.remove_css_class("sidebar-expanded");
+                    controller.sidebar.remove_css_class("sidebar-collapsed");
+
+                    if expanded {
+                        controller.sidebar.add_css_class("sidebar-expanded");
+                        controller.sidebar.set_visible(true);
+                        controller.sidebar.set_reveal_child(true);
+                    } else {
+                        controller.sidebar.add_css_class("sidebar-collapsed");
+                        controller.sidebar.set_reveal_child(false);
+                        controller.sidebar.set_visible(false);
+                    }
                 }
             });
         }
@@ -2411,6 +2480,23 @@ impl AppController {
 
         self.visual_theme_manager.apply(&self.window, visual_theme);
 
+        // material_carousel_indicator_blur_runtime_v2
+        let (blur_mode, blur_opacity) = {
+            let config = self.config.borrow();
+            (config.blur_mode, config.blur_opacity)
+        };
+        self._theme.set_blur_preferences(blur_mode, blur_opacity);
+
+        self.window.remove_css_class("material-blur-enabled");
+        self.window.remove_css_class("material-blur-disabled");
+        let material_blur_enabled =
+            visual_theme == VisualTheme::MaterialExpressive && blur_mode != BlurMode::Off;
+        self.window.add_css_class(if material_blur_enabled {
+            "material-blur-enabled"
+        } else {
+            "material-blur-disabled"
+        });
+
         self._theme.set_noctalia_enabled(
             visual_theme == VisualTheme::Noctalia
                 && noctalia_sync
@@ -2422,7 +2508,6 @@ impl AppController {
 
     fn apply_footer_mode(&self) {
         let configured = self.config.borrow().footer_mode;
-
         // O player principal da Home permanece visível em todas as rotas
         // internas: início, álbum, discografia, artista e playlist.
         // Portanto, o footer automático continua compacto durante toda
@@ -2440,6 +2525,7 @@ impl AppController {
             other => other,
         };
 
+        self.player_bar.remove_css_class("footer-mode-full");
         self.player_bar.remove_css_class("footer-mode-compact");
         self.player_bar.remove_css_class("footer-mode-hidden");
 
@@ -2454,37 +2540,43 @@ impl AppController {
 
         let full = effective == FooterMode::Full;
 
-        // No modo compacto, mantemos:
-        // - card da faixa/fila;
-        // - botão de letras;
-        // - volume e mute.
-        //
-        // Ocultamos apenas:
-        // - controles de reprodução;
-        // - barra de progresso e tempos.
+        // No compacto: faixa + anterior/play/próxima + letras.
+        // Progresso, modos de reprodução e volume ficam no modo completo.
+        // remove_compact_footer_transport_v1
         self.footer_center.set_visible(full);
+        self.footer_center.set_valign(gtk::Align::Center);
+        self.footer_center.set_margin_top(0);
+        self.footer_center.set_margin_bottom(0);
         self.footer_right_controls.set_visible(true);
+        self.footer_right_controls.set_valign(gtk::Align::Center);
 
         self.footer_progress_stack.set_visible(full);
         self.footer_elapsed.set_visible(full);
         self.footer_duration.set_visible(full);
-        self.footer_previous.set_visible(full);
-        self.footer_next.set_visible(full);
+        self.footer_previous.set_visible(true);
+        self.footer_next.set_visible(true);
+        self.footer_play_button.set_visible(true);
         self.footer_repeat_button.set_visible(full);
         self.footer_shuffle_button.set_visible(full);
-        self.footer_play_button.set_visible(full);
+        self.footer_source.set_visible(full);
+        self.footer_favorite_button.set_visible(full);
+        self.mini_artist.set_visible(true);
+        // material_footer_compact_volume_polish_v1
+        self.mute_button.set_visible(true);
+        self.volume.set_visible(full);
 
         if full {
-            self.player_bar.set_height_request(88);
-            self.footer_now_playing.set_size_request(350, 56);
-            self.footer_center.set_size_request(500, 60);
-            self.footer_right_controls.set_size_request(220, 56);
+            self.player_bar.add_css_class("footer-mode-full");
+            self.player_bar.set_height_request(86);
+            self.footer_now_playing.set_size_request(330, 54);
+            self.footer_center.set_size_request(470, 56);
+            self.footer_right_controls.set_size_request(190, 52);
         } else {
             self.player_bar.add_css_class("footer-mode-compact");
-            self.player_bar.set_height_request(72);
-            self.footer_now_playing.set_size_request(350, 56);
-            self.footer_center.set_size_request(0, 56);
-            self.footer_right_controls.set_size_request(220, 56);
+            self.player_bar.set_height_request(70);
+            self.footer_now_playing.set_size_request(292, 52);
+            self.footer_center.set_size_request(0, 52);
+            self.footer_right_controls.set_size_request(104, 52);
         }
     }
 
@@ -3036,6 +3128,8 @@ impl AppController {
         self.mini_artist.set_text(&track.artist);
         self.hero_cover.set_path(track.cover_path.as_deref());
         self.mini_cover.set_path(track.cover_path.as_deref());
+        self.visual_theme_manager
+            .update_artwork(track.cover_path.as_deref());
         self.rebuild_lyrics(&track);
         self.update_favorite_icon(&track.path);
         self.publish_mpris_track(&track);
@@ -3732,6 +3826,7 @@ impl AppController {
             Some("Reproduza uma música com letras sincronizadas para ver o contexto."),
         );
         self.hero_cover.set_path(None);
+        self.visual_theme_manager.update_artwork(None);
         self.mini_cover.set_path(None);
         self.elapsed.set_text("0:00");
         self.duration.set_text("0:00");
