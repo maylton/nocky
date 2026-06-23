@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use std::{
-    cmp::Ordering,
     collections::HashMap,
     fs,
     path::PathBuf,
@@ -8,7 +7,6 @@ use std::{
 };
 
 const MAX_EVENTS: usize = 20_000;
-const RECENT_WINDOW_SECONDS: i64 = 30 * 24 * 60 * 60;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
@@ -59,9 +57,9 @@ impl ListeningHistory {
         }
     }
 
-    pub fn record(
+    pub fn record_progress(
         &mut self,
-        track_id: String,
+        session_id: String,
         artist: String,
         album: String,
         source: ListeningSource,
@@ -71,15 +69,39 @@ impl ListeningHistory {
         if listened_seconds < 30 && !completed {
             return false;
         }
-        self.events.push(PlayEvent {
-            track_id,
-            artist,
-            album,
-            source,
-            played_at: now_unix(),
-            listened_seconds,
-            completed,
-        });
+
+        let now = now_unix();
+        if let Some(event) = self
+            .events
+            .iter_mut()
+            .rev()
+            .find(|event| event.track_id == session_id && event.source == source)
+        {
+            let next_seconds = event.listened_seconds.max(listened_seconds);
+            let next_completed = event.completed || completed;
+            let changed =
+                next_seconds != event.listened_seconds || next_completed != event.completed;
+            if !changed {
+                return false;
+            }
+
+            event.artist = artist;
+            event.album = album;
+            event.listened_seconds = next_seconds;
+            event.completed = next_completed;
+            event.played_at = now;
+        } else {
+            self.events.push(PlayEvent {
+                track_id: session_id,
+                artist,
+                album,
+                source,
+                played_at: now,
+                listened_seconds,
+                completed,
+            });
+        }
+
         if self.events.len() > MAX_EVENTS {
             self.events.drain(..self.events.len() - MAX_EVENTS);
         }
@@ -155,39 +177,33 @@ where
     I: Iterator<Item = &'a PlayEvent>,
     F: Fn(&PlayEvent) -> &str,
 {
-    let now = now_unix();
-    let mut grouped = HashMap::<String, ListeningStats>::new();
+    let mut grouped = HashMap::<String, (String, ListeningStats)>::new();
     for event in events {
-        let name = key(event);
+        let name = key(event).trim();
         if name.is_empty() {
             continue;
         }
-        let stats = grouped.entry(name.to_string()).or_default();
+
+        let normalized = name.to_lowercase();
+        let (_, stats) = grouped
+            .entry(normalized)
+            .or_insert_with(|| (name.to_string(), ListeningStats::default()));
         stats.play_count += 1;
         stats.last_played_at = stats.last_played_at.max(event.played_at);
         stats.total_listened_seconds += event.listened_seconds;
     }
-    let mut ranked = grouped.into_iter().collect::<Vec<_>>();
-    ranked.sort_by(|(_, left), (_, right)| {
-        score(right, now)
-            .partial_cmp(&score(left, now))
-            .unwrap_or(Ordering::Equal)
+
+    let mut ranked = grouped.into_values().collect::<Vec<_>>();
+    ranked.sort_by(|(left_name, left), (right_name, right)| {
+        right
+            .total_listened_seconds
+            .cmp(&left.total_listened_seconds)
+            .then_with(|| right.play_count.cmp(&left.play_count))
             .then_with(|| right.last_played_at.cmp(&left.last_played_at))
+            .then_with(|| left_name.to_lowercase().cmp(&right_name.to_lowercase()))
     });
     ranked.truncate(limit);
     ranked
-}
-
-fn score(stats: &ListeningStats, now: i64) -> f64 {
-    let age = (now - stats.last_played_at).max(0) as f64;
-    let recency = if age <= RECENT_WINDOW_SECONDS as f64 {
-        1.0 - age / RECENT_WINDOW_SECONDS as f64
-    } else {
-        0.0
-    };
-    stats.play_count as f64
-        + (stats.total_listened_seconds as f64 / 60.0).sqrt() * 0.35
-        + recency * 3.0
 }
 
 fn history_path() -> PathBuf {
@@ -203,4 +219,140 @@ fn now_unix() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs().min(i64::MAX as u64) as i64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn event(
+        artist: &str,
+        album: &str,
+        source: ListeningSource,
+        played_at: i64,
+        listened_seconds: u64,
+    ) -> PlayEvent {
+        PlayEvent {
+            track_id: format!("{artist}:{album}:{played_at}"),
+            artist: artist.to_string(),
+            album: album.to_string(),
+            source,
+            played_at,
+            listened_seconds,
+            completed: false,
+        }
+    }
+
+    #[test]
+    fn ranking_prefers_total_listening_time() {
+        let history = ListeningHistory {
+            events: vec![
+                event("Long Listen", "Album A", ListeningSource::Local, 10, 600),
+                event("Recent Plays", "Album B", ListeningSource::Local, 20, 45),
+                event("Recent Plays", "Album B", ListeningSource::Local, 21, 45),
+                event("Recent Plays", "Album B", ListeningSource::Local, 22, 45),
+            ],
+        };
+
+        let artists = history.ranked_artists(ListeningSource::Local, 10);
+        assert_eq!(artists[0].0, "Long Listen");
+        assert_eq!(artists[0].1.total_listened_seconds, 600);
+    }
+
+    #[test]
+    fn ranking_merges_case_variants() {
+        let history = ListeningHistory {
+            events: vec![
+                event("Björk", "Homogenic", ListeningSource::Local, 10, 120),
+                event("BJÖRK", "homogenic", ListeningSource::Local, 11, 180),
+            ],
+        };
+
+        let artists = history.ranked_artists(ListeningSource::Local, 10);
+        let albums = history.ranked_albums(ListeningSource::Local, 10);
+
+        assert_eq!(artists.len(), 1);
+        assert_eq!(artists[0].1.play_count, 2);
+        assert_eq!(artists[0].1.total_listened_seconds, 300);
+        assert_eq!(albums.len(), 1);
+        assert_eq!(albums[0].1.play_count, 2);
+    }
+
+    #[test]
+    fn ranking_keeps_sources_separate() {
+        let history = ListeningHistory {
+            events: vec![
+                event(
+                    "Local Artist",
+                    "Local Album",
+                    ListeningSource::Local,
+                    10,
+                    120,
+                ),
+                event(
+                    "YouTube Artist",
+                    "YouTube Album",
+                    ListeningSource::YouTube,
+                    11,
+                    500,
+                ),
+            ],
+        };
+
+        let local = history.ranked_artists(ListeningSource::Local, 10);
+        assert_eq!(local.len(), 1);
+        assert_eq!(local[0].0, "Local Artist");
+    }
+}
+
+#[cfg(test)]
+mod session_progress_tests {
+    use super::*;
+
+    #[test]
+    fn updates_the_same_playback_session() {
+        let mut history = ListeningHistory::default();
+
+        assert!(history.record_progress(
+            "youtube:abc:session-1".to_string(),
+            "Artist".to_string(),
+            "Album".to_string(),
+            ListeningSource::YouTube,
+            30,
+            false,
+        ));
+        assert!(history.record_progress(
+            "youtube:abc:session-1".to_string(),
+            "Artist".to_string(),
+            "Album".to_string(),
+            ListeningSource::YouTube,
+            180,
+            true,
+        ));
+
+        let ranked = history.ranked_artists(ListeningSource::YouTube, 10);
+        assert_eq!(ranked.len(), 1);
+        assert_eq!(ranked[0].1.play_count, 1);
+        assert_eq!(ranked[0].1.total_listened_seconds, 180);
+    }
+
+    #[test]
+    fn separate_sessions_count_as_separate_plays() {
+        let mut history = ListeningHistory::default();
+
+        for session in ["session-1", "session-2"] {
+            assert!(history.record_progress(
+                session.to_string(),
+                "Artist".to_string(),
+                "Album".to_string(),
+                ListeningSource::Local,
+                45,
+                false,
+            ));
+        }
+
+        let ranked = history.ranked_artists(ListeningSource::Local, 10);
+        assert_eq!(ranked[0].1.play_count, 2);
+        assert_eq!(ranked[0].1.total_listened_seconds, 90);
+    }
 }

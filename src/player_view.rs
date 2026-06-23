@@ -17,6 +17,8 @@ pub(crate) struct PlayerViewHandle {
     favorite_icon: gtk::Image,
     hero_play_icon: gtk::Image,
     lyrics: LyricsPresenter,
+    lyrics_slot: gtk::CenterBox,
+    lyrics_toggle_button: gtk::ToggleButton,
     visualizer: SpectrumVisualizer,
 }
 
@@ -43,7 +45,11 @@ impl PlayerViewHandle {
     }
 
     pub(crate) fn set_lyrics_visible(&self, visible: bool) {
+        self.lyrics_slot.set_visible(visible);
         self.lyrics.inline_widget().set_visible(visible);
+        if self.lyrics_toggle_button.is_active() != visible {
+            self.lyrics_toggle_button.set_active(visible);
+        }
     }
     pub(crate) fn set_visualizer_active(&self, active: bool) {
         self.visualizer.set_active(active);
@@ -59,6 +65,8 @@ pub(crate) struct PlayerView {
     pub(crate) previous_button: gtk::Button,
     pub(crate) hero_play_button: gtk::Button,
     pub(crate) next_button: gtk::Button,
+    pub(crate) inline_lyrics_button: gtk::ToggleButton,
+    pub(crate) refresh_lyrics_button: gtk::Button,
     pub(crate) hero_cover: CoverView,
     pub(crate) hero_play_icon: gtk::Image,
     pub(crate) favorite_icon: gtk::Image,
@@ -126,10 +134,43 @@ impl PlayerView {
         now_heading.set_hexpand(true);
         now_heading.add_css_class("now-heading");
         let headphones = gtk::Image::from_icon_name("audio-headphones-symbolic");
+        headphones.set_pixel_size(16);
         headphones.add_css_class("now-heading-icon");
+
+        let headphones_slot = gtk::CenterBox::new();
+        headphones_slot.set_size_request(34, 34);
+        headphones_slot.set_hexpand(false);
+        headphones_slot.set_vexpand(false);
+        headphones_slot.set_halign(gtk::Align::Center);
+        headphones_slot.set_valign(gtk::Align::Center);
+        headphones_slot.set_center_widget(Some(&headphones));
+        let inline_lyrics_button = gtk::ToggleButton::builder()
+            .icon_name("audio-input-microphone-symbolic")
+            .active(true)
+            .tooltip_text(tr(Message::HomeLyricsDescription))
+            .build();
+        inline_lyrics_button.add_css_class("flat");
+        inline_lyrics_button.add_css_class("card-icon-button");
+        inline_lyrics_button.set_size_request(34, 34);
+
+        let refresh_lyrics_button = gtk::Button::from_icon_name("view-refresh-symbolic");
+        refresh_lyrics_button.set_tooltip_text(Some(tr(Message::MenuDownloadLyrics)));
+        refresh_lyrics_button.add_css_class("flat");
+        refresh_lyrics_button.add_css_class("card-icon-button");
+        refresh_lyrics_button.set_size_request(34, 34);
+
+        let player_header_actions = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+        player_header_actions.set_hexpand(false);
+        player_header_actions.set_halign(gtk::Align::End);
+        player_header_actions.set_valign(gtk::Align::Center);
+        player_header_actions.append(&headphones_slot);
+        player_header_actions.append(&inline_lyrics_button);
+        player_header_actions.append(&refresh_lyrics_button);
+
         let now_header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        now_header.set_hexpand(true);
         now_header.append(&now_heading);
-        now_header.append(&headphones);
+        now_header.append(&player_header_actions);
 
         let title_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         title_row.set_size_request(384, 34);
@@ -331,6 +372,8 @@ impl PlayerView {
             favorite_icon: favorite_icon.clone(),
             hero_play_icon: hero_play_icon.clone(),
             lyrics: lyrics.clone(),
+            lyrics_slot: lyrics_slot.clone(),
+            lyrics_toggle_button: inline_lyrics_button.clone(),
             visualizer: visualizer.clone(),
         };
 
@@ -343,6 +386,8 @@ impl PlayerView {
             previous_button: previous,
             hero_play_button,
             next_button: next,
+            inline_lyrics_button,
+            refresh_lyrics_button,
             hero_cover,
             hero_play_icon,
             favorite_icon,

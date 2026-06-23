@@ -7,7 +7,7 @@ use std::{
     io::{BufRead, BufReader},
     os::unix::net::UnixStream,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
     rc::Rc,
     sync::mpsc,
     thread,
@@ -177,6 +177,8 @@ impl ThemeBridge {
 
         Command::new("pgrep")
             .args(["-f", "[n]octalia"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .status()
             .map(|status| status.success())
             .unwrap_or(false)

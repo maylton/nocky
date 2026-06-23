@@ -1,5 +1,8 @@
+mod background;
+mod background_handler;
 mod browser;
 mod config;
+mod dialogs;
 mod i18n;
 mod library;
 mod listening_history;
@@ -15,12 +18,13 @@ mod theme;
 mod visualizer;
 mod wave_progress;
 mod youtube;
-
-use crate::youtube::YouTubeArtistOverview;
+mod youtube_playback;
 
 use adw::prelude::*;
+use background::{BackgroundChannel, BackgroundMessage};
 use browser::{BrowserEvent, BrowserRoute, LibraryBrowser};
 use config::{AppLanguage, BlurMode, FooterMode, StartupSource};
+use dialogs::SettingsEvent;
 use gtk::prelude::FileExt;
 use gtk::{gdk, gio, glib};
 use i18n::Message;
@@ -36,20 +40,16 @@ use std::{
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
     rc::Rc,
-    sync::{
-        mpsc::{self, Receiver, Sender},
-        Arc, Mutex,
-    },
+    sync::{mpsc, Arc, Mutex},
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use visualizer::SpectrumVisualizer;
 use wave_progress::WaveProgress;
 use youtube::{
-    cache_items_for_browser, cacheable_youtube_playlist, clear_library_cache, download_cover,
-    load_library_cache, save_library_cache, youtube_collection_cache_key, youtube_collection_key,
-    YouTubeBridge, YouTubeItem, YouTubeLibraryCache, YouTubeLibrarySnapshot, YouTubePage,
-    YouTubePageEvent, YouTubeSearchResults, YouTubeStatus, YouTubeStream,
+    cache_items_for_browser, load_library_cache, youtube_collection_cache_key,
+    youtube_collection_key, YouTubeBridge, YouTubeItem, YouTubeLibraryCache, YouTubePage,
+    YouTubePageEvent, YouTubeSearchResults, YouTubeStatus,
 };
 
 const APP_ID: &str = "io.github.maylton.Nocky";
@@ -78,62 +78,6 @@ struct YouTubePlaybackState {
     lyrics: Vec<LyricLine>,
 }
 
-enum BackgroundMessage {
-    LibraryScanned {
-        root: PathBuf,
-        result: Result<Vec<TrackData>, String>,
-    },
-    LyricsDownloaded {
-        path: PathBuf,
-        result: Result<(), String>,
-        notify: bool,
-    },
-    YouTubeLyricsDownloaded {
-        video_id: String,
-        notify: bool,
-        result: Result<Vec<LyricLine>, String>,
-    },
-    YouTubeStatus(Result<YouTubeStatus, String>),
-    YouTubeConnected(Result<YouTubeStatus, String>),
-    YouTubeDisconnected(Result<YouTubeStatus, String>),
-    YouTubeLibrarySynced {
-        notify: bool,
-        result: Result<YouTubeLibrarySnapshot, String>,
-    },
-    YouTubeBrowserPlaylist {
-        request_id: u64,
-        playlist: YouTubeItem,
-        result: Result<Vec<YouTubeItem>, String>,
-    },
-    YouTubeBrowserCollection {
-        item: YouTubeItem,
-        key: String,
-        result: Result<Vec<YouTubeItem>, String>,
-    },
-    YouTubeArtistOverview {
-        key: String,
-        result: Result<YouTubeArtistOverview, String>,
-    },
-    YouTubePlaylistsCached(Result<HashMap<String, Vec<YouTubeItem>>, String>),
-    YouTubeCollectionsCached(Result<HashMap<String, Vec<YouTubeItem>>, String>),
-    YouTubeItems {
-        title: String,
-        result: Result<Vec<YouTubeItem>, String>,
-    },
-    YouTubeGlobalSearch {
-        request_id: u64,
-        query: String,
-        result: Result<YouTubeSearchResults, String>,
-    },
-    YouTubeResolved {
-        request_id: u64,
-        queue: Vec<YouTubeItem>,
-        index: usize,
-        item: Box<YouTubeItem>,
-        result: Result<(YouTubeStream, Option<PathBuf>), String>,
-    },
-}
-
 struct SidebarParts {
     revealer: gtk::Revealer,
     all_button: gtk::Button,
@@ -157,15 +101,14 @@ struct AppController {
     config: RefCell<config::AppConfig>,
     listening_history: RefCell<ListeningHistory>,
     listening_session_id: RefCell<Option<String>>,
-    listening_session_recorded: Cell<bool>,
+    listening_session_last_saved_seconds: Cell<u64>,
     updating_progress: Cell<bool>,
     scanning: Cell<bool>,
     shuffle_enabled: Cell<bool>,
     rng_state: Cell<u64>,
     search_query: RefCell<String>,
     lyrics_pending: RefCell<HashSet<PathBuf>>,
-    background_tx: Sender<BackgroundMessage>,
-    background_rx: Receiver<BackgroundMessage>,
+    background: BackgroundChannel,
     mpris: mpris::MprisBridge,
     last_mpris_position: Cell<i64>,
     playback_source: Cell<PlaybackSource>,
@@ -259,6 +202,57 @@ struct AppController {
     _theme: Rc<theme::ThemeBridge>,
 }
 
+fn resolve_youtube_collection_item(
+    bridge: &YouTubeBridge,
+    item: &YouTubeItem,
+    filter: &str,
+) -> Result<YouTubeItem, String> {
+    if !item.browse_id.trim().is_empty() {
+        return Ok(item.clone());
+    }
+
+    let query = item.title.trim();
+    if query.is_empty() {
+        return Err("The YouTube Music collection has no title".to_string());
+    }
+
+    let mut candidates = bridge.search(query, filter)?;
+    candidates.retain(|candidate| {
+        candidate
+            .result_type
+            .eq_ignore_ascii_case(item.result_type.as_str())
+            || candidate
+                .result_type
+                .eq_ignore_ascii_case(filter.trim_end_matches('s'))
+    });
+
+    candidates
+        .iter()
+        .position(|candidate| candidate.title.eq_ignore_ascii_case(query))
+        .map(|index| candidates.remove(index))
+        .or_else(|| candidates.into_iter().next())
+        .ok_or_else(|| {
+            format!(
+                "No YouTube Music {} could be resolved for '{}'",
+                item.result_type, item.title
+            )
+        })
+}
+
+fn scanned_library_matches(tracks: &[Track], data: &[TrackData]) -> bool {
+    tracks.len() == data.len()
+        && tracks.iter().zip(data).all(|(track, incoming)| {
+            track.path == incoming.path
+                && track.title == incoming.title
+                && track.artist == incoming.artist
+                && track.album == incoming.album
+                && track.duration_seconds == incoming.duration_seconds
+                && track.disc_number == incoming.disc_number
+                && track.track_number == incoming.track_number
+                && track.cover_path == incoming.cover_path
+        })
+}
+
 fn main() -> glib::ExitCode {
     let app = adw::Application::builder().application_id(APP_ID).build();
     app.connect_activate(build_application);
@@ -292,7 +286,7 @@ impl AppController {
         theme.set_blur_preferences(config.blur_mode, config.blur_opacity);
         let player = PlaybackEngine::new(config.volume.clamp(0.0, 1.0))
             .unwrap_or_else(|error| panic!("Nocky playback initialization failed: {error}"));
-        let (background_tx, background_rx) = mpsc::channel();
+        let background = BackgroundChannel::new();
 
         let window = adw::ApplicationWindow::builder()
             .application(app)
@@ -342,6 +336,13 @@ impl AppController {
             .build();
         header.pack_end(&search_button);
 
+        let sync_button = gtk::Button::builder()
+            .icon_name("view-refresh-symbolic")
+            .tooltip_text("Sincronizar biblioteca")
+            .build();
+        sync_button.add_css_class("flat");
+        header.pack_end(&sync_button);
+
         let folder_button = gtk::Button::builder()
             .icon_name("folder-open-symbolic")
             .tooltip_text(tr(Message::ChooseMusicFolderTooltip))
@@ -384,6 +385,8 @@ impl AppController {
             previous_button: previous,
             hero_play_button,
             next_button: next,
+            inline_lyrics_button,
+            refresh_lyrics_button,
             hero_cover,
             hero_play_icon,
             favorite_icon,
@@ -650,15 +653,14 @@ impl AppController {
             config: RefCell::new(config),
             listening_history: RefCell::new(ListeningHistory::load()),
             listening_session_id: RefCell::new(None),
-            listening_session_recorded: Cell::new(false),
+            listening_session_last_saved_seconds: Cell::new(0),
             updating_progress: Cell::new(false),
             scanning: Cell::new(false),
             shuffle_enabled: Cell::new(false),
             rng_state: Cell::new(seed),
             search_query: RefCell::new(String::new()),
             lyrics_pending: RefCell::new(HashSet::new()),
-            background_tx,
-            background_rx,
+            background,
             mpris,
             last_mpris_position: Cell::new(-1),
             playback_source: Cell::new(PlaybackSource::None),
@@ -1103,6 +1105,41 @@ impl AppController {
             });
         }
 
+        {
+            let weak = Rc::downgrade(&controller);
+            sync_button.connect_clicked(move |_| {
+                if let Some(controller) = weak.upgrade() {
+                    controller.sync_active_library();
+                }
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(&controller);
+            inline_lyrics_button.connect_toggled(move |button| {
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+                let visible = button.is_active();
+                controller.player_view.set_lyrics_visible(visible);
+
+                let changed = controller.config.borrow().show_home_lyrics != visible;
+                if changed {
+                    controller.config.borrow_mut().show_home_lyrics = visible;
+                    controller.save_config();
+                }
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(&controller);
+            refresh_lyrics_button.connect_clicked(move |_| {
+                if let Some(controller) = weak.upgrade() {
+                    controller.refresh_current_lyrics();
+                }
+            });
+        }
+
         controller.refresh_browser();
         controller.refresh_youtube_status();
         controller
@@ -1428,6 +1465,38 @@ impl AppController {
         popover.popup();
     }
 
+    fn sync_active_library(&self) {
+        let source = self.config.borrow().startup_source;
+        match source {
+            Some(StartupSource::YouTube) => {
+                let (connected, syncing) = {
+                    let library = self.youtube_library.borrow();
+                    (library.connected, library.syncing)
+                };
+
+                if !connected {
+                    self.show_toast("Conecte sua conta do YouTube Music primeiro");
+                    return;
+                }
+                if syncing {
+                    self.show_toast("A biblioteca já está sendo sincronizada");
+                    return;
+                }
+
+                if self.sync_youtube_library(true, true) {
+                    self.show_toast("Sincronizando biblioteca do YouTube Music…");
+                }
+            }
+            _ => {
+                if self.scanning.get() {
+                    self.show_toast("A biblioteca local já está sendo atualizada");
+                    return;
+                }
+                self.scan_library();
+            }
+        }
+    }
+
     fn refresh_youtube_status(&self) {
         let Some(bridge) = self.youtube_bridge.clone() else {
             self.youtube_page.set_status(&YouTubeStatus::default());
@@ -1436,7 +1505,7 @@ impl AppController {
             );
             return;
         };
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let _ = sender.send(BackgroundMessage::YouTubeStatus(bridge.status()));
         });
@@ -1453,8 +1522,7 @@ impl AppController {
             }
             library.syncing = true;
         }
-        self.refresh_browser();
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let _ = sender.send(BackgroundMessage::YouTubeLibrarySynced {
                 notify,
@@ -1480,7 +1548,7 @@ impl AppController {
         }
 
         self.youtube_playlist_prefetching.set(true);
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             // Playlist requests are independent. A small worker pool prevents the
             // previous sequential 10s + 10s + 10s startup behavior without
@@ -1584,7 +1652,7 @@ impl AppController {
         let request_id = self.youtube_playlist_request_id.get().wrapping_add(1);
         self.youtube_playlist_request_id.set(request_id);
         self.youtube_playlist_loading.set(true);
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let result = bridge.playlist(&playlist).map(|mut items| {
                 cache_items_for_browser(&mut items);
@@ -1637,13 +1705,15 @@ impl AppController {
                 .artist_loading
                 .insert(key.clone());
             self.navigate_browser(route);
-            let sender = self.background_tx.clone();
+            let sender = self.background.sender();
             thread::spawn(move || {
-                let result = bridge.artist_overview(&item).map(|mut overview| {
-                    cache_items_for_browser(std::slice::from_mut(&mut overview.profile));
-                    cache_items_for_browser(&mut overview.albums);
-                    overview
-                });
+                let result = resolve_youtube_collection_item(&bridge, &item, "artists")
+                    .and_then(|resolved| bridge.artist_overview(&resolved))
+                    .map(|mut overview| {
+                        cache_items_for_browser(std::slice::from_mut(&mut overview.profile));
+                        cache_items_for_browser(&mut overview.albums);
+                        overview
+                    });
                 let _ = sender.send(BackgroundMessage::YouTubeArtistOverview { key, result });
             });
             return;
@@ -1672,12 +1742,14 @@ impl AppController {
             .insert(key.clone());
         self.navigate_browser(route);
 
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
-            let result = bridge.collection(&item).map(|mut items| {
-                cache_items_for_browser(&mut items);
-                items
-            });
+            let result = resolve_youtube_collection_item(&bridge, &item, "albums")
+                .and_then(|resolved| bridge.collection(&resolved))
+                .map(|mut items| {
+                    cache_items_for_browser(&mut items);
+                    items
+                });
             let _ = sender.send(BackgroundMessage::YouTubeBrowserCollection { item, key, result });
         });
     }
@@ -1719,7 +1791,7 @@ impl AppController {
         }
 
         self.youtube_collection_prefetching.set(true);
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let worker_count = collections.len().min(3);
             let work = Arc::new(Mutex::new(collections.into_iter().collect::<VecDeque<_>>()));
@@ -1783,6 +1855,7 @@ impl AppController {
                 .artists
                 .iter()
                 .take(12)
+                .filter(|entry| !entry.source.browse_id.is_empty())
                 .filter_map(|entry| {
                     let key = youtube_collection_key("artist", &entry.title);
                     let missing = !library.artist_profiles.contains_key(&key);
@@ -1803,7 +1876,7 @@ impl AppController {
             return;
         }
 
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let worker_count = artists.len().min(3);
             let work = Arc::new(Mutex::new(artists.into_iter().collect::<VecDeque<_>>()));
@@ -1866,7 +1939,7 @@ impl AppController {
         };
         self.refresh_browser();
 
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let filters = ["songs", "albums", "artists", "playlists"];
             let expected = filters.len();
@@ -1948,7 +2021,7 @@ impl AppController {
                 YouTubePageEvent::Search { query, filter } => {
                     self.youtube_page
                         .set_loading(true, "Buscando no YouTube Music...");
-                    let sender = self.background_tx.clone();
+                    let sender = self.background.sender();
                     thread::spawn(move || {
                         let result = bridge.search(&query, &filter);
                         let _ = sender.send(BackgroundMessage::YouTubeItems {
@@ -1960,7 +2033,7 @@ impl AppController {
                 YouTubePageEvent::Connect(raw) => {
                     self.youtube_page
                         .set_loading(true, "Validando sessão do navegador...");
-                    let sender = self.background_tx.clone();
+                    let sender = self.background.sender();
                     thread::spawn(move || {
                         let _ =
                             sender.send(BackgroundMessage::YouTubeConnected(bridge.connect(&raw)));
@@ -1969,7 +2042,7 @@ impl AppController {
                 YouTubePageEvent::Disconnect => {
                     self.youtube_page
                         .set_loading(true, "Desconectando conta...");
-                    let sender = self.background_tx.clone();
+                    let sender = self.background.sender();
                     thread::spawn(move || {
                         let _ = sender
                             .send(BackgroundMessage::YouTubeDisconnected(bridge.disconnect()));
@@ -1978,7 +2051,7 @@ impl AppController {
                 YouTubePageEvent::LoadLibrary => {
                     self.youtube_page
                         .set_loading(true, "Carregando sua biblioteca...");
-                    let sender = self.background_tx.clone();
+                    let sender = self.background.sender();
                     thread::spawn(move || {
                         let _ = sender.send(BackgroundMessage::YouTubeItems {
                             title: "Sua biblioteca do YouTube Music".to_string(),
@@ -1989,7 +2062,7 @@ impl AppController {
                 YouTubePageEvent::LoadLiked => {
                     self.youtube_page
                         .set_loading(true, "Carregando músicas curtidas...");
-                    let sender = self.background_tx.clone();
+                    let sender = self.background.sender();
                     thread::spawn(move || {
                         let _ = sender.send(BackgroundMessage::YouTubeItems {
                             title: "Músicas curtidas".to_string(),
@@ -2000,7 +2073,7 @@ impl AppController {
                 YouTubePageEvent::LoadPlaylists => {
                     self.youtube_page
                         .set_loading(true, "Carregando playlists...");
-                    let sender = self.background_tx.clone();
+                    let sender = self.background.sender();
                     thread::spawn(move || {
                         let _ = sender.send(BackgroundMessage::YouTubeItems {
                             title: "Suas playlists".to_string(),
@@ -2012,7 +2085,7 @@ impl AppController {
                     let title = item.title.clone();
                     self.youtube_page
                         .set_loading(true, &format!("Carregando {title}..."));
-                    let sender = self.background_tx.clone();
+                    let sender = self.background.sender();
                     thread::spawn(move || {
                         let _ = sender.send(BackgroundMessage::YouTubeItems {
                             title,
@@ -2027,315 +2100,8 @@ impl AppController {
         }
     }
 
-    fn resolve_youtube_track(
-        &self,
-        item: YouTubeItem,
-        queue: Vec<YouTubeItem>,
-        index: usize,
-        force: bool,
-    ) {
-        let Some(bridge) = self.youtube_bridge.clone() else {
-            self.show_toast("As dependências do YouTube Music não estão instaladas");
-            return;
-        };
-        if item.video_id.is_empty() {
-            return;
-        }
-        let request_id = self.youtube_request_id.get().wrapping_add(1);
-        self.youtube_request_id.set(request_id);
-        let sender = self.background_tx.clone();
-        thread::spawn(move || {
-            let result = bridge
-                .resolve(&item.video_id, force)
-                .map(|stream| {
-                    let cover = download_cover(&item, &stream.thumbnail_url);
-                    (stream, cover)
-                })
-                .map_err(|error| {
-                    if force {
-                        format!("__NOCKY_STREAM_RECOVERY_FAILED__{error}")
-                    } else {
-                        error
-                    }
-                });
-            let _ = sender.send(BackgroundMessage::YouTubeResolved {
-                request_id,
-                queue,
-                index,
-                item: Box::new(item),
-                result,
-            });
-        });
-    }
-
-    fn try_recover_youtube_stream(&self, error: &str) -> bool {
-        if self.playback_source.get() != PlaybackSource::YouTube
-            || self.youtube_recovery_in_progress.get()
-            || self.youtube_recovery_attempted.get()
-            || !is_refreshable_stream_error(error)
-        {
-            return false;
-        }
-
-        let snapshot = {
-            let state = self.youtube_state.borrow();
-            state
-                .as_ref()
-                .map(|state| (state.queue.clone(), state.current, state.item.clone()))
-        };
-        let Some((queue, index, item)) = snapshot else {
-            return false;
-        };
-
-        self.youtube_recovery_attempted.set(true);
-        self.youtube_recovery_in_progress.set(true);
-        self.youtube_recovery_resume_us
-            .set(self.player.position_us().max(0));
-        let _ = self.player.stop();
-
-        eprintln!(
-            "Nocky YouTube stream rejected; refreshing signed URL: {}",
-            redact_stream_url(error)
-        );
-        self.resolve_youtube_track(item, queue, index, true);
-        true
-    }
-
-    fn reset_youtube_recovery(&self) {
-        self.youtube_recovery_in_progress.set(false);
-        self.youtube_recovery_attempted.set(false);
-        self.youtube_recovery_resume_us.set(0);
-    }
-
-    fn resume_youtube_after_recovery(&self) {
-        let resume_us = self.youtube_recovery_resume_us.replace(0);
-        if resume_us <= 0 || self.playback_source.get() != PlaybackSource::YouTube {
-            return;
-        }
-
-        if self.player.duration_us() <= 0 {
-            self.youtube_recovery_resume_us.set(resume_us);
-            return;
-        }
-
-        if let Err(error) = self.player.seek(resume_us) {
-            eprintln!("Could not restore YouTube playback position: {error}");
-            return;
-        }
-
-        self.last_mpris_position.set(resume_us);
-        self.mpris.send(mpris::MprisUpdate::Position(resume_us));
-    }
-
-    fn apply_youtube_track(
-        &self,
-        queue: Vec<YouTubeItem>,
-        index: usize,
-        mut item: YouTubeItem,
-        stream: YouTubeStream,
-        cover_path: Option<PathBuf>,
-    ) {
-        let recovering = self.youtube_recovery_in_progress.replace(false);
-        let (preserved_lyrics, preserved_cover) = if recovering {
-            self.youtube_state
-                .borrow()
-                .as_ref()
-                .filter(|state| state.item.video_id == item.video_id)
-                .map(|state| (state.lyrics.clone(), state.cover_path.clone()))
-                .unwrap_or_default()
-        } else {
-            self.youtube_recovery_attempted.set(false);
-            self.youtube_recovery_resume_us.set(0);
-            (Vec::new(), None)
-        };
-        let cover_path = cover_path.or(preserved_cover);
-
-        if item.title.is_empty() {
-            item.title = stream.title.clone();
-        }
-        if item.artist.is_empty() {
-            item.artist = stream.artist.clone();
-        }
-        if item.album.is_empty() {
-            item.album = stream.album.clone();
-        }
-        if item.duration_seconds == 0 {
-            item.duration_seconds = stream.duration_seconds;
-        }
-
-        if let Err(error) =
-            self.player
-                .load_with_headers(&stream.stream_url, true, stream.http_headers.clone())
-        {
-            self.youtube_recovery_in_progress.set(false);
-            self.youtube_recovery_resume_us.set(0);
-            self.show_error(&error);
-            return;
-        }
-
-        self.state.borrow_mut().current = None;
-        self.playback_source.set(PlaybackSource::YouTube);
-        self.update_footer_source();
-        self.begin_listening_session(format!("youtube:{}", item.video_id));
-        self.youtube_state.replace(Some(YouTubePlaybackState {
-            queue,
-            current: index,
-            item: item.clone(),
-            cover_path: cover_path.clone(),
-            lyrics: preserved_lyrics.clone(),
-        }));
-
-        self.player_view.set_metadata(
-            &item.title,
-            if item.artist.is_empty() {
-                "YouTube Music"
-            } else {
-                &item.artist
-            },
-            if item.album.is_empty() {
-                "YouTube Music"
-            } else {
-                &item.album
-            },
-        );
-        self.mini_title.set_text(&item.title);
-        self.mini_artist.set_text(if item.artist.is_empty() {
-            "YouTube Music"
-        } else {
-            &item.artist
-        });
-        self.hero_cover.set_path(cover_path.as_deref());
-        self.mini_cover.set_path(cover_path.as_deref());
-        self.player_view.set_favorite(false);
-        self.footer_favorite_icon
-            .set_icon_name(Some("emblem-favorite-symbolic"));
-        self.footer_favorite_icon.set_opacity(0.28);
-
-        if recovering && !preserved_lyrics.is_empty() {
-            self.rebuild_youtube_lyrics(&preserved_lyrics);
-        } else if self.config.borrow().auto_download_lyrics {
-            self.set_lyrics_message("Searching synchronized lyrics for this YouTube track…");
-            self.request_youtube_lyrics(&item, false);
-        } else {
-            self.set_lyrics_message(
-                "No synchronized lyrics loaded yet. Use the menu to search for this YouTube track.",
-            );
-        }
-
-        self.update_play_icons(true);
-        if !recovering {
-            self.last_mpris_position.set(0);
-            self.mpris.send(mpris::MprisUpdate::Position(0));
-        }
-        self.publish_mpris_youtube(&item, &stream, cover_path.as_deref());
-        self.mpris
-            .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Playing));
-        self.prefetch_youtube_queue();
-    }
-
-    fn prefetch_youtube_queue(&self) {
-        let Some(bridge) = self.youtube_bridge.clone() else {
-            return;
-        };
-        let (queue, current) = {
-            let state = self.youtube_state.borrow();
-            let Some(state) = state.as_ref() else {
-                return;
-            };
-            (state.queue.clone(), state.current)
-        };
-        thread::spawn(move || bridge.preload_streams(&queue, current, 4));
-    }
-
     fn set_lyrics_message(&self, message: &str) {
         self.lyrics.show_message(message, None);
-    }
-
-    fn youtube_next_track(&self) {
-        let state = self.youtube_state.borrow();
-        let Some(current) = state.as_ref() else {
-            return;
-        };
-        if current.queue.is_empty() {
-            return;
-        }
-        let next = if self.shuffle_enabled.get() && current.queue.len() > 1 {
-            let mut value = self.rng_state.get();
-            value ^= value << 13;
-            value ^= value >> 7;
-            value ^= value << 17;
-            self.rng_state.set(value);
-            let mut position = value as usize % current.queue.len();
-            if position == current.current {
-                position = (position + 1) % current.queue.len();
-            }
-            Some(position)
-        } else {
-            current
-                .current
-                .checked_add(1)
-                .filter(|position| *position < current.queue.len())
-        };
-        let Some(next) = next else {
-            return;
-        };
-        let queue = current.queue.clone();
-        let item = queue[next].clone();
-        drop(state);
-        self.resolve_youtube_track(item, queue, next, false);
-    }
-
-    fn youtube_previous_track(&self) {
-        if self.player.position_us() > 5_000_000 {
-            self.seek_to(0, true);
-            return;
-        }
-        let state = self.youtube_state.borrow();
-        let Some(current) = state.as_ref() else {
-            return;
-        };
-        let Some(previous) = current.current.checked_sub(1) else {
-            drop(state);
-            self.seek_to(0, true);
-            return;
-        };
-        let queue = current.queue.clone();
-        let item = queue[previous].clone();
-        drop(state);
-        self.resolve_youtube_track(item, queue, previous, false);
-    }
-
-    fn publish_mpris_youtube(
-        &self,
-        item: &YouTubeItem,
-        stream: &YouTubeStream,
-        cover_path: Option<&Path>,
-    ) {
-        let length_us = item
-            .duration_seconds
-            .max(stream.duration_seconds)
-            .saturating_mul(1_000_000)
-            .min(i64::MAX as u64) as i64;
-        let art_url = cover_path.map(|path| gio::File::for_path(path).uri().to_string());
-        self.mpris
-            .send(mpris::MprisUpdate::Metadata(mpris::MprisTrack {
-                track_id: mpris_youtube_track_id(&item.video_id),
-                title: item.title.clone(),
-                artist: if item.artist.is_empty() {
-                    stream.artist.clone()
-                } else {
-                    item.artist.clone()
-                },
-                album: if item.album.is_empty() {
-                    stream.album.clone()
-                } else {
-                    item.album.clone()
-                },
-                length_us,
-                art_url,
-                url: Some(stream.webpage_url.clone()),
-            }));
-        self.publish_mpris_capabilities();
     }
 
     fn install_actions(self: &Rc<Self>, app: &adw::Application) {
@@ -2791,343 +2557,90 @@ impl AppController {
     }
 
     fn show_settings_dialog(self: &Rc<Self>) {
-        let dialog = adw::Dialog::builder()
-            .title(self.tr(Message::SettingsTitle))
-            .content_width(560)
-            .content_height(680)
-            .build();
-
-        let toolbar = adw::ToolbarView::new();
-        toolbar.add_top_bar(&adw::HeaderBar::new());
-
-        let scrolled = gtk::ScrolledWindow::new();
-        scrolled.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-        scrolled.set_vexpand(true);
-
-        let content = gtk::Box::new(gtk::Orientation::Vertical, 14);
-        scrolled.set_child(Some(&content));
-        toolbar.set_content(Some(&scrolled));
-        dialog.set_child(Some(&toolbar));
-        content.set_margin_top(22);
-        content.set_margin_bottom(22);
-        content.set_margin_start(22);
-        content.set_margin_end(22);
-
-        let title = gtk::Label::new(Some(self.tr(Message::SettingsTitle)));
-        title.set_xalign(0.0);
-        title.add_css_class("title-2");
-        let description = gtk::Label::new(Some(self.tr(Message::SettingsDescription)));
-        description.set_xalign(0.0);
-        description.set_wrap(true);
-        description.add_css_class("dim-label");
-        content.append(&title);
-        content.append(&description);
-
-        let config = self.config.borrow().clone();
-        let language = gtk::DropDown::from_strings(&[
-            AppLanguage::Portuguese.label(),
-            AppLanguage::English.label(),
-            AppLanguage::Spanish.label(),
-        ]);
-        language.set_selected(match config.language {
-            AppLanguage::Portuguese => 0,
-            AppLanguage::English => 1,
-            AppLanguage::Spanish => 2,
-        });
-        content.append(&settings_dropdown_row(
-            self.tr(Message::Language),
-            self.tr(Message::LanguageDescription),
-            &language,
-        ));
-
-        let source =
-            gtk::DropDown::from_strings(&[self.tr(Message::LocalLibrary), "YouTube Music"]);
-        source.set_selected(
-            match config.startup_source.unwrap_or(StartupSource::YouTube) {
-                StartupSource::Local => 0,
-                StartupSource::YouTube => 1,
-            },
-        );
-        content.append(&settings_dropdown_row(
-            self.tr(Message::HomeSource),
-            self.tr(Message::HomeSourceDescription),
-            &source,
-        ));
-
+        let initial = self.config.borrow().clone();
         let noctalia_available = self._theme.noctalia_shell_detected();
-        let blur_mode = if noctalia_available {
-            gtk::DropDown::from_strings(&[
-                self.tr(Message::BlurCustom),
-                self.tr(Message::BlurNoctalia),
-                self.tr(Message::BlurOff),
-            ])
-        } else {
-            gtk::DropDown::from_strings(&[self.tr(Message::BlurCustom), self.tr(Message::BlurOff)])
-        };
-        blur_mode.set_selected(if noctalia_available {
-            match config.blur_mode {
-                BlurMode::Custom => 0,
-                BlurMode::Noctalia => 1,
-                BlurMode::Off => 2,
-            }
-        } else {
-            match config.blur_mode {
-                BlurMode::Off => 1,
-                _ => 0,
-            }
-        });
-        content.append(&settings_dropdown_row(
-            self.tr(Message::WindowBlur),
-            self.tr(Message::WindowBlurDescription),
-            &blur_mode,
-        ));
+        let weak = Rc::downgrade(self);
 
-        let blur_opacity = gtk::Scale::with_range(gtk::Orientation::Horizontal, 45.0, 95.0, 1.0);
-        blur_opacity.set_draw_value(true);
-        blur_opacity.set_value(config.blur_opacity.clamp(0.45, 0.95) * 100.0);
-        blur_opacity.set_value_pos(gtk::PositionType::Right);
-        let blur_opacity_row = settings_scale_row(
-            self.tr(Message::BlurOpacity),
-            self.tr(Message::BlurOpacityDescription),
-            &blur_opacity,
-        );
-        blur_opacity_row.set_visible(config.blur_mode == BlurMode::Custom);
-        content.append(&blur_opacity_row);
+        dialogs::present_settings(&self.window, &initial, noctalia_available, move |event| {
+            let Some(controller) = weak.upgrade() else {
+                return;
+            };
 
-        let visualizer = settings_switch(config.show_home_visualizer);
-        content.append(&settings_switch_row(
-            self.tr(Message::HomeVisualizer),
-            self.tr(Message::HomeVisualizerDescription),
-            &visualizer,
-        ));
+            match event {
+                SettingsEvent::Language(language) => {
+                    controller.config.borrow_mut().language = language;
+                    controller.save_config();
+                    controller.apply_translations();
 
-        let lyrics = settings_switch(config.show_home_lyrics);
-        content.append(&settings_switch_row(
-            self.tr(Message::HomeLyrics),
-            self.tr(Message::HomeLyricsDescription),
-            &lyrics,
-        ));
-
-        let m3_progress = settings_switch(config.use_m3_progress);
-        content.append(&settings_switch_row(
-            self.tr(Message::M3Progress),
-            self.tr(Message::M3ProgressDescription),
-            &m3_progress,
-        ));
-
-        let footer_mode = gtk::DropDown::from_strings(&[
-            self.tr(Message::FooterAutomatic),
-            self.tr(Message::FooterFull),
-            self.tr(Message::FooterCompact),
-            self.tr(Message::FooterHidden),
-        ]);
-        footer_mode.set_selected(match config.footer_mode {
-            FooterMode::Automatic => 0,
-            FooterMode::Full => 1,
-            FooterMode::Compact => 2,
-            FooterMode::Hidden => 3,
-        });
-        content.append(&settings_dropdown_row(
-            self.tr(Message::FooterMode),
-            self.tr(Message::FooterModeDescription),
-            &footer_mode,
-        ));
-
-        let auto_lyrics = settings_switch(config.auto_download_lyrics);
-        content.append(&settings_switch_row(
-            self.tr(Message::AutoLyrics),
-            self.tr(Message::AutoLyricsDescription),
-            &auto_lyrics,
-        ));
-
-        let youtube_sync = settings_switch(config.youtube_auto_sync);
-        content.append(&settings_switch_row(
-            self.tr(Message::YoutubeSync),
-            self.tr(Message::YoutubeSyncDescription),
-            &youtube_sync,
-        ));
-
-        let youtube_button = gtk::Button::with_label(self.tr(Message::YoutubeManageAction));
-        youtube_button.add_css_class("suggested-action");
-        content.append(&settings_button_row(
-            self.tr(Message::YoutubeManage),
-            self.tr(Message::YoutubeManageDescription),
-            &youtube_button,
-        ));
-
-        let noctalia = settings_switch(config.noctalia_theme_sync && noctalia_available);
-        noctalia.set_sensitive(noctalia_available);
-        let noctalia_row = settings_switch_row(
-            self.tr(Message::NoctaliaSync),
-            self.tr(Message::NoctaliaSyncDescription),
-            &noctalia,
-        );
-        noctalia_row.set_sensitive(noctalia_available);
-        content.append(&noctalia_row);
-
-        {
-            let weak = Rc::downgrade(self);
-            let dialog = dialog.clone();
-            language.connect_selected_notify(move |dropdown| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
-                controller.config.borrow_mut().language = match dropdown.selected() {
-                    1 => AppLanguage::English,
-                    2 => AppLanguage::Spanish,
-                    _ => AppLanguage::Portuguese,
-                };
-                controller.save_config();
-                controller.apply_translations();
-                dialog.close();
-                let controller = controller.clone();
-                glib::idle_add_local_once(move || controller.show_settings_dialog());
-            });
-        }
-        {
-            let weak = Rc::downgrade(self);
-            source.connect_selected_notify(move |dropdown| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
-                controller.set_startup_source(if dropdown.selected() == 0 {
-                    StartupSource::Local
-                } else {
-                    StartupSource::YouTube
-                });
-            });
-        }
-        {
-            let weak = Rc::downgrade(self);
-            let opacity_row = blur_opacity_row.clone();
-            blur_mode.connect_selected_notify(move |dropdown| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
-                let mode = if noctalia_available {
-                    match dropdown.selected() {
-                        0 => BlurMode::Custom,
-                        2 => BlurMode::Off,
-                        _ => BlurMode::Noctalia,
-                    }
-                } else if dropdown.selected() == 0 {
-                    BlurMode::Custom
-                } else {
-                    BlurMode::Off
-                };
-                opacity_row.set_visible(mode == BlurMode::Custom);
-                controller.config.borrow_mut().blur_mode = mode;
-                controller.save_config();
-                controller.apply_home_preferences();
-            });
-        }
-        {
-            let weak = Rc::downgrade(self);
-            let pending_save = Rc::new(RefCell::new(None::<glib::SourceId>));
-            blur_opacity.connect_value_changed(move |scale| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
-                controller.config.borrow_mut().blur_opacity =
-                    (scale.value() / 100.0).clamp(0.45, 0.95);
-                if controller.config.borrow().blur_mode == BlurMode::Custom {
+                    let controller = controller.clone();
+                    glib::idle_add_local_once(move || controller.show_settings_dialog());
+                }
+                SettingsEvent::StartupSource(source) => {
+                    controller.set_startup_source(source);
+                }
+                SettingsEvent::BlurMode(mode) => {
+                    controller.config.borrow_mut().blur_mode = mode;
+                    controller.save_config();
                     controller.apply_home_preferences();
                 }
-
-                if let Some(source) = pending_save.borrow_mut().take() {
-                    source.remove();
-                }
-                let weak = weak.clone();
-                let pending = pending_save.clone();
-                let source = glib::timeout_add_local_once(Duration::from_millis(350), move || {
-                    pending.borrow_mut().take();
-                    if let Some(controller) = weak.upgrade() {
-                        controller.save_config();
+                SettingsEvent::BlurOpacityPreview(value) => {
+                    let custom = {
+                        let mut config = controller.config.borrow_mut();
+                        config.blur_opacity = value;
+                        config.blur_mode == BlurMode::Custom
+                    };
+                    if custom {
+                        controller.apply_home_preferences();
                     }
-                });
-                pending_save.borrow_mut().replace(source);
-            });
-        }
-        {
-            let weak = Rc::downgrade(self);
-            youtube_button.connect_clicked(move |_| {
-                if let Some(controller) = weak.upgrade() {
+                }
+                SettingsEvent::BlurOpacityCommit(value) => {
+                    controller.config.borrow_mut().blur_opacity = value;
+                    controller.save_config();
+                }
+                SettingsEvent::ShowHomeVisualizer(active) => {
+                    controller.config.borrow_mut().show_home_visualizer = active;
+                    controller.save_config();
+                    controller.apply_home_preferences();
+                }
+                SettingsEvent::ShowHomeLyrics(active) => {
+                    controller.config.borrow_mut().show_home_lyrics = active;
+                    controller.save_config();
+                    controller.apply_home_preferences();
+                }
+                SettingsEvent::UseM3Progress(active) => {
+                    controller.config.borrow_mut().use_m3_progress = active;
+                    controller.save_config();
+                    controller.apply_home_preferences();
+                }
+                SettingsEvent::FooterMode(mode) => {
+                    controller.config.borrow_mut().footer_mode = mode;
+                    controller.save_config();
+                    controller.apply_footer_mode();
+                }
+                SettingsEvent::AutoDownloadLyrics(active) => {
+                    controller.config.borrow_mut().auto_download_lyrics = active;
+                    controller.save_config();
+                    controller.apply_home_preferences();
+                }
+                SettingsEvent::YouTubeAutoSync(active) => {
+                    controller.config.borrow_mut().youtube_auto_sync = active;
+                    controller.save_config();
+                    controller.apply_home_preferences();
+                }
+                SettingsEvent::NoctaliaThemeSync(active) => {
+                    controller.config.borrow_mut().noctalia_theme_sync = active;
+                    controller.save_config();
+                    controller.apply_home_preferences();
+                }
+                SettingsEvent::ManageYouTube => {
                     controller.show_youtube_settings_dialog();
                 }
-            });
-        }
-
-        {
-            let weak = Rc::downgrade(self);
-            footer_mode.connect_selected_notify(move |dropdown| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
-
-                controller.config.borrow_mut().footer_mode = match dropdown.selected() {
-                    1 => FooterMode::Full,
-                    2 => FooterMode::Compact,
-                    3 => FooterMode::Hidden,
-                    _ => FooterMode::Automatic,
-                };
-                controller.save_config();
-                controller.apply_footer_mode();
-            });
-        }
-
-        for (switch, setting) in [
-            (&visualizer, 0_u8),
-            (&lyrics, 1),
-            (&m3_progress, 2),
-            (&auto_lyrics, 3),
-            (&youtube_sync, 4),
-            (&noctalia, 5),
-        ] {
-            let weak = Rc::downgrade(self);
-            switch.connect_active_notify(move |switch| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
-                let active = switch.is_active();
-                {
-                    let mut config = controller.config.borrow_mut();
-                    match setting {
-                        0 => config.show_home_visualizer = active,
-                        1 => config.show_home_lyrics = active,
-                        2 => config.use_m3_progress = active,
-                        3 => config.auto_download_lyrics = active,
-                        4 => config.youtube_auto_sync = active,
-                        _ => config.noctalia_theme_sync = active,
-                    }
-                }
-                controller.save_config();
-                controller.apply_home_preferences();
-            });
-        }
-
-        dialog.present(Some(&self.window));
+            }
+        });
     }
 
     fn show_youtube_settings_dialog(self: &Rc<Self>) {
-        let dialog = adw::Dialog::builder()
-            .title("YouTube Music")
-            .content_width(760)
-            .content_height(620)
-            .build();
-
-        let toolbar = adw::ToolbarView::new();
-        toolbar.add_top_bar(&adw::HeaderBar::new());
-
-        let host = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        host.append(self.youtube_page.root());
-        toolbar.set_content(Some(&host));
-        dialog.set_child(Some(&toolbar));
-
-        let youtube_root = self.youtube_page.root().clone();
-        dialog.connect_closed(move |_| {
-            host.remove(&youtube_root);
-        });
-        dialog.present(Some(&self.window));
+        dialogs::present_youtube_settings(&self.window, self.youtube_page.root());
     }
 
     fn show_onboarding_wizard(self: &Rc<Self>) {
@@ -3176,87 +2689,14 @@ impl AppController {
     }
 
     fn show_startup_source_dialog(self: &Rc<Self>, first_run: bool) {
-        let dialog = adw::Dialog::builder()
-            .title(if first_run {
-                self.tr(Message::StartupWelcome)
-            } else {
-                self.tr(Message::StartupSourceTitle)
-            })
-            .content_width(480)
-            .build();
-        dialog.set_can_close(!first_run);
+        let language = self.config.borrow().language;
+        let weak = Rc::downgrade(self);
 
-        let content = gtk::Box::new(gtk::Orientation::Vertical, 14);
-        dialog.set_child(Some(&content));
-        content.set_margin_top(22);
-        content.set_margin_bottom(22);
-        content.set_margin_start(22);
-        content.set_margin_end(22);
-
-        let title = gtk::Label::new(Some(if first_run {
-            self.tr(Message::StartupQuestion)
-        } else {
-            self.tr(Message::StartupChoose)
-        }));
-        title.set_wrap(true);
-        title.set_xalign(0.0);
-        title.add_css_class("title-2");
-
-        let description = gtk::Label::new(Some(self.tr(Message::StartupDescription)));
-        description.set_wrap(true);
-        description.set_xalign(0.0);
-        description.add_css_class("dim-label");
-
-        let local_button = gtk::Button::with_label(self.tr(Message::UseLocalLibrary));
-        local_button.set_tooltip_text(Some(self.tr(Message::UseLocalLibraryTooltip)));
-        local_button.add_css_class("source-choice-button");
-
-        let youtube_button = gtk::Button::with_label(self.tr(Message::UseYoutubeMusic));
-        youtube_button.set_tooltip_text(Some(self.tr(Message::UseYoutubeMusicTooltip)));
-        youtube_button.add_css_class("source-choice-button");
-        youtube_button.add_css_class("suggested-action");
-
-        let choices = gtk::Box::new(gtk::Orientation::Vertical, 10);
-        choices.append(&local_button);
-        choices.append(&youtube_button);
-
-        content.append(&title);
-        content.append(&description);
-        content.append(&choices);
-
-        if !first_run {
-            let cancel_button = gtk::Button::with_label(self.tr(Message::Cancel));
-            cancel_button.set_halign(gtk::Align::End);
-            content.append(&cancel_button);
-
-            let dialog = dialog.clone();
-            cancel_button.connect_clicked(move |_| {
-                dialog.close();
-            });
-        }
-
-        {
-            let weak = Rc::downgrade(self);
-            let dialog = dialog.clone();
-            local_button.connect_clicked(move |_| {
-                if let Some(controller) = weak.upgrade() {
-                    controller.set_startup_source(StartupSource::Local);
-                }
-                dialog.close();
-            });
-        }
-        {
-            let weak = Rc::downgrade(self);
-            let dialog = dialog.clone();
-            youtube_button.connect_clicked(move |_| {
-                if let Some(controller) = weak.upgrade() {
-                    controller.set_startup_source(StartupSource::YouTube);
-                }
-                dialog.close();
-            });
-        }
-
-        dialog.present(Some(&self.window));
+        dialogs::present_startup_source(&self.window, language, first_run, move |source| {
+            if let Some(controller) = weak.upgrade() {
+                controller.set_startup_source(source);
+            }
+        });
     }
 
     fn load_saved_library(self: &Rc<Self>) {
@@ -3308,433 +2748,22 @@ impl AppController {
             return;
         };
 
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let result = library::scan_music_directory(&root);
             let _ = sender.send(BackgroundMessage::LibraryScanned { root, result });
         });
     }
 
-    fn handle_background_messages(&self) {
-        while let Ok(message) = self.background_rx.try_recv() {
-            match message {
-                BackgroundMessage::LibraryScanned { root, result } => {
-                    self.scanning.set(false);
-                    if self.config.borrow().music_directory.as_ref() != Some(&root) {
-                        continue;
-                    }
-                    match result {
-                        Ok(paths) => self.apply_scanned_library(paths),
-                        Err(error) => self.show_error(&error),
-                    }
-                }
-                BackgroundMessage::LyricsDownloaded {
-                    path,
-                    result,
-                    notify,
-                } => {
-                    self.lyrics_pending.borrow_mut().remove(&path);
-                    match result {
-                        Ok(()) => {
-                            let current_track = {
-                                let mut state = self.state.borrow_mut();
-                                let current = state.current;
-                                let mut changed = None;
-                                if let Some((index, track)) = state
-                                    .tracks
-                                    .iter_mut()
-                                    .enumerate()
-                                    .find(|(_, track)| track.path == path)
-                                {
-                                    track.reload_lyrics();
-                                    changed = Some((index, track.clone()));
-                                }
-                                changed.filter(|(index, _)| Some(*index) == current)
-                            };
-
-                            if let Some((_, track)) = current_track {
-                                self.rebuild_lyrics(&track);
-                            }
-                            self.refresh_browser();
-                            if notify {
-                                self.show_toast("Letras sincronizadas baixadas");
-                            }
-                        }
-                        Err(error) => {
-                            if notify {
-                                self.show_toast(&error);
-                            }
-                        }
-                    }
-                }
-                BackgroundMessage::YouTubeLyricsDownloaded {
-                    video_id,
-                    notify,
-                    result,
-                } => {
-                    let current = self.youtube_state.borrow().as_ref().map(|state| {
-                        (
-                            state.item.video_id.clone(),
-                            state.item.title.clone(),
-                            state.item.artist.clone(),
-                        )
-                    });
-                    if current
-                        .as_ref()
-                        .map(|(current_id, _, _)| current_id.as_str())
-                        != Some(video_id.as_str())
-                    {
-                        continue;
-                    }
-
-                    match result {
-                        Ok(lyrics) => {
-                            if let Some(state) = self.youtube_state.borrow_mut().as_mut() {
-                                state.lyrics = lyrics.clone();
-                            }
-                            self.rebuild_youtube_lyrics(&lyrics);
-                            if notify {
-                                self.show_toast("Letras sincronizadas do YouTube carregadas");
-                            }
-                        }
-                        Err(error) => {
-                            let title = current
-                                .as_ref()
-                                .map(|(_, title, _)| title.as_str())
-                                .unwrap_or("esta música");
-                            self.set_lyrics_message(&format!(
-                                "No synchronized lyrics were found for {title}. {error}"
-                            ));
-                        }
-                    }
-                }
-                BackgroundMessage::YouTubeStatus(result) => match result {
-                    Ok(status) => {
-                        self.youtube_page.set_status(&status);
-                        if status.connected {
-                            self.youtube_library.borrow_mut().connected = true;
-                            let syncing = self.config.borrow().youtube_auto_sync
-                                && self.sync_youtube_library(true, false);
-                            if syncing {
-                                self.youtube_page.set_loading(
-                                    true,
-                                    "Sincronizando biblioteca do YouTube Music…",
-                                );
-                            } else {
-                                self.prefetch_youtube_playlist_cache();
-                                self.prefetch_home_artist_profiles();
-                            }
-                        } else {
-                            self.youtube_library.borrow_mut().clear();
-                            clear_library_cache();
-                            self.refresh_browser();
-                        }
-                    }
-                    Err(error) => self.youtube_page.show_error(&error),
-                },
-                BackgroundMessage::YouTubeConnected(result) => match result {
-                    Ok(status) => {
-                        self.youtube_page.set_status(&status);
-                        self.youtube_page
-                            .set_loading(false, "YouTube Music connected");
-                        {
-                            let mut library = self.youtube_library.borrow_mut();
-                            library.connected = true;
-                            library.synced = false;
-                        }
-                        let _ = self.sync_youtube_library(true, false);
-                        self.show_toast("Conta do YouTube Music conectada");
-                    }
-                    Err(error) => {
-                        self.youtube_page.show_error(&error);
-                        self.show_toast("Não foi possível conectar o YouTube Music");
-                    }
-                },
-                BackgroundMessage::YouTubeDisconnected(result) => match result {
-                    Ok(status) => {
-                        self.youtube_page.set_status(&status);
-                        self.youtube_page.set_loading(false, "YouTube Music");
-                        self.youtube_page
-                            .show_empty("Search for music or connect your account.");
-                        self.youtube_library.borrow_mut().clear();
-                        clear_library_cache();
-                        self.refresh_browser();
-                        self.show_toast("Conta do YouTube Music desconectada");
-                    }
-                    Err(error) => self.youtube_page.show_error(&error),
-                },
-                BackgroundMessage::YouTubeLibrarySynced { notify, result } => match result {
-                    Ok(snapshot) => {
-                        let counts = (
-                            snapshot.library.len(),
-                            snapshot.liked.len(),
-                            snapshot.playlists.len(),
-                        );
-                        self.youtube_library.borrow_mut().apply(snapshot);
-                        if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
-                            eprintln!("Could not save the YouTube library cache: {error}");
-                        }
-                        self.youtube_page
-                            .set_loading(false, "Library synchronized with Nocky");
-                        self.refresh_browser();
-                        self.prefetch_youtube_playlist_cache();
-                        self.prefetch_youtube_collection_cache();
-                        if notify {
-                            self.show_toast(&format!(
-                                "YouTube Music sincronizado: {} faixas, {} curtidas e {} playlists",
-                                counts.0, counts.1, counts.2
-                            ));
-                        }
-                    }
-                    Err(error) => {
-                        self.youtube_library.borrow_mut().syncing = false;
-                        self.youtube_page.set_loading(false, "YouTube Music");
-                        self.refresh_browser();
-                        self.show_toast(&format!(
-                            "Não foi possível sincronizar a biblioteca: {error}"
-                        ));
-                    }
-                },
-                BackgroundMessage::YouTubeBrowserPlaylist {
-                    request_id,
-                    playlist,
-                    result,
-                } => match result {
-                    Ok(items) => {
-                        if request_id != self.youtube_playlist_request_id.get() {
-                            continue;
-                        }
-                        self.youtube_playlist_loading.set(false);
-                        let browse_id = playlist.browse_id.clone();
-                        self.youtube_library
-                            .borrow_mut()
-                            .playlist_loading
-                            .remove(&browse_id);
-
-                        if items.is_empty() {
-                            self.youtube_library
-                                .borrow_mut()
-                                .playlist_tracks
-                                .remove(&browse_id);
-                            if self.is_open_youtube_playlist(&browse_id) {
-                                self.refresh_browser();
-                            }
-                            self.show_toast(
-                                "Esta playlist não retornou faixas reproduzíveis agora",
-                            );
-                        } else {
-                            self.youtube_library
-                                .borrow_mut()
-                                .playlist_tracks
-                                .insert(browse_id.clone(), items);
-                            if cacheable_youtube_playlist(&playlist) {
-                                if let Err(error) =
-                                    save_library_cache(&self.youtube_library.borrow())
-                                {
-                                    eprintln!("Could not save the YouTube playlist cache: {error}");
-                                }
-                            }
-                            if self.is_open_youtube_playlist(&browse_id) {
-                                self.refresh_browser();
-                            }
-                        }
-
-                        let pending = self.youtube_pending_playlist.borrow_mut().take();
-                        if let Some(pending) = pending {
-                            self.load_youtube_playlist_for_browser(pending);
-                        }
-                    }
-                    Err(error) => {
-                        if request_id != self.youtube_playlist_request_id.get() {
-                            continue;
-                        }
-                        self.youtube_playlist_loading.set(false);
-                        let browse_id = playlist.browse_id.clone();
-                        self.youtube_library
-                            .borrow_mut()
-                            .playlist_loading
-                            .remove(&browse_id);
-                        if self.is_open_youtube_playlist(&browse_id) {
-                            self.refresh_browser();
-                        }
-                        self.show_toast(&format!("Não foi possível carregar a playlist: {error}"));
-                        let pending = self.youtube_pending_playlist.borrow_mut().take();
-                        if let Some(pending) = pending {
-                            self.load_youtube_playlist_for_browser(pending);
-                        }
-                    }
-                },
-                BackgroundMessage::YouTubeArtistOverview { key, result } => {
-                    self.youtube_library
-                        .borrow_mut()
-                        .artist_loading
-                        .remove(&key);
-                    match result {
-                        Ok(overview) => {
-                            let mut library = self.youtube_library.borrow_mut();
-                            library
-                                .artist_profiles
-                                .insert(key.clone(), overview.profile);
-                            library.artist_albums.insert(key.clone(), overview.albums);
-                            drop(library);
-                            if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
-                                eprintln!("Could not save YouTube artist details: {error}");
-                            }
-                        }
-                        Err(error) => {
-                            eprintln!("Could not load YouTube artist details: {error}");
-                            if self.is_open_youtube_collection(&key) {
-                                self.show_toast(&format!(
-                                    "Não foi possível carregar os álbuns do artista: {error}"
-                                ));
-                            }
-                        }
-                    }
-                    self.refresh_browser();
-                }
-                BackgroundMessage::YouTubeBrowserCollection { item, key, result } => {
-                    self.youtube_library
-                        .borrow_mut()
-                        .collection_loading
-                        .remove(&key);
-                    match result {
-                        Ok(items) if !items.is_empty() => {
-                            self.youtube_library
-                                .borrow_mut()
-                                .collection_tracks
-                                .insert(key.clone(), items);
-                            if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
-                                eprintln!("Could not save the YouTube collection cache: {error}");
-                            }
-                        }
-                        Ok(_) => {
-                            self.youtube_library
-                                .borrow_mut()
-                                .collection_tracks
-                                .remove(&key);
-                            self.show_toast(if item.result_type == "artist" {
-                                "Este artista não retornou faixas reproduzíveis agora"
-                            } else {
-                                "Este álbum não retornou faixas reproduzíveis agora"
-                            });
-                        }
-                        Err(error) => {
-                            self.youtube_library
-                                .borrow_mut()
-                                .collection_tracks
-                                .remove(&key);
-                            self.show_toast(&format!(
-                                "Não foi possível carregar {}: {error}",
-                                if item.result_type == "artist" {
-                                    "o artista"
-                                } else {
-                                    "o álbum"
-                                }
-                            ));
-                        }
-                    }
-                    if self.is_open_youtube_collection(&key) {
-                        self.refresh_browser();
-                    }
-                }
-                BackgroundMessage::YouTubeCollectionsCached(result) => match result {
-                    Ok(cached) => {
-                        self.youtube_collection_prefetching.set(false);
-                        if cached.is_empty() {
-                            continue;
-                        }
-                        self.youtube_library
-                            .borrow_mut()
-                            .collection_tracks
-                            .extend(cached);
-                        if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
-                            eprintln!("Could not save the YouTube collection cache: {error}");
-                        }
-                        self.refresh_browser();
-                    }
-                    Err(error) => {
-                        self.youtube_collection_prefetching.set(false);
-                        eprintln!("Could not pre-cache YouTube collections: {error}");
-                    }
-                },
-                BackgroundMessage::YouTubePlaylistsCached(result) => match result {
-                    Ok(cached) => {
-                        self.youtube_playlist_prefetching.set(false);
-                        if cached.is_empty() {
-                            continue;
-                        }
-                        self.youtube_library
-                            .borrow_mut()
-                            .playlist_tracks
-                            .extend(cached);
-                        if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
-                            eprintln!("Could not save the YouTube playlist cache: {error}");
-                        }
-                        self.refresh_browser();
-                    }
-                    Err(error) => {
-                        self.youtube_playlist_prefetching.set(false);
-                        eprintln!("Could not pre-cache YouTube playlists: {error}");
-                    }
-                },
-                BackgroundMessage::YouTubeGlobalSearch {
-                    request_id,
-                    query,
-                    result,
-                } => {
-                    if request_id != self.youtube_search_request_id.get()
-                        || self.search_query.borrow().trim() != query.as_str()
-                        || self.config.borrow().startup_source != Some(StartupSource::YouTube)
-                    {
-                        continue;
-                    }
-
-                    let mut library = self.youtube_library.borrow_mut();
-                    match result {
-                        Ok(mut categorized) => {
-                            categorized.loading = false;
-                            library.search = categorized;
-                        }
-                        Err(error) => {
-                            library.search = YouTubeSearchResults {
-                                query,
-                                error,
-                                ..YouTubeSearchResults::default()
-                            };
-                        }
-                    }
-                    drop(library);
-                    self.refresh_browser();
-                }
-                BackgroundMessage::YouTubeItems { title, result } => match result {
-                    Ok(items) => self.youtube_page.show_items(&title, items),
-                    Err(error) => self.youtube_page.show_error(&error),
-                },
-                BackgroundMessage::YouTubeResolved {
-                    request_id,
-                    queue,
-                    index,
-                    item,
-                    result,
-                } => {
-                    if request_id != self.youtube_request_id.get() {
-                        continue;
-                    }
-                    match result {
-                        Ok((stream, cover)) => {
-                            self.apply_youtube_track(queue, index, *item, stream, cover)
-                        }
-                        Err(error) => {
-                            self.show_error(&error);
-                            self.youtube_page.show_error(&error);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     fn apply_scanned_library(&self, data: Vec<TrackData>) {
+        let unchanged = {
+            let state = self.state.borrow();
+            scanned_library_matches(&state.tracks, &data)
+        };
+        if unchanged {
+            return;
+        }
+
         let previous_path = {
             let state = self.state.borrow();
             state
@@ -3952,6 +2981,8 @@ impl AppController {
     }
 
     fn select_track(&self, index: usize, autoplay: bool) {
+        self.maybe_record_listening();
+
         let track = {
             let state = self.state.borrow();
             let Some(track) = state.tracks.get(index).cloned() else {
@@ -4030,7 +3061,7 @@ impl AppController {
         if notify {
             self.show_toast("Buscando letras sincronizadas...");
         }
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let result = lyrics_provider::download_to_sidecar(&path, &lookup);
             let _ = sender.send(BackgroundMessage::LyricsDownloaded {
@@ -4041,26 +3072,35 @@ impl AppController {
         });
     }
 
-    fn request_youtube_lyrics(&self, item: &YouTubeItem, notify: bool) {
-        if item.video_id.is_empty() {
-            return;
+    fn refresh_current_lyrics(&self) {
+        match self.playback_source.get() {
+            PlaybackSource::Local => {
+                let current = self.state.borrow().current;
+                let Some(index) = current else {
+                    self.show_toast("Selecione uma faixa primeiro");
+                    return;
+                };
+                self.request_lyrics(index, true, true);
+            }
+            PlaybackSource::YouTube => {
+                let item = self
+                    .youtube_state
+                    .borrow()
+                    .as_ref()
+                    .map(|state| state.item.clone());
+                let Some(item) = item else {
+                    self.show_toast("Selecione uma faixa primeiro");
+                    return;
+                };
+
+                self.set_lyrics_message("Buscando novamente as letras sincronizadas…");
+                self.show_toast("Buscando letras sincronizadas…");
+                self.request_youtube_lyrics(&item, true);
+            }
+            PlaybackSource::None => {
+                self.show_toast("Selecione uma faixa primeiro");
+            }
         }
-        let lookup = lyrics_provider::LyricsLookup {
-            title: item.title.clone(),
-            artist: item.artist.clone(),
-            album: item.album.clone(),
-        };
-        let video_id = item.video_id.clone();
-        let sender = self.background_tx.clone();
-        thread::spawn(move || {
-            let result = lyrics_provider::fetch_synced_lyrics(&lookup)
-                .map(|contents| lyrics::parse_lrc(&contents));
-            let _ = sender.send(BackgroundMessage::YouTubeLyricsDownloaded {
-                video_id,
-                notify,
-                result,
-            });
-        });
     }
 
     fn toggle_favorite(&self) {
@@ -4252,6 +3292,8 @@ impl AppController {
     }
 
     fn pause_current(&self) {
+        self.maybe_record_listening();
+
         match self.player.pause() {
             Ok(()) => {
                 self.update_play_icons(false);
@@ -4294,6 +3336,8 @@ impl AppController {
     }
 
     fn handle_end_of_stream(&self) {
+        self.maybe_record_listening();
+
         if self.repeat_button.is_active() {
             self.seek_to(0, true);
             self.play_current();
@@ -4506,23 +3550,36 @@ impl AppController {
     }
 
     fn begin_listening_session(&self, id: String) {
-        self.listening_session_id.replace(Some(id));
-        self.listening_session_recorded.set(false);
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or_default();
+        self.listening_session_id
+            .replace(Some(format!("{id}:{nonce}")));
+        self.listening_session_last_saved_seconds.set(0);
     }
 
     fn maybe_record_listening(&self) {
-        if self.listening_session_recorded.get() || !self.player.is_playing() {
-            return;
-        }
         let listened_seconds = (self.player.position_us().max(0) / 1_000_000) as u64;
         let duration_seconds = (self.player.duration_us().max(0) / 1_000_000) as u64;
         let completed =
             duration_seconds > 0 && listened_seconds.saturating_mul(2) >= duration_seconds;
+
         if listened_seconds < 30 && !completed {
             return;
         }
 
-        let recorded = match self.playback_source.get() {
+        let previous = self.listening_session_last_saved_seconds.get();
+        let checkpoint_due = previous == 0 || listened_seconds >= previous.saturating_add(15);
+        if !completed && !checkpoint_due {
+            return;
+        }
+
+        let Some(session_id) = self.listening_session_id.borrow().clone() else {
+            return;
+        };
+
+        let updated = match self.playback_source.get() {
             PlaybackSource::Local => {
                 let state = self.state.borrow();
                 let Some(index) = state.current else {
@@ -4531,8 +3588,8 @@ impl AppController {
                 let Some(track) = state.tracks.get(index) else {
                     return;
                 };
-                self.listening_history.borrow_mut().record(
-                    track.path.to_string_lossy().into_owned(),
+                self.listening_history.borrow_mut().record_progress(
+                    session_id,
                     track.artist.clone(),
                     track.album.clone(),
                     ListeningSource::Local,
@@ -4545,8 +3602,8 @@ impl AppController {
                 let Some(state) = state.as_ref() else {
                     return;
                 };
-                self.listening_history.borrow_mut().record(
-                    state.item.video_id.clone(),
+                self.listening_history.borrow_mut().record_progress(
+                    session_id,
                     state.item.artist.clone(),
                     state.item.album.clone(),
                     ListeningSource::YouTube,
@@ -4556,9 +3613,10 @@ impl AppController {
             }
             PlaybackSource::None => false,
         };
-        if recorded {
-            self.listening_session_recorded.set(true);
-            self.refresh_browser();
+
+        if updated {
+            self.listening_session_last_saved_seconds
+                .set(listened_seconds);
         }
     }
 
@@ -4846,105 +3904,6 @@ fn build_sidebar(language: AppLanguage) -> SidebarParts {
         liked_label,
         section_label: section,
     }
-}
-
-fn settings_switch(active: bool) -> gtk::Switch {
-    gtk::Switch::builder()
-        .active(active)
-        .valign(gtk::Align::Center)
-        .build()
-}
-
-fn settings_switch_row(title: &str, subtitle: &str, switch: &gtk::Switch) -> gtk::Box {
-    let title_label = gtk::Label::new(Some(title));
-    title_label.set_xalign(0.0);
-    title_label.add_css_class("track-title");
-    let subtitle_label = gtk::Label::new(Some(subtitle));
-    subtitle_label.set_xalign(0.0);
-    subtitle_label.set_wrap(true);
-    subtitle_label.add_css_class("dim-label");
-
-    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    text.set_hexpand(true);
-    text.append(&title_label);
-    text.append(&subtitle_label);
-
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    row.add_css_class("settings-row");
-    row.append(&text);
-    row.append(switch);
-    row
-}
-
-fn settings_dropdown_row(title: &str, subtitle: &str, dropdown: &gtk::DropDown) -> gtk::Box {
-    let title_label = gtk::Label::new(Some(title));
-    title_label.set_xalign(0.0);
-    title_label.add_css_class("track-title");
-    let subtitle_label = gtk::Label::new(Some(subtitle));
-    subtitle_label.set_xalign(0.0);
-    subtitle_label.set_wrap(true);
-    subtitle_label.add_css_class("dim-label");
-
-    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    text.set_hexpand(true);
-    text.append(&title_label);
-    text.append(&subtitle_label);
-
-    dropdown.set_valign(gtk::Align::Center);
-    dropdown.set_width_request(170);
-
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    row.add_css_class("settings-row");
-    row.append(&text);
-    row.append(dropdown);
-    row
-}
-
-fn settings_scale_row(title: &str, subtitle: &str, scale: &gtk::Scale) -> gtk::Box {
-    let title_label = gtk::Label::new(Some(title));
-    title_label.set_xalign(0.0);
-    title_label.add_css_class("track-title");
-    let subtitle_label = gtk::Label::new(Some(subtitle));
-    subtitle_label.set_xalign(0.0);
-    subtitle_label.set_wrap(true);
-    subtitle_label.add_css_class("dim-label");
-
-    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    text.set_hexpand(true);
-    text.append(&title_label);
-    text.append(&subtitle_label);
-
-    scale.set_valign(gtk::Align::Center);
-    scale.set_width_request(190);
-
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    row.add_css_class("settings-row");
-    row.append(&text);
-    row.append(scale);
-    row
-}
-
-fn settings_button_row(title: &str, subtitle: &str, button: &gtk::Button) -> gtk::Box {
-    let title_label = gtk::Label::new(Some(title));
-    title_label.set_xalign(0.0);
-    title_label.add_css_class("track-title");
-    let subtitle_label = gtk::Label::new(Some(subtitle));
-    subtitle_label.set_xalign(0.0);
-    subtitle_label.set_wrap(true);
-    subtitle_label.add_css_class("dim-label");
-
-    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    text.set_hexpand(true);
-    text.append(&title_label);
-    text.append(&subtitle_label);
-
-    button.set_valign(gtk::Align::Center);
-
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    row.add_css_class("settings-row");
-    row.append(&text);
-    row.append(button);
-    row
 }
 
 fn sidebar_row(icon_name: &str, text: &str, active: bool) -> (gtk::Button, gtk::Label) {
