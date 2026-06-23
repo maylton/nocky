@@ -1,5 +1,6 @@
 mod browser;
 mod config;
+mod dialogs;
 mod i18n;
 mod library;
 mod listening_history;
@@ -21,6 +22,7 @@ use crate::youtube::YouTubeArtistOverview;
 use adw::prelude::*;
 use browser::{BrowserEvent, BrowserRoute, LibraryBrowser};
 use config::{AppLanguage, BlurMode, FooterMode, StartupSource};
+use dialogs::SettingsEvent;
 use gtk::prelude::FileExt;
 use gtk::{gdk, gio, glib};
 use i18n::Message;
@@ -2791,343 +2793,90 @@ impl AppController {
     }
 
     fn show_settings_dialog(self: &Rc<Self>) {
-        let dialog = adw::Dialog::builder()
-            .title(self.tr(Message::SettingsTitle))
-            .content_width(560)
-            .content_height(680)
-            .build();
-
-        let toolbar = adw::ToolbarView::new();
-        toolbar.add_top_bar(&adw::HeaderBar::new());
-
-        let scrolled = gtk::ScrolledWindow::new();
-        scrolled.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-        scrolled.set_vexpand(true);
-
-        let content = gtk::Box::new(gtk::Orientation::Vertical, 14);
-        scrolled.set_child(Some(&content));
-        toolbar.set_content(Some(&scrolled));
-        dialog.set_child(Some(&toolbar));
-        content.set_margin_top(22);
-        content.set_margin_bottom(22);
-        content.set_margin_start(22);
-        content.set_margin_end(22);
-
-        let title = gtk::Label::new(Some(self.tr(Message::SettingsTitle)));
-        title.set_xalign(0.0);
-        title.add_css_class("title-2");
-        let description = gtk::Label::new(Some(self.tr(Message::SettingsDescription)));
-        description.set_xalign(0.0);
-        description.set_wrap(true);
-        description.add_css_class("dim-label");
-        content.append(&title);
-        content.append(&description);
-
-        let config = self.config.borrow().clone();
-        let language = gtk::DropDown::from_strings(&[
-            AppLanguage::Portuguese.label(),
-            AppLanguage::English.label(),
-            AppLanguage::Spanish.label(),
-        ]);
-        language.set_selected(match config.language {
-            AppLanguage::Portuguese => 0,
-            AppLanguage::English => 1,
-            AppLanguage::Spanish => 2,
-        });
-        content.append(&settings_dropdown_row(
-            self.tr(Message::Language),
-            self.tr(Message::LanguageDescription),
-            &language,
-        ));
-
-        let source =
-            gtk::DropDown::from_strings(&[self.tr(Message::LocalLibrary), "YouTube Music"]);
-        source.set_selected(
-            match config.startup_source.unwrap_or(StartupSource::YouTube) {
-                StartupSource::Local => 0,
-                StartupSource::YouTube => 1,
-            },
-        );
-        content.append(&settings_dropdown_row(
-            self.tr(Message::HomeSource),
-            self.tr(Message::HomeSourceDescription),
-            &source,
-        ));
-
+        let initial = self.config.borrow().clone();
         let noctalia_available = self._theme.noctalia_shell_detected();
-        let blur_mode = if noctalia_available {
-            gtk::DropDown::from_strings(&[
-                self.tr(Message::BlurCustom),
-                self.tr(Message::BlurNoctalia),
-                self.tr(Message::BlurOff),
-            ])
-        } else {
-            gtk::DropDown::from_strings(&[self.tr(Message::BlurCustom), self.tr(Message::BlurOff)])
-        };
-        blur_mode.set_selected(if noctalia_available {
-            match config.blur_mode {
-                BlurMode::Custom => 0,
-                BlurMode::Noctalia => 1,
-                BlurMode::Off => 2,
-            }
-        } else {
-            match config.blur_mode {
-                BlurMode::Off => 1,
-                _ => 0,
-            }
-        });
-        content.append(&settings_dropdown_row(
-            self.tr(Message::WindowBlur),
-            self.tr(Message::WindowBlurDescription),
-            &blur_mode,
-        ));
+        let weak = Rc::downgrade(self);
 
-        let blur_opacity = gtk::Scale::with_range(gtk::Orientation::Horizontal, 45.0, 95.0, 1.0);
-        blur_opacity.set_draw_value(true);
-        blur_opacity.set_value(config.blur_opacity.clamp(0.45, 0.95) * 100.0);
-        blur_opacity.set_value_pos(gtk::PositionType::Right);
-        let blur_opacity_row = settings_scale_row(
-            self.tr(Message::BlurOpacity),
-            self.tr(Message::BlurOpacityDescription),
-            &blur_opacity,
-        );
-        blur_opacity_row.set_visible(config.blur_mode == BlurMode::Custom);
-        content.append(&blur_opacity_row);
+        dialogs::present_settings(&self.window, &initial, noctalia_available, move |event| {
+            let Some(controller) = weak.upgrade() else {
+                return;
+            };
 
-        let visualizer = settings_switch(config.show_home_visualizer);
-        content.append(&settings_switch_row(
-            self.tr(Message::HomeVisualizer),
-            self.tr(Message::HomeVisualizerDescription),
-            &visualizer,
-        ));
+            match event {
+                SettingsEvent::Language(language) => {
+                    controller.config.borrow_mut().language = language;
+                    controller.save_config();
+                    controller.apply_translations();
 
-        let lyrics = settings_switch(config.show_home_lyrics);
-        content.append(&settings_switch_row(
-            self.tr(Message::HomeLyrics),
-            self.tr(Message::HomeLyricsDescription),
-            &lyrics,
-        ));
-
-        let m3_progress = settings_switch(config.use_m3_progress);
-        content.append(&settings_switch_row(
-            self.tr(Message::M3Progress),
-            self.tr(Message::M3ProgressDescription),
-            &m3_progress,
-        ));
-
-        let footer_mode = gtk::DropDown::from_strings(&[
-            self.tr(Message::FooterAutomatic),
-            self.tr(Message::FooterFull),
-            self.tr(Message::FooterCompact),
-            self.tr(Message::FooterHidden),
-        ]);
-        footer_mode.set_selected(match config.footer_mode {
-            FooterMode::Automatic => 0,
-            FooterMode::Full => 1,
-            FooterMode::Compact => 2,
-            FooterMode::Hidden => 3,
-        });
-        content.append(&settings_dropdown_row(
-            self.tr(Message::FooterMode),
-            self.tr(Message::FooterModeDescription),
-            &footer_mode,
-        ));
-
-        let auto_lyrics = settings_switch(config.auto_download_lyrics);
-        content.append(&settings_switch_row(
-            self.tr(Message::AutoLyrics),
-            self.tr(Message::AutoLyricsDescription),
-            &auto_lyrics,
-        ));
-
-        let youtube_sync = settings_switch(config.youtube_auto_sync);
-        content.append(&settings_switch_row(
-            self.tr(Message::YoutubeSync),
-            self.tr(Message::YoutubeSyncDescription),
-            &youtube_sync,
-        ));
-
-        let youtube_button = gtk::Button::with_label(self.tr(Message::YoutubeManageAction));
-        youtube_button.add_css_class("suggested-action");
-        content.append(&settings_button_row(
-            self.tr(Message::YoutubeManage),
-            self.tr(Message::YoutubeManageDescription),
-            &youtube_button,
-        ));
-
-        let noctalia = settings_switch(config.noctalia_theme_sync && noctalia_available);
-        noctalia.set_sensitive(noctalia_available);
-        let noctalia_row = settings_switch_row(
-            self.tr(Message::NoctaliaSync),
-            self.tr(Message::NoctaliaSyncDescription),
-            &noctalia,
-        );
-        noctalia_row.set_sensitive(noctalia_available);
-        content.append(&noctalia_row);
-
-        {
-            let weak = Rc::downgrade(self);
-            let dialog = dialog.clone();
-            language.connect_selected_notify(move |dropdown| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
-                controller.config.borrow_mut().language = match dropdown.selected() {
-                    1 => AppLanguage::English,
-                    2 => AppLanguage::Spanish,
-                    _ => AppLanguage::Portuguese,
-                };
-                controller.save_config();
-                controller.apply_translations();
-                dialog.close();
-                let controller = controller.clone();
-                glib::idle_add_local_once(move || controller.show_settings_dialog());
-            });
-        }
-        {
-            let weak = Rc::downgrade(self);
-            source.connect_selected_notify(move |dropdown| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
-                controller.set_startup_source(if dropdown.selected() == 0 {
-                    StartupSource::Local
-                } else {
-                    StartupSource::YouTube
-                });
-            });
-        }
-        {
-            let weak = Rc::downgrade(self);
-            let opacity_row = blur_opacity_row.clone();
-            blur_mode.connect_selected_notify(move |dropdown| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
-                let mode = if noctalia_available {
-                    match dropdown.selected() {
-                        0 => BlurMode::Custom,
-                        2 => BlurMode::Off,
-                        _ => BlurMode::Noctalia,
-                    }
-                } else if dropdown.selected() == 0 {
-                    BlurMode::Custom
-                } else {
-                    BlurMode::Off
-                };
-                opacity_row.set_visible(mode == BlurMode::Custom);
-                controller.config.borrow_mut().blur_mode = mode;
-                controller.save_config();
-                controller.apply_home_preferences();
-            });
-        }
-        {
-            let weak = Rc::downgrade(self);
-            let pending_save = Rc::new(RefCell::new(None::<glib::SourceId>));
-            blur_opacity.connect_value_changed(move |scale| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
-                controller.config.borrow_mut().blur_opacity =
-                    (scale.value() / 100.0).clamp(0.45, 0.95);
-                if controller.config.borrow().blur_mode == BlurMode::Custom {
+                    let controller = controller.clone();
+                    glib::idle_add_local_once(move || controller.show_settings_dialog());
+                }
+                SettingsEvent::StartupSource(source) => {
+                    controller.set_startup_source(source);
+                }
+                SettingsEvent::BlurMode(mode) => {
+                    controller.config.borrow_mut().blur_mode = mode;
+                    controller.save_config();
                     controller.apply_home_preferences();
                 }
-
-                if let Some(source) = pending_save.borrow_mut().take() {
-                    source.remove();
-                }
-                let weak = weak.clone();
-                let pending = pending_save.clone();
-                let source = glib::timeout_add_local_once(Duration::from_millis(350), move || {
-                    pending.borrow_mut().take();
-                    if let Some(controller) = weak.upgrade() {
-                        controller.save_config();
+                SettingsEvent::BlurOpacityPreview(value) => {
+                    let custom = {
+                        let mut config = controller.config.borrow_mut();
+                        config.blur_opacity = value;
+                        config.blur_mode == BlurMode::Custom
+                    };
+                    if custom {
+                        controller.apply_home_preferences();
                     }
-                });
-                pending_save.borrow_mut().replace(source);
-            });
-        }
-        {
-            let weak = Rc::downgrade(self);
-            youtube_button.connect_clicked(move |_| {
-                if let Some(controller) = weak.upgrade() {
+                }
+                SettingsEvent::BlurOpacityCommit(value) => {
+                    controller.config.borrow_mut().blur_opacity = value;
+                    controller.save_config();
+                }
+                SettingsEvent::ShowHomeVisualizer(active) => {
+                    controller.config.borrow_mut().show_home_visualizer = active;
+                    controller.save_config();
+                    controller.apply_home_preferences();
+                }
+                SettingsEvent::ShowHomeLyrics(active) => {
+                    controller.config.borrow_mut().show_home_lyrics = active;
+                    controller.save_config();
+                    controller.apply_home_preferences();
+                }
+                SettingsEvent::UseM3Progress(active) => {
+                    controller.config.borrow_mut().use_m3_progress = active;
+                    controller.save_config();
+                    controller.apply_home_preferences();
+                }
+                SettingsEvent::FooterMode(mode) => {
+                    controller.config.borrow_mut().footer_mode = mode;
+                    controller.save_config();
+                    controller.apply_footer_mode();
+                }
+                SettingsEvent::AutoDownloadLyrics(active) => {
+                    controller.config.borrow_mut().auto_download_lyrics = active;
+                    controller.save_config();
+                    controller.apply_home_preferences();
+                }
+                SettingsEvent::YouTubeAutoSync(active) => {
+                    controller.config.borrow_mut().youtube_auto_sync = active;
+                    controller.save_config();
+                    controller.apply_home_preferences();
+                }
+                SettingsEvent::NoctaliaThemeSync(active) => {
+                    controller.config.borrow_mut().noctalia_theme_sync = active;
+                    controller.save_config();
+                    controller.apply_home_preferences();
+                }
+                SettingsEvent::ManageYouTube => {
                     controller.show_youtube_settings_dialog();
                 }
-            });
-        }
-
-        {
-            let weak = Rc::downgrade(self);
-            footer_mode.connect_selected_notify(move |dropdown| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
-
-                controller.config.borrow_mut().footer_mode = match dropdown.selected() {
-                    1 => FooterMode::Full,
-                    2 => FooterMode::Compact,
-                    3 => FooterMode::Hidden,
-                    _ => FooterMode::Automatic,
-                };
-                controller.save_config();
-                controller.apply_footer_mode();
-            });
-        }
-
-        for (switch, setting) in [
-            (&visualizer, 0_u8),
-            (&lyrics, 1),
-            (&m3_progress, 2),
-            (&auto_lyrics, 3),
-            (&youtube_sync, 4),
-            (&noctalia, 5),
-        ] {
-            let weak = Rc::downgrade(self);
-            switch.connect_active_notify(move |switch| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
-                let active = switch.is_active();
-                {
-                    let mut config = controller.config.borrow_mut();
-                    match setting {
-                        0 => config.show_home_visualizer = active,
-                        1 => config.show_home_lyrics = active,
-                        2 => config.use_m3_progress = active,
-                        3 => config.auto_download_lyrics = active,
-                        4 => config.youtube_auto_sync = active,
-                        _ => config.noctalia_theme_sync = active,
-                    }
-                }
-                controller.save_config();
-                controller.apply_home_preferences();
-            });
-        }
-
-        dialog.present(Some(&self.window));
+            }
+        });
     }
 
     fn show_youtube_settings_dialog(self: &Rc<Self>) {
-        let dialog = adw::Dialog::builder()
-            .title("YouTube Music")
-            .content_width(760)
-            .content_height(620)
-            .build();
-
-        let toolbar = adw::ToolbarView::new();
-        toolbar.add_top_bar(&adw::HeaderBar::new());
-
-        let host = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        host.append(self.youtube_page.root());
-        toolbar.set_content(Some(&host));
-        dialog.set_child(Some(&toolbar));
-
-        let youtube_root = self.youtube_page.root().clone();
-        dialog.connect_closed(move |_| {
-            host.remove(&youtube_root);
-        });
-        dialog.present(Some(&self.window));
+        dialogs::present_youtube_settings(&self.window, self.youtube_page.root());
     }
 
     fn show_onboarding_wizard(self: &Rc<Self>) {
@@ -3176,87 +2925,14 @@ impl AppController {
     }
 
     fn show_startup_source_dialog(self: &Rc<Self>, first_run: bool) {
-        let dialog = adw::Dialog::builder()
-            .title(if first_run {
-                self.tr(Message::StartupWelcome)
-            } else {
-                self.tr(Message::StartupSourceTitle)
-            })
-            .content_width(480)
-            .build();
-        dialog.set_can_close(!first_run);
+        let language = self.config.borrow().language;
+        let weak = Rc::downgrade(self);
 
-        let content = gtk::Box::new(gtk::Orientation::Vertical, 14);
-        dialog.set_child(Some(&content));
-        content.set_margin_top(22);
-        content.set_margin_bottom(22);
-        content.set_margin_start(22);
-        content.set_margin_end(22);
-
-        let title = gtk::Label::new(Some(if first_run {
-            self.tr(Message::StartupQuestion)
-        } else {
-            self.tr(Message::StartupChoose)
-        }));
-        title.set_wrap(true);
-        title.set_xalign(0.0);
-        title.add_css_class("title-2");
-
-        let description = gtk::Label::new(Some(self.tr(Message::StartupDescription)));
-        description.set_wrap(true);
-        description.set_xalign(0.0);
-        description.add_css_class("dim-label");
-
-        let local_button = gtk::Button::with_label(self.tr(Message::UseLocalLibrary));
-        local_button.set_tooltip_text(Some(self.tr(Message::UseLocalLibraryTooltip)));
-        local_button.add_css_class("source-choice-button");
-
-        let youtube_button = gtk::Button::with_label(self.tr(Message::UseYoutubeMusic));
-        youtube_button.set_tooltip_text(Some(self.tr(Message::UseYoutubeMusicTooltip)));
-        youtube_button.add_css_class("source-choice-button");
-        youtube_button.add_css_class("suggested-action");
-
-        let choices = gtk::Box::new(gtk::Orientation::Vertical, 10);
-        choices.append(&local_button);
-        choices.append(&youtube_button);
-
-        content.append(&title);
-        content.append(&description);
-        content.append(&choices);
-
-        if !first_run {
-            let cancel_button = gtk::Button::with_label(self.tr(Message::Cancel));
-            cancel_button.set_halign(gtk::Align::End);
-            content.append(&cancel_button);
-
-            let dialog = dialog.clone();
-            cancel_button.connect_clicked(move |_| {
-                dialog.close();
-            });
-        }
-
-        {
-            let weak = Rc::downgrade(self);
-            let dialog = dialog.clone();
-            local_button.connect_clicked(move |_| {
-                if let Some(controller) = weak.upgrade() {
-                    controller.set_startup_source(StartupSource::Local);
-                }
-                dialog.close();
-            });
-        }
-        {
-            let weak = Rc::downgrade(self);
-            let dialog = dialog.clone();
-            youtube_button.connect_clicked(move |_| {
-                if let Some(controller) = weak.upgrade() {
-                    controller.set_startup_source(StartupSource::YouTube);
-                }
-                dialog.close();
-            });
-        }
-
-        dialog.present(Some(&self.window));
+        dialogs::present_startup_source(&self.window, language, first_run, move |source| {
+            if let Some(controller) = weak.upgrade() {
+                controller.set_startup_source(source);
+            }
+        });
     }
 
     fn load_saved_library(self: &Rc<Self>) {
@@ -4846,105 +4522,6 @@ fn build_sidebar(language: AppLanguage) -> SidebarParts {
         liked_label,
         section_label: section,
     }
-}
-
-fn settings_switch(active: bool) -> gtk::Switch {
-    gtk::Switch::builder()
-        .active(active)
-        .valign(gtk::Align::Center)
-        .build()
-}
-
-fn settings_switch_row(title: &str, subtitle: &str, switch: &gtk::Switch) -> gtk::Box {
-    let title_label = gtk::Label::new(Some(title));
-    title_label.set_xalign(0.0);
-    title_label.add_css_class("track-title");
-    let subtitle_label = gtk::Label::new(Some(subtitle));
-    subtitle_label.set_xalign(0.0);
-    subtitle_label.set_wrap(true);
-    subtitle_label.add_css_class("dim-label");
-
-    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    text.set_hexpand(true);
-    text.append(&title_label);
-    text.append(&subtitle_label);
-
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    row.add_css_class("settings-row");
-    row.append(&text);
-    row.append(switch);
-    row
-}
-
-fn settings_dropdown_row(title: &str, subtitle: &str, dropdown: &gtk::DropDown) -> gtk::Box {
-    let title_label = gtk::Label::new(Some(title));
-    title_label.set_xalign(0.0);
-    title_label.add_css_class("track-title");
-    let subtitle_label = gtk::Label::new(Some(subtitle));
-    subtitle_label.set_xalign(0.0);
-    subtitle_label.set_wrap(true);
-    subtitle_label.add_css_class("dim-label");
-
-    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    text.set_hexpand(true);
-    text.append(&title_label);
-    text.append(&subtitle_label);
-
-    dropdown.set_valign(gtk::Align::Center);
-    dropdown.set_width_request(170);
-
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    row.add_css_class("settings-row");
-    row.append(&text);
-    row.append(dropdown);
-    row
-}
-
-fn settings_scale_row(title: &str, subtitle: &str, scale: &gtk::Scale) -> gtk::Box {
-    let title_label = gtk::Label::new(Some(title));
-    title_label.set_xalign(0.0);
-    title_label.add_css_class("track-title");
-    let subtitle_label = gtk::Label::new(Some(subtitle));
-    subtitle_label.set_xalign(0.0);
-    subtitle_label.set_wrap(true);
-    subtitle_label.add_css_class("dim-label");
-
-    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    text.set_hexpand(true);
-    text.append(&title_label);
-    text.append(&subtitle_label);
-
-    scale.set_valign(gtk::Align::Center);
-    scale.set_width_request(190);
-
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    row.add_css_class("settings-row");
-    row.append(&text);
-    row.append(scale);
-    row
-}
-
-fn settings_button_row(title: &str, subtitle: &str, button: &gtk::Button) -> gtk::Box {
-    let title_label = gtk::Label::new(Some(title));
-    title_label.set_xalign(0.0);
-    title_label.add_css_class("track-title");
-    let subtitle_label = gtk::Label::new(Some(subtitle));
-    subtitle_label.set_xalign(0.0);
-    subtitle_label.set_wrap(true);
-    subtitle_label.add_css_class("dim-label");
-
-    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    text.set_hexpand(true);
-    text.append(&title_label);
-    text.append(&subtitle_label);
-
-    button.set_valign(gtk::Align::Center);
-
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    row.add_css_class("settings-row");
-    row.append(&text);
-    row.append(button);
-    row
 }
 
 fn sidebar_row(icon_name: &str, text: &str, active: bool) -> (gtk::Button, gtk::Label) {
