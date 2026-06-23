@@ -2,6 +2,28 @@
 
 All notable public changes to Nocky are documented here.
 
+## 0.2.7 — 2026-06-23
+
+### Added
+
+- Faithful GTK/Cairo port of Noctalia's compact audio-spectrum processing and rendering behavior
+- Automated Fedora quality gate covering formatting, compilation, tests and Clippy with warnings denied
+- Unit coverage for mirrored-band indexing and silent-spectrum convergence
+- Installer `--version` command
+
+### Improved
+
+- Horizontal visualizer now uses the Noctalia-style 16-band mirrored 32-bar layout
+- Spectrum processing now runs at 60 Hz with logarithmic compression, adaptive sensitivity, gravity falloff, temporal memory and Monstercat smoothing
+- Bar sizing, spacing, centering and pixel snapping follow the compact Noctalia bar-widget model
+- GStreamer spectrum magnitudes are forwarded without the previous custom pre-compression curve
+- Universal installer now derives its version from `Cargo.toml` and builds with the locked dependency graph
+
+### Changed
+
+- Project version advanced to 0.2.7
+- Warning-free builds and Clippy are now enforced as a permanent project baseline
+
 ## 0.2.6 — 2026-06-23
 
 ### Added

@@ -4,9 +4,13 @@ set -Eeuo pipefail
 APP_NAME="Nocky"
 APP_ID="io.github.maylton.Nocky"
 BIN_NAME="nocky"
-VERSION="0.2.4"
 DENO_VERSION="2.8.3"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERSION="$(awk -F'"' '/^version = / { print $2; exit }' "$ROOT_DIR/Cargo.toml")"
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || {
+  echo "Could not determine Nocky version from Cargo.toml." >&2
+  exit 1
+}
 MODE="user"
 PREFIX=""
 INSTALL_DEPS=false
@@ -29,6 +33,7 @@ Options:
   --prefix PATH       Install under a custom prefix
   --build-only        Build without copying application files
   -y, --yes           Use non-interactive package-manager confirmation
+  --version           Show the Nocky version
   -h, --help          Show this help
 
 Supported package-manager families:
@@ -57,6 +62,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --build-only) BUILD_ONLY=true ;;
     -y|--yes) ASSUME_YES=true ;;
+    --version) printf "%s %s\n" "$APP_NAME" "$VERSION"; exit 0 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -204,7 +210,7 @@ fi
 
 cd "$ROOT_DIR"
 echo "Building ${APP_NAME} ${VERSION} in release mode..."
-cargo build --release
+cargo build --release --locked
 
 if $BUILD_ONLY; then
   echo "Build completed: $ROOT_DIR/target/release/$BIN_NAME"

@@ -1,6 +1,6 @@
 [package]
 name = "nocky"
-version = "0.2.6"
+version = "0.2.7"
 edition = "2021"
 description = "A native GTK4/libadwaita music player for Linux"
 license = "GPL-3.0-or-later"
