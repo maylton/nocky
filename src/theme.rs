@@ -132,12 +132,14 @@ impl ThemeBridge {
             &bridge.provider,
             gtk::STYLE_PROVIDER_PRIORITY_USER,
         );
-        // Keep the runtime glass CSS above the generated Noctalia theme and
-        // any focus/backdrop rules from the desktop GTK theme.
+        // functional_carousel_queue_blur_fix_v1
+        // The dynamic Material palette is installed at USER + 80 and
+        // paints opaque window/app-shell surfaces. Keep runtime blur above
+        // it so Custom/Noctalia transparency is not overwritten later.
         gtk::style_context_add_provider_for_display(
             &display,
             &bridge.blur_provider,
-            gtk::STYLE_PROVIDER_PRIORITY_USER + 64,
+            gtk::STYLE_PROVIDER_PRIORITY_USER + 96,
         );
 
         bridge.reload();
@@ -244,6 +246,41 @@ window.theme-material-expressive > toastoverlay:backdrop {
 window.theme-material-expressive .app-shell,
 window.theme-material-expressive .app-shell:backdrop {
   background-color: @m3_surface;
+  background-image: none;
+}
+
+/* material_queue_thumb_blur_final_v2 */
+popover.queue-popover.theme-material-expressive > contents,
+popover.queue-popover.theme-material-expressive > arrow {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  background-image: none;
+  border-color: alpha(@m3_outline, 0.22);
+}
+
+/* material_settings_and_local_player_dimensions_v1 */
+window.settings-dialog.theme-material-expressive,
+window.youtube-settings-dialog.theme-material-expressive,
+window.startup-dialog.theme-material-expressive,
+window.theme-material-expressive.settings-dialog,
+window.theme-material-expressive.youtube-settings-dialog,
+window.theme-material-expressive.startup-dialog {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  background-image: none;
+}
+
+window.settings-dialog.theme-material-expressive .material-dialog-toolbar,
+window.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar,
+window.startup-dialog.theme-material-expressive .material-dialog-toolbar {
+  background-color: @m3_surface_container_low;
+  background-image: none;
+}
+
+window.settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+window.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+window.startup-dialog.theme-material-expressive .material-dialog-toolbar headerbar {
+  background-color: @m3_surface_container;
   background-image: none;
 }
 "#,
@@ -439,6 +476,49 @@ window.theme-material-expressive.material-blur-enabled .expressive-footer:backdr
 window.theme-material-expressive.material-blur-enabled scrolledwindow,
 window.theme-material-expressive.material-blur-enabled viewport {{
   background-color: transparent;
+  background-image: none;
+}}
+
+/* material_queue_thumb_blur_final_v2 */
+window.theme-material-expressive.material-blur-enabled .expressive-body,
+window.theme-material-expressive.material-blur-enabled .expressive-dashboard,
+window.theme-material-expressive.material-blur-enabled .navigation-rail-revealer,
+window.theme-material-expressive.material-blur-enabled .expressive-search-bar {{
+  background-color: transparent;
+  background-image: none;
+}}
+
+popover.queue-popover.theme-material-expressive > contents,
+popover.queue-popover.theme-material-expressive > arrow {{
+  color: @m3_on_surface;
+  background-color: alpha(@m3_surface_container_high, {card:.3});
+  background-image: none;
+  border-color: alpha(@m3_outline, 0.22);
+}}
+
+/* material_settings_and_local_player_dimensions_v1 */
+window.settings-dialog.theme-material-expressive,
+window.youtube-settings-dialog.theme-material-expressive,
+window.startup-dialog.theme-material-expressive,
+window.theme-material-expressive.settings-dialog,
+window.theme-material-expressive.youtube-settings-dialog,
+window.theme-material-expressive.startup-dialog {{
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  background-image: none;
+}}
+
+window.settings-dialog.theme-material-expressive .material-dialog-toolbar,
+window.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar,
+window.startup-dialog.theme-material-expressive .material-dialog-toolbar {{
+  background-color: @m3_surface_container_low;
+  background-image: none;
+}}
+
+window.settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+window.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+window.startup-dialog.theme-material-expressive .material-dialog-toolbar headerbar {{
+  background-color: @m3_surface_container;
   background-image: none;
 }}
 "#

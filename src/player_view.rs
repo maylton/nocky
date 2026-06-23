@@ -81,6 +81,11 @@ pub(crate) struct PlayerView {
     pub(crate) lyrics: LyricsPresenter,
 }
 
+// material_settings_and_local_player_dimensions_v1
+const PLAYER_INNER_WIDTH: i32 = 384;
+const PLAYER_SURFACE_WIDTH: i32 = 414;
+const PLAYER_CARD_WIDTH: i32 = 454;
+
 // material_expressive_player_v1
 impl PlayerView {
     pub(crate) fn new(language: AppLanguage) -> Self {
@@ -102,7 +107,7 @@ impl PlayerView {
         let artist = gtk::Label::new(Some(tr(Message::NoTrackSelected)));
         artist.set_xalign(0.0);
         artist.set_single_line_mode(true);
-        artist.set_width_request(384);
+        artist.set_width_request(PLAYER_INNER_WIDTH);
         artist.set_width_chars(-1);
         artist.set_max_width_chars(40);
         artist.set_ellipsize(gtk::pango::EllipsizeMode::End);
@@ -113,7 +118,7 @@ impl PlayerView {
         let album = gtk::Label::new(Some(tr(Message::ChooseFolderToStart)));
         album.set_xalign(0.0);
         album.set_single_line_mode(true);
-        album.set_width_request(384);
+        album.set_width_request(PLAYER_INNER_WIDTH);
         album.set_width_chars(-1);
         album.set_max_width_chars(40);
         album.set_ellipsize(gtk::pango::EllipsizeMode::End);
@@ -184,7 +189,7 @@ impl PlayerView {
         now_header.append(&player_header_actions);
 
         let title_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        title_row.set_size_request(384, 34);
+        title_row.set_size_request(PLAYER_INNER_WIDTH, 34);
         title_row.set_hexpand(false);
         title_row.set_vexpand(false);
         title_row.set_overflow(gtk::Overflow::Hidden);
@@ -205,7 +210,7 @@ impl PlayerView {
         hero_cover_slot.set_margin_top(0);
         hero_cover_slot.set_margin_bottom(0);
         hero_cover_slot.set_height_request(328);
-        hero_cover_slot.set_width_request(384);
+        hero_cover_slot.set_width_request(PLAYER_SURFACE_WIDTH);
         hero_cover_slot.set_valign(gtk::Align::Start);
         hero_cover_slot.set_center_widget(Some(&hero_cover.stack));
         hero_cover_slot.add_css_class("hero-cover-slot");
@@ -295,7 +300,7 @@ impl PlayerView {
         // stable_home_player_layout_v1
         // stable_standby_slots_v1
         let visualizer_widget = visualizer.widget().clone();
-        visualizer_widget.set_size_request(384, 74);
+        visualizer_widget.set_size_request(PLAYER_INNER_WIDTH, 74);
         visualizer_widget.set_hexpand(false);
         visualizer_widget.set_halign(gtk::Align::Center);
         visualizer_widget.set_vexpand(false);
@@ -303,7 +308,7 @@ impl PlayerView {
 
         let visualizer_slot = gtk::CenterBox::new();
         visualizer_slot.set_orientation(gtk::Orientation::Vertical);
-        visualizer_slot.set_size_request(384, 74);
+        visualizer_slot.set_size_request(PLAYER_SURFACE_WIDTH, 74);
         visualizer_slot.set_hexpand(false);
         visualizer_slot.set_halign(gtk::Align::Center);
         visualizer_slot.set_vexpand(false);
@@ -314,7 +319,7 @@ impl PlayerView {
         visualizer_slot.add_css_class("player-visualizer-surface");
 
         let inline_lyrics_widget = lyrics.inline_widget().clone();
-        inline_lyrics_widget.set_size_request(384, 158);
+        inline_lyrics_widget.set_size_request(PLAYER_INNER_WIDTH, 158);
         inline_lyrics_widget.set_hexpand(false);
         inline_lyrics_widget.set_halign(gtk::Align::Center);
         inline_lyrics_widget.set_vexpand(false);
@@ -322,7 +327,7 @@ impl PlayerView {
 
         let lyrics_slot = gtk::CenterBox::new();
         lyrics_slot.set_orientation(gtk::Orientation::Vertical);
-        lyrics_slot.set_size_request(384, 158);
+        lyrics_slot.set_size_request(PLAYER_SURFACE_WIDTH, 158);
         lyrics_slot.set_hexpand(false);
         lyrics_slot.set_halign(gtk::Align::Center);
         lyrics_slot.set_vexpand(false);
@@ -352,7 +357,7 @@ impl PlayerView {
         controls.set_valign(gtk::Align::Center);
 
         let metadata_block = gtk::Box::new(gtk::Orientation::Vertical, 6);
-        metadata_block.set_size_request(384, 92);
+        metadata_block.set_size_request(PLAYER_SURFACE_WIDTH, 92);
         metadata_block.set_hexpand(false);
         metadata_block.set_vexpand(false);
         metadata_block.set_valign(gtk::Align::Start);
@@ -364,7 +369,7 @@ impl PlayerView {
         metadata_block.append(&album);
 
         let transport_block = gtk::Box::new(gtk::Orientation::Vertical, 6);
-        transport_block.set_size_request(384, 116);
+        transport_block.set_size_request(PLAYER_SURFACE_WIDTH, 116);
         transport_block.set_hexpand(false);
         transport_block.set_vexpand(false);
         transport_block.set_valign(gtk::Align::Start);
@@ -376,7 +381,7 @@ impl PlayerView {
         transport_block.append(&controls);
 
         let now_content = gtk::Box::new(gtk::Orientation::Vertical, 12);
-        now_content.set_width_request(384);
+        now_content.set_width_request(PLAYER_SURFACE_WIDTH);
         now_content.set_hexpand(false);
         now_content.set_halign(gtk::Align::Center);
         now_content.set_vexpand(false);
@@ -392,7 +397,7 @@ impl PlayerView {
         now_content.append(&lyrics_slot);
 
         let now_card = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        now_card.set_size_request(420, -1);
+        now_card.set_size_request(PLAYER_CARD_WIDTH, -1);
         now_card.set_hexpand(false);
         now_card.set_vexpand(true);
         now_card.set_valign(gtk::Align::Fill);

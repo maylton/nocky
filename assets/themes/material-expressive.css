@@ -2468,3 +2468,112 @@ window.theme-material-expressive.material-blur-enabled > toastoverlay {
   background-color: transparent;
   background-image: none;
 }
+/* functional_carousel_queue_blur_fix_v1 */
+
+/* Actual icon used by the active entry in the playback queue popover. */
+window.theme-material-expressive .queue-playing-indicator {
+  color: @m3_primary;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: 14px;
+  background-color: alpha(@m3_primary_container, 0.88);
+  -gtk-icon-shadow: 0 0 10px alpha(@m3_primary, 0.30);
+}
+
+window.theme-material-expressive .queue-popover-row.active {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.72);
+  border-color: alpha(@m3_primary, 0.30);
+}
+/* material_queue_thumb_blur_final_v2 */
+
+/* Match the queue scrollbar language, but keep the horizontal thumb slimmer. */
+window.theme-material-expressive
+  .home-carousel-scroll.material-carousel-scroll
+  scrollbar.horizontal {
+  min-height: 6px;
+  opacity: 1;
+  background-color: transparent;
+}
+
+window.theme-material-expressive
+  .home-carousel-scroll.material-carousel-scroll
+  scrollbar.horizontal
+  trough {
+  min-height: 6px;
+  background-color: transparent;
+  border: none;
+}
+
+window.theme-material-expressive
+  .home-carousel-scroll.material-carousel-scroll
+  scrollbar.horizontal
+  slider {
+  min-width: 34px;
+  min-height: 6px;
+  margin: 0;
+  border-radius: 999px;
+  background-color: alpha(@m3_on_surface_variant, 0.32);
+  border: none;
+  box-shadow: none;
+}
+
+window.theme-material-expressive
+  .home-carousel-scroll.material-carousel-scroll
+  scrollbar.horizontal
+  slider:hover {
+  min-height: 6px;
+  margin: 0;
+  background-color: alpha(@m3_primary, 0.62);
+}
+
+/* Directly themed playback queue popover. */
+popover.queue-popover.theme-material-expressive > contents,
+popover.queue-popover.theme-material-expressive > arrow {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  background-image: none;
+  border-color: alpha(@m3_outline, 0.22);
+}
+/* material_settings_and_local_player_dimensions_v1 */
+window.settings-dialog.theme-material-expressive,
+window.youtube-settings-dialog.theme-material-expressive,
+window.startup-dialog.theme-material-expressive,
+window.theme-material-expressive.settings-dialog,
+window.theme-material-expressive.youtube-settings-dialog,
+window.theme-material-expressive.startup-dialog {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  background-image:
+    radial-gradient(circle at 18% 0%, alpha(@m3_primary, 0.08), transparent 44%);
+}
+
+window.settings-dialog.theme-material-expressive scrolledwindow,
+window.settings-dialog.theme-material-expressive viewport,
+window.settings-dialog.theme-material-expressive clamp,
+window.settings-dialog.theme-material-expressive .settings-content,
+window.youtube-settings-dialog.theme-material-expressive scrolledwindow,
+window.youtube-settings-dialog.theme-material-expressive viewport,
+window.youtube-settings-dialog.theme-material-expressive clamp,
+window.startup-dialog.theme-material-expressive scrolledwindow,
+window.startup-dialog.theme-material-expressive viewport,
+window.startup-dialog.theme-material-expressive clamp {
+  background-color: transparent;
+  background-image: none;
+}
+
+window.theme-material-expressive .stable-home-player {
+  min-width: 454px;
+}
+
+window.theme-material-expressive .stable-player-content {
+  min-width: 414px;
+}
+
+window.theme-material-expressive .player-metadata-surface,
+window.theme-material-expressive .player-transport-surface,
+window.theme-material-expressive .player-visualizer-surface,
+window.theme-material-expressive .player-lyrics-surface {
+  min-width: 414px;
+}

@@ -2308,7 +2308,10 @@ fn home_section(
     }
 
     let scroll = gtk::ScrolledWindow::new();
-    scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Never);
+    // functional_carousel_queue_blur_fix_v1
+    // Keep the thin Material position indicator visible whenever the
+    // carousel is presented, instead of relying on GTK auto-hide.
+    scroll.set_policy(gtk::PolicyType::Always, gtk::PolicyType::Never);
     scroll.set_min_content_height(190);
     scroll.set_child(Some(&rail));
     scroll.add_css_class("home-carousel-scroll");

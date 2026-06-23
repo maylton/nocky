@@ -1361,6 +1361,7 @@ impl AppController {
         self.navigate_browser(BrowserRoute::All);
     }
 
+    // functional_carousel_queue_blur_fix_v1
     fn show_footer_playback_queue(self: &Rc<Self>) {
         let popover = gtk::Popover::new();
         popover.set_has_arrow(true);
@@ -1368,6 +1369,13 @@ impl AppController {
         popover.set_position(gtk::PositionType::Top);
         popover.set_parent(&self.footer_now_playing);
         popover.add_css_class("queue-popover");
+
+        // material_queue_thumb_blur_final_v2
+        if self.window.has_css_class("theme-material-expressive") {
+            popover.add_css_class("theme-material-expressive");
+        } else {
+            popover.add_css_class("theme-noctalia");
+        }
 
         let content = gtk::Box::new(gtk::Orientation::Vertical, 10);
         content.set_margin_top(12);
@@ -1430,6 +1438,7 @@ impl AppController {
                     if state.current == Some(*index) {
                         let playing = gtk::Image::from_icon_name("audio-volume-high-symbolic");
                         playing.add_css_class("accent");
+                        playing.add_css_class("queue-playing-indicator");
                         line.append(&playing);
                         button.add_css_class("active");
                     }
@@ -1494,6 +1503,7 @@ impl AppController {
                         if position == current {
                             let playing = gtk::Image::from_icon_name("audio-volume-high-symbolic");
                             playing.add_css_class("accent");
+                            playing.add_css_class("queue-playing-indicator");
                             line.append(&playing);
                             button.add_css_class("active");
                         }
