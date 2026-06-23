@@ -2877,6 +2877,14 @@ impl AppController {
                 BrowserEvent::OpenYouTubeCollection(item) => {
                     self.load_youtube_collection_for_browser(item);
                 }
+                BrowserEvent::LoadMoreAlbums => {
+                    self.browser.show_more_albums();
+                    self.refresh_browser();
+                }
+                BrowserEvent::LoadMoreArtists => {
+                    self.browser.show_more_artists();
+                    self.refresh_browser();
+                }
                 BrowserEvent::Navigate(route) => self.navigate_browser(route),
                 BrowserEvent::CreatePlaylist(name) => {
                     let created = self.config.borrow_mut().create_playlist(&name);
