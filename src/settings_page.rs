@@ -1,101 +1,86 @@
 use crate::{
     config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme},
+    dialogs::SettingsEvent,
     i18n::{self, Message},
 };
 use adw::prelude::*;
 use gtk::glib;
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::mpsc::{self, Receiver, Sender},
+    time::Duration,
+};
 
-// material_expressive_remaining_interface_v1
-fn inherit_visual_theme(parent: &adw::ApplicationWindow, widget: &impl IsA<gtk::Widget>) {
-    widget.remove_css_class("theme-noctalia");
-    widget.remove_css_class("theme-material-expressive");
-    widget.add_css_class(if parent.has_css_class("theme-material-expressive") {
-        "theme-material-expressive"
-    } else {
-        "theme-noctalia"
-    });
+// navigable_settings_page_v1
+pub(crate) struct SettingsPage {
+    root: gtk::ScrolledWindow,
+    sender: Sender<SettingsEvent>,
+    receiver: Receiver<SettingsEvent>,
+    rebuilding: RefCell<bool>,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub(crate) enum SettingsEvent {
-    Language(AppLanguage),
-    StartupSource(StartupSource),
-    BlurMode(BlurMode),
-    BlurOpacityPreview(f64),
-    BlurOpacityCommit(f64),
-    ShowHomeVisualizer(bool),
-    ShowHomeLyrics(bool),
-    VisualTheme(VisualTheme),
-    FooterMode(FooterMode),
-    AutoDownloadLyrics(bool),
-    YouTubeAutoSync(bool),
-    NoctaliaThemeSync(bool),
-    ManageYouTube,
+impl SettingsPage {
+    pub(crate) fn new(initial: &AppConfig, noctalia_available: bool) -> Rc<Self> {
+        let (sender, receiver) = mpsc::channel();
+
+        let root = gtk::ScrolledWindow::new();
+        root.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+        root.set_vexpand(true);
+        root.set_hexpand(true);
+        root.add_css_class("settings-page-scroll");
+
+        let page = Rc::new(Self {
+            root,
+            sender,
+            receiver,
+            rebuilding: RefCell::new(false),
+        });
+        page.rebuild(initial, noctalia_available);
+        page
+    }
+
+    pub(crate) fn root(&self) -> &gtk::ScrolledWindow {
+        &self.root
+    }
+
+    pub(crate) fn try_recv(&self) -> Option<SettingsEvent> {
+        self.receiver.try_recv().ok()
+    }
+
+    pub(crate) fn rebuild(&self, initial: &AppConfig, noctalia_available: bool) {
+        if *self.rebuilding.borrow() {
+            return;
+        }
+        *self.rebuilding.borrow_mut() = true;
+        self.root.set_child(Some(&build_content(
+            initial,
+            noctalia_available,
+            self.sender.clone(),
+        )));
+        *self.rebuilding.borrow_mut() = false;
+    }
 }
 
-#[derive(Clone, Copy)]
-enum ToggleSetting {
-    Visualizer,
-    Lyrics,
-    AutoLyrics,
-    YouTubeSync,
-    Noctalia,
-}
-
-#[allow(dead_code)]
-pub(crate) fn present_settings<F>(
-    parent: &adw::ApplicationWindow,
+fn build_content(
     initial: &AppConfig,
     noctalia_available: bool,
-    on_event: F,
-) where
-    F: Fn(SettingsEvent) + 'static,
-{
+    sender: Sender<SettingsEvent>,
+) -> gtk::Box {
     let tr = |message| i18n::text(initial.language, message);
-    let emit: Rc<dyn Fn(SettingsEvent)> = Rc::new(on_event);
+    let emit: Rc<dyn Fn(SettingsEvent)> = Rc::new(move |event| {
+        let _ = sender.send(event);
+    });
 
-    let dialog = adw::Dialog::builder()
-        .title(tr(Message::SettingsTitle))
-        .content_width(640)
-        .content_height(720)
-        .build();
-    dialog.add_css_class("settings-dialog");
-    inherit_visual_theme(parent, &dialog);
-
-    let toolbar = adw::ToolbarView::new();
-    toolbar.add_css_class("material-dialog-toolbar");
-    toolbar.add_top_bar(&adw::HeaderBar::new());
-
-    let scrolled = gtk::ScrolledWindow::new();
-    scrolled.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-    scrolled.set_vexpand(true);
-
-    let content = gtk::Box::new(gtk::Orientation::Vertical, 14);
-    content.add_css_class("settings-content");
-    scrolled.set_child(Some(&content));
-    toolbar.set_content(Some(&scrolled));
-
-    // m3_settings_explicit_shell_fix_v2
-    // Style a real child widget instead of relying on AdwDialog's
-    // internal presentation nodes, which vary across libadwaita modes.
-    toolbar.add_css_class("settings-dialog-surface");
-    inherit_visual_theme(parent, &toolbar);
-    toolbar.set_hexpand(true);
-    toolbar.set_vexpand(true);
-
-    let dialog_shell = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    dialog_shell.add_css_class("settings-dialog-shell");
-    inherit_visual_theme(parent, &dialog_shell);
-    dialog_shell.set_hexpand(true);
-    dialog_shell.set_vexpand(true);
-    dialog_shell.set_overflow(gtk::Overflow::Hidden);
-    dialog_shell.append(&toolbar);
-    dialog.set_child(Some(&dialog_shell));
-    content.set_margin_top(22);
-    content.set_margin_bottom(22);
-    content.set_margin_start(22);
-    content.set_margin_end(22);
+    let page = gtk::Box::new(gtk::Orientation::Vertical, 16);
+    page.set_width_request(760);
+    page.set_halign(gtk::Align::Center);
+    page.set_margin_top(28);
+    page.set_margin_bottom(34);
+    page.set_margin_start(24);
+    page.set_margin_end(24);
+    page.add_css_class("settings-page");
+    page.add_css_class("settings-content");
 
     let title = gtk::Label::new(Some(tr(Message::SettingsTitle)));
     title.set_xalign(0.0);
@@ -131,7 +116,7 @@ pub(crate) fn present_settings<F>(
     hero.append(&hero_icon_container);
     hero.append(&hero_copy);
     hero.append(&version_badge);
-    content.append(&hero);
+    page.append(&hero);
 
     let group_text = |pt: &'static str, en: &'static str, es: &'static str| match initial.language {
         AppLanguage::Portuguese => pt,
@@ -189,11 +174,24 @@ pub(crate) fn present_settings<F>(
         ),
     );
 
-    content.append(&general_group);
-    content.append(&appearance_group);
-    content.append(&playback_group);
-    content.append(&lyrics_group);
-    content.append(&youtube_group);
+    // settings_about_and_remove_overflow_v1
+    let (about_group, about_rows) = settings_group(
+        "help-about-symbolic",
+        group_text("Sobre", "About", "Acerca de"),
+        group_text(
+            "Informações do aplicativo, versão e licença",
+            "Application information, version and license",
+            "Información de la aplicación, versión y licencia",
+        ),
+    );
+    about_group.add_css_class("settings-about-group");
+
+    page.append(&general_group);
+    page.append(&appearance_group);
+    page.append(&playback_group);
+    page.append(&lyrics_group);
+    page.append(&youtube_group);
+    page.append(&about_group);
 
     let language = gtk::DropDown::from_strings(&[
         AppLanguage::Portuguese.label(),
@@ -255,7 +253,6 @@ pub(crate) fn present_settings<F>(
     blur_opacity.set_draw_value(true);
     blur_opacity.set_value(initial.blur_opacity.clamp(0.45, 0.95) * 100.0);
     blur_opacity.set_value_pos(gtk::PositionType::Right);
-
     let blur_opacity_row = scale_row(
         tr(Message::BlurOpacity),
         tr(Message::BlurOpacityDescription),
@@ -263,6 +260,27 @@ pub(crate) fn present_settings<F>(
     );
     blur_opacity_row.set_visible(initial.blur_mode == BlurMode::Custom);
     appearance_rows.append(&blur_opacity_row);
+
+    let visual_theme = gtk::DropDown::from_strings(&["Noctalia", "Material 3 Expressive"]);
+    visual_theme.set_selected(match initial.visual_theme {
+        VisualTheme::Noctalia => 0,
+        VisualTheme::MaterialExpressive => 1,
+    });
+    appearance_rows.append(&dropdown_row(
+        tr(Message::M3Progress),
+        tr(Message::M3ProgressDescription),
+        &visual_theme,
+    ));
+
+    let noctalia = settings_switch(initial.noctalia_theme_sync && noctalia_available);
+    noctalia.set_sensitive(noctalia_available);
+    let noctalia_row = switch_row(
+        tr(Message::NoctaliaSync),
+        tr(Message::NoctaliaSyncDescription),
+        &noctalia,
+    );
+    noctalia_row.set_sensitive(noctalia_available);
+    appearance_rows.append(&noctalia_row);
 
     let visualizer = settings_switch(initial.show_home_visualizer);
     playback_rows.append(&switch_row(
@@ -276,17 +294,6 @@ pub(crate) fn present_settings<F>(
         tr(Message::HomeLyrics),
         tr(Message::HomeLyricsDescription),
         &lyrics,
-    ));
-
-    let visual_theme = gtk::DropDown::from_strings(&["Noctalia", "Material 3 Expressive"]);
-    visual_theme.set_selected(match initial.visual_theme {
-        VisualTheme::Noctalia => 0,
-        VisualTheme::MaterialExpressive => 1,
-    });
-    appearance_rows.append(&dropdown_row(
-        tr(Message::M3Progress),
-        tr(Message::M3ProgressDescription),
-        &visual_theme,
     ));
 
     let footer_mode = gtk::DropDown::from_strings(&[
@@ -330,19 +337,42 @@ pub(crate) fn present_settings<F>(
         &youtube_button,
     ));
 
-    let noctalia = settings_switch(initial.noctalia_theme_sync && noctalia_available);
-    noctalia.set_sensitive(noctalia_available);
-    let noctalia_row = switch_row(
-        tr(Message::NoctaliaSync),
-        tr(Message::NoctaliaSyncDescription),
-        &noctalia,
-    );
-    noctalia_row.set_sensitive(noctalia_available);
-    appearance_rows.append(&noctalia_row);
+    let about_button = gtk::Button::with_label(group_text(
+        "Ver informações",
+        "View details",
+        "Ver información",
+    ));
+    about_button.set_action_name(Some("app.about"));
+    // noctalia_about_action_release_polish_v1
+    about_button.add_css_class("settings-primary-action");
+    about_button.add_css_class("settings-row-action");
+    about_button.add_css_class("settings-about-action");
+
+    let about_subtitle = format!("v{} · GPL-3.0", env!("CARGO_PKG_VERSION"));
+    about_rows.append(&button_row("Nocky", &about_subtitle, &about_button));
+
+    let shortcuts_button =
+        gtk::Button::with_label(group_text("Ver atalhos", "View shortcuts", "Ver atajos"));
+    shortcuts_button.set_action_name(Some("app.shortcuts"));
+    shortcuts_button.add_css_class("settings-row-action");
+    shortcuts_button.add_css_class("settings-shortcuts-action");
+
+    about_rows.append(&button_row(
+        group_text(
+            "Atalhos de teclado",
+            "Keyboard shortcuts",
+            "Atajos de teclado",
+        ),
+        group_text(
+            "Veja todos os comandos disponíveis em uma lista.",
+            "View every available command in a list.",
+            "Consulta todos los comandos disponibles en una lista.",
+        ),
+        &shortcuts_button,
+    ));
 
     {
         let emit = emit.clone();
-        let dialog = dialog.clone();
         language.connect_selected_notify(move |dropdown| {
             let language = match dropdown.selected() {
                 1 => AppLanguage::English,
@@ -350,7 +380,6 @@ pub(crate) fn present_settings<F>(
                 _ => AppLanguage::Portuguese,
             };
             emit(SettingsEvent::Language(language));
-            dialog.close();
         });
     }
 
@@ -408,11 +437,6 @@ pub(crate) fn present_settings<F>(
 
     {
         let emit = emit.clone();
-        youtube_button.connect_clicked(move |_| emit(SettingsEvent::ManageYouTube));
-    }
-
-    {
-        let emit = emit.clone();
         visual_theme.connect_selected_notify(move |dropdown| {
             emit(SettingsEvent::VisualTheme(if dropdown.selected() == 1 {
                 VisualTheme::MaterialExpressive
@@ -433,6 +457,11 @@ pub(crate) fn present_settings<F>(
             };
             emit(SettingsEvent::FooterMode(mode));
         });
+    }
+
+    {
+        let emit = emit.clone();
+        youtube_button.connect_clicked(move |_| emit(SettingsEvent::ManageYouTube));
     }
 
     for (switch, setting) in [
@@ -456,137 +485,18 @@ pub(crate) fn present_settings<F>(
         });
     }
 
-    dialog.present(Some(parent));
+    page
 }
 
-pub(crate) fn present_youtube_settings<W>(parent: &adw::ApplicationWindow, root: &W)
-where
-    W: IsA<gtk::Widget> + Clone + 'static,
-{
-    let dialog = adw::Dialog::builder()
-        .title("YouTube Music")
-        .content_width(760)
-        .content_height(620)
-        .build();
-    dialog.add_css_class("youtube-settings-dialog");
-    inherit_visual_theme(parent, &dialog);
-
-    let toolbar = adw::ToolbarView::new();
-    toolbar.add_css_class("material-dialog-toolbar");
-    toolbar.add_top_bar(&adw::HeaderBar::new());
-
-    let host = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    host.add_css_class("youtube-settings-host");
-    host.append(root);
-    toolbar.set_content(Some(&host));
-    dialog.set_child(Some(&toolbar));
-
-    let youtube_root = root.clone();
-    dialog.connect_closed(move |_| {
-        host.remove(&youtube_root);
-    });
-    dialog.present(Some(parent));
+#[derive(Clone, Copy)]
+enum ToggleSetting {
+    Visualizer,
+    Lyrics,
+    AutoLyrics,
+    YouTubeSync,
+    Noctalia,
 }
 
-pub(crate) fn present_startup_source<F>(
-    parent: &adw::ApplicationWindow,
-    language: AppLanguage,
-    first_run: bool,
-    on_select: F,
-) where
-    F: Fn(StartupSource) + 'static,
-{
-    let tr = |message| i18n::text(language, message);
-    let on_select: Rc<dyn Fn(StartupSource)> = Rc::new(on_select);
-
-    let dialog = adw::Dialog::builder()
-        .title(if first_run {
-            tr(Message::StartupWelcome)
-        } else {
-            tr(Message::StartupSourceTitle)
-        })
-        .content_width(480)
-        .build();
-    dialog.add_css_class("startup-dialog");
-    inherit_visual_theme(parent, &dialog);
-    dialog.set_can_close(!first_run);
-
-    let content = gtk::Box::new(gtk::Orientation::Vertical, 14);
-    content.add_css_class("startup-dialog-content");
-    dialog.set_child(Some(&content));
-    content.set_margin_top(22);
-    content.set_margin_bottom(22);
-    content.set_margin_start(22);
-    content.set_margin_end(22);
-
-    let title = gtk::Label::new(Some(if first_run {
-        tr(Message::StartupQuestion)
-    } else {
-        tr(Message::StartupChoose)
-    }));
-    title.set_wrap(true);
-    title.set_xalign(0.0);
-    title.add_css_class("title-2");
-    title.add_css_class("startup-dialog-title");
-
-    let description = gtk::Label::new(Some(tr(Message::StartupDescription)));
-    description.set_wrap(true);
-    description.set_xalign(0.0);
-    description.add_css_class("dim-label");
-    description.add_css_class("startup-dialog-description");
-
-    let local_button = gtk::Button::with_label(tr(Message::UseLocalLibrary));
-    local_button.set_tooltip_text(Some(tr(Message::UseLocalLibraryTooltip)));
-    local_button.add_css_class("source-choice-button");
-
-    let youtube_button = gtk::Button::with_label(tr(Message::UseYoutubeMusic));
-    youtube_button.set_tooltip_text(Some(tr(Message::UseYoutubeMusicTooltip)));
-    youtube_button.add_css_class("source-choice-button");
-    youtube_button.add_css_class("suggested-action");
-
-    let choices = gtk::Box::new(gtk::Orientation::Vertical, 10);
-    choices.add_css_class("startup-choice-group");
-    choices.append(&local_button);
-    choices.append(&youtube_button);
-
-    content.append(&title);
-    content.append(&description);
-    content.append(&choices);
-
-    if !first_run {
-        let cancel_button = gtk::Button::with_label(tr(Message::Cancel));
-        cancel_button.set_halign(gtk::Align::End);
-        cancel_button.add_css_class("startup-cancel-action");
-        content.append(&cancel_button);
-
-        let dialog = dialog.clone();
-        cancel_button.connect_clicked(move |_| {
-            dialog.close();
-        });
-    }
-
-    {
-        let on_select = on_select.clone();
-        let dialog = dialog.clone();
-        local_button.connect_clicked(move |_| {
-            on_select(StartupSource::Local);
-            dialog.close();
-        });
-    }
-
-    {
-        let on_select = on_select.clone();
-        let dialog = dialog.clone();
-        youtube_button.connect_clicked(move |_| {
-            on_select(StartupSource::YouTube);
-            dialog.close();
-        });
-    }
-
-    dialog.present(Some(parent));
-}
-
-// organized_settings_milestone_v1
 fn settings_group(icon_name: &str, title: &str, description: &str) -> (gtk::Box, gtk::Box) {
     let icon = gtk::Image::from_icon_name(icon_name);
     icon.set_pixel_size(20);
@@ -626,6 +536,7 @@ fn settings_group(icon_name: &str, title: &str, description: &str) -> (gtk::Box,
 
     (group, rows)
 }
+
 fn settings_switch(active: bool) -> gtk::Switch {
     let switch = gtk::Switch::builder()
         .active(active)

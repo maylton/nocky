@@ -132,12 +132,14 @@ impl ThemeBridge {
             &bridge.provider,
             gtk::STYLE_PROVIDER_PRIORITY_USER,
         );
-        // Keep the runtime glass CSS above the generated Noctalia theme and
-        // any focus/backdrop rules from the desktop GTK theme.
+        // functional_carousel_queue_blur_fix_v1
+        // The dynamic Material palette is installed at USER + 80 and
+        // paints opaque window/app-shell surfaces. Keep runtime blur above
+        // it so Custom/Noctalia transparency is not overwritten later.
         gtk::style_context_add_provider_for_display(
             &display,
             &bridge.blur_provider,
-            gtk::STYLE_PROVIDER_PRIORITY_USER + 64,
+            gtk::STYLE_PROVIDER_PRIORITY_USER + 96,
         );
 
         bridge.reload();
@@ -227,6 +229,103 @@ popover.queue-popover > arrow {
   background-color: @nm_surface_alt;
   background-image: none;
 }
+
+/* material_carousel_playing_blur_polish_v1: opaque Material mode */
+window.background.noctalia-window.theme-material-expressive,
+window.background.noctalia-window.theme-material-expressive:backdrop,
+window.noctalia-window.theme-material-expressive,
+window.noctalia-window.theme-material-expressive:backdrop,
+window.theme-material-expressive,
+window.theme-material-expressive:backdrop,
+window.theme-material-expressive > toastoverlay,
+window.theme-material-expressive > toastoverlay:backdrop {
+  background-color: @m3_surface;
+  background-image: none;
+}
+
+window.theme-material-expressive .app-shell,
+window.theme-material-expressive .app-shell:backdrop {
+  background-color: @m3_surface;
+  background-image: none;
+}
+
+/* material_queue_thumb_blur_final_v2 */
+popover.queue-popover.theme-material-expressive > contents,
+popover.queue-popover.theme-material-expressive > arrow {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  background-image: none;
+  border-color: alpha(@m3_outline, 0.22);
+}
+
+/* m3_settings_surface_priority_fix_v1 */
+dialog.settings-dialog.theme-material-expressive,
+dialog.youtube-settings-dialog.theme-material-expressive,
+dialog.startup-dialog.theme-material-expressive,
+.settings-dialog.theme-material-expressive,
+.youtube-settings-dialog.theme-material-expressive,
+.startup-dialog.theme-material-expressive {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  background-image:
+    radial-gradient(circle at 12% 0%, alpha(@m3_primary, 0.10), transparent 46%);
+}
+
+dialog.settings-dialog.theme-material-expressive .material-dialog-toolbar,
+dialog.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar,
+dialog.startup-dialog.theme-material-expressive .material-dialog-toolbar,
+.settings-dialog.theme-material-expressive .material-dialog-toolbar,
+.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar,
+.startup-dialog.theme-material-expressive .material-dialog-toolbar {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  background-image:
+    radial-gradient(circle at 12% 0%, alpha(@m3_primary, 0.08), transparent 48%);
+}
+
+dialog.settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+dialog.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+dialog.startup-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.startup-dialog.theme-material-expressive .material-dialog-toolbar headerbar {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  background-image: none;
+}
+
+/* m3_settings_explicit_shell_fix_v2 */
+dialog.settings-dialog.theme-material-expressive {
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  background-color: transparent;
+  background-image: none;
+}
+
+.settings-dialog-shell.theme-material-expressive {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  background-image:
+    radial-gradient(circle at 10% 0%, alpha(@m3_primary, 0.11), transparent 46%);
+  border: 1px solid alpha(@m3_outline, 0.22);
+  border-radius: 30px;
+  box-shadow: 0 18px 46px alpha(black, 0.34);
+}
+
+.settings-dialog-surface.theme-material-expressive,
+.settings-dialog-shell.theme-material-expressive .material-dialog-toolbar {
+  color: @m3_on_surface;
+  background-color: transparent;
+  background-image: none;
+}
+
+.settings-dialog-shell.theme-material-expressive headerbar {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  background-image: none;
+  border-color: alpha(@m3_outline, 0.18);
+}
 "#,
             );
             return;
@@ -297,6 +396,216 @@ window.noctalia-window viewport:backdrop {{
 window.noctalia-window searchbar,
 window.noctalia-window searchbar:backdrop {{
   background-color: alpha(@nm_surface_alt, {header:.3});
+}}
+
+/* material_carousel_playing_blur_polish_v1: translucent Material mode */
+window.background.noctalia-window.theme-material-expressive,
+window.background.noctalia-window.theme-material-expressive:backdrop,
+window.noctalia-window.theme-material-expressive,
+window.noctalia-window.theme-material-expressive:backdrop,
+window.theme-material-expressive,
+window.theme-material-expressive:backdrop,
+window.theme-material-expressive > toastoverlay,
+window.theme-material-expressive > toastoverlay:backdrop {{
+  background-color: transparent;
+  background-image: none;
+}}
+
+window.theme-material-expressive .app-shell,
+window.theme-material-expressive .app-shell:backdrop {{
+  background-color: alpha(@m3_surface, {surface:.3});
+  background-image: none;
+}}
+
+window.theme-material-expressive .expressive-header,
+window.theme-material-expressive .expressive-header:backdrop,
+window.theme-material-expressive .noctalia-header,
+window.theme-material-expressive .noctalia-header:backdrop {{
+  background-color: alpha(@m3_surface_container, {header:.3});
+}}
+
+window.theme-material-expressive .sidebar,
+window.theme-material-expressive .sidebar:backdrop,
+window.theme-material-expressive .search-section-card,
+window.theme-material-expressive .search-section-card:backdrop {{
+  background-color: alpha(@m3_surface_container_low, {panel:.3});
+}}
+
+window.theme-material-expressive .now-playing-card,
+window.theme-material-expressive .now-playing-card:backdrop,
+window.theme-material-expressive .expressive-player-card,
+window.theme-material-expressive .expressive-player-card:backdrop,
+window.theme-material-expressive .collection-card,
+window.theme-material-expressive .collection-card:backdrop {{
+  background-color: alpha(@m3_surface_container, {card:.3});
+}}
+
+window.theme-material-expressive .library-panel,
+window.theme-material-expressive .library-panel:backdrop,
+window.theme-material-expressive .home-section,
+window.theme-material-expressive .home-section:backdrop,
+window.theme-material-expressive .collection-page,
+window.theme-material-expressive .collection-page:backdrop {{
+  background-color: alpha(@m3_surface_container_low, {panel:.3});
+}}
+
+window.theme-material-expressive .player-bar,
+window.theme-material-expressive .player-bar:backdrop,
+window.theme-material-expressive .expressive-footer,
+window.theme-material-expressive .expressive-footer:backdrop {{
+  background-color: alpha(@m3_surface_container_low, {footer:.3});
+}}
+
+window.theme-material-expressive scrolledwindow,
+window.theme-material-expressive scrolledwindow:backdrop,
+window.theme-material-expressive viewport,
+window.theme-material-expressive viewport:backdrop {{
+  background-color: transparent;
+  background-image: none;
+}}
+
+window.theme-material-expressive searchbar,
+window.theme-material-expressive searchbar:backdrop {{
+  background-color: alpha(@m3_surface_container, {header:.3});
+}}
+
+/* material_carousel_indicator_blur_runtime_v2 */
+window.theme-material-expressive.material-blur-enabled,
+window.theme-material-expressive.material-blur-enabled:backdrop,
+window.background.noctalia-window.theme-material-expressive.material-blur-enabled,
+window.background.noctalia-window.theme-material-expressive.material-blur-enabled:backdrop,
+window.noctalia-window.theme-material-expressive.material-blur-enabled,
+window.noctalia-window.theme-material-expressive.material-blur-enabled:backdrop,
+window.theme-material-expressive.material-blur-enabled > toastoverlay,
+window.theme-material-expressive.material-blur-enabled > toastoverlay:backdrop {{
+  background-color: transparent;
+  background-image: none;
+}}
+
+window.theme-material-expressive.material-blur-enabled .app-shell,
+window.theme-material-expressive.material-blur-enabled .app-shell:backdrop {{
+  background-color: rgba(17, 19, 24, {surface:.3});
+  background-image: none;
+}}
+
+window.theme-material-expressive.material-blur-enabled .expressive-header,
+window.theme-material-expressive.material-blur-enabled .expressive-header:backdrop {{
+  background-color: rgba(29, 31, 37, {header:.3});
+}}
+
+window.theme-material-expressive.material-blur-enabled .sidebar,
+window.theme-material-expressive.material-blur-enabled .sidebar:backdrop,
+window.theme-material-expressive.material-blur-enabled .library-panel,
+window.theme-material-expressive.material-blur-enabled .library-panel:backdrop,
+window.theme-material-expressive.material-blur-enabled .home-section,
+window.theme-material-expressive.material-blur-enabled .home-section:backdrop {{
+  background-color: rgba(23, 25, 31, {panel:.3});
+}}
+
+window.theme-material-expressive.material-blur-enabled .now-playing-card,
+window.theme-material-expressive.material-blur-enabled .now-playing-card:backdrop,
+window.theme-material-expressive.material-blur-enabled .collection-card,
+window.theme-material-expressive.material-blur-enabled .collection-card:backdrop {{
+  background-color: rgba(29, 31, 37, {card:.3});
+}}
+
+window.theme-material-expressive.material-blur-enabled .player-bar,
+window.theme-material-expressive.material-blur-enabled .player-bar:backdrop,
+window.theme-material-expressive.material-blur-enabled .expressive-footer,
+window.theme-material-expressive.material-blur-enabled .expressive-footer:backdrop {{
+  background-color: rgba(23, 25, 31, {footer:.3});
+}}
+
+window.theme-material-expressive.material-blur-enabled scrolledwindow,
+window.theme-material-expressive.material-blur-enabled viewport {{
+  background-color: transparent;
+  background-image: none;
+}}
+
+/* material_queue_thumb_blur_final_v2 */
+window.theme-material-expressive.material-blur-enabled .expressive-body,
+window.theme-material-expressive.material-blur-enabled .expressive-dashboard,
+window.theme-material-expressive.material-blur-enabled .navigation-rail-revealer,
+window.theme-material-expressive.material-blur-enabled .expressive-search-bar {{
+  background-color: transparent;
+  background-image: none;
+}}
+
+popover.queue-popover.theme-material-expressive > contents,
+popover.queue-popover.theme-material-expressive > arrow {{
+  color: @m3_on_surface;
+  background-color: alpha(@m3_surface_container_high, {card:.3});
+  background-image: none;
+  border-color: alpha(@m3_outline, 0.22);
+}}
+
+/* m3_settings_surface_priority_fix_v1 */
+dialog.settings-dialog.theme-material-expressive,
+dialog.youtube-settings-dialog.theme-material-expressive,
+dialog.startup-dialog.theme-material-expressive,
+.settings-dialog.theme-material-expressive,
+.youtube-settings-dialog.theme-material-expressive,
+.startup-dialog.theme-material-expressive {{
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  background-image:
+    radial-gradient(circle at 12% 0%, alpha(@m3_primary, 0.10), transparent 46%);
+}}
+
+dialog.settings-dialog.theme-material-expressive .material-dialog-toolbar,
+dialog.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar,
+dialog.startup-dialog.theme-material-expressive .material-dialog-toolbar,
+.settings-dialog.theme-material-expressive .material-dialog-toolbar,
+.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar,
+.startup-dialog.theme-material-expressive .material-dialog-toolbar {{
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  background-image:
+    radial-gradient(circle at 12% 0%, alpha(@m3_primary, 0.08), transparent 48%);
+}}
+
+dialog.settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+dialog.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+dialog.startup-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.startup-dialog.theme-material-expressive .material-dialog-toolbar headerbar {{
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  background-image: none;
+}}
+
+/* m3_settings_explicit_shell_fix_v2 */
+dialog.settings-dialog.theme-material-expressive {{
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  background-color: transparent;
+  background-image: none;
+}}
+
+.settings-dialog-shell.theme-material-expressive {{
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  background-image:
+    radial-gradient(circle at 10% 0%, alpha(@m3_primary, 0.11), transparent 46%);
+  border: 1px solid alpha(@m3_outline, 0.22);
+  border-radius: 30px;
+  box-shadow: 0 18px 46px alpha(black, 0.34);
+}}
+
+.settings-dialog-surface.theme-material-expressive,
+.settings-dialog-shell.theme-material-expressive .material-dialog-toolbar {{
+  color: @m3_on_surface;
+  background-color: transparent;
+  background-image: none;
+}}
+
+.settings-dialog-shell.theme-material-expressive headerbar {{
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  background-image: none;
+  border-color: alpha(@m3_outline, 0.18);
 }}
 "#
         ));
