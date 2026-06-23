@@ -1,47 +1,75 @@
-name: CI
+name: Quality Gate
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  check:
+  quality:
+    name: Rust quality gate
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    container:
+      image: fedora:44
+
+    env:
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: "1"
+
     steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-
-      - name: Install native dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            pkg-config \
-            libgtk-4-dev \
-            libadwaita-1-dev \
-            libgstreamer1.0-dev \
-            libgstreamer-plugins-base1.0-dev \
-            gstreamer1.0-plugins-base \
-            gstreamer1.0-plugins-good \
-            desktop-file-utils \
-            appstream
-
-      - name: Install stable Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Checkout repository
+        uses: actions/checkout@v6
         with:
-          components: rustfmt
+          persist-credentials: false
 
-      - name: Format
-        run: cargo fmt --check
-
-      - name: Check
-        run: cargo check
-
-      - name: Validate YouTube helper
+      - name: Install system dependencies
+        shell: bash
         run: |
-          python3 -m py_compile helpers/nocky_youtube.py
-          printf '{}\n' | python3 helpers/nocky_youtube.py status
+          dnf --assumeyes --setopt=install_weak_deps=False install \
+            ca-certificates \
+            curl \
+            gcc \
+            gcc-c++ \
+            gdk-pixbuf2-devel \
+            git \
+            glib2-devel \
+            gstreamer1-devel \
+            gstreamer1-plugins-base-devel \
+            gtk4-devel \
+            libadwaita-devel \
+            make \
+            openssl-devel \
+            pkgconf-pkg-config \
+            python3
 
-      - name: Verify release metadata
-        run: ./scripts/verify-release.sh
+      - name: Install Rust toolchain
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 --silent --show-error --fail \
+            https://sh.rustup.rs \
+            | sh -s -- -y --profile minimal --default-toolchain none
+
+          source "$HOME/.cargo/env"
+          rustup toolchain install stable \
+            --profile minimal \
+            --component rustfmt \
+            --component clippy
+
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Run quality gate
+        shell: bash
+        run: ./scripts/quality-gate.sh
