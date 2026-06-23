@@ -837,3 +837,45 @@ button.queue-popover-row.active {
   min-width: 384px;
   min-height: 158px;
 }
+
+/* First-run onboarding */
+.onboarding-dialog {
+  background-color: @nm_surface;
+}
+
+.onboarding-shell {
+  background-color: alpha(@nm_surface, 0.98);
+}
+
+.onboarding-progress trough {
+  min-height: 6px;
+  border-radius: 999px;
+}
+
+.onboarding-progress progress {
+  min-height: 6px;
+  border-radius: 999px;
+}
+
+.onboarding-app-icon {
+  opacity: 1;
+}
+
+.onboarding-option-card,
+.onboarding-summary-row {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background-color: alpha(@nm_surface_alt, 0.72);
+  border: 1px solid alpha(@nm_text, 0.08);
+}
+
+.onboarding-warning {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background-color: alpha(@warning_color, 0.10);
+  border: 1px solid alpha(@warning_color, 0.25);
+}
+
+.onboarding-radio {
+  margin: 0 2px;
+}

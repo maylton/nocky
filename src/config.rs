@@ -99,6 +99,7 @@ pub struct AppConfig {
     pub startup_source: Option<StartupSource>,
     pub blur_mode: BlurMode,
     pub blur_opacity: f64,
+    pub onboarding_completed: bool,
 }
 
 impl Default for AppConfig {
@@ -119,6 +120,7 @@ impl Default for AppConfig {
             startup_source: None,
             blur_mode: BlurMode::Noctalia,
             blur_opacity: 0.74,
+            onboarding_completed: false,
         }
     }
 }
@@ -135,10 +137,27 @@ impl AppConfig {
         let Ok(contents) = fs::read_to_string(&source) else {
             return Self::default();
         };
-        let config: Self = serde_json::from_str(&contents).unwrap_or_default();
 
-        // Transparently migrate settings from the old project name.
-        if source != path {
+        let parsed = serde_json::from_str::<serde_json::Value>(&contents).ok();
+        let onboarding_was_stored = parsed
+            .as_ref()
+            .and_then(|value| value.get("onboarding_completed"))
+            .is_some();
+
+        let mut config: Self = parsed
+            .and_then(|value| serde_json::from_value(value).ok())
+            .unwrap_or_default();
+
+        // Existing installations must not be interrupted by the new
+        // first-run wizard. Only genuinely new configurations start with
+        // onboarding_completed = false.
+        if !onboarding_was_stored {
+            config.onboarding_completed = true;
+        }
+
+        // Transparently migrate settings from the old project name and
+        // persist the onboarding migration marker.
+        if source != path || !onboarding_was_stored {
             let _ = config.save();
         }
         config
