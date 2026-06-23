@@ -2,6 +2,44 @@
 
 All notable public changes to Nocky are documented here.
 
+## 0.2.5 — 2026-06-23
+
+### Added
+
+- Personalized Home experience based on listening history, recently played music and frequently heard artists
+- Categorized YouTube Music search for songs, albums, artists and playlists
+- Synchronized lyrics support for streamed YouTube Music tracks
+- Material 3-inspired animated wavy progress bar, available as a persistent setting
+- Footer display modes: **Automatic**, **Full**, **Compact** and **Hidden**
+- Portuguese, English and Spanish interface localization
+- Clickable playback queue for both local and YouTube Music tracks
+
+### Improved
+
+- Redesigned Footer 2.0 with larger artwork, clearer metadata and responsive layouts
+- Automatic footer mode stays compact throughout every Home route and becomes complete outside Home
+- Compact footer keeps track/queue information, lyrics and volume while avoiding duplicated playback controls
+- Local-library mode no longer displays online recommendations, mixes or synchronized playlists
+- Albums and artists use incremental collection loading for faster large-library browsing
+- Search requests and online collection loading are batched to improve responsiveness
+- Playback queue popover has stronger, more readable blur and opacity
+- Home sidebar starts collapsed and the primary Music tab is now identified as Home
+- Home artist cards, metadata alignment, favorite state and playback controls received visual corrections
+- Inline lyrics wrap naturally only when the available card width is exceeded
+- Wavy progress ending now uses a continuous smooth bridge without compression or animation jumps
+
+### Fixed
+
+- Rejected or expired YouTube stream URLs are refreshed automatically during playback
+- Footer queue access and queue-row activation work consistently
+- Progress-track visibility and active/inactive wave transitions are visually consistent
+- Multiple footer alignment, sizing and adaptive-layout regressions
+- Artist and album collection rendering issues in the personalized Home
+
+### Known limitation
+
+- A small Home-player layout shift may still occur while inline lyrics transition between loading and synchronized content.
+
 ## 0.2.4 — 2026-06-21
 
 ### Added

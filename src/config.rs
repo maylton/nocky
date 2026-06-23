@@ -1,7 +1,7 @@
 use gtk::glib;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs, io,
+    env, fs, io,
     path::{Path, PathBuf},
 };
 
@@ -37,6 +37,16 @@ pub enum BlurMode {
     Off,
 }
 
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FooterMode {
+    #[default]
+    Automatic,
+    Full,
+    Compact,
+    Hidden,
+}
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AppLanguage {
@@ -46,6 +56,22 @@ pub enum AppLanguage {
 }
 
 impl AppLanguage {
+    pub fn detect_system() -> Self {
+        let locale = ["LC_ALL", "LC_MESSAGES", "LANGUAGE", "LANG"]
+            .into_iter()
+            .find_map(|name| env::var(name).ok())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+
+        if locale.starts_with("pt") || locale.contains(":pt") {
+            Self::Portuguese
+        } else if locale.starts_with("es") || locale.contains(":es") {
+            Self::Spanish
+        } else {
+            Self::English
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Portuguese => "Português",
@@ -62,6 +88,8 @@ pub struct AppConfig {
     pub auto_download_lyrics: bool,
     pub show_home_visualizer: bool,
     pub show_home_lyrics: bool,
+    pub use_m3_progress: bool,
+    pub footer_mode: FooterMode,
     pub noctalia_theme_sync: bool,
     pub youtube_auto_sync: bool,
     pub language: AppLanguage,
@@ -80,9 +108,11 @@ impl Default for AppConfig {
             auto_download_lyrics: true,
             show_home_visualizer: true,
             show_home_lyrics: true,
+            use_m3_progress: true,
+            footer_mode: FooterMode::Automatic,
             noctalia_theme_sync: true,
             youtube_auto_sync: true,
-            language: AppLanguage::Portuguese,
+            language: AppLanguage::detect_system(),
             volume: 0.75,
             liked_tracks: Vec::new(),
             playlists: Vec::new(),

@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 APP_ID="io.github.maylton.Nocky"
-EXPECTED_VERSION="0.2.4"
+EXPECTED_VERSION="0.2.5"
 expected_sizes=(32 48 64 128 256 512)
 
 fail() { echo "ERROR: $*" >&2; exit 1; }

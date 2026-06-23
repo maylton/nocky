@@ -1600,7 +1600,7 @@ fn ranked_home_artist_cards(
                     .len();
                 cards.push(HomeCard::LocalArtist {
                     title: name,
-                    subtitle: format!("{albums} álbuns"),
+                    subtitle: String::new(),
                     detail: format!("Local • {} faixas", artist_tracks.len()),
                     cover_path: artist_tracks
                         .iter()
@@ -1708,7 +1708,7 @@ fn search_artist_cards(
                 .len();
             cards.push(HomeCard::LocalArtist {
                 title: artist,
-                subtitle: format!("{albums} álbuns"),
+                subtitle: String::new(),
                 detail: format!("Local • {} faixas", artist_tracks.len()),
                 cover_path: artist_tracks
                     .iter()
@@ -2201,12 +2201,6 @@ fn home_card_button(card: HomeCard, event_tx: &Sender<BrowserEvent>) -> gtk::But
             subtitle,
             detail,
             cover_path,
-        }
-        | HomeCard::LocalArtist {
-            title,
-            subtitle,
-            detail,
-            cover_path,
         } => (
             cover_path.as_deref(),
             title.as_str(),
@@ -2214,13 +2208,10 @@ fn home_card_button(card: HomeCard, event_tx: &Sender<BrowserEvent>) -> gtk::But
             detail.as_str(),
             false,
         ),
+        HomeCard::LocalArtist {
+            title, cover_path, ..
+        } => (cover_path.as_deref(), title.as_str(), "", "", false),
         HomeCard::YouTubeAlbum {
-            item,
-            subtitle,
-            detail,
-            cover_path,
-        }
-        | HomeCard::YouTubeArtist {
             item,
             subtitle,
             detail,
@@ -2232,6 +2223,9 @@ fn home_card_button(card: HomeCard, event_tx: &Sender<BrowserEvent>) -> gtk::But
             detail.as_str(),
             true,
         ),
+        HomeCard::YouTubeArtist {
+            item, cover_path, ..
+        } => (cover_path.as_deref(), item.title.as_str(), "", "", true),
         HomeCard::LocalPlaylist { title, subtitle } => (
             None,
             title.as_str(),

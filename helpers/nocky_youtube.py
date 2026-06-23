@@ -968,6 +968,17 @@ def command_liked(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return _dedupe([item for result in results if isinstance(result, dict) if (item := _song_item(result))])
 
 
+def command_rate(payload: dict[str, Any]) -> bool:
+    client = _create_client(authenticated=True)
+    if not _load_session().get("headers"):
+        raise RuntimeError("Connect a YouTube Music browser session first")
+
+    video_id = _extract_video_id(str(payload.get("video_id") or ""))
+    liked = bool(payload.get("liked"))
+    client.rate_song(video_id, "LIKE" if liked else "INDIFFERENT")
+    return liked
+
+
 def command_playlists(payload: dict[str, Any]) -> list[dict[str, Any]]:
     client = _create_client(authenticated=True)
     if not _load_session().get("headers"):
@@ -1249,6 +1260,7 @@ COMMANDS = {
     "search": command_search,
     "library": command_library,
     "liked": command_liked,
+    "rate": command_rate,
     "home": command_home,
     "playlists": command_playlists,
     "playlist": command_playlist,
@@ -1261,7 +1273,7 @@ COMMANDS = {
 def main() -> int:
     try:
         if len(sys.argv) != 2 or sys.argv[1] not in COMMANDS:
-            raise RuntimeError("Usage: nocky_youtube.py <status|connect|disconnect|search|library|liked|home|playlists|playlist|collection|resolve>")
+            raise RuntimeError("Usage: nocky_youtube.py <status|connect|disconnect|search|library|liked|rate|home|playlists|playlist|collection|artist|resolve>")
         payload = _read_input()
         result = COMMANDS[sys.argv[1]](payload)
         _emit({"ok": True, "result": result})

@@ -59,7 +59,9 @@ impl LyricsPresenter {
         inline_stack.set_margin_bottom(2);
         inline_stack.set_vexpand(false);
         inline_stack.set_valign(gtk::Align::Center);
-        inline_stack.set_size_request(-1, 158);
+        inline_stack.set_size_request(384, 158);
+        inline_stack.set_hexpand(false);
+        inline_stack.set_halign(gtk::Align::Center);
         inline_stack.add_css_class("inline-lyrics-panel");
         inline_stack.add_named(&page_a.root, Some("lyrics-a"));
         inline_stack.add_named(&page_b.root, Some("lyrics-b"));
@@ -334,7 +336,9 @@ impl LyricsPresenter {
 
 fn inline_page() -> InlinePage {
     let root = gtk::Box::new(gtk::Orientation::Vertical, 4);
-    root.set_size_request(-1, 136);
+    root.set_size_request(384, 136);
+    root.set_hexpand(false);
+    root.set_halign(gtk::Align::Center);
     root.set_vexpand(false);
     root.set_valign(gtk::Align::Center);
     root.add_css_class("inline-lyrics-page");
@@ -342,19 +346,24 @@ fn inline_page() -> InlinePage {
     let mut labels = Vec::with_capacity(INLINE_SLOTS);
     for index in 0..INLINE_SLOTS {
         let label = gtk::Label::new(None);
-        label.set_wrap(true);
-        label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
-        label.set_single_line_mode(false);
-        label.set_ellipsize(gtk::pango::EllipsizeMode::End);
         label.set_justify(gtk::Justification::Center);
         label.set_halign(gtk::Align::Center);
-        label.set_hexpand(true);
-        label.set_width_chars(1);
-        label.set_max_width_chars(38);
+        label.set_hexpand(false);
+        label.set_width_request(360);
+        label.set_width_chars(-1);
+        label.set_max_width_chars(-1);
+
         if index == INLINE_CENTER {
+            label.set_wrap(true);
+            label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+            label.set_single_line_mode(false);
+            label.set_ellipsize(gtk::pango::EllipsizeMode::End);
             label.set_lines(2);
             label.set_size_request(-1, 44);
         } else {
+            label.set_wrap(false);
+            label.set_single_line_mode(true);
+            label.set_ellipsize(gtk::pango::EllipsizeMode::End);
             label.set_lines(1);
             label.set_size_request(-1, 22);
         }

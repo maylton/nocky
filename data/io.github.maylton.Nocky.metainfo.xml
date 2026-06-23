@@ -23,6 +23,11 @@
   <url type="homepage">https://github.com/maylton/nocky</url>
   <url type="bugtracker">https://github.com/maylton/nocky/issues</url>
   <releases>
+    <release version="0.2.5" date="2026-06-23">
+      <description>
+        <p>Introduces a personalized and responsive Home, synchronized online lyrics, categorized search, the Material 3 wavy progress bar, a redesigned adaptive footer with configurable display modes, clickable playback queues, internationalization and multiple performance and visual refinements.</p>
+      </description>
+    </release>
     <release version="0.2.4" date="2026-06-21">
       <description>
         <p>Adds an automatic YouTube Music startup sync and refreshes the library home, album and artist browsing views.</p>
