@@ -1,3 +1,4 @@
+mod background;
 mod browser;
 mod config;
 mod dialogs;
@@ -17,9 +18,8 @@ mod visualizer;
 mod wave_progress;
 mod youtube;
 
-use crate::youtube::YouTubeArtistOverview;
-
 use adw::prelude::*;
+use background::{BackgroundChannel, BackgroundMessage};
 use browser::{BrowserEvent, BrowserRoute, LibraryBrowser};
 use config::{AppLanguage, BlurMode, FooterMode, StartupSource};
 use dialogs::SettingsEvent;
@@ -38,10 +38,7 @@ use std::{
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
     rc::Rc,
-    sync::{
-        mpsc::{self, Receiver, Sender},
-        Arc, Mutex,
-    },
+    sync::{mpsc, Arc, Mutex},
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -50,8 +47,8 @@ use wave_progress::WaveProgress;
 use youtube::{
     cache_items_for_browser, cacheable_youtube_playlist, clear_library_cache, download_cover,
     load_library_cache, save_library_cache, youtube_collection_cache_key, youtube_collection_key,
-    YouTubeBridge, YouTubeItem, YouTubeLibraryCache, YouTubeLibrarySnapshot, YouTubePage,
-    YouTubePageEvent, YouTubeSearchResults, YouTubeStatus, YouTubeStream,
+    YouTubeBridge, YouTubeItem, YouTubeLibraryCache, YouTubePage, YouTubePageEvent,
+    YouTubeSearchResults, YouTubeStatus, YouTubeStream,
 };
 
 const APP_ID: &str = "io.github.maylton.Nocky";
@@ -78,62 +75,6 @@ struct YouTubePlaybackState {
     item: YouTubeItem,
     cover_path: Option<PathBuf>,
     lyrics: Vec<LyricLine>,
-}
-
-enum BackgroundMessage {
-    LibraryScanned {
-        root: PathBuf,
-        result: Result<Vec<TrackData>, String>,
-    },
-    LyricsDownloaded {
-        path: PathBuf,
-        result: Result<(), String>,
-        notify: bool,
-    },
-    YouTubeLyricsDownloaded {
-        video_id: String,
-        notify: bool,
-        result: Result<Vec<LyricLine>, String>,
-    },
-    YouTubeStatus(Result<YouTubeStatus, String>),
-    YouTubeConnected(Result<YouTubeStatus, String>),
-    YouTubeDisconnected(Result<YouTubeStatus, String>),
-    YouTubeLibrarySynced {
-        notify: bool,
-        result: Result<YouTubeLibrarySnapshot, String>,
-    },
-    YouTubeBrowserPlaylist {
-        request_id: u64,
-        playlist: YouTubeItem,
-        result: Result<Vec<YouTubeItem>, String>,
-    },
-    YouTubeBrowserCollection {
-        item: YouTubeItem,
-        key: String,
-        result: Result<Vec<YouTubeItem>, String>,
-    },
-    YouTubeArtistOverview {
-        key: String,
-        result: Result<YouTubeArtistOverview, String>,
-    },
-    YouTubePlaylistsCached(Result<HashMap<String, Vec<YouTubeItem>>, String>),
-    YouTubeCollectionsCached(Result<HashMap<String, Vec<YouTubeItem>>, String>),
-    YouTubeItems {
-        title: String,
-        result: Result<Vec<YouTubeItem>, String>,
-    },
-    YouTubeGlobalSearch {
-        request_id: u64,
-        query: String,
-        result: Result<YouTubeSearchResults, String>,
-    },
-    YouTubeResolved {
-        request_id: u64,
-        queue: Vec<YouTubeItem>,
-        index: usize,
-        item: Box<YouTubeItem>,
-        result: Result<(YouTubeStream, Option<PathBuf>), String>,
-    },
 }
 
 struct SidebarParts {
@@ -166,8 +107,7 @@ struct AppController {
     rng_state: Cell<u64>,
     search_query: RefCell<String>,
     lyrics_pending: RefCell<HashSet<PathBuf>>,
-    background_tx: Sender<BackgroundMessage>,
-    background_rx: Receiver<BackgroundMessage>,
+    background: BackgroundChannel,
     mpris: mpris::MprisBridge,
     last_mpris_position: Cell<i64>,
     playback_source: Cell<PlaybackSource>,
@@ -294,7 +234,7 @@ impl AppController {
         theme.set_blur_preferences(config.blur_mode, config.blur_opacity);
         let player = PlaybackEngine::new(config.volume.clamp(0.0, 1.0))
             .unwrap_or_else(|error| panic!("Nocky playback initialization failed: {error}"));
-        let (background_tx, background_rx) = mpsc::channel();
+        let background = BackgroundChannel::new();
 
         let window = adw::ApplicationWindow::builder()
             .application(app)
@@ -659,8 +599,7 @@ impl AppController {
             rng_state: Cell::new(seed),
             search_query: RefCell::new(String::new()),
             lyrics_pending: RefCell::new(HashSet::new()),
-            background_tx,
-            background_rx,
+            background,
             mpris,
             last_mpris_position: Cell::new(-1),
             playback_source: Cell::new(PlaybackSource::None),
@@ -1438,7 +1377,7 @@ impl AppController {
             );
             return;
         };
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let _ = sender.send(BackgroundMessage::YouTubeStatus(bridge.status()));
         });
@@ -1456,7 +1395,7 @@ impl AppController {
             library.syncing = true;
         }
         self.refresh_browser();
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let _ = sender.send(BackgroundMessage::YouTubeLibrarySynced {
                 notify,
@@ -1482,7 +1421,7 @@ impl AppController {
         }
 
         self.youtube_playlist_prefetching.set(true);
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             // Playlist requests are independent. A small worker pool prevents the
             // previous sequential 10s + 10s + 10s startup behavior without
@@ -1586,7 +1525,7 @@ impl AppController {
         let request_id = self.youtube_playlist_request_id.get().wrapping_add(1);
         self.youtube_playlist_request_id.set(request_id);
         self.youtube_playlist_loading.set(true);
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let result = bridge.playlist(&playlist).map(|mut items| {
                 cache_items_for_browser(&mut items);
@@ -1639,7 +1578,7 @@ impl AppController {
                 .artist_loading
                 .insert(key.clone());
             self.navigate_browser(route);
-            let sender = self.background_tx.clone();
+            let sender = self.background.sender();
             thread::spawn(move || {
                 let result = bridge.artist_overview(&item).map(|mut overview| {
                     cache_items_for_browser(std::slice::from_mut(&mut overview.profile));
@@ -1674,7 +1613,7 @@ impl AppController {
             .insert(key.clone());
         self.navigate_browser(route);
 
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let result = bridge.collection(&item).map(|mut items| {
                 cache_items_for_browser(&mut items);
@@ -1721,7 +1660,7 @@ impl AppController {
         }
 
         self.youtube_collection_prefetching.set(true);
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let worker_count = collections.len().min(3);
             let work = Arc::new(Mutex::new(collections.into_iter().collect::<VecDeque<_>>()));
@@ -1805,7 +1744,7 @@ impl AppController {
             return;
         }
 
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let worker_count = artists.len().min(3);
             let work = Arc::new(Mutex::new(artists.into_iter().collect::<VecDeque<_>>()));
@@ -1868,7 +1807,7 @@ impl AppController {
         };
         self.refresh_browser();
 
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let filters = ["songs", "albums", "artists", "playlists"];
             let expected = filters.len();
@@ -1950,7 +1889,7 @@ impl AppController {
                 YouTubePageEvent::Search { query, filter } => {
                     self.youtube_page
                         .set_loading(true, "Buscando no YouTube Music...");
-                    let sender = self.background_tx.clone();
+                    let sender = self.background.sender();
                     thread::spawn(move || {
                         let result = bridge.search(&query, &filter);
                         let _ = sender.send(BackgroundMessage::YouTubeItems {
@@ -1962,7 +1901,7 @@ impl AppController {
                 YouTubePageEvent::Connect(raw) => {
                     self.youtube_page
                         .set_loading(true, "Validando sessão do navegador...");
-                    let sender = self.background_tx.clone();
+                    let sender = self.background.sender();
                     thread::spawn(move || {
                         let _ =
                             sender.send(BackgroundMessage::YouTubeConnected(bridge.connect(&raw)));
@@ -1971,7 +1910,7 @@ impl AppController {
                 YouTubePageEvent::Disconnect => {
                     self.youtube_page
                         .set_loading(true, "Desconectando conta...");
-                    let sender = self.background_tx.clone();
+                    let sender = self.background.sender();
                     thread::spawn(move || {
                         let _ = sender
                             .send(BackgroundMessage::YouTubeDisconnected(bridge.disconnect()));
@@ -1980,7 +1919,7 @@ impl AppController {
                 YouTubePageEvent::LoadLibrary => {
                     self.youtube_page
                         .set_loading(true, "Carregando sua biblioteca...");
-                    let sender = self.background_tx.clone();
+                    let sender = self.background.sender();
                     thread::spawn(move || {
                         let _ = sender.send(BackgroundMessage::YouTubeItems {
                             title: "Sua biblioteca do YouTube Music".to_string(),
@@ -1991,7 +1930,7 @@ impl AppController {
                 YouTubePageEvent::LoadLiked => {
                     self.youtube_page
                         .set_loading(true, "Carregando músicas curtidas...");
-                    let sender = self.background_tx.clone();
+                    let sender = self.background.sender();
                     thread::spawn(move || {
                         let _ = sender.send(BackgroundMessage::YouTubeItems {
                             title: "Músicas curtidas".to_string(),
@@ -2002,7 +1941,7 @@ impl AppController {
                 YouTubePageEvent::LoadPlaylists => {
                     self.youtube_page
                         .set_loading(true, "Carregando playlists...");
-                    let sender = self.background_tx.clone();
+                    let sender = self.background.sender();
                     thread::spawn(move || {
                         let _ = sender.send(BackgroundMessage::YouTubeItems {
                             title: "Suas playlists".to_string(),
@@ -2014,7 +1953,7 @@ impl AppController {
                     let title = item.title.clone();
                     self.youtube_page
                         .set_loading(true, &format!("Carregando {title}..."));
-                    let sender = self.background_tx.clone();
+                    let sender = self.background.sender();
                     thread::spawn(move || {
                         let _ = sender.send(BackgroundMessage::YouTubeItems {
                             title,
@@ -2045,7 +1984,7 @@ impl AppController {
         }
         let request_id = self.youtube_request_id.get().wrapping_add(1);
         self.youtube_request_id.set(request_id);
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let result = bridge
                 .resolve(&item.video_id, force)
@@ -2984,7 +2923,7 @@ impl AppController {
             return;
         };
 
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let result = library::scan_music_directory(&root);
             let _ = sender.send(BackgroundMessage::LibraryScanned { root, result });
@@ -2992,7 +2931,7 @@ impl AppController {
     }
 
     fn handle_background_messages(&self) {
-        while let Ok(message) = self.background_rx.try_recv() {
+        while let Ok(message) = self.background.try_recv() {
             match message {
                 BackgroundMessage::LibraryScanned { root, result } => {
                     self.scanning.set(false);
@@ -3706,7 +3645,7 @@ impl AppController {
         if notify {
             self.show_toast("Buscando letras sincronizadas...");
         }
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let result = lyrics_provider::download_to_sidecar(&path, &lookup);
             let _ = sender.send(BackgroundMessage::LyricsDownloaded {
@@ -3727,7 +3666,7 @@ impl AppController {
             album: item.album.clone(),
         };
         let video_id = item.video_id.clone();
-        let sender = self.background_tx.clone();
+        let sender = self.background.sender();
         thread::spawn(move || {
             let result = lyrics_provider::fetch_synced_lyrics(&lookup)
                 .map(|contents| lyrics::parse_lrc(&contents));
