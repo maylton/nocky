@@ -1,7 +1,7 @@
 use crate::{
     background::BackgroundMessage,
     lyrics, lyrics_provider, mpris,
-    youtube::{download_cover, YouTubeItem, YouTubeStream},
+    youtube::{download_cover, save_library_cache, YouTubeItem, YouTubeStream},
 };
 use gtk::{
     gio,
@@ -167,6 +167,21 @@ impl AppController {
             return;
         }
 
+        if item.thumbnail_url.is_empty() {
+            item.thumbnail_url = stream.thumbnail_url.clone();
+        }
+        if let Some(path) = cover_path.as_ref() {
+            item.cover_path = path.to_string_lossy().into_owned();
+        }
+
+        {
+            let mut library = self.youtube_library.borrow_mut();
+            if library.observe_playback(&item) {
+                if let Err(error) = save_library_cache(&library) {
+                    eprintln!("Could not save recently played YouTube item: {error}");
+                }
+            }
+        }
         self.state.borrow_mut().current = None;
         self.playback_source.set(PlaybackSource::YouTube);
         self.update_footer_source();

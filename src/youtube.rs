@@ -4,8 +4,9 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::json;
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{hash_map::DefaultHasher, BTreeMap, BTreeSet, HashMap, HashSet},
     env, fs,
+    hash::{Hash, Hasher},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     rc::Rc,
@@ -42,6 +43,37 @@ impl YouTubeItem {
         let path = Path::new(&self.cover_path);
         (!self.cover_path.is_empty() && path.is_file()).then_some(path)
     }
+}
+
+pub fn cached_cover_for_item(item: &YouTubeItem) -> Option<PathBuf> {
+    if let Some(path) = item.cached_cover() {
+        return Some(path.to_path_buf());
+    }
+
+    let original = item.thumbnail_url.trim();
+    if original.is_empty() {
+        return None;
+    }
+
+    let cache_root = glib::user_cache_dir()
+        .join("nocky")
+        .join("youtube")
+        .join("covers");
+
+    for size in [PLAYER_COVER_SIZE, BROWSER_COVER_SIZE] {
+        let upgraded = upgrade_thumbnail_url(original, size);
+        let digest = stable_hash(&upgraded);
+        let candidate = cache_root.join(format!("{digest:016x}-{size}.cover"));
+        if candidate.is_file()
+            && fs::metadata(&candidate)
+                .map(|metadata| metadata.len() > 0)
+                .unwrap_or(false)
+        {
+            return Some(candidate);
+        }
+    }
+
+    None
 }
 
 pub fn cacheable_youtube_playlist(item: &YouTubeItem) -> bool {
@@ -113,6 +145,7 @@ pub struct YouTubeLibraryCache {
     pub synced: bool,
     pub library: Vec<YouTubeItem>,
     pub liked: Vec<YouTubeItem>,
+    pub recently_played: Vec<YouTubeItem>,
     pub playlists: Vec<YouTubeItem>,
     pub suggested_albums: Vec<YouTubeItem>,
     pub suggested_artists: Vec<YouTubeItem>,
@@ -139,6 +172,7 @@ impl YouTubeLibraryCache {
         self.synced = false;
         self.library.clear();
         self.liked.clear();
+        self.recently_played.clear();
         self.playlists.clear();
         self.suggested_albums.clear();
         self.suggested_artists.clear();
@@ -188,11 +222,136 @@ impl YouTubeLibraryCache {
     }
 
     pub fn rebuild_collections(&mut self) {
-        let catalog = youtube_catalog(&self.library, &self.liked);
+        let catalog = youtube_catalog(&self.library, &self.liked, &self.recently_played);
         self.albums = build_album_cache(&catalog);
         self.artists = build_artist_cache(&catalog);
         merge_suggested_collections(&mut self.albums, &self.suggested_albums, "album");
         merge_suggested_collections(&mut self.artists, &self.suggested_artists, "artist");
+    }
+
+    pub fn observe_playback(&mut self, item: &YouTubeItem) -> bool {
+        if item.video_id.trim().is_empty() {
+            return false;
+        }
+
+        let mut observed = item.clone();
+        if let Some(existing) = self
+            .recently_played
+            .iter()
+            .find(|candidate| candidate.video_id == observed.video_id)
+        {
+            if observed.thumbnail_url.is_empty() {
+                observed.thumbnail_url = existing.thumbnail_url.clone();
+            }
+            if observed.cover_path.is_empty() {
+                observed.cover_path = existing.cover_path.clone();
+            }
+        }
+        if observed.cover_path.is_empty() {
+            if let Some(path) = cached_cover_for_item(&observed) {
+                observed.cover_path = path.to_string_lossy().into_owned();
+            }
+        }
+        if observed.result_type.is_empty() {
+            observed.result_type = "song".to_string();
+        }
+
+        let previous = self
+            .recently_played
+            .iter()
+            .position(|candidate| candidate.video_id == observed.video_id);
+        let unchanged = previous
+            .and_then(|index| self.recently_played.get(index))
+            .is_some_and(|candidate| {
+                candidate.title == observed.title
+                    && candidate.artist == observed.artist
+                    && candidate.album == observed.album
+                    && candidate.cover_path == observed.cover_path
+                    && candidate.thumbnail_url == observed.thumbnail_url
+            });
+
+        if let Some(index) = previous {
+            self.recently_played.remove(index);
+        }
+        self.recently_played.insert(0, observed);
+        self.recently_played.truncate(240);
+        self.rebuild_collections();
+
+        previous != Some(0) || !unchanged
+    }
+
+    pub fn presentation_signature(&self) -> u64 {
+        fn hash_item(item: &YouTubeItem, hasher: &mut DefaultHasher) {
+            item.result_type.hash(hasher);
+            item.title.hash(hasher);
+            item.subtitle.hash(hasher);
+            item.video_id.hash(hasher);
+            item.browse_id.hash(hasher);
+            item.album.hash(hasher);
+            item.artist.hash(hasher);
+            item.playlist_kind.hash(hasher);
+            item.params.hash(hasher);
+            item.duration_seconds.hash(hasher);
+            item.thumbnail_url.hash(hasher);
+            item.cover_path.hash(hasher);
+        }
+
+        fn hash_entry(entry: &YouTubeCollectionEntry, hasher: &mut DefaultHasher) {
+            entry.title.hash(hasher);
+            entry.subtitle.hash(hasher);
+            entry.detail.hash(hasher);
+            entry.cover_path.hash(hasher);
+            entry.item_count.hash(hasher);
+            hash_item(&entry.source, hasher);
+        }
+
+        fn hash_items(label: &str, items: &[YouTubeItem], hasher: &mut DefaultHasher) {
+            label.hash(hasher);
+            items.len().hash(hasher);
+            for item in items {
+                hash_item(item, hasher);
+            }
+        }
+
+        let mut hasher = DefaultHasher::new();
+        hash_items("library", &self.library, &mut hasher);
+        hash_items("liked", &self.liked, &mut hasher);
+        hash_items("recently_played", &self.recently_played, &mut hasher);
+        hash_items("playlists", &self.playlists, &mut hasher);
+        hash_items("suggested_albums", &self.suggested_albums, &mut hasher);
+        hash_items("suggested_artists", &self.suggested_artists, &mut hasher);
+
+        "albums".hash(&mut hasher);
+        self.albums.len().hash(&mut hasher);
+        for entry in &self.albums {
+            hash_entry(entry, &mut hasher);
+        }
+
+        "artists".hash(&mut hasher);
+        self.artists.len().hash(&mut hasher);
+        for entry in &self.artists {
+            hash_entry(entry, &mut hasher);
+        }
+
+        hasher.finish()
+    }
+
+    pub fn repair_recent_cover_paths(&mut self) -> bool {
+        let mut changed = false;
+
+        for item in &mut self.recently_played {
+            if item.cover_path.is_empty() {
+                if let Some(path) = cached_cover_for_item(item) {
+                    item.cover_path = path.to_string_lossy().into_owned();
+                    changed = true;
+                }
+            }
+        }
+
+        if changed {
+            self.rebuild_collections();
+        }
+        changed
     }
 }
 
@@ -209,6 +368,8 @@ struct PersistedYouTubeLibraryCache {
     saved_at: u64,
     library: Vec<YouTubeItem>,
     liked: Vec<YouTubeItem>,
+    #[serde(default)]
+    recently_played: Vec<YouTubeItem>,
     playlists: Vec<YouTubeItem>,
     suggested_albums: Vec<YouTubeItem>,
     suggested_artists: Vec<YouTubeItem>,
@@ -935,10 +1096,15 @@ pub fn cache_library_covers(snapshot: &mut YouTubeLibrarySnapshot) {
     cache_items_for_browser(&mut snapshot.suggested_artists);
 }
 
-fn youtube_catalog(library: &[YouTubeItem], liked: &[YouTubeItem]) -> Vec<YouTubeItem> {
+fn youtube_catalog(
+    library: &[YouTubeItem],
+    liked: &[YouTubeItem],
+    recently_played: &[YouTubeItem],
+) -> Vec<YouTubeItem> {
     let mut seen = HashSet::new();
-    library
+    recently_played
         .iter()
+        .chain(library.iter())
         .chain(liked.iter())
         .filter(|item| item.playable())
         .filter(|item| seen.insert(item.video_id.clone()))
@@ -1246,6 +1412,7 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
         synced: false,
         library: cache.library,
         liked: cache.liked,
+        recently_played: cache.recently_played,
         playlists: cache.playlists,
         suggested_albums: cache.suggested_albums,
         suggested_artists: cache.suggested_artists,
@@ -1259,8 +1426,12 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
         albums: cache.albums,
         artists: cache.artists,
     };
+    let repaired_covers = library.repair_recent_cover_paths();
     if library.albums.is_empty() || library.artists.is_empty() {
         library.rebuild_collections();
+    }
+    if repaired_covers {
+        let _ = save_library_cache(&library);
     }
     library
 }
@@ -1298,6 +1469,7 @@ pub fn save_library_cache(cache: &YouTubeLibraryCache) -> Result<(), String> {
         saved_at,
         library: cache.library.clone(),
         liked: cache.liked.clone(),
+        recently_played: cache.recently_played.clone(),
         playlists: cache.playlists.clone(),
         suggested_albums: cache.suggested_albums.clone(),
         suggested_artists: cache.suggested_artists.clone(),

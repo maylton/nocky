@@ -202,6 +202,57 @@ struct AppController {
     _theme: Rc<theme::ThemeBridge>,
 }
 
+fn resolve_youtube_collection_item(
+    bridge: &YouTubeBridge,
+    item: &YouTubeItem,
+    filter: &str,
+) -> Result<YouTubeItem, String> {
+    if !item.browse_id.trim().is_empty() {
+        return Ok(item.clone());
+    }
+
+    let query = item.title.trim();
+    if query.is_empty() {
+        return Err("The YouTube Music collection has no title".to_string());
+    }
+
+    let mut candidates = bridge.search(query, filter)?;
+    candidates.retain(|candidate| {
+        candidate
+            .result_type
+            .eq_ignore_ascii_case(item.result_type.as_str())
+            || candidate
+                .result_type
+                .eq_ignore_ascii_case(filter.trim_end_matches('s'))
+    });
+
+    candidates
+        .iter()
+        .position(|candidate| candidate.title.eq_ignore_ascii_case(query))
+        .map(|index| candidates.remove(index))
+        .or_else(|| candidates.into_iter().next())
+        .ok_or_else(|| {
+            format!(
+                "No YouTube Music {} could be resolved for '{}'",
+                item.result_type, item.title
+            )
+        })
+}
+
+fn scanned_library_matches(tracks: &[Track], data: &[TrackData]) -> bool {
+    tracks.len() == data.len()
+        && tracks.iter().zip(data).all(|(track, incoming)| {
+            track.path == incoming.path
+                && track.title == incoming.title
+                && track.artist == incoming.artist
+                && track.album == incoming.album
+                && track.duration_seconds == incoming.duration_seconds
+                && track.disc_number == incoming.disc_number
+                && track.track_number == incoming.track_number
+                && track.cover_path == incoming.cover_path
+        })
+}
+
 fn main() -> glib::ExitCode {
     let app = adw::Application::builder().application_id(APP_ID).build();
     app.connect_activate(build_application);
@@ -285,6 +336,13 @@ impl AppController {
             .build();
         header.pack_end(&search_button);
 
+        let sync_button = gtk::Button::builder()
+            .icon_name("view-refresh-symbolic")
+            .tooltip_text("Sincronizar biblioteca")
+            .build();
+        sync_button.add_css_class("flat");
+        header.pack_end(&sync_button);
+
         let folder_button = gtk::Button::builder()
             .icon_name("folder-open-symbolic")
             .tooltip_text(tr(Message::ChooseMusicFolderTooltip))
@@ -327,6 +385,8 @@ impl AppController {
             previous_button: previous,
             hero_play_button,
             next_button: next,
+            inline_lyrics_button,
+            refresh_lyrics_button,
             hero_cover,
             hero_play_icon,
             favorite_icon,
@@ -1045,6 +1105,41 @@ impl AppController {
             });
         }
 
+        {
+            let weak = Rc::downgrade(&controller);
+            sync_button.connect_clicked(move |_| {
+                if let Some(controller) = weak.upgrade() {
+                    controller.sync_active_library();
+                }
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(&controller);
+            inline_lyrics_button.connect_toggled(move |button| {
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+                let visible = button.is_active();
+                controller.player_view.set_lyrics_visible(visible);
+
+                let changed = controller.config.borrow().show_home_lyrics != visible;
+                if changed {
+                    controller.config.borrow_mut().show_home_lyrics = visible;
+                    controller.save_config();
+                }
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(&controller);
+            refresh_lyrics_button.connect_clicked(move |_| {
+                if let Some(controller) = weak.upgrade() {
+                    controller.refresh_current_lyrics();
+                }
+            });
+        }
+
         controller.refresh_browser();
         controller.refresh_youtube_status();
         controller
@@ -1370,6 +1465,38 @@ impl AppController {
         popover.popup();
     }
 
+    fn sync_active_library(&self) {
+        let source = self.config.borrow().startup_source;
+        match source {
+            Some(StartupSource::YouTube) => {
+                let (connected, syncing) = {
+                    let library = self.youtube_library.borrow();
+                    (library.connected, library.syncing)
+                };
+
+                if !connected {
+                    self.show_toast("Conecte sua conta do YouTube Music primeiro");
+                    return;
+                }
+                if syncing {
+                    self.show_toast("A biblioteca já está sendo sincronizada");
+                    return;
+                }
+
+                if self.sync_youtube_library(true, true) {
+                    self.show_toast("Sincronizando biblioteca do YouTube Music…");
+                }
+            }
+            _ => {
+                if self.scanning.get() {
+                    self.show_toast("A biblioteca local já está sendo atualizada");
+                    return;
+                }
+                self.scan_library();
+            }
+        }
+    }
+
     fn refresh_youtube_status(&self) {
         let Some(bridge) = self.youtube_bridge.clone() else {
             self.youtube_page.set_status(&YouTubeStatus::default());
@@ -1395,7 +1522,6 @@ impl AppController {
             }
             library.syncing = true;
         }
-        self.refresh_browser();
         let sender = self.background.sender();
         thread::spawn(move || {
             let _ = sender.send(BackgroundMessage::YouTubeLibrarySynced {
@@ -1581,11 +1707,13 @@ impl AppController {
             self.navigate_browser(route);
             let sender = self.background.sender();
             thread::spawn(move || {
-                let result = bridge.artist_overview(&item).map(|mut overview| {
-                    cache_items_for_browser(std::slice::from_mut(&mut overview.profile));
-                    cache_items_for_browser(&mut overview.albums);
-                    overview
-                });
+                let result = resolve_youtube_collection_item(&bridge, &item, "artists")
+                    .and_then(|resolved| bridge.artist_overview(&resolved))
+                    .map(|mut overview| {
+                        cache_items_for_browser(std::slice::from_mut(&mut overview.profile));
+                        cache_items_for_browser(&mut overview.albums);
+                        overview
+                    });
                 let _ = sender.send(BackgroundMessage::YouTubeArtistOverview { key, result });
             });
             return;
@@ -1616,10 +1744,12 @@ impl AppController {
 
         let sender = self.background.sender();
         thread::spawn(move || {
-            let result = bridge.collection(&item).map(|mut items| {
-                cache_items_for_browser(&mut items);
-                items
-            });
+            let result = resolve_youtube_collection_item(&bridge, &item, "albums")
+                .and_then(|resolved| bridge.collection(&resolved))
+                .map(|mut items| {
+                    cache_items_for_browser(&mut items);
+                    items
+                });
             let _ = sender.send(BackgroundMessage::YouTubeBrowserCollection { item, key, result });
         });
     }
@@ -1725,6 +1855,7 @@ impl AppController {
                 .artists
                 .iter()
                 .take(12)
+                .filter(|entry| !entry.source.browse_id.is_empty())
                 .filter_map(|entry| {
                     let key = youtube_collection_key("artist", &entry.title);
                     let missing = !library.artist_profiles.contains_key(&key);
@@ -2625,6 +2756,14 @@ impl AppController {
     }
 
     fn apply_scanned_library(&self, data: Vec<TrackData>) {
+        let unchanged = {
+            let state = self.state.borrow();
+            scanned_library_matches(&state.tracks, &data)
+        };
+        if unchanged {
+            return;
+        }
+
         let previous_path = {
             let state = self.state.borrow();
             state
@@ -2931,6 +3070,37 @@ impl AppController {
                 notify,
             });
         });
+    }
+
+    fn refresh_current_lyrics(&self) {
+        match self.playback_source.get() {
+            PlaybackSource::Local => {
+                let current = self.state.borrow().current;
+                let Some(index) = current else {
+                    self.show_toast("Selecione uma faixa primeiro");
+                    return;
+                };
+                self.request_lyrics(index, true, true);
+            }
+            PlaybackSource::YouTube => {
+                let item = self
+                    .youtube_state
+                    .borrow()
+                    .as_ref()
+                    .map(|state| state.item.clone());
+                let Some(item) = item else {
+                    self.show_toast("Selecione uma faixa primeiro");
+                    return;
+                };
+
+                self.set_lyrics_message("Buscando novamente as letras sincronizadas…");
+                self.show_toast("Buscando letras sincronizadas…");
+                self.request_youtube_lyrics(&item, true);
+            }
+            PlaybackSource::None => {
+                self.show_toast("Selecione uma faixa primeiro");
+            }
+        }
     }
 
     fn toggle_favorite(&self) {
@@ -3447,11 +3617,6 @@ impl AppController {
         if updated {
             self.listening_session_last_saved_seconds
                 .set(listened_seconds);
-            if matches!(self.browser.route(), BrowserRoute::All)
-                && self.search_query.borrow().trim().is_empty()
-            {
-                self.refresh_browser();
-            }
         }
     }
 

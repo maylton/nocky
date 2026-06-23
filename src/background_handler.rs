@@ -163,13 +163,20 @@ impl AppController {
                             snapshot.liked.len(),
                             snapshot.playlists.len(),
                         );
+                        let previous_signature =
+                            self.youtube_library.borrow().presentation_signature();
                         self.youtube_library.borrow_mut().apply(snapshot);
+                        let content_changed =
+                            self.youtube_library.borrow().presentation_signature()
+                                != previous_signature;
                         if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
                             eprintln!("Could not save the YouTube library cache: {error}");
                         }
                         self.youtube_page
                             .set_loading(false, "Library synchronized with Nocky");
-                        self.refresh_browser();
+                        if content_changed {
+                            self.refresh_browser();
+                        }
                         self.prefetch_youtube_playlist_cache();
                         self.prefetch_youtube_collection_cache();
                         if notify {
@@ -182,7 +189,6 @@ impl AppController {
                     Err(error) => {
                         self.youtube_library.borrow_mut().syncing = false;
                         self.youtube_page.set_loading(false, "YouTube Music");
-                        self.refresh_browser();
                         self.show_toast(&format!(
                             "Não foi possível sincronizar a biblioteca: {error}"
                         ));
@@ -275,7 +281,9 @@ impl AppController {
                             }
                         }
                         Err(error) => {
-                            eprintln!("Could not load YouTube artist details: {error}");
+                            if !error.contains("No YouTube Music artist could be resolved") {
+                                eprintln!("Could not load YouTube artist details: {error}");
+                            }
                             if self.is_open_youtube_collection(&key) {
                                 self.show_toast(&format!(
                                     "Não foi possível carregar os álbuns do artista: {error}"
@@ -283,7 +291,9 @@ impl AppController {
                             }
                         }
                     }
-                    self.refresh_browser();
+                    if self.is_open_youtube_collection(&key) {
+                        self.refresh_browser();
+                    }
                 }
                 BackgroundMessage::YouTubeBrowserCollection { item, key, result } => {
                     self.youtube_library
@@ -343,7 +353,6 @@ impl AppController {
                         if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
                             eprintln!("Could not save the YouTube collection cache: {error}");
                         }
-                        self.refresh_browser();
                     }
                     Err(error) => {
                         self.youtube_collection_prefetching.set(false);
@@ -363,7 +372,6 @@ impl AppController {
                         if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
                             eprintln!("Could not save the YouTube playlist cache: {error}");
                         }
-                        self.refresh_browser();
                     }
                     Err(error) => {
                         self.youtube_playlist_prefetching.set(false);

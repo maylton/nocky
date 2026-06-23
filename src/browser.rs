@@ -1488,8 +1488,9 @@ impl LibraryBrowser {
 fn youtube_catalog(youtube: &YouTubeLibraryCache) -> Vec<YouTubeItem> {
     let mut seen = HashSet::new();
     youtube
-        .library
+        .recently_played
         .iter()
+        .chain(youtube.library.iter())
         .chain(youtube.liked.iter())
         .filter(|item| item.playable())
         .filter(|item| seen.insert(item.video_id.clone()))
@@ -1592,7 +1593,7 @@ fn ranked_home_album_cards(
                     item: source_item,
                     subtitle: artists,
                     detail: listening_rank_detail(&stats, &fallback_detail),
-                    cover_path: first.cached_cover().map(Path::to_path_buf),
+                    cover_path: crate::youtube::cached_cover_for_item(first),
                 });
             }
         }
@@ -1673,7 +1674,7 @@ fn ranked_home_artist_cards(
                     item: source_item,
                     subtitle: format!("{album_count} álbuns"),
                     detail: listening_rank_detail(&stats, &fallback_detail),
-                    cover_path: first.cached_cover().map(Path::to_path_buf),
+                    cover_path: crate::youtube::cached_cover_for_item(first),
                 });
             }
         }
