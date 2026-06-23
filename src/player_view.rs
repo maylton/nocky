@@ -17,6 +17,7 @@ pub(crate) struct PlayerViewHandle {
     favorite_icon: gtk::Image,
     hero_play_icon: gtk::Image,
     lyrics: LyricsPresenter,
+    visualizer: SpectrumVisualizer,
 }
 
 impl PlayerViewHandle {
@@ -44,13 +45,14 @@ impl PlayerViewHandle {
     pub(crate) fn set_lyrics_visible(&self, visible: bool) {
         self.lyrics.inline_widget().set_visible(visible);
     }
+    pub(crate) fn set_visualizer_active(&self, active: bool) {
+        self.visualizer.set_active(active);
+    }
 }
 
 pub(crate) struct PlayerView {
     pub(crate) handle: PlayerViewHandle,
     pub(crate) root: gtk::Box,
-    pub(crate) title: gtk::Label,
-    pub(crate) artist: gtk::Label,
     pub(crate) album: gtk::Label,
     pub(crate) now_heading: gtk::Label,
     pub(crate) favorite_button: gtk::Button,
@@ -329,13 +331,12 @@ impl PlayerView {
             favorite_icon: favorite_icon.clone(),
             hero_play_icon: hero_play_icon.clone(),
             lyrics: lyrics.clone(),
+            visualizer: visualizer.clone(),
         };
 
         Self {
             handle,
             root: now_card,
-            title,
-            artist,
             album,
             now_heading,
             favorite_button: favorite,

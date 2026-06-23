@@ -207,9 +207,6 @@ struct AppController {
     lyrics: LyricsPresenter,
     youtube_page: Rc<YouTubePage>,
     player_view: PlayerViewHandle,
-
-    title: gtk::Label,
-    artist: gtk::Label,
     album: gtk::Label,
     now_heading: gtk::Label,
     favorite_button: gtk::Button,
@@ -381,8 +378,6 @@ impl AppController {
         let PlayerView {
             handle: player_view,
             root: now_card,
-            title,
-            artist,
             album,
             now_heading,
             favorite_button: favorite,
@@ -704,8 +699,6 @@ impl AppController {
             lyrics,
             youtube_page,
             player_view,
-            title,
-            artist,
             album,
             now_heading,
             favorite_button: favorite.clone(),
@@ -2623,9 +2616,11 @@ impl AppController {
         self.empty_add.set_label(tr(Message::ChooseFolderAction));
 
         if self.playback_source.get() == PlaybackSource::None {
-            self.title.set_text(tr(Message::IntegratedMusic));
-            self.artist.set_text(tr(Message::NoTrackSelected));
-            self.album.set_text(tr(Message::ChooseFolderToStart));
+            self.player_view.set_metadata(
+                tr(Message::IntegratedMusic),
+                tr(Message::NoTrackSelected),
+                tr(Message::ChooseFolderToStart),
+            );
             self.mini_title.set_text(tr(Message::NothingPlaying));
         }
 
@@ -2783,8 +2778,8 @@ impl AppController {
         self.visualizer
             .widget()
             .set_visible(config.show_home_visualizer);
-        self.visualizer
-            .set_active(config.show_home_visualizer && self.player.is_playing());
+        self.player_view
+            .set_visualizer_active(config.show_home_visualizer && self.player.is_playing());
         self.player_view.set_lyrics_visible(config.show_home_lyrics);
         self._theme.set_noctalia_enabled(
             config.noctalia_theme_sync && self._theme.noctalia_shell_detected(),
@@ -3981,9 +3976,8 @@ impl AppController {
         self.youtube_state.replace(None);
         self.reset_youtube_recovery();
         self.state.borrow_mut().current = Some(index);
-        self.title.set_text(&track.title);
-        self.artist.set_text(&track.artist);
-        self.album.set_text(&track.album);
+        self.player_view
+            .set_metadata(&track.title, &track.artist, &track.album);
         self.mini_title.set_text(&track.title);
         self.mini_artist.set_text(&track.artist);
         self.hero_cover.set_path(track.cover_path.as_deref());
@@ -4504,8 +4498,8 @@ impl AppController {
         };
         self.play_icon.set_icon_name(Some(icon));
         self.hero_play_icon.set_icon_name(Some(icon));
-        self.visualizer
-            .set_active(playing && self.visualizer.widget().is_visible());
+        self.player_view
+            .set_visualizer_active(playing && self.visualizer.widget().is_visible());
         let animate_m3 = playing && self.config.borrow().use_m3_progress;
         self.home_wave_progress.set_playing(animate_m3);
         self.footer_progress.set_playing(animate_m3);
@@ -4641,9 +4635,11 @@ impl AppController {
         self.playback_source.set(PlaybackSource::None);
         self.youtube_state.replace(None);
         self.reset_youtube_recovery();
-        self.title.set_text(self.tr(Message::IntegratedMusic));
-        self.artist.set_text(self.tr(Message::NoTrackSelected));
-        self.album.set_text(message);
+        self.player_view.set_metadata(
+            self.tr(Message::IntegratedMusic),
+            self.tr(Message::NoTrackSelected),
+            message,
+        );
         self.mini_title.set_text(self.tr(Message::NothingPlaying));
         self.mini_artist.set_text("Nocky");
         self.update_footer_source();
