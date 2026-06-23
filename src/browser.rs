@@ -1,5 +1,6 @@
 use crate::{
     config::AppConfig,
+    listening_history::{ListeningHistory, ListeningSource},
     model::Track,
     youtube::{youtube_collection_key, YouTubeCollectionEntry, YouTubeItem, YouTubeLibraryCache},
 };
@@ -394,13 +395,14 @@ impl LibraryBrowser {
         tracks: &[Track],
         config: &AppConfig,
         youtube: &YouTubeLibraryCache,
+        history: &ListeningHistory,
         query: &str,
     ) {
         let previous = self.route();
         self.root
             .set_transition_type(route_transition(&previous, &route));
         self.route.replace(route);
-        self.refresh(tracks, config, youtube, query);
+        self.refresh(tracks, config, youtube, history, query);
     }
 
     pub fn refresh(
@@ -408,6 +410,7 @@ impl LibraryBrowser {
         tracks: &[Track],
         config: &AppConfig,
         youtube: &YouTubeLibraryCache,
+        history: &ListeningHistory,
         query: &str,
     ) {
         match self.route() {
@@ -428,7 +431,7 @@ impl LibraryBrowser {
                 self.root.set_visible_child_name("playlists");
             }
             BrowserRoute::All if query.trim().is_empty() => {
-                self.rebuild_home(tracks, config, youtube);
+                self.rebuild_home(tracks, config, youtube, history);
                 self.root.set_visible_child_name("home");
             }
             route => {
@@ -833,7 +836,13 @@ impl LibraryBrowser {
         });
     }
 
-    fn rebuild_home(&self, tracks: &[Track], config: &AppConfig, youtube: &YouTubeLibraryCache) {
+    fn rebuild_home(
+        &self,
+        tracks: &[Track],
+        config: &AppConfig,
+        youtube: &YouTubeLibraryCache,
+        history: &ListeningHistory,
+    ) {
         while let Some(child) = self.home_content.first_child() {
             self.home_content.remove(&child);
         }
@@ -860,17 +869,26 @@ impl LibraryBrowser {
             &self.event_tx,
         ));
 
+        // In YouTube-only mode AppController passes an empty local track
+        // slice. This avoids using a populated YouTube cache while the user is
+        // browsing the local source.
+        let active_source = if tracks.is_empty() {
+            ListeningSource::YouTube
+        } else {
+            ListeningSource::Local
+        };
+
         self.home_content.append(&home_section(
-            "Álbuns",
-            "Capas e coleções sincronizadas",
-            home_album_cards(tracks, youtube),
+            "Seus álbuns",
+            "Mais ouvidos e reproduzidos recentemente",
+            ranked_home_album_cards(tracks, youtube, history, active_source),
             &self.event_tx,
         ));
 
         self.home_content.append(&home_section(
-            "Artistas",
-            "Artistas organizados pela biblioteca ativa",
-            home_artist_cards(tracks, youtube),
+            "Seus artistas",
+            "Com base no que você mais escuta",
+            ranked_home_artist_cards(tracks, youtube, history, active_source),
             &self.event_tx,
         ));
 
@@ -1248,6 +1266,143 @@ fn youtube_catalog(youtube: &YouTubeLibraryCache) -> Vec<YouTubeItem> {
         .collect()
 }
 
+fn ranked_home_album_cards(
+    tracks: &[Track],
+    youtube: &YouTubeLibraryCache,
+    history: &ListeningHistory,
+    source: ListeningSource,
+) -> Vec<HomeCard> {
+    let mut names = history
+        .ranked_albums(source, 12)
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect::<Vec<_>>();
+    for album in history.recent_albums(source, 12) {
+        if !names.iter().any(|name| name.eq_ignore_ascii_case(&album)) {
+            names.push(album);
+        }
+        if names.len() == 12 {
+            break;
+        }
+    }
+    let fallback = home_album_cards(tracks, youtube);
+    if names.is_empty() {
+        return fallback;
+    }
+    let mut cards = Vec::new();
+    for name in names {
+        match source {
+            ListeningSource::Local => {
+                let album_tracks = tracks
+                    .iter()
+                    .filter(|track| track.album.eq_ignore_ascii_case(&name))
+                    .collect::<Vec<_>>();
+                if album_tracks.is_empty() {
+                    continue;
+                }
+                let artists = album_tracks
+                    .iter()
+                    .map(|track| track.artist.as_str())
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                cards.push(HomeCard::LocalAlbum {
+                    title: name,
+                    subtitle: artists,
+                    detail: format!("Local • {} faixas", album_tracks.len()),
+                    cover_path: album_tracks
+                        .iter()
+                        .find_map(|track| track.cover_path.clone()),
+                });
+            }
+            ListeningSource::YouTube => {
+                if let Some(entry) = youtube
+                    .albums
+                    .iter()
+                    .find(|entry| entry.title.eq_ignore_ascii_case(&name))
+                {
+                    cards.push(HomeCard::YouTubeAlbum {
+                        item: entry.source.clone(),
+                        subtitle: entry.subtitle.clone(),
+                        detail: entry.detail.clone(),
+                        cover_path: entry.cached_cover().map(Path::to_path_buf),
+                    });
+                }
+            }
+        }
+    }
+    if cards.is_empty() {
+        fallback
+    } else {
+        cards
+    }
+}
+
+fn ranked_home_artist_cards(
+    tracks: &[Track],
+    youtube: &YouTubeLibraryCache,
+    history: &ListeningHistory,
+    source: ListeningSource,
+) -> Vec<HomeCard> {
+    let names = history
+        .ranked_artists(source, 12)
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect::<Vec<_>>();
+    let fallback = home_artist_cards(tracks, youtube);
+    if names.is_empty() {
+        return fallback;
+    }
+    let mut cards = Vec::new();
+    for name in names {
+        match source {
+            ListeningSource::Local => {
+                let artist_tracks = tracks
+                    .iter()
+                    .filter(|track| track.artist.eq_ignore_ascii_case(&name))
+                    .collect::<Vec<_>>();
+                if artist_tracks.is_empty() {
+                    continue;
+                }
+                let albums = artist_tracks
+                    .iter()
+                    .map(|track| track.album.as_str())
+                    .filter(|album| !album.is_empty())
+                    .collect::<BTreeSet<_>>()
+                    .len();
+                cards.push(HomeCard::LocalArtist {
+                    title: name,
+                    subtitle: format!("{albums} álbuns"),
+                    detail: format!("Local • {} faixas", artist_tracks.len()),
+                    cover_path: artist_tracks
+                        .iter()
+                        .find_map(|track| track.cover_path.clone()),
+                });
+            }
+            ListeningSource::YouTube => {
+                if let Some(entry) = youtube
+                    .artists
+                    .iter()
+                    .find(|entry| entry.title.eq_ignore_ascii_case(&name))
+                {
+                    cards.push(HomeCard::YouTubeArtist {
+                        item: entry.source.clone(),
+                        subtitle: entry.subtitle.clone(),
+                        detail: entry.detail.clone(),
+                        cover_path: entry.cached_cover().map(Path::to_path_buf),
+                    });
+                }
+            }
+        }
+    }
+    if cards.is_empty() {
+        fallback
+    } else {
+        cards
+    }
+}
+
 fn home_album_cards(tracks: &[Track], youtube: &YouTubeLibraryCache) -> Vec<HomeCard> {
     let mut cards = Vec::new();
 
@@ -1296,26 +1451,21 @@ fn home_artist_cards(tracks: &[Track], youtube: &YouTubeLibraryCache) -> Vec<Hom
             .push(track);
     }
     for (artist, artist_tracks) in local_groups.into_iter().take(12) {
-        let albums = artist_tracks
-            .iter()
-            .map(|track| track.album.as_str())
-            .collect::<BTreeSet<_>>()
-            .len();
         let cover_path = artist_tracks
             .iter()
             .find_map(|track| track.cover_path.clone());
         cards.push(HomeCard::LocalArtist {
             title: artist,
-            subtitle: format!("{albums} álbuns"),
-            detail: format!("Local • {} faixas", artist_tracks.len()),
+            subtitle: String::new(),
+            detail: String::new(),
             cover_path,
         });
     }
 
     for artist in youtube.artists.iter().take(12) {
         let key = youtube_collection_key("artist", &artist.title);
-        let source = youtube.artist_profiles.get(&key).unwrap_or(&artist.source);
-        cards.push(youtube_artist_home_card_from_source(artist, source));
+        let profile = youtube.artist_profiles.get(&key);
+        cards.push(youtube_artist_home_card_from_source(artist, profile));
     }
 
     cards.truncate(18);
@@ -1333,15 +1483,14 @@ fn youtube_album_home_card(entry: &YouTubeCollectionEntry) -> HomeCard {
 
 fn youtube_artist_home_card_from_source(
     entry: &YouTubeCollectionEntry,
-    source: &YouTubeItem,
+    profile: Option<&YouTubeItem>,
 ) -> HomeCard {
     HomeCard::YouTubeArtist {
-        item: source.clone(),
-        subtitle: entry.subtitle.clone(),
-        detail: entry.detail.clone(),
-        cover_path: source
-            .cached_cover()
-            .or_else(|| entry.cached_cover())
+        item: entry.source.clone(),
+        subtitle: String::new(),
+        detail: String::new(),
+        cover_path: profile
+            .and_then(YouTubeItem::cached_cover)
             .map(Path::to_path_buf),
     }
 }
@@ -1796,7 +1945,9 @@ fn collection_card(
     }
     card.append(&artwork);
     card.append(&title_label);
-    card.append(&subtitle_label);
+    if !subtitle.is_empty() {
+        card.append(&subtitle_label);
+    }
     bind_responsive_collection_artwork(&card, &artwork, cover_path.map(Path::to_path_buf));
     card
 }
