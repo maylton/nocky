@@ -54,7 +54,7 @@ impl PlaybackEngine {
         let spectrum = gst::ElementFactory::make("spectrum")
             .property("bands", 32_u32)
             .property("threshold", -80_i32)
-            .property("interval", 50_000_000_u64)
+            .property("interval", 16_666_667_u64)
             .property("post-messages", true)
             .property("message-magnitude", true)
             .property("message-phase", false)
@@ -136,13 +136,6 @@ impl PlaybackEngine {
                                     let values = magnitudes
                                         .iter()
                                         .filter_map(|value| value.get::<f32>().ok())
-                                        .map(|decibels| {
-                                            // Ignore the quietest floor and keep loud tracks from
-                                            // pinning every band at full height.
-                                            (((decibels + 66.0) / 66.0).clamp(0.0, 1.0).powf(1.12)
-                                                * 0.78)
-                                                .min(0.86)
-                                        })
                                         .collect::<Vec<_>>();
                                     if !values.is_empty() {
                                         let _ = event_tx.send(PlaybackEvent::Spectrum(values));

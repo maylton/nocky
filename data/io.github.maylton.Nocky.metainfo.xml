@@ -23,6 +23,11 @@
   <url type="homepage">https://github.com/maylton/nocky</url>
   <url type="bugtracker">https://github.com/maylton/nocky/issues</url>
   <releases>
+    <release version="0.2.7" date="2026-06-23">
+      <description>
+        <p>Ports Noctalia's compact mirrored spectrum behavior to GTK/Cairo, adds 60 Hz logarithmic spectrum processing, gravity falloff, temporal memory, Monstercat smoothing, a zero-warning CI quality gate and a version-synchronized universal installer.</p>
+      </description>
+    </release>
     <release version="0.2.6" date="2026-06-23">
       <description>
         <p>Adds a complete first-run setup wizard, conditional synchronized-lyrics wrapping, Noctalia-aware appearance choices and improved Nocky branding in onboarding and About.</p>

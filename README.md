@@ -4,7 +4,7 @@
 
 This app is vibe-coded and any improvement suggestion is welcomed, but don't expect much as it's just a free time hobby project =)
 
-> **Status:** Nocky 0.2.6 is a beta release. It adds a complete first-run setup wizard, Noctalia-aware appearance choices and truly conditional synchronized-lyrics wrapping.
+> **Status:** Nocky 0.2.7 is a beta release. It introduces a faithful GTK/Cairo port of Noctalia's compact mirrored spectrum behavior, a zero-warning quality baseline and a synchronized universal installer.
 
 <!-- noctalia-inspiration:start -->
 > [!NOTE]
@@ -26,7 +26,7 @@ This app is vibe-coded and any improvement suggestion is welcomed, but don't exp
 - Stable track/disc-aware playback queues
 - Embedded and sidecar album artwork
 - Direct GStreamer playback engine
-- Real-time horizontal audio spectrum visualizer
+- Noctalia-style 60 Hz mirrored audio spectrum visualizer
 - Five-line synchronized lyrics preview
 - Full synchronized `.lrc` lyrics page
 - Automatic LRCLIB lookup
@@ -192,10 +192,9 @@ requirements-youtube.txt  pinned optional Python runtime
 ## Development
 
 ```bash
-cargo fmt --check
-cargo check
-python3 -m py_compile helpers/nocky_youtube.py
+./scripts/quality-gate.sh
 ./scripts/verify-release.sh
+./install.sh --version
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
