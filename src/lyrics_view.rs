@@ -8,6 +8,7 @@ use std::{
 
 const INLINE_SLOTS: usize = 5;
 const INLINE_CENTER: usize = INLINE_SLOTS / 2;
+const INLINE_TEXT_WIDTH: i32 = 360;
 const SCROLL_DURATION: Duration = Duration::from_millis(220);
 
 #[derive(Clone)]
@@ -245,13 +246,13 @@ impl LyricsPresenter {
     fn render_inline_message(&self, title: &str, hint: Option<&str>, animate: bool) {
         let target = self.inline_target_page(animate);
         let page = &self.inner.inline_pages[target];
-        for label in &page.labels {
-            label.set_text("");
+        for (slot, label) in page.labels.iter().enumerate() {
+            set_inline_label_text(label, "", slot == INLINE_CENTER);
         }
-        page.labels[INLINE_CENTER].set_text(title);
+        set_inline_label_text(&page.labels[INLINE_CENTER], title, true);
         if let Some(hint) = hint.filter(|hint| !hint.trim().is_empty()) {
             if INLINE_CENTER + 1 < page.labels.len() {
-                page.labels[INLINE_CENTER + 1].set_text(hint);
+                set_inline_label_text(&page.labels[INLINE_CENTER + 1], hint, false);
             }
         }
         self.show_inline_page(target);
@@ -354,11 +355,11 @@ fn inline_page() -> InlinePage {
         label.set_max_width_chars(-1);
 
         if index == INLINE_CENTER {
-            label.set_wrap(true);
+            label.set_wrap(false);
             label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
-            label.set_single_line_mode(false);
-            label.set_ellipsize(gtk::pango::EllipsizeMode::End);
-            label.set_lines(2);
+            label.set_single_line_mode(true);
+            label.set_ellipsize(gtk::pango::EllipsizeMode::None);
+            label.set_lines(1);
             label.set_size_request(-1, 44);
         } else {
             label.set_wrap(false);
@@ -379,14 +380,44 @@ fn inline_page() -> InlinePage {
     InlinePage { root, labels }
 }
 
+fn set_inline_label_text(label: &gtk::Label, text: &str, focused: bool) {
+    let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
+
+    let natural_width = if normalized.is_empty() {
+        0
+    } else {
+        label.create_pango_layout(Some(&normalized)).pixel_size().0
+    };
+
+    let should_wrap = focused && natural_width > INLINE_TEXT_WIDTH;
+
+    label.set_wrap(should_wrap);
+    label.set_single_line_mode(!should_wrap);
+
+    if should_wrap {
+        label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+        label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+        label.set_lines(2);
+    } else {
+        label.set_ellipsize(if focused {
+            gtk::pango::EllipsizeMode::None
+        } else {
+            gtk::pango::EllipsizeMode::End
+        });
+        label.set_lines(1);
+    }
+
+    label.set_text(&normalized);
+}
+
 fn fill_inline_lines(
     page: &InlinePage,
     lines: &[LyricLine],
     visible: &[usize],
     active_visible: usize,
 ) {
-    for label in &page.labels {
-        label.set_text("");
+    for (slot, label) in page.labels.iter().enumerate() {
+        set_inline_label_text(label, "", slot == INLINE_CENTER);
     }
 
     for (slot, offset) in (-2_isize..=2).enumerate() {
@@ -395,7 +426,11 @@ fn fill_inline_lines(
             continue;
         }
         let line_index = visible[position as usize];
-        page.labels[slot].set_text(lines[line_index].text.trim());
+        set_inline_label_text(
+            &page.labels[slot],
+            lines[line_index].text.trim(),
+            slot == INLINE_CENTER,
+        );
     }
 }
 
