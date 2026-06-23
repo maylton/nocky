@@ -37,6 +37,16 @@ pub enum BlurMode {
     Off,
 }
 
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FooterMode {
+    #[default]
+    Automatic,
+    Full,
+    Compact,
+    Hidden,
+}
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AppLanguage {
@@ -79,6 +89,7 @@ pub struct AppConfig {
     pub show_home_visualizer: bool,
     pub show_home_lyrics: bool,
     pub use_m3_progress: bool,
+    pub footer_mode: FooterMode,
     pub noctalia_theme_sync: bool,
     pub youtube_auto_sync: bool,
     pub language: AppLanguage,
@@ -98,6 +109,7 @@ impl Default for AppConfig {
             show_home_visualizer: true,
             show_home_lyrics: true,
             use_m3_progress: true,
+            footer_mode: FooterMode::Automatic,
             noctalia_theme_sync: true,
             youtube_auto_sync: true,
             language: AppLanguage::detect_system(),

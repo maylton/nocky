@@ -18,7 +18,7 @@ use crate::youtube::YouTubeArtistOverview;
 
 use adw::prelude::*;
 use browser::{BrowserEvent, BrowserRoute, LibraryBrowser};
-use config::{AppLanguage, BlurMode, StartupSource};
+use config::{AppLanguage, BlurMode, FooterMode, StartupSource};
 use gtk::prelude::FileExt;
 use gtk::{gdk, gio, glib};
 use i18n::Message;
@@ -957,6 +957,7 @@ impl AppController {
         controller.apply_home_preferences();
         controller.apply_volume_icon();
         controller.install_footer_adaptive();
+        controller.apply_footer_mode();
 
         controller.sidebar_button.set_active(false);
         controller.sidebar.set_reveal_child(false);
@@ -990,6 +991,17 @@ impl AppController {
                 }
             });
             switcher.add_controller(click);
+        }
+
+        {
+            let weak = Rc::downgrade(&controller);
+            controller
+                .views
+                .connect_visible_child_name_notify(move |_| {
+                    if let Some(controller) = weak.upgrade() {
+                        controller.apply_footer_mode();
+                    }
+                });
         }
 
         {
@@ -2808,6 +2820,74 @@ impl AppController {
         self.apply_volume_icon();
     }
 
+    fn apply_footer_mode(&self) {
+        let configured = self.config.borrow().footer_mode;
+
+        // O player principal da Home permanece visível em todas as rotas
+        // internas: início, álbum, discografia, artista e playlist.
+        // Portanto, o footer automático continua compacto durante toda
+        // a navegação da Home e só volta ao modo completo fora dela.
+        let home_player_visible = self.views.visible_child_name().as_deref() == Some("music");
+
+        let effective = match configured {
+            FooterMode::Automatic => {
+                if home_player_visible {
+                    FooterMode::Compact
+                } else {
+                    FooterMode::Full
+                }
+            }
+            other => other,
+        };
+
+        self.player_bar.remove_css_class("footer-mode-compact");
+        self.player_bar.remove_css_class("footer-mode-hidden");
+
+        if effective == FooterMode::Hidden {
+            self.player_bar.add_css_class("footer-mode-hidden");
+            self.player_bar.set_visible(false);
+            return;
+        }
+
+        self.player_bar.set_visible(true);
+        self.footer_now_playing.set_visible(true);
+
+        let full = effective == FooterMode::Full;
+
+        // No modo compacto, mantemos:
+        // - card da faixa/fila;
+        // - botão de letras;
+        // - volume e mute.
+        //
+        // Ocultamos apenas:
+        // - controles de reprodução;
+        // - barra de progresso e tempos.
+        self.footer_center.set_visible(full);
+        self.footer_right_controls.set_visible(true);
+
+        self.footer_progress_stack.set_visible(full);
+        self.footer_elapsed.set_visible(full);
+        self.footer_duration.set_visible(full);
+        self.footer_previous.set_visible(full);
+        self.footer_next.set_visible(full);
+        self.footer_repeat_button.set_visible(full);
+        self.footer_shuffle_button.set_visible(full);
+        self.footer_play_button.set_visible(full);
+
+        if full {
+            self.player_bar.set_height_request(88);
+            self.footer_now_playing.set_size_request(350, 56);
+            self.footer_center.set_size_request(500, 60);
+            self.footer_right_controls.set_size_request(220, 56);
+        } else {
+            self.player_bar.add_css_class("footer-mode-compact");
+            self.player_bar.set_height_request(72);
+            self.footer_now_playing.set_size_request(350, 56);
+            self.footer_center.set_size_request(0, 56);
+            self.footer_right_controls.set_size_request(220, 56);
+        }
+    }
+
     fn install_footer_adaptive(&self) {
         let mode = Rc::new(Cell::new(u8::MAX));
         let mode_state = mode.clone();
@@ -2824,6 +2904,11 @@ impl AppController {
 
         self.player_bar.add_tick_callback(move |bar, _| {
             let width = bar.width();
+
+            if bar.has_css_class("footer-mode-compact") {
+                mode_state.set(u8::MAX);
+                return glib::ControlFlow::Continue;
+            }
             let next_mode = if width >= 1040 {
                 0
             } else if width >= 790 {
@@ -3004,6 +3089,24 @@ impl AppController {
             &m3_progress,
         ));
 
+        let footer_mode = gtk::DropDown::from_strings(&[
+            self.tr(Message::FooterAutomatic),
+            self.tr(Message::FooterFull),
+            self.tr(Message::FooterCompact),
+            self.tr(Message::FooterHidden),
+        ]);
+        footer_mode.set_selected(match config.footer_mode {
+            FooterMode::Automatic => 0,
+            FooterMode::Full => 1,
+            FooterMode::Compact => 2,
+            FooterMode::Hidden => 3,
+        });
+        content.append(&settings_dropdown_row(
+            self.tr(Message::FooterMode),
+            self.tr(Message::FooterModeDescription),
+            &footer_mode,
+        ));
+
         let auto_lyrics = settings_switch(config.auto_download_lyrics);
         content.append(&settings_switch_row(
             self.tr(Message::AutoLyrics),
@@ -3116,6 +3219,24 @@ impl AppController {
                 if let Some(controller) = weak.upgrade() {
                     controller.show_youtube_settings_dialog();
                 }
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(self);
+            footer_mode.connect_selected_notify(move |dropdown| {
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+
+                controller.config.borrow_mut().footer_mode = match dropdown.selected() {
+                    1 => FooterMode::Full,
+                    2 => FooterMode::Compact,
+                    3 => FooterMode::Hidden,
+                    _ => FooterMode::Automatic,
+                };
+                controller.save_config();
+                controller.apply_footer_mode();
             });
         }
 
@@ -3836,6 +3957,7 @@ impl AppController {
         drop(config);
         drop(state);
         self.update_sidebar_active(&route);
+        self.apply_footer_mode();
     }
 
     fn update_sidebar_active(&self, route: &BrowserRoute) {

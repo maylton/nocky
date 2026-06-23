@@ -4,7 +4,7 @@
 
 This app is vibe-coded and any improvement suggestion is welcomed, but don't expect much as it's just a free time hobby project =)
 
-> **Status:** Nocky 0.2.4 is a beta release. It adds an automatic YouTube Music startup sync and a refreshed library home with collection carousels. 
+> **Status:** Nocky 0.2.5 is a beta release. It introduces a personalized Home, synchronized online lyrics, a Material 3-inspired progress bar and a configurable adaptive footer.
 
 <p align="center">
   <img src="assets/nocky-icon.png" alt="Nocky owl icon" width="180" />
@@ -136,7 +136,7 @@ The uninstaller intentionally preserves user settings, session data and cache. D
 
 ## Lyrics
 
-Nocky loads sidecar `.lrc` files and can automatically search LRCLIB when synchronized lyrics are missing. Downloaded lyrics are saved beside local audio files when the folder is writable. The 0.2.4 YouTube player currently shows a clear placeholder rather than fetching lyrics for streamed tracks.
+Nocky loads sidecar `.lrc` files and can automatically search LRCLIB when synchronized lyrics are missing. Downloaded lyrics are saved beside local audio files when the folder is writable. Local and YouTube Music tracks can use the five-line inline preview and the full lyrics page. The focused inline line wraps only when it exceeds the available card width.
 
 ## MPRIS
 
@@ -183,8 +183,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 ## Current beta limitations
 
 - YouTube Music uses an unofficial browser-session integration and can require updates when the service changes.
-- YouTube stream URLs are temporary and are resolved again when necessary.
-- YouTube lyrics and account write actions such as liking/unliking are not included yet.
+- YouTube stream URLs are temporary, although Nocky automatically refreshes rejected or expired streams.
+- YouTube Music account write actions such as liking and unliking are not included yet.
+- A minor Home-player layout shift may occur while inline lyrics change from loading to synchronized content.
 - Gapless playback is disabled; the pipeline is reset between tracks for reliability.
 - Flatpak packaging is planned but not included in this release.
 
