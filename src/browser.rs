@@ -62,6 +62,8 @@ pub enum BrowserEvent {
     },
     OpenYouTubePlaylist(YouTubeItem),
     OpenYouTubeCollection(YouTubeItem),
+    LoadMoreAlbums,
+    LoadMoreArtists,
     Navigate(BrowserRoute),
     CreatePlaylist(String),
     AddCurrentToPlaylist(String),
@@ -127,6 +129,8 @@ pub struct LibraryBrowser {
     route: RefCell<BrowserRoute>,
     visible_tracks: Rc<RefCell<Vec<VisibleTrack>>>,
     queue_render_generation: Rc<Cell<u64>>,
+    album_display_limit: Cell<usize>,
+    artist_display_limit: Cell<usize>,
     playlist_names: Rc<RefCell<Vec<String>>>,
     playlist_row_refs: Rc<RefCell<Vec<Option<PlaylistRef>>>>,
     event_tx: Sender<BrowserEvent>,
@@ -367,6 +371,8 @@ impl LibraryBrowser {
             route: RefCell::new(BrowserRoute::All),
             visible_tracks,
             queue_render_generation,
+            album_display_limit: Cell::new(COLLECTION_INITIAL_BATCH),
+            artist_display_limit: Cell::new(COLLECTION_INITIAL_BATCH),
             playlist_names,
             playlist_row_refs,
             event_tx,
@@ -434,6 +440,16 @@ impl LibraryBrowser {
 
     pub fn try_recv(&self) -> Option<BrowserEvent> {
         self.events.try_recv().ok()
+    }
+
+    pub fn show_more_albums(&self) {
+        self.album_display_limit
+            .set(self.album_display_limit.get() + COLLECTION_BATCH_INCREMENT);
+    }
+
+    pub fn show_more_artists(&self) {
+        self.artist_display_limit
+            .set(self.artist_display_limit.get() + COLLECTION_BATCH_INCREMENT);
     }
 
     pub fn visible_indices(&self) -> Vec<usize> {
@@ -891,7 +907,13 @@ impl LibraryBrowser {
     fn rebuild_albums(&self, tracks: &[Track], youtube: &YouTubeLibraryCache, query: &str) {
         clear_grid(&self.albums_grid);
         let query = query.trim().to_lowercase();
+        let limit = if query.is_empty() {
+            self.album_display_limit.get()
+        } else {
+            usize::MAX
+        };
         let mut position = 0;
+        let mut hidden = 0;
 
         let mut local_groups: BTreeMap<String, Vec<&Track>> = BTreeMap::new();
         for track in tracks {
@@ -910,6 +932,10 @@ impl LibraryBrowser {
                 .join(", ");
             let haystack = format!("{album} {artists}").to_lowercase();
             if !query.is_empty() && !haystack.contains(&query) {
+                continue;
+            }
+            if position as usize >= limit {
+                hidden += 1;
                 continue;
             }
             let cover = album_tracks
@@ -938,6 +964,10 @@ impl LibraryBrowser {
             if !query.is_empty() && !haystack.contains(&query) {
                 continue;
             }
+            if position as usize >= limit {
+                hidden += 1;
+                continue;
+            }
             append_collection_grid_card(
                 &self.albums_grid,
                 position,
@@ -950,6 +980,19 @@ impl LibraryBrowser {
                         true,
                     ),
                     BrowserEvent::OpenYouTubeCollection(album_entry.source.clone()),
+                    &self.event_tx,
+                ),
+            );
+            position += 1;
+        }
+
+        if hidden > 0 {
+            append_collection_grid_card(
+                &self.albums_grid,
+                position,
+                collection_event_button(
+                    collection_placeholder("Carregar mais álbuns", &format!("{hidden} restantes")),
+                    BrowserEvent::LoadMoreAlbums,
                     &self.event_tx,
                 ),
             );
@@ -975,7 +1018,13 @@ impl LibraryBrowser {
     fn rebuild_artists(&self, tracks: &[Track], youtube: &YouTubeLibraryCache, query: &str) {
         clear_grid(&self.artists_grid);
         let query = query.trim().to_lowercase();
+        let limit = if query.is_empty() {
+            self.artist_display_limit.get()
+        } else {
+            usize::MAX
+        };
         let mut position = 0;
+        let mut hidden = 0;
 
         let mut local_names = tracks
             .iter()
@@ -989,6 +1038,10 @@ impl LibraryBrowser {
 
         for artist in local_names {
             if !query.is_empty() && !artist.to_lowercase().contains(&query) {
+                continue;
+            }
+            if position as usize >= limit {
+                hidden += 1;
                 continue;
             }
 
@@ -1011,6 +1064,10 @@ impl LibraryBrowser {
             if !query.is_empty() && !artist_entry.title.to_lowercase().contains(&query) {
                 continue;
             }
+            if position as usize >= limit {
+                hidden += 1;
+                continue;
+            }
 
             append_collection_grid_card(
                 &self.artists_grid,
@@ -1018,6 +1075,19 @@ impl LibraryBrowser {
                 artist_list_button(
                     &artist_entry.title,
                     BrowserEvent::OpenYouTubeCollection(artist_entry.source.clone()),
+                    &self.event_tx,
+                ),
+            );
+            position += 1;
+        }
+
+        if hidden > 0 {
+            append_collection_grid_card(
+                &self.artists_grid,
+                position,
+                artist_list_button(
+                    &format!("Carregar mais artistas ({hidden} restantes)"),
+                    BrowserEvent::LoadMoreArtists,
                     &self.event_tx,
                 ),
             );
@@ -1492,6 +1562,8 @@ const COLLECTION_CARD_MAX_WIDTH: i32 = 220;
 const COLLECTION_CARD_MIN_HEIGHT: i32 = 210;
 const COLLECTION_ARTWORK_MIN_SIZE: i32 = 124;
 const COLLECTION_ARTWORK_MAX_SIZE: i32 = 216;
+const COLLECTION_INITIAL_BATCH: usize = 48;
+const COLLECTION_BATCH_INCREMENT: usize = 48;
 
 fn artist_list_grid() -> gtk::FlowBox {
     let list = gtk::FlowBox::new();
