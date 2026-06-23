@@ -324,16 +324,6 @@ impl YouTubeBridge {
         self.run("liked", json!({ "limit": 200 }))
     }
 
-    pub fn rate_song(&self, video_id: &str, liked: bool) -> Result<bool, String> {
-        self.run(
-            "rate",
-            json!({
-                "video_id": video_id,
-                "liked": liked,
-            }),
-        )
-    }
-
     pub fn playlists(&self) -> Result<Vec<YouTubeItem>, String> {
         self.run("playlists", json!({ "limit": 150, "home_limit": 8 }))
     }
@@ -1173,9 +1163,7 @@ pub fn upgrade_thumbnail_url(url: &str, size: u32) -> String {
     }
 
     let mut output = url.to_string();
-    let path_end = output
-        .find(|character| character == '?' || character == '#')
-        .unwrap_or(output.len());
+    let path_end = output.find(['?', '#']).unwrap_or(output.len());
     let slash = output[..path_end].rfind('/').unwrap_or(0);
     if let Some(relative_equal) = output[slash..path_end].rfind('=') {
         let equal = slash + relative_equal;

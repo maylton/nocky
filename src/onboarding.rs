@@ -1,6 +1,5 @@
 use crate::config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource};
 use adw::prelude::*;
-use gtk::{glib, prelude::*};
 use std::{cell::Cell, rc::Rc};
 
 #[derive(Clone, Copy, Debug)]
@@ -288,23 +287,18 @@ pub fn present<F>(
 {
     let text = copy(language);
 
-    let dialog = gtk::Dialog::builder()
-        .transient_for(parent)
-        .modal(true)
+    let dialog = adw::Dialog::builder()
         .title(text.window_title)
-        .default_width(720)
-        .default_height(600)
+        .content_width(720)
+        .content_height(600)
         .build();
-    dialog.set_deletable(false);
+    dialog.set_can_close(false);
     dialog.add_css_class("onboarding-dialog");
-
-    let area = dialog.content_area();
-    area.set_spacing(0);
 
     let shell = gtk::Box::new(gtk::Orientation::Vertical, 0);
     shell.set_vexpand(true);
     shell.add_css_class("onboarding-shell");
-    area.append(&shell);
+    dialog.set_child(Some(&shell));
 
     let progress_header = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     progress_header.set_margin_top(16);
@@ -659,10 +653,10 @@ pub fn present<F>(
             };
 
             on_finish(choices);
-            dialog.close();
+            dialog.force_close();
         });
     }
 
     update_navigation();
-    dialog.present();
+    dialog.present(Some(parent));
 }

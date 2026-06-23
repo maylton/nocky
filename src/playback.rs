@@ -72,12 +72,9 @@ impl PlaybackEngine {
         let request_headers = Arc::new(Mutex::new(HashMap::<String, String>::new()));
         let source_headers = request_headers.clone();
         let _source_setup = pipeline.connect("source-setup", false, move |values| {
-            let Some(source) = values
+            let source = values
                 .get(1)
-                .and_then(|value| value.get::<gst::Element>().ok())
-            else {
-                return None;
-            };
+                .and_then(|value| value.get::<gst::Element>().ok())?;
             let Ok(headers) = source_headers.lock() else {
                 return None;
             };

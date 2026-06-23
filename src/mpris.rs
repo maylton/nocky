@@ -217,8 +217,7 @@ fn connect_simple(player: &Player, commands: &Sender<MprisCommand>) {
 async fn apply_update(player: &Player, update: MprisUpdate) -> mpris_server::zbus::Result<()> {
     match update {
         MprisUpdate::Metadata(track) => {
-            let track_id =
-                TrackId::try_from(track.track_id.as_str()).unwrap_or_else(|_| TrackId::NO_TRACK);
+            let track_id = TrackId::try_from(track.track_id.as_str()).unwrap_or(TrackId::NO_TRACK);
             let mut builder = Metadata::builder()
                 .trackid(track_id)
                 .title(track.title)

@@ -77,13 +77,13 @@ pub enum BrowserEvent {
 #[derive(Clone, Debug)]
 enum VisibleTrack {
     Local(usize),
-    YouTube(YouTubeItem),
+    YouTube(Box<YouTubeItem>),
 }
 
 #[derive(Clone, Debug)]
 enum PlaylistRef {
     Local(String),
-    YouTube(YouTubeItem),
+    YouTube(Box<YouTubeItem>),
 }
 
 #[derive(Clone, Debug)]
@@ -200,7 +200,7 @@ impl LibraryBrowser {
                             .iter()
                             .filter_map(|entry| match entry {
                                 VisibleTrack::YouTube(item) if item.playable() => {
-                                    Some(item.clone())
+                                    Some(item.as_ref().clone())
                                 }
                                 _ => None,
                             })
@@ -209,7 +209,11 @@ impl LibraryBrowser {
                             .iter()
                             .position(|candidate| candidate.video_id == item.video_id)
                             .unwrap_or(0);
-                        let _ = tx.send(BrowserEvent::YouTubeTrackActivated { item, queue, index });
+                        let _ = tx.send(BrowserEvent::YouTubeTrackActivated {
+                            item: *item,
+                            queue,
+                            index,
+                        });
                     }
                 }
             });
@@ -345,7 +349,7 @@ impl LibraryBrowser {
                         let _ = tx.send(BrowserEvent::Navigate(BrowserRoute::Playlist(name)));
                     }
                     PlaylistRef::YouTube(item) => {
-                        let _ = tx.send(BrowserEvent::OpenYouTubePlaylist(item));
+                        let _ = tx.send(BrowserEvent::OpenYouTubePlaylist(*item));
                     }
                 }
             });
@@ -572,7 +576,7 @@ impl LibraryBrowser {
                     .iter()
                     .filter(|item| item.playable())
                     .cloned()
-                    .map(VisibleTrack::YouTube),
+                    .map(|item| VisibleTrack::YouTube(Box::new(item))),
             );
         }
 
@@ -598,7 +602,7 @@ impl LibraryBrowser {
                             .iter()
                             .filter_map(|entry| match entry {
                                 VisibleTrack::YouTube(item) if item.playable() => {
-                                    Some(item.clone())
+                                    Some(item.as_ref().clone())
                                 }
                                 _ => None,
                             })
@@ -607,7 +611,11 @@ impl LibraryBrowser {
                             .iter()
                             .position(|candidate| candidate.video_id == item.video_id)
                             .unwrap_or(0);
-                        let _ = tx.send(BrowserEvent::YouTubeTrackActivated { item, queue, index });
+                        let _ = tx.send(BrowserEvent::YouTubeTrackActivated {
+                            item: *item,
+                            queue,
+                            index,
+                        });
                     }
                 }
             });
@@ -828,7 +836,7 @@ impl LibraryBrowser {
                     .iter()
                     .any(|candidate| candidate.video_id == item.video_id);
             self.queue.append(&youtube_track_row(number, &item, liked));
-            entries.push(VisibleTrack::YouTube(item));
+            entries.push(VisibleTrack::YouTube(Box::new(item)));
         }
 
         self.queue_title.set_text(&route_title(route));
@@ -906,7 +914,7 @@ impl LibraryBrowser {
             self.queue.append(&youtube_track_row(number, &item, liked));
             self.visible_tracks
                 .borrow_mut()
-                .push(VisibleTrack::YouTube(item));
+                .push(VisibleTrack::YouTube(Box::new(item)));
         }
 
         if items.is_empty() {
@@ -933,7 +941,7 @@ impl LibraryBrowser {
                 queue.append(&youtube_track_row(number, &item, liked));
                 visible_tracks
                     .borrow_mut()
-                    .push(VisibleTrack::YouTube(item));
+                    .push(VisibleTrack::YouTube(Box::new(item)));
             }
 
             if pending.borrow().is_empty() {
@@ -1025,7 +1033,7 @@ impl LibraryBrowser {
             self.queue.append(&youtube_track_row(number, &item, liked));
             self.visible_tracks
                 .borrow_mut()
-                .push(VisibleTrack::YouTube(item));
+                .push(VisibleTrack::YouTube(Box::new(item)));
         }
 
         if items.is_empty() {
@@ -1052,7 +1060,7 @@ impl LibraryBrowser {
                 queue.append(&youtube_track_row(number, &item, liked));
                 visible_tracks
                     .borrow_mut()
-                    .push(VisibleTrack::YouTube(item));
+                    .push(VisibleTrack::YouTube(Box::new(item)));
             }
 
             if pending.borrow().is_empty() {
@@ -1457,7 +1465,7 @@ impl LibraryBrowser {
                 youtube_playlist_subtitle(playlist),
                 true,
             ));
-            row_refs.push(Some(PlaylistRef::YouTube(playlist.clone())));
+            row_refs.push(Some(PlaylistRef::YouTube(Box::new(playlist.clone()))));
         }
 
         if row_refs.is_empty() {
@@ -1592,12 +1600,6 @@ fn ranked_home_artist_cards(
                 if artist_tracks.is_empty() {
                     continue;
                 }
-                let albums = artist_tracks
-                    .iter()
-                    .map(|track| track.album.as_str())
-                    .filter(|album| !album.is_empty())
-                    .collect::<BTreeSet<_>>()
-                    .len();
                 cards.push(HomeCard::LocalArtist {
                     title: name,
                     subtitle: String::new(),
@@ -1700,12 +1702,6 @@ fn search_artist_cards(
             if !artist.to_lowercase().contains(query) {
                 continue;
             }
-            let albums = artist_tracks
-                .iter()
-                .map(|track| track.album.as_str())
-                .filter(|album| !album.is_empty())
-                .collect::<BTreeSet<_>>()
-                .len();
             cards.push(HomeCard::LocalArtist {
                 title: artist,
                 subtitle: String::new(),

@@ -296,10 +296,15 @@ impl LyricsPresenter {
             }
 
             let adjustment = scroll.vadjustment();
-            let allocation = label.allocation();
+            let Some(content) = scroll.child() else {
+                return;
+            };
+            let Some(bounds) = label.compute_bounds(&content) else {
+                return;
+            };
             let lower = adjustment.lower();
             let upper = (adjustment.upper() - adjustment.page_size()).max(lower);
-            let center = allocation.y() as f64 + allocation.height() as f64 / 2.0;
+            let center = bounds.y() as f64 + bounds.height() as f64 / 2.0;
             let target = (center - adjustment.page_size() / 2.0).clamp(lower, upper);
             let start = adjustment.value();
 
