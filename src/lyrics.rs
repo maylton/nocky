@@ -55,6 +55,11 @@ pub fn parse_lrc(contents: &str) -> Vec<LyricLine> {
     lines
 }
 
+pub fn active_index(lines: &[LyricLine], timestamp_us: i64) -> Option<usize> {
+    let next = lines.partition_point(|line| line.timestamp_us <= timestamp_us);
+    next.checked_sub(1)
+}
+
 fn parse_timestamp(tag: &str) -> Option<i64> {
     let (minutes, seconds) = tag.split_once(':')?;
     let minutes: f64 = minutes.parse().ok()?;
@@ -72,5 +77,14 @@ mod tests {
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].timestamp_us, 10_500_000);
         assert_eq!(result[1].timestamp_us, 62_000_000);
+    }
+
+    #[test]
+    fn finds_active_line_with_binary_search() {
+        let lines = parse_lrc("[00:01]One\n[00:05]Two\n[00:10]Three");
+        assert_eq!(active_index(&lines, 500_000), None);
+        assert_eq!(active_index(&lines, 1_000_000), Some(0));
+        assert_eq!(active_index(&lines, 7_500_000), Some(1));
+        assert_eq!(active_index(&lines, 20_000_000), Some(2));
     }
 }

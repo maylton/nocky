@@ -9,7 +9,10 @@ use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
     rc::Rc,
-    sync::mpsc::{self, Receiver, Sender},
+    sync::{
+        mpsc::{self, Receiver, Sender},
+        OnceLock,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -23,6 +26,8 @@ pub struct YouTubeItem {
     pub browse_id: String,
     pub album: String,
     pub artist: String,
+    pub playlist_kind: String,
+    pub params: String,
     pub duration_seconds: u64,
     pub thumbnail_url: String,
     pub cover_path: String,
@@ -39,6 +44,32 @@ impl YouTubeItem {
     }
 }
 
+pub fn cacheable_youtube_playlist(item: &YouTubeItem) -> bool {
+    item.result_type == "playlist"
+        && !item.browse_id.is_empty()
+        && (item.playlist_kind.is_empty() || item.playlist_kind == "library")
+}
+
+pub fn youtube_collection_key(kind: &str, title: &str) -> String {
+    let normalized_kind = if kind.eq_ignore_ascii_case("artist") {
+        "artist"
+    } else {
+        "album"
+    };
+    format!("{normalized_kind}:{}", title.trim().to_lowercase())
+}
+
+pub fn youtube_collection_cache_key(item: &YouTubeItem) -> String {
+    youtube_collection_key(&item.result_type, &item.title)
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct YouTubeArtistOverview {
+    pub profile: YouTubeItem,
+    pub albums: Vec<YouTubeItem>,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct YouTubeStatus {
@@ -53,6 +84,8 @@ pub struct YouTubeLibrarySnapshot {
     pub library: Vec<YouTubeItem>,
     pub liked: Vec<YouTubeItem>,
     pub playlists: Vec<YouTubeItem>,
+    pub suggested_albums: Vec<YouTubeItem>,
+    pub suggested_artists: Vec<YouTubeItem>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -63,6 +96,7 @@ pub struct YouTubeCollectionEntry {
     pub detail: String,
     pub cover_path: String,
     pub item_count: usize,
+    pub source: YouTubeItem,
 }
 
 impl YouTubeCollectionEntry {
@@ -80,7 +114,15 @@ pub struct YouTubeLibraryCache {
     pub library: Vec<YouTubeItem>,
     pub liked: Vec<YouTubeItem>,
     pub playlists: Vec<YouTubeItem>,
+    pub suggested_albums: Vec<YouTubeItem>,
+    pub suggested_artists: Vec<YouTubeItem>,
     pub playlist_tracks: HashMap<String, Vec<YouTubeItem>>,
+    pub playlist_loading: HashSet<String>,
+    pub collection_tracks: HashMap<String, Vec<YouTubeItem>>,
+    pub collection_loading: HashSet<String>,
+    pub artist_profiles: HashMap<String, YouTubeItem>,
+    pub artist_albums: HashMap<String, Vec<YouTubeItem>>,
+    pub artist_loading: HashSet<String>,
     pub albums: Vec<YouTubeCollectionEntry>,
     pub artists: Vec<YouTubeCollectionEntry>,
 }
@@ -97,7 +139,15 @@ impl YouTubeLibraryCache {
         self.library.clear();
         self.liked.clear();
         self.playlists.clear();
+        self.suggested_albums.clear();
+        self.suggested_artists.clear();
         self.playlist_tracks.clear();
+        self.playlist_loading.clear();
+        self.collection_tracks.clear();
+        self.collection_loading.clear();
+        self.artist_profiles.clear();
+        self.artist_albums.clear();
+        self.artist_loading.clear();
         self.albums.clear();
         self.artists.clear();
     }
@@ -108,27 +158,47 @@ impl YouTubeLibraryCache {
         self.library = snapshot.library;
         self.liked = snapshot.liked;
         self.playlists = snapshot.playlists;
+        self.suggested_albums = snapshot.suggested_albums;
+        self.suggested_artists = snapshot.suggested_artists;
 
         let valid_playlists = self
             .playlists
             .iter()
-            .filter_map(|item| (!item.browse_id.is_empty()).then_some(item.browse_id.clone()))
+            .filter(|item| cacheable_youtube_playlist(item))
+            .map(|item| item.browse_id.clone())
             .collect::<HashSet<_>>();
         self.playlist_tracks
             .retain(|browse_id, _| valid_playlists.contains(browse_id));
+        self.playlist_loading
+            .retain(|browse_id| valid_playlists.contains(browse_id));
         self.rebuild_collections();
+
+        let valid_collections = self
+            .albums
+            .iter()
+            .chain(self.artists.iter())
+            .map(|entry| youtube_collection_cache_key(&entry.source))
+            .collect::<HashSet<_>>();
+        self.collection_tracks
+            .retain(|key, _| valid_collections.contains(key));
+        self.collection_loading
+            .retain(|key| valid_collections.contains(key));
     }
 
     pub fn rebuild_collections(&mut self) {
         let catalog = youtube_catalog(&self.library, &self.liked);
         self.albums = build_album_cache(&catalog);
         self.artists = build_artist_cache(&catalog);
+        merge_suggested_collections(&mut self.albums, &self.suggested_albums, "album");
+        merge_suggested_collections(&mut self.artists, &self.suggested_artists, "artist");
     }
 }
 
-const LIBRARY_CACHE_VERSION: u32 = 1;
+const LIBRARY_CACHE_VERSION: u32 = 5;
 const BROWSER_COVER_SIZE: u32 = 512;
 const PLAYER_COVER_SIZE: u32 = 1200;
+
+static COVER_CLIENT: OnceLock<Option<reqwest::blocking::Client>> = OnceLock::new();
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -138,7 +208,12 @@ struct PersistedYouTubeLibraryCache {
     library: Vec<YouTubeItem>,
     liked: Vec<YouTubeItem>,
     playlists: Vec<YouTubeItem>,
+    suggested_albums: Vec<YouTubeItem>,
+    suggested_artists: Vec<YouTubeItem>,
     playlist_tracks: HashMap<String, Vec<YouTubeItem>>,
+    collection_tracks: HashMap<String, Vec<YouTubeItem>>,
+    artist_profiles: HashMap<String, YouTubeItem>,
+    artist_albums: HashMap<String, Vec<YouTubeItem>>,
     albums: Vec<YouTubeCollectionEntry>,
     artists: Vec<YouTubeCollectionEntry>,
 }
@@ -156,6 +231,14 @@ pub struct YouTubeStream {
     pub thumbnail_url: String,
     pub http_headers: HashMap<String, String>,
     pub expires_at: f64,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct YouTubeHomeSuggestions {
+    pub playlists: Vec<YouTubeItem>,
+    pub albums: Vec<YouTubeItem>,
+    pub artists: Vec<YouTubeItem>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -229,21 +312,74 @@ impl YouTubeBridge {
     }
 
     pub fn playlists(&self) -> Result<Vec<YouTubeItem>, String> {
-        self.run("playlists", json!({ "limit": 100 }))
+        self.run("playlists", json!({ "limit": 150, "home_limit": 8 }))
+    }
+
+    fn library_playlists(&self) -> Result<Vec<YouTubeItem>, String> {
+        self.run("playlists", json!({ "limit": 150, "home_limit": 0 }))
+    }
+
+    pub fn home(&self) -> Result<YouTubeHomeSuggestions, String> {
+        self.run("home", json!({ "limit": 8 }))
     }
 
     pub fn sync_library(&self) -> Result<YouTubeLibrarySnapshot, String> {
+        let home = self.home().unwrap_or_else(|error| {
+            eprintln!("Could not load YouTube Music home suggestions: {error}");
+            YouTubeHomeSuggestions::default()
+        });
+        let mut playlists = self.library_playlists()?;
+        extend_unique_youtube_items(&mut playlists, home.playlists);
         let mut snapshot = YouTubeLibrarySnapshot {
             library: self.library()?,
             liked: self.liked()?,
-            playlists: self.playlists()?,
+            playlists,
+            suggested_albums: home.albums,
+            suggested_artists: home.artists,
         };
         cache_library_covers(&mut snapshot);
         Ok(snapshot)
     }
 
-    pub fn playlist(&self, browse_id: &str) -> Result<Vec<YouTubeItem>, String> {
-        self.run("playlist", json!({ "browse_id": browse_id, "limit": 300 }))
+    pub fn playlist(&self, playlist: &YouTubeItem) -> Result<Vec<YouTubeItem>, String> {
+        self.run(
+            "playlist",
+            json!({
+                "browse_id": playlist.browse_id,
+                "video_id": playlist.video_id,
+                "playlist_kind": playlist.playlist_kind,
+                "params": playlist.params,
+                // Loading hundreds of entries before the first paint made
+                // cold playlist navigation unnecessarily slow. A larger,
+                // paginated model can be introduced later; 120 covers the
+                // common case while cutting response and render time sharply.
+                "limit": 120,
+            }),
+        )
+    }
+
+    pub fn collection(&self, item: &YouTubeItem) -> Result<Vec<YouTubeItem>, String> {
+        self.run(
+            "collection",
+            json!({
+                "result_type": item.result_type,
+                "browse_id": item.browse_id,
+                "title": item.title,
+                "params": item.params,
+                "limit": 120,
+            }),
+        )
+    }
+
+    pub fn artist_overview(&self, item: &YouTubeItem) -> Result<YouTubeArtistOverview, String> {
+        self.run(
+            "artist",
+            json!({
+                "browse_id": item.browse_id,
+                "title": item.title,
+                "limit": 160,
+            }),
+        )
     }
 
     pub fn resolve(&self, video_id: &str, force: bool) -> Result<YouTubeStream, String> {
@@ -782,6 +918,8 @@ pub fn cache_library_covers(snapshot: &mut YouTubeLibrarySnapshot) {
     }
 
     cache_items_for_browser(&mut snapshot.playlists);
+    cache_items_for_browser(&mut snapshot.suggested_albums);
+    cache_items_for_browser(&mut snapshot.suggested_artists);
 }
 
 fn youtube_catalog(library: &[YouTubeItem], liked: &[YouTubeItem]) -> Vec<YouTubeItem> {
@@ -820,15 +958,88 @@ fn build_album_cache(catalog: &[YouTubeItem]) -> Vec<YouTubeCollectionEntry> {
                 .find_map(|item| item.cached_cover())
                 .map(|path| path.to_string_lossy().to_string())
                 .unwrap_or_default();
+            let source = YouTubeItem {
+                result_type: "album".to_string(),
+                title: album.clone(),
+                album: album.clone(),
+                artist: artists.clone(),
+                ..YouTubeItem::default()
+            };
             YouTubeCollectionEntry {
                 title: album,
                 subtitle: artists,
                 detail: format!("YouTube Music • {} faixas", items.len()),
                 cover_path,
                 item_count: items.len(),
+                source,
             }
         })
         .collect()
+}
+
+fn merge_suggested_collections(
+    collections: &mut Vec<YouTubeCollectionEntry>,
+    suggestions: &[YouTubeItem],
+    kind: &str,
+) {
+    let mut seen = collections
+        .iter()
+        .map(|entry| entry.title.trim().to_lowercase())
+        .collect::<HashSet<_>>();
+    let mut suggested = Vec::new();
+    for item in suggestions {
+        let title = item.title.trim();
+        if title.is_empty() || !seen.insert(title.to_lowercase()) {
+            continue;
+        }
+        suggested.push(YouTubeCollectionEntry {
+            title: title.to_string(),
+            subtitle: item.subtitle.clone(),
+            detail: match kind {
+                "artist" => "YouTube Music • sugerido".to_string(),
+                _ => "YouTube Music • álbum sugerido".to_string(),
+            },
+            cover_path: item
+                .cached_cover()
+                .map(|path| path.to_string_lossy().to_string())
+                .unwrap_or_default(),
+            item_count: 0,
+            source: item.clone(),
+        });
+    }
+    suggested.extend(collections.iter().cloned());
+    *collections = suggested;
+}
+
+fn extend_unique_youtube_items(target: &mut Vec<YouTubeItem>, items: Vec<YouTubeItem>) {
+    let mut seen = target
+        .iter()
+        .map(|item| {
+            (
+                item.result_type.clone(),
+                if item.browse_id.is_empty() {
+                    item.video_id.clone()
+                } else {
+                    item.browse_id.clone()
+                },
+                item.title.clone(),
+            )
+        })
+        .collect::<HashSet<_>>();
+    for item in items {
+        let key = (
+            item.result_type.clone(),
+            if item.browse_id.is_empty() {
+                item.video_id.clone()
+            } else {
+                item.browse_id.clone()
+            },
+            item.title.clone(),
+        );
+        if seen.insert(key) {
+            target.push(item);
+        }
+    }
 }
 
 fn build_artist_cache(catalog: &[YouTubeItem]) -> Vec<YouTubeCollectionEntry> {
@@ -854,12 +1065,19 @@ fn build_artist_cache(catalog: &[YouTubeItem]) -> Vec<YouTubeCollectionEntry> {
                 .find_map(|item| item.cached_cover())
                 .map(|path| path.to_string_lossy().to_string())
                 .unwrap_or_default();
+            let source = YouTubeItem {
+                result_type: "artist".to_string(),
+                title: artist.clone(),
+                artist: artist.clone(),
+                ..YouTubeItem::default()
+            };
             YouTubeCollectionEntry {
                 title: artist,
                 subtitle: format!("{albums} álbuns"),
                 detail: format!("YouTube Music • {} faixas", items.len()),
                 cover_path,
                 item_count: items.len(),
+                source,
             }
         })
         .collect()
@@ -891,21 +1109,29 @@ fn download_cover_sized(item: &YouTubeItem, url: &str, size: u32) -> Option<Path
         return Some(destination);
     }
 
-    let client = reqwest::blocking::Client::builder()
-        .user_agent("Nocky/0.2.4")
-        .timeout(std::time::Duration::from_secs(20))
-        .build()
-        .ok()?;
+    let client = cover_client()?;
 
-    let bytes = fetch_cover_bytes(&client, &upgraded).or_else(|| {
+    let bytes = fetch_cover_bytes(client, &upgraded).or_else(|| {
         (upgraded != original)
-            .then(|| fetch_cover_bytes(&client, original))
+            .then(|| fetch_cover_bytes(client, original))
             .flatten()
     })?;
     let temporary = destination.with_extension("tmp");
     fs::write(&temporary, &bytes).ok()?;
     fs::rename(&temporary, &destination).ok()?;
     Some(destination)
+}
+
+fn cover_client() -> Option<&'static reqwest::blocking::Client> {
+    COVER_CLIENT
+        .get_or_init(|| {
+            reqwest::blocking::Client::builder()
+                .user_agent("Nocky/0.2.4")
+                .timeout(std::time::Duration::from_secs(20))
+                .build()
+                .ok()
+        })
+        .as_ref()
 }
 
 fn fetch_cover_bytes(client: &reqwest::blocking::Client, url: &str) -> Option<Vec<u8>> {
@@ -985,6 +1211,22 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
         return YouTubeLibraryCache::default();
     }
 
+    let cacheable_playlists = cache
+        .playlists
+        .iter()
+        .filter(|item| cacheable_youtube_playlist(item))
+        .map(|item| item.browse_id.clone())
+        .collect::<HashSet<_>>();
+    let playlist_tracks = cache
+        .playlist_tracks
+        .into_iter()
+        .filter(|(browse_id, items)| cacheable_playlists.contains(browse_id) && !items.is_empty())
+        .collect();
+    let collection_tracks = cache
+        .collection_tracks
+        .into_iter()
+        .filter(|(_, items)| !items.is_empty())
+        .collect();
     let mut library = YouTubeLibraryCache {
         connected: false,
         syncing: false,
@@ -993,7 +1235,15 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
         library: cache.library,
         liked: cache.liked,
         playlists: cache.playlists,
-        playlist_tracks: cache.playlist_tracks,
+        suggested_albums: cache.suggested_albums,
+        suggested_artists: cache.suggested_artists,
+        playlist_tracks,
+        playlist_loading: HashSet::new(),
+        collection_tracks,
+        collection_loading: HashSet::new(),
+        artist_profiles: cache.artist_profiles,
+        artist_albums: cache.artist_albums,
+        artist_loading: HashSet::new(),
         albums: cache.albums,
         artists: cache.artists,
     };
@@ -1013,17 +1263,40 @@ pub fn save_library_cache(cache: &YouTubeLibraryCache) -> Result<(), String> {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs())
         .unwrap_or_default();
+    let cacheable_playlists = cache
+        .playlists
+        .iter()
+        .filter(|item| cacheable_youtube_playlist(item))
+        .map(|item| item.browse_id.clone())
+        .collect::<HashSet<_>>();
+    let playlist_tracks = cache
+        .playlist_tracks
+        .iter()
+        .filter(|(browse_id, items)| cacheable_playlists.contains(*browse_id) && !items.is_empty())
+        .map(|(browse_id, items)| (browse_id.clone(), items.clone()))
+        .collect();
+    let collection_tracks = cache
+        .collection_tracks
+        .iter()
+        .filter(|(_, items)| !items.is_empty())
+        .map(|(key, items)| (key.clone(), items.clone()))
+        .collect();
     let payload = PersistedYouTubeLibraryCache {
         version: LIBRARY_CACHE_VERSION,
         saved_at,
         library: cache.library.clone(),
         liked: cache.liked.clone(),
         playlists: cache.playlists.clone(),
-        playlist_tracks: cache.playlist_tracks.clone(),
+        suggested_albums: cache.suggested_albums.clone(),
+        suggested_artists: cache.suggested_artists.clone(),
+        playlist_tracks,
+        collection_tracks,
+        artist_profiles: cache.artist_profiles.clone(),
+        artist_albums: cache.artist_albums.clone(),
         albums: cache.albums.clone(),
         artists: cache.artists.clone(),
     };
-    let serialized = serde_json::to_vec_pretty(&payload)
+    let serialized = serde_json::to_vec(&payload)
         .map_err(|error| format!("Could not serialize the YouTube library cache: {error}"))?;
     let temporary = path.with_extension("tmp");
     fs::write(&temporary, serialized)

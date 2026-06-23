@@ -3,6 +3,7 @@ mod config;
 mod library;
 mod lyrics;
 mod lyrics_provider;
+mod lyrics_view;
 mod model;
 mod mpris;
 mod playback;
@@ -10,32 +11,36 @@ mod theme;
 mod visualizer;
 mod youtube;
 
+use crate::youtube::YouTubeArtistOverview;
+
 use adw::prelude::*;
 use browser::{BrowserEvent, BrowserRoute, LibraryBrowser};
-use config::{AppLanguage, StartupSource};
+use config::{AppLanguage, BlurMode, StartupSource};
 use gtk::prelude::FileExt;
 use gtk::{gdk, gio, glib};
 use lyrics::LyricLine;
+use lyrics_view::LyricsPresenter;
 use model::{Track, TrackData};
 use playback::{PlaybackEngine, PlaybackEvent};
 use std::{
     cell::{Cell, RefCell},
-    collections::{hash_map::DefaultHasher, HashMap, HashSet},
+    collections::{hash_map::DefaultHasher, HashMap, HashSet, VecDeque},
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
     rc::Rc,
     sync::{
         mpsc::{self, Receiver, Sender},
-        Arc,
+        Arc, Mutex,
     },
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use visualizer::SpectrumVisualizer;
 use youtube::{
-    cache_items_for_browser, clear_library_cache, download_cover, load_library_cache,
-    save_library_cache, YouTubeBridge, YouTubeItem, YouTubeLibraryCache, YouTubeLibrarySnapshot,
-    YouTubePage, YouTubePageEvent, YouTubeStatus, YouTubeStream,
+    cache_items_for_browser, cacheable_youtube_playlist, clear_library_cache, download_cover,
+    load_library_cache, save_library_cache, youtube_collection_cache_key, youtube_collection_key,
+    YouTubeBridge, YouTubeItem, YouTubeLibraryCache, YouTubeLibrarySnapshot, YouTubePage,
+    YouTubePageEvent, YouTubeStatus, YouTubeStream,
 };
 
 const APP_ID: &str = "io.github.maylton.Nocky";
@@ -77,17 +82,32 @@ enum BackgroundMessage {
     },
     YouTubeLyricsDownloaded {
         video_id: String,
+        notify: bool,
         result: Result<Vec<LyricLine>, String>,
     },
     YouTubeStatus(Result<YouTubeStatus, String>),
     YouTubeConnected(Result<YouTubeStatus, String>),
     YouTubeDisconnected(Result<YouTubeStatus, String>),
-    YouTubeLibrarySynced(Result<YouTubeLibrarySnapshot, String>),
+    YouTubeLibrarySynced {
+        notify: bool,
+        result: Result<YouTubeLibrarySnapshot, String>,
+    },
     YouTubeBrowserPlaylist {
+        request_id: u64,
         playlist: YouTubeItem,
         result: Result<Vec<YouTubeItem>, String>,
     },
+    YouTubeBrowserCollection {
+        item: YouTubeItem,
+        key: String,
+        result: Result<Vec<YouTubeItem>, String>,
+    },
+    YouTubeArtistOverview {
+        key: String,
+        result: Result<YouTubeArtistOverview, String>,
+    },
     YouTubePlaylistsCached(Result<HashMap<String, Vec<YouTubeItem>>, String>),
+    YouTubeCollectionsCached(Result<HashMap<String, Vec<YouTubeItem>>, String>),
     YouTubeItems {
         title: String,
         result: Result<Vec<YouTubeItem>, String>,
@@ -129,6 +149,14 @@ struct AppController {
     playback_source: Cell<PlaybackSource>,
     youtube_state: RefCell<Option<YouTubePlaybackState>>,
     youtube_request_id: Cell<u64>,
+    youtube_recovery_in_progress: Cell<bool>,
+    youtube_recovery_attempted: Cell<bool>,
+    youtube_recovery_resume_us: Cell<i64>,
+    youtube_playlist_request_id: Cell<u64>,
+    youtube_collection_prefetching: Cell<bool>,
+    youtube_playlist_loading: Cell<bool>,
+    youtube_playlist_prefetching: Cell<bool>,
+    youtube_pending_playlist: RefCell<Option<YouTubeItem>>,
     youtube_bridge: Option<Arc<YouTubeBridge>>,
     youtube_library: RefCell<YouTubeLibraryCache>,
 
@@ -140,7 +168,7 @@ struct AppController {
     sidebar_liked: gtk::Button,
     views: adw::ViewStack,
     browser: LibraryBrowser,
-    lyrics_box: gtk::Box,
+    lyrics: LyricsPresenter,
     youtube_page: Rc<YouTubePage>,
 
     title: gtk::Label,
@@ -163,8 +191,6 @@ struct AppController {
     repeat_button: gtk::ToggleButton,
     shuffle_button: gtk::ToggleButton,
     visualizer: SpectrumVisualizer,
-    inline_lyrics: gtk::Box,
-    inline_lyric_lines: Vec<gtk::Label>,
 
     _theme: Rc<theme::ThemeBridge>,
 }
@@ -198,6 +224,7 @@ impl AppController {
         let theme = theme::ThemeBridge::install();
         let config = config::AppConfig::load();
         theme.set_noctalia_enabled(config.noctalia_theme_sync);
+        theme.set_blur_preferences(config.blur_mode, config.blur_opacity);
         let player = PlaybackEngine::new(config.volume.clamp(0.0, 1.0))
             .unwrap_or_else(|error| panic!("Nocky playback initialization failed: {error}"));
         let (background_tx, background_rx) = mpsc::channel();
@@ -351,8 +378,18 @@ impl AppController {
         title_row.append(&title);
         title_row.append(&favorite);
 
-        let hero_cover = build_cover(230);
+        let hero_cover = build_cover(280);
         hero_cover.stack.set_halign(gtk::Align::Center);
+
+        // Keep placeholder and real artwork in the same balanced vertical slot.
+        let hero_cover_slot = gtk::CenterBox::new();
+        hero_cover_slot.set_orientation(gtk::Orientation::Vertical);
+        hero_cover_slot.set_vexpand(false);
+        hero_cover_slot.set_hexpand(true);
+        hero_cover_slot.set_margin_top(28);
+        hero_cover_slot.set_margin_bottom(20);
+        hero_cover_slot.set_center_widget(Some(&hero_cover.stack));
+        hero_cover_slot.add_css_class("hero-cover-slot");
 
         let elapsed = gtk::Label::new(Some("0:00"));
         elapsed.add_css_class("time-label");
@@ -404,40 +441,16 @@ impl AppController {
         controls.append(&shuffle);
 
         let visualizer = SpectrumVisualizer::new();
-
-        let inline_lyrics = gtk::Box::new(gtk::Orientation::Vertical, 4);
-        inline_lyrics.set_margin_top(4);
-        inline_lyrics.set_margin_bottom(2);
-        inline_lyrics.set_vexpand(true);
-        inline_lyrics.set_valign(gtk::Align::Center);
-        inline_lyrics.add_css_class("inline-lyrics-panel");
-
-        let mut inline_lyric_lines = Vec::with_capacity(5);
-        for index in 0..5 {
-            let label = gtk::Label::new(None);
-            label.set_wrap(true);
-            label.set_justify(gtk::Justification::Center);
-            label.set_halign(gtk::Align::Center);
-            label.set_hexpand(true);
-            label.add_css_class("inline-lyric-line");
-            match index {
-                2 => label.add_css_class("inline-lyric-current"),
-                1 | 3 => label.add_css_class("inline-lyric-near"),
-                _ => label.add_css_class("inline-lyric-far"),
-            }
-            inline_lyrics.append(&label);
-            inline_lyric_lines.push(label);
-        }
-        inline_lyric_lines[2].set_text("As letras aparecerão aqui");
-        inline_lyric_lines[3]
-            .set_text("Reproduza uma música com letras sincronizadas para ver o contexto");
+        let lyrics = LyricsPresenter::new();
 
         let now_card = gtk::Box::new(gtk::Orientation::Vertical, 12);
         now_card.set_size_request(380, -1);
         now_card.set_hexpand(false);
+        now_card.set_vexpand(true);
+        now_card.set_valign(gtk::Align::Fill);
         now_card.add_css_class("now-playing-card");
         now_card.append(&now_header);
-        now_card.append(&hero_cover.stack);
+        now_card.append(&hero_cover_slot);
         now_card.append(&title_row);
         now_card.append(&artist);
         now_card.append(&album);
@@ -445,7 +458,7 @@ impl AppController {
         now_card.append(&time_row);
         now_card.append(&controls);
         now_card.append(visualizer.widget());
-        now_card.append(&inline_lyrics);
+        now_card.append(lyrics.inline_widget());
 
         let browser = LibraryBrowser::new();
 
@@ -483,19 +496,10 @@ impl AppController {
 
         let music_stack = gtk::Stack::new();
         music_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
+        music_stack.set_transition_duration(180);
         music_stack.add_named(&empty_state, Some("empty"));
         music_stack.add_named(&dashboard, Some("library"));
         music_stack.set_visible_child_name("empty");
-
-        let lyrics_box = gtk::Box::new(gtk::Orientation::Vertical, 22);
-        lyrics_box.set_margin_top(56);
-        lyrics_box.set_margin_bottom(56);
-        lyrics_box.set_margin_start(36);
-        lyrics_box.set_margin_end(36);
-        lyrics_box.set_halign(gtk::Align::Center);
-        let lyrics_scroll = gtk::ScrolledWindow::new();
-        lyrics_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-        lyrics_scroll.set_child(Some(&lyrics_box));
 
         views.add_titled_with_icon(
             &music_stack,
@@ -504,7 +508,7 @@ impl AppController {
             "folder-music-symbolic",
         );
         views.add_titled_with_icon(
-            &lyrics_scroll,
+            lyrics.full_widget(),
             Some("lyrics"),
             "Lyrics",
             "audio-input-microphone-symbolic",
@@ -616,6 +620,14 @@ impl AppController {
             playback_source: Cell::new(PlaybackSource::None),
             youtube_state: RefCell::new(None),
             youtube_request_id: Cell::new(0),
+            youtube_recovery_in_progress: Cell::new(false),
+            youtube_recovery_attempted: Cell::new(false),
+            youtube_recovery_resume_us: Cell::new(0),
+            youtube_playlist_request_id: Cell::new(0),
+            youtube_collection_prefetching: Cell::new(false),
+            youtube_playlist_loading: Cell::new(false),
+            youtube_playlist_prefetching: Cell::new(false),
+            youtube_pending_playlist: RefCell::new(None),
             youtube_bridge,
             youtube_library: RefCell::new(load_library_cache()),
             sidebar: sidebar_parts.revealer,
@@ -626,7 +638,7 @@ impl AppController {
             sidebar_liked: sidebar_parts.liked_button,
             views,
             browser,
-            lyrics_box,
+            lyrics,
             youtube_page,
             title,
             artist,
@@ -647,8 +659,6 @@ impl AppController {
             repeat_button: repeat.clone(),
             shuffle_button: shuffle.clone(),
             visualizer,
-            inline_lyrics,
-            inline_lyric_lines,
             _theme: theme,
         });
         controller.apply_home_preferences();
@@ -806,6 +816,10 @@ impl AppController {
                         } else {
                             "music"
                         });
+                    if button.is_active() {
+                        let lyrics = controller.lyrics.clone();
+                        glib::idle_add_local_once(move || lyrics.recenter(false));
+                    }
                 }
             });
         }
@@ -852,13 +866,27 @@ impl AppController {
 
         {
             let weak = Rc::downgrade(self);
+            let pending_save = Rc::new(RefCell::new(None::<glib::SourceId>));
             self.volume.connect_value_changed(move |scale| {
                 if let Some(controller) = weak.upgrade() {
                     let value = scale.value().clamp(0.0, 1.0);
                     controller.player.set_volume(value);
                     controller.config.borrow_mut().volume = value;
-                    controller.save_config();
                     controller.mpris.send(mpris::MprisUpdate::Volume(value));
+
+                    if let Some(source) = pending_save.borrow_mut().take() {
+                        source.remove();
+                    }
+                    let weak = weak.clone();
+                    let pending = pending_save.clone();
+                    let source =
+                        glib::timeout_add_local_once(Duration::from_millis(350), move || {
+                            pending.borrow_mut().take();
+                            if let Some(controller) = weak.upgrade() {
+                                controller.save_config();
+                            }
+                        });
+                    pending_save.borrow_mut().replace(source);
                 }
             });
         }
@@ -881,6 +909,7 @@ impl AppController {
 
         {
             let weak = Rc::downgrade(self);
+            let mut progress_ticks = 0_u8;
             glib::timeout_add_local(Duration::from_millis(50), move || {
                 let Some(controller) = weak.upgrade() else {
                     return glib::ControlFlow::Break;
@@ -890,7 +919,31 @@ impl AppController {
                 controller.handle_youtube_events();
                 controller.handle_mpris_commands();
                 controller.handle_playback_events();
-                controller.refresh_progress();
+
+                progress_ticks = progress_ticks.wrapping_add(1);
+                let cadence = if controller.player.is_playing() {
+                    2
+                } else {
+                    10
+                };
+                if progress_ticks % cadence == 0 {
+                    controller.refresh_progress();
+                }
+                glib::ControlFlow::Continue
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(self);
+            glib::timeout_add_local(Duration::from_secs(10 * 60), move || {
+                let Some(controller) = weak.upgrade() else {
+                    return glib::ControlFlow::Break;
+                };
+                if controller.config.borrow().youtube_auto_sync
+                    && controller.youtube_library.borrow().connected
+                {
+                    let _ = controller.sync_youtube_library(true, false);
+                }
                 glib::ControlFlow::Continue
             });
         }
@@ -910,7 +963,7 @@ impl AppController {
         });
     }
 
-    fn sync_youtube_library(&self, force: bool) -> bool {
+    fn sync_youtube_library(&self, force: bool, notify: bool) -> bool {
         let Some(bridge) = self.youtube_bridge.clone() else {
             return false;
         };
@@ -924,9 +977,10 @@ impl AppController {
         self.refresh_browser();
         let sender = self.background_tx.clone();
         thread::spawn(move || {
-            let _ = sender.send(BackgroundMessage::YouTubeLibrarySynced(
-                bridge.sync_library(),
-            ));
+            let _ = sender.send(BackgroundMessage::YouTubeLibrarySynced {
+                notify,
+                result: bridge.sync_library(),
+            });
         });
         true
     }
@@ -935,31 +989,62 @@ impl AppController {
         let Some(bridge) = self.youtube_bridge.clone() else {
             return;
         };
+        if self.youtube_playlist_prefetching.get() {
+            return;
+        }
         let playlists = {
             let library = self.youtube_library.borrow();
-            library
-                .playlists
-                .iter()
-                .filter(|playlist| !playlist.browse_id.is_empty())
-                .filter(|playlist| !library.playlist_tracks.contains_key(&playlist.browse_id))
-                .take(24)
-                .cloned()
-                .collect::<Vec<_>>()
+            youtube_home_prefetch_candidates(&library)
         };
         if playlists.is_empty() {
             return;
         }
 
+        self.youtube_playlist_prefetching.set(true);
         let sender = self.background_tx.clone();
         thread::spawn(move || {
-            let mut cached = HashMap::new();
-            for playlist in playlists {
-                let browse_id = playlist.browse_id.clone();
-                match bridge.playlist(&browse_id) {
-                    Ok(mut items) => {
+            // Playlist requests are independent. A small worker pool prevents the
+            // previous sequential 10s + 10s + 10s startup behavior without
+            // flooding YouTube or spawning an unbounded number of helpers.
+            let worker_count = playlists.len().min(3);
+            let work = Arc::new(Mutex::new(playlists.into_iter().collect::<VecDeque<_>>()));
+            let (result_tx, result_rx) = mpsc::channel();
+            let mut workers = Vec::with_capacity(worker_count);
+
+            for _ in 0..worker_count {
+                let bridge = bridge.clone();
+                let work = work.clone();
+                let result_tx = result_tx.clone();
+                workers.push(thread::spawn(move || loop {
+                    let playlist = match work.lock() {
+                        Ok(mut queue) => queue.pop_front(),
+                        Err(_) => None,
+                    };
+                    let Some(playlist) = playlist else {
+                        break;
+                    };
+
+                    let browse_id = playlist.browse_id.clone();
+                    let result = bridge.playlist(&playlist).map(|mut items| {
                         cache_items_for_browser(&mut items);
+                        items
+                    });
+                    let _ = result_tx.send((playlist, browse_id, result));
+                }));
+            }
+            drop(result_tx);
+
+            let mut cached = HashMap::new();
+            for (playlist, browse_id, result) in result_rx {
+                match result {
+                    Ok(items) if !items.is_empty() => {
                         cached.insert(browse_id, items);
                     }
+                    Ok(_) => {}
+                    Err(error)
+                        if error.contains(
+                            "No playable tracks were returned for this YouTube Music playlist",
+                        ) => {}
                     Err(error) => {
                         eprintln!(
                             "Could not pre-cache YouTube playlist '{}': {error}",
@@ -968,6 +1053,10 @@ impl AppController {
                     }
                 }
             }
+            for worker in workers {
+                let _ = worker.join();
+            }
+
             let _ = sender.send(BackgroundMessage::YouTubePlaylistsCached(Ok(cached)));
         });
     }
@@ -981,27 +1070,293 @@ impl AppController {
         if browse_id.is_empty() {
             return;
         }
-        if self
+
+        let route = BrowserRoute::YouTubePlaylist {
+            title: playlist.title.clone(),
+            browse_id: browse_id.clone(),
+        };
+        let cached = self
             .youtube_library
             .borrow()
             .playlist_tracks
-            .contains_key(&browse_id)
+            .get(&browse_id)
+            .map(|items| !items.is_empty())
+            .unwrap_or(false);
+        if cached {
+            self.navigate_browser(route);
+            return;
+        }
+
         {
-            self.navigate_browser(BrowserRoute::YouTubePlaylist {
-                title: playlist.title,
-                browse_id,
+            let mut library = self.youtube_library.borrow_mut();
+            library.playlist_tracks.remove(&browse_id);
+            library.playlist_loading.insert(browse_id.clone());
+        }
+        // Change pages before starting or queueing the network request. The user
+        // immediately sees the playlist title and a loading row instead of
+        // remaining on the previous page for several seconds.
+        self.navigate_browser(route);
+
+        if self.youtube_playlist_loading.get() {
+            self.youtube_pending_playlist.replace(Some(playlist));
+            return;
+        }
+
+        let request_id = self.youtube_playlist_request_id.get().wrapping_add(1);
+        self.youtube_playlist_request_id.set(request_id);
+        self.youtube_playlist_loading.set(true);
+        let sender = self.background_tx.clone();
+        thread::spawn(move || {
+            let result = bridge.playlist(&playlist).map(|mut items| {
+                cache_items_for_browser(&mut items);
+                items
+            });
+            let _ = sender.send(BackgroundMessage::YouTubeBrowserPlaylist {
+                request_id,
+                playlist,
+                result,
+            });
+        });
+    }
+
+    fn is_open_youtube_playlist(&self, browse_id: &str) -> bool {
+        matches!(
+            self.browser.route(),
+            BrowserRoute::YouTubePlaylist {
+                browse_id: current,
+                ..
+            } if current == browse_id
+        )
+    }
+
+    fn load_youtube_collection_for_browser(&self, item: YouTubeItem) {
+        let title = item.title.clone();
+        let route = if item.result_type == "artist" {
+            BrowserRoute::YouTubeArtist(title)
+        } else {
+            BrowserRoute::YouTubeAlbum(title)
+        };
+        let key = youtube_collection_cache_key(&item);
+
+        if item.result_type == "artist" {
+            let cached = self
+                .youtube_library
+                .borrow()
+                .artist_albums
+                .contains_key(&key);
+            if cached {
+                self.navigate_browser(route);
+                return;
+            }
+
+            let Some(bridge) = self.youtube_bridge.clone() else {
+                self.show_toast("As dependências do YouTube Music não estão instaladas");
+                return;
+            };
+            self.youtube_library
+                .borrow_mut()
+                .artist_loading
+                .insert(key.clone());
+            self.navigate_browser(route);
+            let sender = self.background_tx.clone();
+            thread::spawn(move || {
+                let result = bridge.artist_overview(&item).map(|mut overview| {
+                    cache_items_for_browser(std::slice::from_mut(&mut overview.profile));
+                    cache_items_for_browser(&mut overview.albums);
+                    overview
+                });
+                let _ = sender.send(BackgroundMessage::YouTubeArtistOverview { key, result });
             });
             return;
         }
 
-        self.show_toast(&format!("Carregando playlist ‘{}’…", playlist.title));
+        let cached = self
+            .youtube_library
+            .borrow()
+            .collection_tracks
+            .get(&key)
+            .map(|items| !items.is_empty())
+            .unwrap_or(false);
+        if cached {
+            self.navigate_browser(route);
+            return;
+        }
+
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            self.show_toast("As dependências do YouTube Music não estão instaladas");
+            return;
+        };
+
+        self.youtube_library
+            .borrow_mut()
+            .collection_loading
+            .insert(key.clone());
+        self.navigate_browser(route);
+
         let sender = self.background_tx.clone();
         thread::spawn(move || {
-            let result = bridge.playlist(&browse_id).map(|mut items| {
+            let result = bridge.collection(&item).map(|mut items| {
                 cache_items_for_browser(&mut items);
                 items
             });
-            let _ = sender.send(BackgroundMessage::YouTubeBrowserPlaylist { playlist, result });
+            let _ = sender.send(BackgroundMessage::YouTubeBrowserCollection { item, key, result });
+        });
+    }
+
+    fn is_open_youtube_collection(&self, key: &str) -> bool {
+        match self.browser.route() {
+            BrowserRoute::YouTubeAlbum(title) => youtube_collection_key("album", &title) == key,
+            BrowserRoute::YouTubeArtist(title) => youtube_collection_key("artist", &title) == key,
+            _ => false,
+        }
+    }
+
+    fn prefetch_youtube_collection_cache(&self) {
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            return;
+        };
+        if self.youtube_collection_prefetching.get() {
+            return;
+        }
+
+        let collections = {
+            let library = self.youtube_library.borrow();
+            let mut seen = HashSet::new();
+            library
+                .suggested_albums
+                .iter()
+                .take(6)
+                .chain(library.suggested_artists.iter().take(6))
+                .filter(|item| !item.browse_id.is_empty())
+                .filter(|item| {
+                    let key = youtube_collection_cache_key(item);
+                    seen.insert(key.clone()) && !library.collection_tracks.contains_key(&key)
+                })
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        if collections.is_empty() {
+            return;
+        }
+
+        self.youtube_collection_prefetching.set(true);
+        let sender = self.background_tx.clone();
+        thread::spawn(move || {
+            let worker_count = collections.len().min(3);
+            let work = Arc::new(Mutex::new(collections.into_iter().collect::<VecDeque<_>>()));
+            let (result_tx, result_rx) = mpsc::channel();
+            let mut workers = Vec::with_capacity(worker_count);
+
+            for _ in 0..worker_count {
+                let bridge = bridge.clone();
+                let work = work.clone();
+                let result_tx = result_tx.clone();
+                workers.push(thread::spawn(move || loop {
+                    let item = match work.lock() {
+                        Ok(mut queue) => queue.pop_front(),
+                        Err(_) => None,
+                    };
+                    let Some(item) = item else {
+                        break;
+                    };
+
+                    let key = youtube_collection_cache_key(&item);
+                    let result = bridge.collection(&item).map(|mut items| {
+                        cache_items_for_browser(&mut items);
+                        items
+                    });
+                    let _ = result_tx.send((item, key, result));
+                }));
+            }
+            drop(result_tx);
+
+            let mut cached = HashMap::new();
+            for (item, key, result) in result_rx {
+                match result {
+                    Ok(items) if !items.is_empty() => {
+                        cached.insert(key, items);
+                    }
+                    Ok(_) => {}
+                    Err(error) => {
+                        eprintln!(
+                            "Could not pre-cache YouTube {} '{}': {error}",
+                            item.result_type, item.title
+                        );
+                    }
+                }
+            }
+            for worker in workers {
+                let _ = worker.join();
+            }
+
+            let _ = sender.send(BackgroundMessage::YouTubeCollectionsCached(Ok(cached)));
+        });
+    }
+
+    fn prefetch_home_artist_profiles(&self) {
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            return;
+        };
+
+        let artists = {
+            let mut library = self.youtube_library.borrow_mut();
+            let candidates = library
+                .artists
+                .iter()
+                .take(12)
+                .filter_map(|entry| {
+                    let key = youtube_collection_key("artist", &entry.title);
+                    let missing = !library.artist_profiles.contains_key(&key);
+                    let idle = !library.artist_loading.contains(&key);
+
+                    (missing && idle).then(|| (key, entry.source.clone()))
+                })
+                .collect::<Vec<_>>();
+
+            for (key, _) in &candidates {
+                library.artist_loading.insert(key.clone());
+            }
+
+            candidates
+        };
+
+        if artists.is_empty() {
+            return;
+        }
+
+        let sender = self.background_tx.clone();
+        thread::spawn(move || {
+            let worker_count = artists.len().min(3);
+            let work = Arc::new(Mutex::new(artists.into_iter().collect::<VecDeque<_>>()));
+            let mut workers = Vec::with_capacity(worker_count);
+
+            for _ in 0..worker_count {
+                let bridge = bridge.clone();
+                let work = work.clone();
+                let sender = sender.clone();
+
+                workers.push(thread::spawn(move || loop {
+                    let next = match work.lock() {
+                        Ok(mut queue) => queue.pop_front(),
+                        Err(_) => None,
+                    };
+                    let Some((key, item)) = next else {
+                        break;
+                    };
+
+                    let result = bridge.artist_overview(&item).map(|mut overview| {
+                        cache_items_for_browser(std::slice::from_mut(&mut overview.profile));
+                        cache_items_for_browser(&mut overview.albums);
+                        overview
+                    });
+
+                    let _ = sender.send(BackgroundMessage::YouTubeArtistOverview { key, result });
+                }));
+            }
+
+            for worker in workers {
+                let _ = worker.join();
+            }
         });
     }
 
@@ -1016,7 +1371,7 @@ impl AppController {
 
             match event {
                 YouTubePageEvent::SyncLibrary => {
-                    if self.sync_youtube_library(true) {
+                    if self.sync_youtube_library(true, true) {
                         self.youtube_page
                             .set_loading(true, "Sincronizando com o Nocky...");
                     } else {
@@ -1088,14 +1443,13 @@ impl AppController {
                 }
                 YouTubePageEvent::OpenPlaylist(item) => {
                     let title = item.title.clone();
-                    let browse_id = item.browse_id.clone();
                     self.youtube_page
                         .set_loading(true, &format!("Carregando {title}..."));
                     let sender = self.background_tx.clone();
                     thread::spawn(move || {
                         let _ = sender.send(BackgroundMessage::YouTubeItems {
                             title,
-                            result: bridge.playlist(&browse_id),
+                            result: bridge.playlist(&item),
                         });
                     });
                 }
@@ -1122,13 +1476,21 @@ impl AppController {
         }
         let request_id = self.youtube_request_id.get().wrapping_add(1);
         self.youtube_request_id.set(request_id);
-        self.show_toast("Preparando stream do YouTube Music...");
         let sender = self.background_tx.clone();
         thread::spawn(move || {
-            let result = bridge.resolve(&item.video_id, force).map(|stream| {
-                let cover = download_cover(&item, &stream.thumbnail_url);
-                (stream, cover)
-            });
+            let result = bridge
+                .resolve(&item.video_id, force)
+                .map(|stream| {
+                    let cover = download_cover(&item, &stream.thumbnail_url);
+                    (stream, cover)
+                })
+                .map_err(|error| {
+                    if force {
+                        format!("__NOCKY_STREAM_RECOVERY_FAILED__{error}")
+                    } else {
+                        error
+                    }
+                });
             let _ = sender.send(BackgroundMessage::YouTubeResolved {
                 request_id,
                 queue,
@@ -1139,6 +1501,65 @@ impl AppController {
         });
     }
 
+    fn try_recover_youtube_stream(&self, error: &str) -> bool {
+        if self.playback_source.get() != PlaybackSource::YouTube
+            || self.youtube_recovery_in_progress.get()
+            || self.youtube_recovery_attempted.get()
+            || !is_refreshable_stream_error(error)
+        {
+            return false;
+        }
+
+        let snapshot = {
+            let state = self.youtube_state.borrow();
+            state
+                .as_ref()
+                .map(|state| (state.queue.clone(), state.current, state.item.clone()))
+        };
+        let Some((queue, index, item)) = snapshot else {
+            return false;
+        };
+
+        self.youtube_recovery_attempted.set(true);
+        self.youtube_recovery_in_progress.set(true);
+        self.youtube_recovery_resume_us
+            .set(self.player.position_us().max(0));
+        let _ = self.player.stop();
+
+        eprintln!(
+            "Nocky YouTube stream rejected; refreshing signed URL: {}",
+            redact_stream_url(error)
+        );
+        self.resolve_youtube_track(item, queue, index, true);
+        true
+    }
+
+    fn reset_youtube_recovery(&self) {
+        self.youtube_recovery_in_progress.set(false);
+        self.youtube_recovery_attempted.set(false);
+        self.youtube_recovery_resume_us.set(0);
+    }
+
+    fn resume_youtube_after_recovery(&self) {
+        let resume_us = self.youtube_recovery_resume_us.replace(0);
+        if resume_us <= 0 || self.playback_source.get() != PlaybackSource::YouTube {
+            return;
+        }
+
+        if self.player.duration_us() <= 0 {
+            self.youtube_recovery_resume_us.set(resume_us);
+            return;
+        }
+
+        if let Err(error) = self.player.seek(resume_us) {
+            eprintln!("Could not restore YouTube playback position: {error}");
+            return;
+        }
+
+        self.last_mpris_position.set(resume_us);
+        self.mpris.send(mpris::MprisUpdate::Position(resume_us));
+    }
+
     fn apply_youtube_track(
         &self,
         queue: Vec<YouTubeItem>,
@@ -1147,6 +1568,21 @@ impl AppController {
         stream: YouTubeStream,
         cover_path: Option<PathBuf>,
     ) {
+        let recovering = self.youtube_recovery_in_progress.replace(false);
+        let (preserved_lyrics, preserved_cover) = if recovering {
+            self.youtube_state
+                .borrow()
+                .as_ref()
+                .filter(|state| state.item.video_id == item.video_id)
+                .map(|state| (state.lyrics.clone(), state.cover_path.clone()))
+                .unwrap_or_default()
+        } else {
+            self.youtube_recovery_attempted.set(false);
+            self.youtube_recovery_resume_us.set(0);
+            (Vec::new(), None)
+        };
+        let cover_path = cover_path.or(preserved_cover);
+
         if item.title.is_empty() {
             item.title = stream.title.clone();
         }
@@ -1164,6 +1600,8 @@ impl AppController {
             self.player
                 .load_with_headers(&stream.stream_url, true, stream.http_headers.clone())
         {
+            self.youtube_recovery_in_progress.set(false);
+            self.youtube_recovery_resume_us.set(0);
             self.show_error(&error);
             return;
         }
@@ -1176,7 +1614,7 @@ impl AppController {
             item: item.clone(),
             stream: stream.clone(),
             cover_path: cover_path.clone(),
-            lyrics: Vec::new(),
+            lyrics: preserved_lyrics.clone(),
         }));
 
         self.title.set_text(&item.title);
@@ -1201,18 +1639,24 @@ impl AppController {
         self.favorite_icon
             .set_icon_name(Some("emblem-favorite-symbolic"));
         self.favorite_icon.set_opacity(0.28);
-        if self.config.borrow().auto_download_lyrics {
+
+        if recovering && !preserved_lyrics.is_empty() {
+            self.rebuild_youtube_lyrics(&preserved_lyrics);
+        } else if self.config.borrow().auto_download_lyrics {
             self.set_lyrics_message("Searching synchronized lyrics for this YouTube track…");
-            self.request_youtube_lyrics(&item);
+            self.request_youtube_lyrics(&item, false);
         } else {
             self.set_lyrics_message(
                 "No synchronized lyrics loaded yet. Use the menu to search for this YouTube track.",
             );
         }
+
         self.update_play_icons(true);
-        self.last_mpris_position.set(0);
+        if !recovering {
+            self.last_mpris_position.set(0);
+            self.mpris.send(mpris::MprisUpdate::Position(0));
+        }
         self.publish_mpris_youtube(&item, &stream, cover_path.as_deref());
-        self.mpris.send(mpris::MprisUpdate::Position(0));
         self.mpris
             .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Playing));
         self.prefetch_youtube_queue();
@@ -1233,17 +1677,7 @@ impl AppController {
     }
 
     fn set_lyrics_message(&self, message: &str) {
-        while let Some(child) = self.lyrics_box.first_child() {
-            self.lyrics_box.remove(&child);
-        }
-        let title = gtk::Label::new(Some(message));
-        title.set_wrap(true);
-        title.set_justify(gtk::Justification::Center);
-        title.add_css_class("title-3");
-        self.lyrics_box.append(&title);
-        for (index, label) in self.inline_lyric_lines.iter().enumerate() {
-            label.set_text(if index == 2 { message } else { " " });
-        }
+        self.lyrics.show_message(message, None);
     }
 
     fn youtube_next_track(&self) {
@@ -1370,7 +1804,7 @@ impl AppController {
                         controller.set_lyrics_message(
                             "Searching synchronized lyrics for this YouTube track…",
                         );
-                        controller.request_youtube_lyrics(&item);
+                        controller.request_youtube_lyrics(&item, true);
                         return;
                     }
                     let current = controller.state.borrow().current;
@@ -1407,7 +1841,7 @@ impl AppController {
                             .as_ref()
                             .map(|state| state.item.clone())
                         {
-                            controller.request_youtube_lyrics(&item);
+                            controller.request_youtube_lyrics(&item, false);
                         } else if let Some(index) = controller.state.borrow().current {
                             controller.request_lyrics(index, false, false);
                         }
@@ -1487,11 +1921,6 @@ impl AppController {
                 self.refresh_youtube_status();
             }
         }
-        let label = match source {
-            StartupSource::Local => "biblioteca local",
-            StartupSource::YouTube => "YouTube Music",
-        };
-        self.show_toast(&format!("Fonte da Home definida como {label}"));
     }
 
     fn apply_home_preferences(&self) {
@@ -1499,8 +1928,14 @@ impl AppController {
         self.visualizer
             .widget()
             .set_visible(config.show_home_visualizer);
-        self.inline_lyrics.set_visible(config.show_home_lyrics);
+        self.visualizer
+            .set_active(config.show_home_visualizer && self.player.is_playing());
+        self.lyrics
+            .inline_widget()
+            .set_visible(config.show_home_lyrics);
         self._theme.set_noctalia_enabled(config.noctalia_theme_sync);
+        self._theme
+            .set_blur_preferences(config.blur_mode, config.blur_opacity);
     }
 
     fn show_settings_dialog(self: &Rc<Self>) {
@@ -1560,6 +1995,34 @@ impl AppController {
             &source,
         ));
 
+        let blur_mode = gtk::DropDown::from_strings(&[
+            self.tr("blur_custom"),
+            self.tr("blur_noctalia"),
+            self.tr("blur_off"),
+        ]);
+        blur_mode.set_selected(match config.blur_mode {
+            BlurMode::Custom => 0,
+            BlurMode::Noctalia => 1,
+            BlurMode::Off => 2,
+        });
+        content.append(&settings_dropdown_row(
+            self.tr("window_blur"),
+            self.tr("window_blur_description"),
+            &blur_mode,
+        ));
+
+        let blur_opacity = gtk::Scale::with_range(gtk::Orientation::Horizontal, 45.0, 95.0, 1.0);
+        blur_opacity.set_draw_value(true);
+        blur_opacity.set_value(config.blur_opacity.clamp(0.45, 0.95) * 100.0);
+        blur_opacity.set_value_pos(gtk::PositionType::Right);
+        let blur_opacity_row = settings_scale_row(
+            self.tr("blur_opacity"),
+            self.tr("blur_opacity_description"),
+            &blur_opacity,
+        );
+        blur_opacity_row.set_visible(config.blur_mode == BlurMode::Custom);
+        content.append(&blur_opacity_row);
+
         let visualizer = settings_switch(config.show_home_visualizer);
         content.append(&settings_switch_row(
             self.tr("home_visualizer"),
@@ -1615,7 +2078,6 @@ impl AppController {
                     _ => AppLanguage::Portuguese,
                 };
                 controller.save_config();
-                controller.show_toast(controller.tr("settings_saved"));
             });
         }
         {
@@ -1629,6 +2091,51 @@ impl AppController {
                 } else {
                     StartupSource::YouTube
                 });
+            });
+        }
+        {
+            let weak = Rc::downgrade(self);
+            let opacity_row = blur_opacity_row.clone();
+            blur_mode.connect_selected_notify(move |dropdown| {
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+                let mode = match dropdown.selected() {
+                    0 => BlurMode::Custom,
+                    2 => BlurMode::Off,
+                    _ => BlurMode::Noctalia,
+                };
+                opacity_row.set_visible(mode == BlurMode::Custom);
+                controller.config.borrow_mut().blur_mode = mode;
+                controller.save_config();
+                controller.apply_home_preferences();
+            });
+        }
+        {
+            let weak = Rc::downgrade(self);
+            let pending_save = Rc::new(RefCell::new(None::<glib::SourceId>));
+            blur_opacity.connect_value_changed(move |scale| {
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+                controller.config.borrow_mut().blur_opacity =
+                    (scale.value() / 100.0).clamp(0.45, 0.95);
+                if controller.config.borrow().blur_mode == BlurMode::Custom {
+                    controller.apply_home_preferences();
+                }
+
+                if let Some(source) = pending_save.borrow_mut().take() {
+                    source.remove();
+                }
+                let weak = weak.clone();
+                let pending = pending_save.clone();
+                let source = glib::timeout_add_local_once(Duration::from_millis(350), move || {
+                    pending.borrow_mut().take();
+                    if let Some(controller) = weak.upgrade() {
+                        controller.save_config();
+                    }
+                });
+                pending_save.borrow_mut().replace(source);
             });
         }
         {
@@ -1665,7 +2172,6 @@ impl AppController {
                 }
                 controller.save_config();
                 controller.apply_home_preferences();
-                controller.show_toast(controller.tr("settings_saved"));
             });
         }
 
@@ -1836,7 +2342,6 @@ impl AppController {
             return;
         };
 
-        self.show_toast("Escaneando a biblioteca de músicas...");
         let sender = self.background_tx.clone();
         thread::spawn(move || {
             let result = library::scan_music_directory(&root);
@@ -1896,7 +2401,11 @@ impl AppController {
                         }
                     }
                 }
-                BackgroundMessage::YouTubeLyricsDownloaded { video_id, result } => {
+                BackgroundMessage::YouTubeLyricsDownloaded {
+                    video_id,
+                    notify,
+                    result,
+                } => {
                     let current = self.youtube_state.borrow().as_ref().map(|state| {
                         (
                             state.item.video_id.clone(),
@@ -1918,7 +2427,9 @@ impl AppController {
                                 state.lyrics = lyrics.clone();
                             }
                             self.rebuild_youtube_lyrics(&lyrics);
-                            self.show_toast("Letras sincronizadas do YouTube carregadas");
+                            if notify {
+                                self.show_toast("Letras sincronizadas do YouTube carregadas");
+                            }
                         }
                         Err(error) => {
                             let title = current
@@ -1936,14 +2447,16 @@ impl AppController {
                         self.youtube_page.set_status(&status);
                         if status.connected {
                             self.youtube_library.borrow_mut().connected = true;
-                            self.prefetch_youtube_playlist_cache();
-                            if self.config.borrow().youtube_auto_sync
-                                && self.sync_youtube_library(true)
-                            {
+                            let syncing = self.config.borrow().youtube_auto_sync
+                                && self.sync_youtube_library(true, false);
+                            if syncing {
                                 self.youtube_page.set_loading(
                                     true,
                                     "Sincronizando biblioteca do YouTube Music…",
                                 );
+                            } else {
+                                self.prefetch_youtube_playlist_cache();
+                                self.prefetch_home_artist_profiles();
                             }
                         } else {
                             self.youtube_library.borrow_mut().clear();
@@ -1963,7 +2476,7 @@ impl AppController {
                             library.connected = true;
                             library.synced = false;
                         }
-                        let _ = self.sync_youtube_library(true);
+                        let _ = self.sync_youtube_library(true, false);
                         self.show_toast("Conta do YouTube Music conectada");
                     }
                     Err(error) => {
@@ -1984,7 +2497,7 @@ impl AppController {
                     }
                     Err(error) => self.youtube_page.show_error(&error),
                 },
-                BackgroundMessage::YouTubeLibrarySynced(result) => match result {
+                BackgroundMessage::YouTubeLibrarySynced { notify, result } => match result {
                     Ok(snapshot) => {
                         let counts = (
                             snapshot.library.len(),
@@ -1999,10 +2512,13 @@ impl AppController {
                             .set_loading(false, "Library synchronized with Nocky");
                         self.refresh_browser();
                         self.prefetch_youtube_playlist_cache();
-                        self.show_toast(&format!(
-                            "YouTube Music sincronizado: {} faixas, {} curtidas e {} playlists",
-                            counts.0, counts.1, counts.2
-                        ));
+                        self.prefetch_youtube_collection_cache();
+                        if notify {
+                            self.show_toast(&format!(
+                                "YouTube Music sincronizado: {} faixas, {} curtidas e {} playlists",
+                                counts.0, counts.1, counts.2
+                            ));
+                        }
                     }
                     Err(error) => {
                         self.youtube_library.borrow_mut().syncing = false;
@@ -2013,27 +2529,169 @@ impl AppController {
                         ));
                     }
                 },
-                BackgroundMessage::YouTubeBrowserPlaylist { playlist, result } => match result {
+                BackgroundMessage::YouTubeBrowserPlaylist {
+                    request_id,
+                    playlist,
+                    result,
+                } => match result {
                     Ok(items) => {
+                        if request_id != self.youtube_playlist_request_id.get() {
+                            continue;
+                        }
+                        self.youtube_playlist_loading.set(false);
                         let browse_id = playlist.browse_id.clone();
                         self.youtube_library
                             .borrow_mut()
-                            .playlist_tracks
-                            .insert(browse_id.clone(), items);
-                        if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
-                            eprintln!("Could not save the YouTube playlist cache: {error}");
+                            .playlist_loading
+                            .remove(&browse_id);
+
+                        if items.is_empty() {
+                            self.youtube_library
+                                .borrow_mut()
+                                .playlist_tracks
+                                .remove(&browse_id);
+                            if self.is_open_youtube_playlist(&browse_id) {
+                                self.refresh_browser();
+                            }
+                            self.show_toast(
+                                "Esta playlist não retornou faixas reproduzíveis agora",
+                            );
+                        } else {
+                            self.youtube_library
+                                .borrow_mut()
+                                .playlist_tracks
+                                .insert(browse_id.clone(), items);
+                            if cacheable_youtube_playlist(&playlist) {
+                                if let Err(error) =
+                                    save_library_cache(&self.youtube_library.borrow())
+                                {
+                                    eprintln!("Could not save the YouTube playlist cache: {error}");
+                                }
+                            }
+                            if self.is_open_youtube_playlist(&browse_id) {
+                                self.refresh_browser();
+                            }
                         }
-                        self.navigate_browser(BrowserRoute::YouTubePlaylist {
-                            title: playlist.title,
-                            browse_id,
-                        });
+
+                        let pending = self.youtube_pending_playlist.borrow_mut().take();
+                        if let Some(pending) = pending {
+                            self.load_youtube_playlist_for_browser(pending);
+                        }
                     }
                     Err(error) => {
-                        self.show_toast(&format!("Não foi possível carregar a playlist: {error}"))
+                        if request_id != self.youtube_playlist_request_id.get() {
+                            continue;
+                        }
+                        self.youtube_playlist_loading.set(false);
+                        let browse_id = playlist.browse_id.clone();
+                        self.youtube_library
+                            .borrow_mut()
+                            .playlist_loading
+                            .remove(&browse_id);
+                        if self.is_open_youtube_playlist(&browse_id) {
+                            self.refresh_browser();
+                        }
+                        self.show_toast(&format!("Não foi possível carregar a playlist: {error}"));
+                        let pending = self.youtube_pending_playlist.borrow_mut().take();
+                        if let Some(pending) = pending {
+                            self.load_youtube_playlist_for_browser(pending);
+                        }
+                    }
+                },
+                BackgroundMessage::YouTubeArtistOverview { key, result } => {
+                    self.youtube_library
+                        .borrow_mut()
+                        .artist_loading
+                        .remove(&key);
+                    match result {
+                        Ok(overview) => {
+                            let mut library = self.youtube_library.borrow_mut();
+                            library
+                                .artist_profiles
+                                .insert(key.clone(), overview.profile);
+                            library.artist_albums.insert(key.clone(), overview.albums);
+                            drop(library);
+                            if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
+                                eprintln!("Could not save YouTube artist details: {error}");
+                            }
+                        }
+                        Err(error) => {
+                            eprintln!("Could not load YouTube artist details: {error}");
+                            self.show_toast(&format!(
+                                "Não foi possível carregar os álbuns do artista: {error}"
+                            ));
+                        }
+                    }
+                    self.refresh_browser();
+                }
+                BackgroundMessage::YouTubeBrowserCollection { item, key, result } => {
+                    self.youtube_library
+                        .borrow_mut()
+                        .collection_loading
+                        .remove(&key);
+                    match result {
+                        Ok(items) if !items.is_empty() => {
+                            self.youtube_library
+                                .borrow_mut()
+                                .collection_tracks
+                                .insert(key.clone(), items);
+                            if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
+                                eprintln!("Could not save the YouTube collection cache: {error}");
+                            }
+                        }
+                        Ok(_) => {
+                            self.youtube_library
+                                .borrow_mut()
+                                .collection_tracks
+                                .remove(&key);
+                            self.show_toast(if item.result_type == "artist" {
+                                "Este artista não retornou faixas reproduzíveis agora"
+                            } else {
+                                "Este álbum não retornou faixas reproduzíveis agora"
+                            });
+                        }
+                        Err(error) => {
+                            self.youtube_library
+                                .borrow_mut()
+                                .collection_tracks
+                                .remove(&key);
+                            self.show_toast(&format!(
+                                "Não foi possível carregar {}: {error}",
+                                if item.result_type == "artist" {
+                                    "o artista"
+                                } else {
+                                    "o álbum"
+                                }
+                            ));
+                        }
+                    }
+                    if self.is_open_youtube_collection(&key) {
+                        self.refresh_browser();
+                    }
+                }
+                BackgroundMessage::YouTubeCollectionsCached(result) => match result {
+                    Ok(cached) => {
+                        self.youtube_collection_prefetching.set(false);
+                        if cached.is_empty() {
+                            continue;
+                        }
+                        self.youtube_library
+                            .borrow_mut()
+                            .collection_tracks
+                            .extend(cached);
+                        if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
+                            eprintln!("Could not save the YouTube collection cache: {error}");
+                        }
+                        self.refresh_browser();
+                    }
+                    Err(error) => {
+                        self.youtube_collection_prefetching.set(false);
+                        eprintln!("Could not pre-cache YouTube collections: {error}");
                     }
                 },
                 BackgroundMessage::YouTubePlaylistsCached(result) => match result {
                     Ok(cached) => {
+                        self.youtube_playlist_prefetching.set(false);
                         if cached.is_empty() {
                             continue;
                         }
@@ -2046,7 +2704,10 @@ impl AppController {
                         }
                         self.refresh_browser();
                     }
-                    Err(error) => eprintln!("Could not pre-cache YouTube playlists: {error}"),
+                    Err(error) => {
+                        self.youtube_playlist_prefetching.set(false);
+                        eprintln!("Could not pre-cache YouTube playlists: {error}");
+                    }
                 },
                 BackgroundMessage::YouTubeItems { title, result } => match result {
                     Ok(items) => self.youtube_page.show_items(&title, items),
@@ -2109,7 +2770,6 @@ impl AppController {
             {
                 self.select_track(selected.unwrap_or(0), false);
             }
-            self.show_toast(&format!("{count} tracks found"));
         } else {
             if self.playback_source.get() != PlaybackSource::YouTube {
                 self.reset_now_playing("No supported audio files were found");
@@ -2214,6 +2874,9 @@ impl AppController {
                 BrowserEvent::OpenYouTubePlaylist(item) => {
                     self.load_youtube_playlist_for_browser(item);
                 }
+                BrowserEvent::OpenYouTubeCollection(item) => {
+                    self.load_youtube_collection_for_browser(item);
+                }
                 BrowserEvent::Navigate(route) => self.navigate_browser(route),
                 BrowserEvent::CreatePlaylist(name) => {
                     let created = self.config.borrow_mut().create_playlist(&name);
@@ -2289,6 +2952,7 @@ impl AppController {
 
         self.playback_source.set(PlaybackSource::Local);
         self.youtube_state.replace(None);
+        self.reset_youtube_recovery();
         self.state.borrow_mut().current = Some(index);
         self.title.set_text(&track.title);
         self.artist.set_text(&track.artist);
@@ -2356,7 +3020,7 @@ impl AppController {
         });
     }
 
-    fn request_youtube_lyrics(&self, item: &YouTubeItem) {
+    fn request_youtube_lyrics(&self, item: &YouTubeItem, notify: bool) {
         if item.video_id.is_empty() {
             return;
         }
@@ -2370,7 +3034,11 @@ impl AppController {
         thread::spawn(move || {
             let result = lyrics_provider::fetch_synced_lyrics(&lookup)
                 .map(|contents| lyrics::parse_lrc(&contents));
-            let _ = sender.send(BackgroundMessage::YouTubeLyricsDownloaded { video_id, result });
+            let _ = sender.send(BackgroundMessage::YouTubeLyricsDownloaded {
+                video_id,
+                notify,
+                result,
+            });
         });
     }
 
@@ -2573,13 +3241,28 @@ impl AppController {
         while let Some(event) = self.player.try_recv() {
             match event {
                 PlaybackEvent::EndOfStream => self.handle_end_of_stream(),
-                PlaybackEvent::DurationChanged => self.publish_mpris_capabilities(),
+                PlaybackEvent::DurationChanged => {
+                    self.publish_mpris_capabilities();
+                    self.resume_youtube_after_recovery();
+                }
                 PlaybackEvent::Spectrum(values) => self.visualizer.set_values(&values),
                 PlaybackEvent::Error(error) => {
+                    if self.youtube_recovery_in_progress.get() {
+                        eprintln!(
+                            "Ignoring follow-up GStreamer error during stream refresh: {}",
+                            redact_stream_url(&error)
+                        );
+                        continue;
+                    }
+                    if self.try_recover_youtube_stream(&error) {
+                        continue;
+                    }
+
+                    eprintln!("Nocky playback error: {}", redact_stream_url(&error));
                     self.update_play_icons(false);
                     self.mpris
                         .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Stopped));
-                    self.show_error(&error);
+                    self.show_error(playback_error_message(&error));
                 }
             }
         }
@@ -2789,7 +3472,8 @@ impl AppController {
         };
         self.play_icon.set_icon_name(Some(icon));
         self.hero_play_icon.set_icon_name(Some(icon));
-        self.visualizer.set_active(playing);
+        self.visualizer
+            .set_active(playing && self.visualizer.widget().is_visible());
     }
 
     fn refresh_progress(&self) {
@@ -2816,189 +3500,57 @@ impl AppController {
     }
 
     fn rebuild_lyrics(&self, track: &Track) {
-        while let Some(child) = self.lyrics_box.first_child() {
-            self.lyrics_box.remove(&child);
-        }
-
         if track.lyrics.is_empty() {
-            let title = gtk::Label::new(Some("Nenhuma letra sincronizada disponível ainda"));
-            title.add_css_class("title-2");
-            let hint = gtk::Label::new(Some(if self.config.borrow().auto_download_lyrics {
-                "Automatic LRCLIB lookup is enabled. Use the menu to retry whenever needed."
-            } else {
-                "Use the menu to download lyrics, or place a matching .lrc file beside the song."
-            }));
-            hint.set_wrap(true);
-            hint.set_justify(gtk::Justification::Center);
-            hint.add_css_class("dim-label");
-            self.lyrics_box.append(&title);
-            self.lyrics_box.append(&hint);
-            self.clear_inline_lyrics();
-            self.inline_lyric_lines[2].set_text("No synchronized lyrics available yet");
-            self.inline_lyric_lines[3].set_text(if self.config.borrow().auto_download_lyrics {
-                "Automatic LRCLIB lookup is enabled. You can also open the Lyrics page for the full view."
-            } else {
-                "Use the menu to download lyrics, or open the Lyrics page for the full view."
-            });
+            let automatic = self.config.borrow().auto_download_lyrics;
+            self.lyrics.show_state(
+                "Nenhuma letra sincronizada disponível ainda",
+                Some(if automatic {
+                    "Automatic LRCLIB lookup is enabled. Use the menu to retry whenever needed."
+                } else {
+                    "Use the menu to download lyrics, or place a matching .lrc file beside the song."
+                }),
+                "No synchronized lyrics available yet",
+                Some(if automatic {
+                    "Automatic LRCLIB lookup is enabled. You can also open the Lyrics page for the full view."
+                } else {
+                    "Use the menu to download lyrics, or open the Lyrics page for the full view."
+                }),
+            );
             return;
         }
 
-        for line in &track.lyrics {
-            let label = gtk::Label::new(Some(&line.text));
-            label.set_wrap(true);
-            label.set_justify(gtk::Justification::Center);
-            label.set_halign(gtk::Align::Center);
-            label.add_css_class("lyric-line");
-            self.lyrics_box.append(&label);
-        }
-        self.update_inline_lyric_preview(track, None);
+        self.lyrics.set_lines(&track.lyrics);
     }
 
     fn rebuild_youtube_lyrics(&self, lyrics: &[LyricLine]) {
-        while let Some(child) = self.lyrics_box.first_child() {
-            self.lyrics_box.remove(&child);
-        }
-
         if lyrics.is_empty() {
             self.set_lyrics_message("No synchronized lyrics available for this YouTube track yet.");
             return;
         }
 
-        for line in lyrics {
-            let label = gtk::Label::new(Some(&line.text));
-            label.set_wrap(true);
-            label.set_justify(gtk::Justification::Center);
-            label.set_halign(gtk::Align::Center);
-            label.add_css_class("lyric-line");
-            self.lyrics_box.append(&label);
-        }
-        self.update_inline_lyric_preview_lines(lyrics, None);
+        self.lyrics.set_lines(lyrics);
     }
 
     fn highlight_lyric(&self, timestamp: i64) {
-        if self.playback_source.get() == PlaybackSource::YouTube {
-            let lyrics = self
-                .youtube_state
-                .borrow()
-                .as_ref()
-                .map(|state| state.lyrics.clone())
-                .unwrap_or_default();
-            if lyrics.is_empty() {
-                return;
-            }
-
-            let current_index = lyrics
-                .iter()
-                .enumerate()
-                .rev()
-                .find(|(_, line)| timestamp >= line.timestamp_us)
-                .map(|(index, _)| index);
-
-            self.update_inline_lyric_preview_lines(&lyrics, current_index);
-            self.highlight_lyrics_box(current_index);
-            return;
-        }
-
-        let state = self.state.borrow();
-        let Some(track) = state.current.and_then(|index| state.tracks.get(index)) else {
-            return;
-        };
-        if track.lyrics.is_empty() {
-            return;
-        }
-
-        let current_index = track
-            .lyrics
-            .iter()
-            .enumerate()
-            .rev()
-            .find(|(_, line)| timestamp >= line.timestamp_us)
-            .map(|(index, _)| index);
-
-        self.update_inline_lyric_preview(track, current_index);
-        self.highlight_lyrics_box(current_index);
-    }
-
-    fn highlight_lyrics_box(&self, current_index: Option<usize>) {
-        let mut child = self.lyrics_box.first_child();
-        let mut index = 0;
-        while let Some(widget) = child {
-            widget.remove_css_class("current-lyric");
-            widget.remove_css_class("past-lyric");
-            if Some(index) == current_index {
-                widget.add_css_class("current-lyric");
-            } else if current_index.is_some_and(|current| index < current) {
-                widget.add_css_class("past-lyric");
-            }
-            child = widget.next_sibling();
-            index += 1;
-        }
-    }
-
-    fn clear_inline_lyrics(&self) {
-        for label in &self.inline_lyric_lines {
-            label.set_text("");
-        }
-    }
-
-    fn update_inline_lyric_preview(&self, track: &Track, current_index: Option<usize>) {
-        self.update_inline_lyric_preview_lines(&track.lyrics, current_index);
-    }
-
-    fn update_inline_lyric_preview_lines(
-        &self,
-        lyrics: &[LyricLine],
-        current_index: Option<usize>,
-    ) {
-        self.clear_inline_lyrics();
-
-        if lyrics.is_empty() {
-            self.inline_lyric_lines[2].set_text("No synchronized lyrics available yet");
-            self.inline_lyric_lines[3].set_text(if self.config.borrow().auto_download_lyrics {
-                "Automatic LRCLIB lookup is enabled. You can also open the Lyrics page for the full view."
-            } else {
-                "Use the menu to download lyrics, or open the Lyrics page for the full view."
-            });
-            return;
-        }
-
-        let visible = lyrics
-            .iter()
-            .enumerate()
-            .filter(|(_, line)| !line.text.trim().is_empty())
-            .collect::<Vec<_>>();
-
-        if visible.is_empty() {
-            self.inline_lyric_lines[2].set_text("♪");
-            return;
-        }
-
-        let active_visible = current_index
-            .and_then(|current| visible.iter().position(|(index, _)| *index == current))
-            .unwrap_or(0);
-
-        for (slot, offset) in (-2_isize..=2).enumerate() {
-            let position = active_visible as isize + offset;
-            if position < 0 || position >= visible.len() as isize {
-                continue;
-            }
-            self.inline_lyric_lines[slot].set_text(visible[position as usize].1.text.trim());
-        }
+        self.lyrics.update_timestamp(timestamp);
     }
 
     fn reset_now_playing(&self, message: &str) {
         let _ = self.player.stop();
         self.playback_source.set(PlaybackSource::None);
         self.youtube_state.replace(None);
+        self.reset_youtube_recovery();
         self.title.set_text("Sua música, naturalmente integrada");
         self.artist.set_text("Nenhuma faixa selecionada");
         self.album.set_text(message);
         self.mini_title.set_text("Nada reproduzindo");
         self.mini_artist.set_text("Nocky");
-        self.clear_inline_lyrics();
-        self.inline_lyric_lines[2].set_text("As letras aparecerão aqui");
-        self.inline_lyric_lines[3]
-            .set_text("Play a song with synchronized lyrics to see the surrounding lines");
+        self.lyrics.show_state(
+            "As letras aparecerão aqui",
+            Some("Reproduza uma música com letras sincronizadas para acompanhar cada verso."),
+            "As letras aparecerão aqui",
+            Some("Reproduza uma música com letras sincronizadas para ver o contexto."),
+        );
         self.hero_cover.set_path(None);
         self.mini_cover.set_path(None);
         self.elapsed.set_text("0:00");
@@ -3020,14 +3572,117 @@ impl AppController {
     }
 
     fn show_toast(&self, message: &str) {
-        self.toast_overlay.add_toast(adw::Toast::new(message));
+        let toast = adw::Toast::new(message);
+        toast.set_use_markup(false);
+        self.toast_overlay.add_toast(toast);
     }
 
     fn show_error(&self, message: &str) {
-        eprintln!("Nocky error: {message}");
+        if let Some(detail) = message.strip_prefix("__NOCKY_STREAM_RECOVERY_FAILED__") {
+            self.youtube_recovery_in_progress.set(false);
+            self.youtube_recovery_resume_us.set(0);
+            eprintln!(
+                "Nocky stream recovery failed: {}",
+                redact_stream_url(detail)
+            );
+            let friendly =
+                "Não foi possível renovar o stream desta faixa. Tente reproduzi-la novamente.";
+            self.album.set_text(friendly);
+            self.show_toast(friendly);
+            return;
+        }
+
+        eprintln!("Nocky error: {}", redact_stream_url(message));
         self.album.set_text(&format!("Error: {message}"));
         self.show_toast(message);
     }
+}
+
+fn is_refreshable_stream_error(message: &str) -> bool {
+    let message = message.to_ascii_lowercase();
+    let network_source = message.contains("gstsouphttpsrc")
+        || message.contains("souphttpsrc")
+        || message.contains("googlevideo.com");
+    let rejected = message.contains("forbidden")
+        || message.contains("(403)")
+        || message.contains("http 403")
+        || message.contains("unauthorized")
+        || message.contains("(401)")
+        || message.contains("gone")
+        || message.contains("(410)");
+    network_source && rejected
+}
+
+fn youtube_home_prefetch_candidates(library: &YouTubeLibraryCache) -> Vec<YouTubeItem> {
+    let mut seen = HashSet::new();
+    let mut candidates = Vec::new();
+    for playlist in library
+        .playlists
+        .iter()
+        .filter(|playlist| youtube_playlist_is_mix(playlist))
+        .chain(
+            library
+                .playlists
+                .iter()
+                .filter(|playlist| !youtube_playlist_is_mix(playlist)),
+        )
+        .filter(|playlist| !playlist.browse_id.is_empty())
+        .filter(|playlist| {
+            library
+                .playlist_tracks
+                .get(&playlist.browse_id)
+                .map(|items| items.is_empty())
+                .unwrap_or(true)
+        })
+    {
+        if seen.insert(playlist.browse_id.clone()) {
+            candidates.push(playlist.clone());
+        }
+        if candidates.len() >= 24 {
+            break;
+        }
+    }
+    candidates
+}
+
+fn youtube_playlist_is_mix(playlist: &YouTubeItem) -> bool {
+    if playlist.playlist_kind == "mix" {
+        return true;
+    }
+    let title = playlist.title.to_lowercase();
+    title.contains("mix") || title.contains("radio") || title.contains("supermix")
+}
+
+fn playback_error_message(message: &str) -> &str {
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("forbidden") || lower.contains("(403)") || lower.contains("http 403") {
+        "O YouTube recusou o stream desta faixa mesmo após a renovação."
+    } else if lower.contains("souphttpsrc")
+        || lower.contains("internal data stream error")
+        || lower.contains("can't typefind stream")
+    {
+        "A reprodução online foi interrompida. Verifique a conexão e tente novamente."
+    } else {
+        "Não foi possível reproduzir esta faixa."
+    }
+}
+
+fn redact_stream_url(message: &str) -> String {
+    let Some(url_marker) = message.find("URL: http") else {
+        return message.to_string();
+    };
+    let url_start = url_marker + "URL: ".len();
+    let tail = &message[url_start..];
+    let url_end = tail
+        .find(", Redirect")
+        .or_else(|| tail.find(char::is_whitespace))
+        .unwrap_or(tail.len());
+
+    let mut redacted = String::with_capacity(message.len().min(512));
+    redacted.push_str(&message[..url_start]);
+    redacted.push_str("<redacted>");
+    redacted.push_str(&tail[url_end..]);
+    redacted
 }
 
 fn build_sidebar() -> SidebarParts {
@@ -3130,6 +3785,30 @@ fn settings_dropdown_row(title: &str, subtitle: &str, dropdown: &gtk::DropDown) 
     row
 }
 
+fn settings_scale_row(title: &str, subtitle: &str, scale: &gtk::Scale) -> gtk::Box {
+    let title_label = gtk::Label::new(Some(title));
+    title_label.set_xalign(0.0);
+    title_label.add_css_class("track-title");
+    let subtitle_label = gtk::Label::new(Some(subtitle));
+    subtitle_label.set_xalign(0.0);
+    subtitle_label.set_wrap(true);
+    subtitle_label.add_css_class("dim-label");
+
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    text.set_hexpand(true);
+    text.append(&title_label);
+    text.append(&subtitle_label);
+
+    scale.set_valign(gtk::Align::Center);
+    scale.set_width_request(190);
+
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    row.add_css_class("settings-row");
+    row.append(&text);
+    row.append(scale);
+    row
+}
+
 fn settings_button_row(title: &str, subtitle: &str, button: &gtk::Button) -> gtk::Box {
     let title_label = gtk::Label::new(Some(title));
     title_label.set_xalign(0.0);
@@ -3189,6 +3868,17 @@ fn translate(language: AppLanguage, key: &str) -> &'static str {
             "noctalia_sync_description" => {
                 "Aplica o CSS gerado pelo Noctalia em ~/.config/nocky/theme.css."
             }
+            "window_blur" => "Desfoque da janela",
+            "window_blur_description" => {
+                "Escolha o vidro do Nocky, a aparência sincronizada do Noctalia ou uma janela opaca."
+            }
+            "blur_custom" => "Desfoque",
+            "blur_noctalia" => "Desfoque do Noctalia",
+            "blur_off" => "Desativado",
+            "blur_opacity" => "Transparência do vidro",
+            "blur_opacity_description" => {
+                "Controla a transparência usada no modo Desfoque."
+            }
             "settings_saved" => "Configurações salvas",
             "close" => "Fechar",
             _ => "Nocky",
@@ -3222,6 +3912,17 @@ fn translate(language: AppLanguage, key: &str) -> &'static str {
             "noctalia_sync" => "Sync with Noctalia Shell",
             "noctalia_sync_description" => {
                 "Apply the CSS generated by Noctalia at ~/.config/nocky/theme.css."
+            }
+            "window_blur" => "Window blur",
+            "window_blur_description" => {
+                "Use Nocky's glass, follow Noctalia's appearance, or keep the window opaque."
+            }
+            "blur_custom" => "Blur",
+            "blur_noctalia" => "Noctalia blur",
+            "blur_off" => "Off",
+            "blur_opacity" => "Glass transparency",
+            "blur_opacity_description" => {
+                "Controls the transparency used by the Blur mode."
             }
             "settings_saved" => "Settings saved",
             "close" => "Close",
@@ -3260,6 +3961,17 @@ fn translate(language: AppLanguage, key: &str) -> &'static str {
             "noctalia_sync" => "Sincronizar con Noctalia Shell",
             "noctalia_sync_description" => {
                 "Aplica el CSS generado por Noctalia en ~/.config/nocky/theme.css."
+            }
+            "window_blur" => "Desenfoque de la ventana",
+            "window_blur_description" => {
+                "Usa el cristal de Nocky, sigue la apariencia de Noctalia o deja la ventana opaca."
+            }
+            "blur_custom" => "Desenfoque",
+            "blur_noctalia" => "Desenfoque de Noctalia",
+            "blur_off" => "Desactivado",
+            "blur_opacity" => "Transparencia del cristal",
+            "blur_opacity_description" => {
+                "Controla la transparencia usada por el modo Desenfoque."
             }
             "settings_saved" => "Configuración guardada",
             "close" => "Cerrar",
@@ -3348,13 +4060,13 @@ fn build_cover(size: i32) -> CoverView {
     placeholder.set_height_request(size);
     placeholder.set_halign(gtk::Align::Center);
     placeholder.set_valign(gtk::Align::Center);
-    placeholder.set_hexpand(true);
-    placeholder.set_vexpand(true);
+    placeholder.set_hexpand(false);
+    placeholder.set_vexpand(false);
     placeholder.append(&icon);
 
     let picture = gtk::Picture::new();
     picture.set_content_fit(gtk::ContentFit::Cover);
-    picture.set_can_shrink(true);
+    picture.set_can_shrink(false);
     picture.set_width_request(size);
     picture.set_height_request(size);
     picture.set_halign(gtk::Align::Center);
@@ -3370,6 +4082,7 @@ fn build_cover(size: i32) -> CoverView {
     stack.set_vexpand(false);
     stack.set_overflow(gtk::Overflow::Hidden);
     stack.set_transition_type(gtk::StackTransitionType::Crossfade);
+    stack.set_transition_duration(180);
     stack.add_named(&placeholder, Some("placeholder"));
     stack.add_named(&picture, Some("picture"));
     stack.set_visible_child_name("placeholder");

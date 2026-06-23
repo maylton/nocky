@@ -1,0 +1,21 @@
+// Nocky background blur for niri 26.04 or newer.
+//
+// CachyOS often keeps window rules in a separate included file. Place this
+// block in the active rules file, or save this file under your rules directory
+// and include it from config.kdl (directly or through another rules file).
+//
+// Keep this rule enabled permanently. Nocky's Settings control whether the
+// GTK surface is translucent (Blur / Noctalia blur) or opaque (Off).
+window-rule {
+    match app-id=r#"^io\.github\.maylton\.Nocky$"#
+
+    // Keep compositor opacity identical while focused and unfocused.
+    // The application itself controls only its background alpha.
+    opacity 1.0
+    draw-border-with-background false
+
+    background-effect {
+        blur true
+        xray false
+    }
+}

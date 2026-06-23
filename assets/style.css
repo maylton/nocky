@@ -89,6 +89,10 @@ button.sidebar-row:disabled {
   background-color: alpha(@nm_accent, 0.10);
 }
 
+.hero-cover-slot {
+  min-height: 280px;
+}
+
 .album-cover {
   border-radius: 17px;
   border: 1px solid alpha(@nm_text, 0.08);
@@ -243,11 +247,16 @@ button.sidebar-row:disabled {
 
 .inline-lyrics-panel {
   min-height: 158px;
+}
+
+.inline-lyrics-page {
+  min-height: 136px;
   padding: 8px 10px 4px 10px;
 }
 
 .inline-lyric-line {
   min-height: 22px;
+  margin: 0;
 }
 
 .inline-lyric-current {
@@ -313,21 +322,34 @@ scale slider {
   box-shadow: none;
 }
 
+.lyrics-scroll {
+  background: transparent;
+}
+
+.lyrics-page {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
 .lyric-line {
-  color: alpha(@nm_text, 0.24);
-  font-size: 1.22rem;
+  min-height: 44px;
+  padding: 7px 18px;
+  border-radius: 14px;
+  color: alpha(@nm_text, 0.27);
+  font-size: 1.20rem;
   font-weight: 650;
 }
 
 .lyric-line.past-lyric {
-  color: alpha(@nm_text, 0.44);
+  color: alpha(@nm_text, 0.48);
 }
 
 .lyric-line.current-lyric {
   color: @nm_text;
-  font-size: 1.78rem;
+  font-size: 1.66rem;
   font-weight: 900;
-  text-shadow: 0 0 18px alpha(@nm_text, 0.24);
+  background-color: alpha(@nm_accent, 0.08);
+  text-shadow: 0 0 18px alpha(@nm_text, 0.20);
 }
 
 .empty-icon {
@@ -346,7 +368,6 @@ searchbar entry {
 
 .footer-meta {
   min-width: 270px;
-  max-width: 270px;
 }
 
 .queue-list image {
@@ -423,8 +444,7 @@ searchbar entry {
 }
 
 .collection-card {
-  min-width: 128px;
-  max-width: 128px;
+  min-width: 156px;
   padding: 6px;
   border-radius: 12px;
   background-color: transparent;
@@ -436,7 +456,7 @@ searchbar entry {
 }
 
 .collection-card-button {
-  min-width: 148px;
+  min-width: 176px;
   min-height: 184px;
   padding: 0;
   border-radius: 13px;
@@ -464,14 +484,13 @@ searchbar entry {
   font-size: 0.90rem;
 }
 
-flowboxchild {
-  min-width: 140px;
-  max-width: 140px;
+.collection-grid flowboxchild {
+  min-width: 176px;
   border-radius: 12px;
   padding: 0;
 }
 
-flowboxchild:hover {
+.collection-grid flowboxchild:hover {
   background: transparent;
 }
 

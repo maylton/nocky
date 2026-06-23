@@ -433,6 +433,45 @@ def _best_thumbnail(thumbnails: Any) -> str:
     return _upgrade_thumbnail_url(str(candidate.get("url") or ""))
 
 
+def _thumbnails(result: dict[str, Any]) -> Any:
+    return result.get("thumbnails") or result.get("thumbnail") or []
+
+
+def _text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, dict):
+        for key in ("name", "title", "text"):
+            text = _text(value.get(key))
+            if text:
+                return text
+    return ""
+
+
+def _names(value: Any) -> str:
+    if isinstance(value, list):
+        names = [_text(item) for item in value]
+        return ", ".join(name for name in names if name)
+    return _text(value)
+
+
+def _duration_text_to_seconds(value: Any) -> int:
+    text = _text(value)
+    if not text:
+        return 0
+    parts = text.split(":")
+    if len(parts) > 1 and all(part.strip().isdigit() for part in parts):
+        total = 0
+        for part in parts:
+            total = total * 60 + int(part)
+        return total
+    return 0
+
+
 def _duration(value: Any) -> int:
     try:
         return max(0, int(value or 0))
@@ -440,20 +479,49 @@ def _duration(value: Any) -> int:
         return 0
 
 
+def _duration_seconds(result: dict[str, Any]) -> int:
+    return (
+        _duration(result.get("duration_seconds") or result.get("durationSeconds"))
+        or _duration_text_to_seconds(result.get("duration") or result.get("length"))
+    )
+
+
+def _playlist_id(result: dict[str, Any]) -> str:
+    for key in ("playlistId", "playlist_id", "audioPlaylistId", "playlist"):
+        value = _text(result.get(key))
+        if value:
+            return value
+    result_type = _text(result.get("resultType") or result.get("result_type")).lower()
+    if result_type == "playlist":
+        value = _text(result.get("id"))
+        if value:
+            return value
+    browse_id = _text(result.get("browseId") or result.get("browse_id"))
+    if browse_id.startswith("VL") and len(browse_id) > 2:
+        return browse_id[2:]
+    if browse_id.startswith(("PL", "RD", "OLAK5uy_")):
+        return browse_id
+    return ""
+
+
+def _playlist_kind(title: str, source: str = "") -> str:
+    if source == "Library playlist":
+        return "library"
+    text = f"{title} {source}".lower()
+    if any(token in text for token in ("mix", "radio", "supermix")):
+        return "mix"
+    return "recommended" if source else "library"
+
+
 def _song_item(result: dict[str, Any], result_type: str = "song") -> dict[str, Any] | None:
-    video_id = str(result.get("videoId") or "").strip()
-    title = str(result.get("title") or "").strip()
+    video_id = _text(result.get("videoId") or result.get("video_id"))
+    title = _text(result.get("title") or result.get("name"))
     if not video_id or not title:
         return None
-    artists = result.get("artists") or []
-    artist = ", ".join(
-        str(item.get("name") or "").strip()
-        for item in artists
-        if isinstance(item, dict) and item.get("name")
-    )
+    artist = _names(result.get("artists") or result.get("artist"))
     album_data = result.get("album") or {}
-    album = str(album_data.get("name") or "").strip() if isinstance(album_data, dict) else ""
-    duration = _duration(result.get("duration_seconds") or result.get("durationSeconds"))
+    album = _text(album_data) if isinstance(album_data, dict) else _text(album_data)
+    duration = _duration_seconds(result)
     subtitle = " • ".join(value for value in (artist, album, _format_duration(duration)) if value)
     return {
         "result_type": result_type,
@@ -463,29 +531,84 @@ def _song_item(result: dict[str, Any], result_type: str = "song") -> dict[str, A
         "browse_id": "",
         "album": album,
         "artist": artist,
+        "playlist_kind": "",
+        "params": "",
         "duration_seconds": duration,
-        "thumbnail_url": _best_thumbnail(result.get("thumbnails")),
+        "thumbnail_url": _best_thumbnail(_thumbnails(result)),
     }
 
 
-def _playlist_item(result: dict[str, Any]) -> dict[str, Any] | None:
-    title = str(result.get("title") or "").strip()
-    browse_id = str(result.get("playlistId") or result.get("browseId") or "").strip()
+def _playlist_item(result: dict[str, Any], source: str = "") -> dict[str, Any] | None:
+    title = _text(result.get("title") or result.get("name"))
+    browse_id = _playlist_id(result)
     if not title or not browse_id:
         return None
-    count = str(result.get("count") or result.get("itemCount") or "").strip()
-    author = str(result.get("author") or "").strip()
-    subtitle = " • ".join(value for value in (author, f"{count} tracks" if count else "Playlist") if value)
+    count = _text(result.get("count") or result.get("itemCount") or result.get("trackCount"))
+    author = _names(result.get("author") or result.get("artists") or result.get("channel"))
+    description = _text(result.get("description"))
+    kind = source or "Playlist"
+    if not count and description:
+        match = re.search(r"(\d[\d.,]*)\s+(?:songs|tracks|músicas|faixas|canciones)", description, re.IGNORECASE)
+        if match:
+            count = match.group(1)
+    detail = f"{count} tracks" if count else description or kind
+    subtitle = " • ".join(value for value in (author, detail) if value)
     return {
         "result_type": "playlist",
+        "title": title,
+        "subtitle": subtitle,
+        "video_id": _text(result.get("videoId") or result.get("video_id")),
+        "browse_id": browse_id,
+        "album": "",
+        "artist": author,
+        "playlist_kind": _playlist_kind(title, source),
+        "params": _text(result.get("params")),
+        "duration_seconds": 0,
+        "thumbnail_url": _best_thumbnail(_thumbnails(result)),
+    }
+
+
+def _album_item(result: dict[str, Any], source: str = "") -> dict[str, Any] | None:
+    title = _text(result.get("title") or result.get("name"))
+    browse_id = _text(result.get("browseId") or result.get("browse_id"))
+    if not title or not browse_id:
+        return None
+    artist = _names(result.get("artists") or result.get("artist"))
+    year = _text(result.get("year"))
+    subtitle = " • ".join(value for value in (artist, year, source) if value)
+    return {
+        "result_type": "album",
+        "title": title,
+        "subtitle": subtitle,
+        "video_id": "",
+        "browse_id": browse_id,
+        "album": title,
+        "artist": artist,
+        "playlist_kind": "",
+        "params": _text(result.get("params")),
+        "duration_seconds": 0,
+        "thumbnail_url": _best_thumbnail(_thumbnails(result)),
+    }
+
+
+def _artist_item(result: dict[str, Any], source: str = "") -> dict[str, Any] | None:
+    title = _text(result.get("artist") or result.get("title") or result.get("name"))
+    browse_id = _text(result.get("browseId") or result.get("browse_id") or result.get("channelId"))
+    if not title or not browse_id:
+        return None
+    subtitle = source or "Artist"
+    return {
+        "result_type": "artist",
         "title": title,
         "subtitle": subtitle,
         "video_id": "",
         "browse_id": browse_id,
         "album": "",
-        "artist": author,
+        "artist": title,
+        "playlist_kind": "",
+        "params": _text(result.get("params")),
         "duration_seconds": 0,
-        "thumbnail_url": _best_thumbnail(result.get("thumbnails")),
+        "thumbnail_url": _best_thumbnail(_thumbnails(result)),
     }
 
 
@@ -494,37 +617,11 @@ def _search_item(result: dict[str, Any]) -> dict[str, Any] | None:
     if result_type in {"song", "video"}:
         return _song_item(result, result_type)
     if result_type == "playlist":
-        return _playlist_item(result)
+        return _playlist_item(result, "Playlist")
     if result_type == "album":
-        title = str(result.get("title") or "").strip()
-        if not title:
-            return None
-        return {
-            "result_type": "album",
-            "title": title,
-            "subtitle": " • ".join(str(result.get(key) or "").strip() for key in ("artist", "year") if result.get(key)),
-            "video_id": "",
-            "browse_id": str(result.get("browseId") or ""),
-            "album": title,
-            "artist": str(result.get("artist") or ""),
-            "duration_seconds": 0,
-            "thumbnail_url": _best_thumbnail(result.get("thumbnails")),
-        }
+        return _album_item(result)
     if result_type == "artist":
-        title = str(result.get("artist") or result.get("title") or "").strip()
-        if not title:
-            return None
-        return {
-            "result_type": "artist",
-            "title": title,
-            "subtitle": "Artist",
-            "video_id": "",
-            "browse_id": str(result.get("browseId") or ""),
-            "album": "",
-            "artist": title,
-            "duration_seconds": 0,
-            "thumbnail_url": _best_thumbnail(result.get("thumbnails")),
-        }
+        return _artist_item(result)
     return None
 
 
@@ -538,6 +635,89 @@ def _dedupe(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen.add(key)
         output.append(item)
     return output
+
+
+def _home_playlist_items(client, limit: int) -> list[dict[str, Any]]:
+    return _home_suggestions(client, limit).get("playlists", [])
+
+
+def _home_suggestions(client, limit: int) -> dict[str, list[dict[str, Any]]]:
+    suggestions: dict[str, list[dict[str, Any]]] = {
+        "playlists": [],
+        "albums": [],
+        "artists": [],
+    }
+    if limit <= 0 or not hasattr(client, "get_home"):
+        return suggestions
+    try:
+        rows = client.get_home(limit=limit)
+    except Exception as error:
+        print(f"Nocky YouTube home lookup skipped: {error}", file=sys.stderr)
+        return suggestions
+
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        section = _text(row.get("title")) or "Recommended"
+        for result in row.get("contents") or []:
+            if not isinstance(result, dict):
+                continue
+            result_type = _text(result.get("resultType")).lower()
+            browse_id = _text(result.get("browseId") or result.get("browse_id"))
+            if result_type == "album" or browse_id.startswith("MPRE"):
+                if album := _album_item(result, section):
+                    suggestions["albums"].append(album)
+                continue
+            if result_type == "artist" or (
+                browse_id.startswith("UC")
+                and not _text(result.get("playlistId") or result.get("playlist_id"))
+                and not _text(result.get("videoId") or result.get("video_id"))
+            ):
+                if artist := _artist_item(result, section):
+                    suggestions["artists"].append(artist)
+                continue
+            if playlist := _playlist_item(result, section):
+                suggestions["playlists"].append(playlist)
+    return {key: _dedupe(items) for key, items in suggestions.items()}
+
+
+def _playlist_tracks_from_watch(
+    client,
+    playlist_id: str,
+    video_id: str,
+    limit: int,
+    radio: bool,
+) -> list[dict[str, Any]]:
+    if not hasattr(client, "get_watch_playlist"):
+        return []
+    attempts: list[dict[str, Any]] = []
+    if video_id and playlist_id:
+        attempts.append({"videoId": video_id, "playlistId": playlist_id, "limit": limit, "radio": radio})
+    if playlist_id:
+        attempts.append({"playlistId": playlist_id, "limit": limit, "radio": radio})
+    if video_id:
+        attempts.append({"videoId": video_id, "limit": limit, "radio": radio})
+
+    last_error: Exception | None = None
+    for kwargs in attempts:
+        try:
+            data = client.get_watch_playlist(**kwargs)
+        except Exception as error:
+            last_error = error
+            continue
+        tracks = data.get("tracks") if isinstance(data, dict) else []
+        items = [
+            item
+            for result in tracks or []
+            if isinstance(result, dict)
+            if (item := _song_item(result))
+        ]
+        if items:
+            return items
+
+    if last_error is not None:
+        print(f"Nocky YouTube watch playlist fallback failed for {playlist_id or video_id}: {last_error}", file=sys.stderr)
+    return []
 
 
 def _format_duration(seconds: int) -> str:
@@ -645,6 +825,13 @@ def _resolve_stream(video_or_url: str, force: bool = False) -> dict[str, Any]:
     video_id = _extract_video_id(video_or_url)
     cache = _load_stream_cache()
     cached = cache.get(video_id)
+    if force and isinstance(cached, dict):
+        # Overwrite the cached entry with an expired marker so _save_stream_cache
+        # removes a URL that the CDN has already rejected.
+        cache[video_id] = {"expires_at": 0}
+        _save_stream_cache(cache)
+        cache.pop(video_id, None)
+        cached = None
     if (
         not force
         and isinstance(cached, dict)
@@ -664,8 +851,17 @@ def _resolve_stream(video_or_url: str, force: bool = False) -> dict[str, Any]:
         "--no-playlist",
         "--skip-download",
         "--dump-single-json",
+        "--check-formats",
         "--format",
-        "bestaudio/best",
+        "bestaudio[protocol^=http]/bestaudio/best",
+        "--retries",
+        "3",
+        "--extractor-retries",
+        "3",
+        "--fragment-retries",
+        "3",
+        "--socket-timeout",
+        "20",
         "--no-warnings",
         "--no-progress",
         "--no-update",
@@ -700,6 +896,10 @@ def _resolve_stream(video_or_url: str, force: bool = False) -> dict[str, Any]:
         "duration_seconds": _duration(payload.get("duration")),
         "thumbnail_url": _upgrade_thumbnail_url(thumbnail),
         "http_headers": headers,
+        "format_id": str(payload.get("format_id") or ""),
+        "protocol": str(payload.get("protocol") or ""),
+        "container": str(payload.get("ext") or ""),
+        "audio_codec": str(payload.get("acodec") or ""),
         "expires_at": time.time() + STREAM_CACHE_TTL,
     }
     cache[video_id] = result
@@ -772,17 +972,270 @@ def command_playlists(payload: dict[str, Any]) -> list[dict[str, Any]]:
     client = _create_client(authenticated=True)
     if not _load_session().get("headers"):
         raise RuntimeError("Connect a YouTube Music browser session first")
-    results = client.get_library_playlists(limit=max(1, min(500, int(payload.get("limit") or 100))))
-    return _dedupe([item for result in (results or []) if isinstance(result, dict) if (item := _playlist_item(result))])
+    limit = max(1, min(500, int(payload.get("limit") or 100)))
+    home_limit = max(0, min(12, int(payload["home_limit"] if "home_limit" in payload else 8)))
+    results = client.get_library_playlists(limit=limit)
+    library_items = [
+        item
+        for result in (results or [])
+        if isinstance(result, dict)
+        if (item := _playlist_item(result, "Library playlist"))
+    ]
+    return _dedupe(library_items + _home_playlist_items(client, home_limit))
+
+
+def command_home(payload: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    client = _create_client(authenticated=True)
+    if not _load_session().get("headers"):
+        raise RuntimeError("Connect a YouTube Music browser session first")
+    limit = max(0, min(12, int(payload.get("limit") or 8)))
+    return _home_suggestions(client, limit)
 
 
 def command_playlist(payload: dict[str, Any]) -> list[dict[str, Any]]:
     client = _create_client(authenticated=True)
     browse_id = str(payload.get("browse_id") or "").strip()
+    video_id = str(payload.get("video_id") or "").strip()
+    playlist_kind = str(payload.get("playlist_kind") or "").strip()
+    if not browse_id and not video_id:
+        return []
+    limit = max(1, min(500, int(payload.get("limit") or 200)))
+    tracks: list[dict[str, Any]] = []
+    playlist_error = None
+    if browse_id and playlist_kind != "mix":
+        try:
+            data = client.get_playlist(browse_id, limit=limit)
+            tracks = [
+                item
+                for result in (data.get("tracks") or [])
+                if isinstance(result, dict)
+                if (item := _song_item(result))
+            ]
+        except Exception as error:
+            playlist_error = error
+
+    if not tracks:
+        tracks = _playlist_tracks_from_watch(client, browse_id, video_id, limit, playlist_kind == "mix")
+    if not tracks and playlist_error is not None:
+        raise playlist_error
+    if not tracks:
+        raise RuntimeError("No playable tracks were returned for this YouTube Music playlist")
+    return _dedupe(tracks)
+
+
+def command_collection(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    client = _create_client(authenticated=True)
+    result_type = str(payload.get("result_type") or "").strip().lower()
+    browse_id = str(payload.get("browse_id") or "").strip()
+    title = str(payload.get("title") or "").strip()
+    limit = max(1, min(200, int(payload.get("limit") or 120)))
+
+    if not browse_id and title:
+        filter_name = "artists" if result_type == "artist" else "albums"
+        results = client.search(title, filter=filter_name, limit=5)
+        candidates = [
+            item
+            for result in results
+            if isinstance(result, dict)
+            if (item := _search_item(result))
+            if item.get("result_type") == result_type
+        ]
+        exact = next(
+            (
+                item
+                for item in candidates
+                if _text(item.get("title")).casefold() == title.casefold()
+            ),
+            None,
+        )
+        selected = exact or (candidates[0] if candidates else None)
+        browse_id = _text((selected or {}).get("browse_id"))
+
     if not browse_id:
         return []
-    data = client.get_playlist(browse_id, limit=max(1, min(500, int(payload.get("limit") or 200))))
-    return _dedupe([item for result in (data.get("tracks") or []) if isinstance(result, dict) if (item := _song_item(result))])
+
+    tracks: list[dict[str, Any]] = []
+    if result_type == "album":
+        data = client.get_album(browse_id)
+        tracks = [
+            item
+            for result in (data.get("tracks") or [])
+            if isinstance(result, dict)
+            if (item := _song_item(result))
+        ]
+    elif result_type == "artist":
+        data = client.get_artist(browse_id)
+        songs = data.get("songs") or {}
+        tracks = [
+            item
+            for result in (songs.get("results") or [])
+            if isinstance(result, dict)
+            if (item := _song_item(result))
+        ]
+
+        songs_browse_id = _text(songs.get("browseId") or songs.get("browse_id"))
+        if songs_browse_id:
+            try:
+                playlist = client.get_playlist(songs_browse_id, limit=limit)
+                expanded = [
+                    item
+                    for result in (playlist.get("tracks") or [])
+                    if isinstance(result, dict)
+                    if (item := _song_item(result))
+                ]
+                if expanded:
+                    tracks = expanded
+            except Exception as error:
+                print(
+                    f"Nocky artist songs expansion skipped for {browse_id}: {error}",
+                    file=sys.stderr,
+                )
+
+        if not tracks:
+            radio_id = _text(data.get("radioId") or data.get("shuffleId"))
+            if radio_id:
+                tracks = _playlist_tracks_from_watch(
+                    client,
+                    radio_id,
+                    "",
+                    limit,
+                    True,
+                )
+    else:
+        raise RuntimeError("Unsupported YouTube collection type")
+
+    tracks = _dedupe(tracks)[:limit]
+    if not tracks:
+        raise RuntimeError(
+            f"No playable tracks were returned for this YouTube Music {result_type}"
+        )
+    return tracks
+
+
+def _artist_release_items(
+    results: Any,
+    artist_name: str,
+) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    for result in results or []:
+        if not isinstance(result, dict):
+            continue
+        item = _album_item(result, artist_name)
+        if item is None:
+            continue
+        if not item.get("artist"):
+            item["artist"] = artist_name
+        if not item.get("subtitle"):
+            item["subtitle"] = artist_name
+        output.append(item)
+    return output
+
+
+def _get_all_artist_releases(
+    client: Any,
+    browse_id: str,
+    params: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    try:
+        return client.get_artist_albums(
+            browse_id,
+            params,
+            limit=limit,
+        ) or []
+    except TypeError:
+        return client.get_artist_albums(browse_id, params) or []
+
+
+def command_artist(payload: dict[str, Any]) -> dict[str, Any]:
+    client = _create_client(authenticated=True)
+    browse_id = str(payload.get("browse_id") or "").strip()
+    title = str(payload.get("title") or "").strip()
+    limit = max(1, min(250, int(payload.get("limit") or 160)))
+
+    if not browse_id and title:
+        results = client.search(title, filter="artists", limit=5)
+        candidates = [
+            item
+            for result in results
+            if isinstance(result, dict)
+            if (item := _artist_item(result))
+        ]
+        exact = next(
+            (
+                item
+                for item in candidates
+                if _text(item.get("title")).casefold() == title.casefold()
+            ),
+            None,
+        )
+        selected = exact or (candidates[0] if candidates else None)
+        browse_id = _text((selected or {}).get("browse_id"))
+
+    if not browse_id:
+        raise RuntimeError("No YouTube Music artist could be resolved")
+
+    data = client.get_artist(browse_id)
+    artist_name = _text(data.get("name")) or title or "YouTube Music artist"
+    profile = _artist_item(
+        {
+            "title": artist_name,
+            "browseId": browse_id,
+            "subscribers": data.get("subscribers") or data.get("monthlyListeners"),
+            "thumbnails": data.get("thumbnails") or [],
+        }
+    )
+    if profile is None:
+        raise RuntimeError("YouTube Music returned no artist profile")
+
+    releases: list[dict[str, Any]] = []
+    expansion_errors: list[str] = []
+
+    for section_name in ("albums", "singles"):
+        section = data.get(section_name) or {}
+        if not isinstance(section, dict):
+            continue
+
+        releases.extend(
+            _artist_release_items(
+                section.get("results") or section.get("items"),
+                artist_name,
+            )
+        )
+
+        section_browse_id = _text(
+            section.get("browseId")
+            or section.get("browse_id")
+            or browse_id
+        )
+        section_params = _text(section.get("params"))
+        if not section_browse_id or not section_params:
+            continue
+
+        try:
+            expanded = _get_all_artist_releases(
+                client,
+                section_browse_id,
+                section_params,
+                limit,
+            )
+            releases.extend(_artist_release_items(expanded, artist_name))
+        except Exception as error:
+            expansion_errors.append(f"{section_name}: {error}")
+
+    releases = _dedupe(releases)[:limit]
+
+    if not releases:
+        details = "; ".join(expansion_errors)
+        suffix = f" ({details})" if details else ""
+        raise RuntimeError(
+            f"No albums or singles were returned for {artist_name}{suffix}"
+        )
+
+    return {
+        "profile": profile,
+        "albums": releases,
+    }
 
 
 def command_resolve(payload: dict[str, Any]) -> dict[str, Any]:
@@ -796,8 +1249,11 @@ COMMANDS = {
     "search": command_search,
     "library": command_library,
     "liked": command_liked,
+    "home": command_home,
     "playlists": command_playlists,
     "playlist": command_playlist,
+    "collection": command_collection,
+    "artist": command_artist,
     "resolve": command_resolve,
 }
 
@@ -805,7 +1261,7 @@ COMMANDS = {
 def main() -> int:
     try:
         if len(sys.argv) != 2 or sys.argv[1] not in COMMANDS:
-            raise RuntimeError("Usage: nocky_youtube.py <status|connect|disconnect|search|library|liked|playlists|playlist|resolve>")
+            raise RuntimeError("Usage: nocky_youtube.py <status|connect|disconnect|search|library|liked|home|playlists|playlist|collection|resolve>")
         payload = _read_input()
         result = COMMANDS[sys.argv[1]](payload)
         _emit({"ok": True, "result": result})

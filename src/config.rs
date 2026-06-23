@@ -28,6 +28,15 @@ pub enum StartupSource {
     YouTube,
 }
 
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BlurMode {
+    Custom,
+    #[default]
+    Noctalia,
+    Off,
+}
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AppLanguage {
@@ -60,6 +69,8 @@ pub struct AppConfig {
     pub liked_tracks: Vec<PathBuf>,
     pub playlists: Vec<Playlist>,
     pub startup_source: Option<StartupSource>,
+    pub blur_mode: BlurMode,
+    pub blur_opacity: f64,
 }
 
 impl Default for AppConfig {
@@ -76,6 +87,8 @@ impl Default for AppConfig {
             liked_tracks: Vec::new(),
             playlists: Vec::new(),
             startup_source: None,
+            blur_mode: BlurMode::Noctalia,
+            blur_opacity: 0.74,
         }
     }
 }
