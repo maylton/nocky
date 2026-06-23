@@ -1,6 +1,7 @@
 mod browser;
 mod config;
 mod library;
+mod listening_history;
 mod lyrics;
 mod lyrics_provider;
 mod lyrics_view;
@@ -18,6 +19,7 @@ use browser::{BrowserEvent, BrowserRoute, LibraryBrowser};
 use config::{AppLanguage, BlurMode, StartupSource};
 use gtk::prelude::FileExt;
 use gtk::{gdk, gio, glib};
+use listening_history::{ListeningHistory, ListeningSource};
 use lyrics::LyricLine;
 use lyrics_view::LyricsPresenter;
 use model::{Track, TrackData};
@@ -40,7 +42,7 @@ use youtube::{
     cache_items_for_browser, cacheable_youtube_playlist, clear_library_cache, download_cover,
     load_library_cache, save_library_cache, youtube_collection_cache_key, youtube_collection_key,
     YouTubeBridge, YouTubeItem, YouTubeLibraryCache, YouTubeLibrarySnapshot, YouTubePage,
-    YouTubePageEvent, YouTubeStatus, YouTubeStream,
+    YouTubePageEvent, YouTubeSearchResults, YouTubeStatus, YouTubeStream,
 };
 
 const APP_ID: &str = "io.github.maylton.Nocky";
@@ -112,6 +114,11 @@ enum BackgroundMessage {
         title: String,
         result: Result<Vec<YouTubeItem>, String>,
     },
+    YouTubeGlobalSearch {
+        request_id: u64,
+        query: String,
+        result: Result<YouTubeSearchResults, String>,
+    },
     YouTubeResolved {
         request_id: u64,
         queue: Vec<YouTubeItem>,
@@ -136,6 +143,9 @@ struct AppController {
     player: PlaybackEngine,
     state: RefCell<AppState>,
     config: RefCell<config::AppConfig>,
+    listening_history: RefCell<ListeningHistory>,
+    listening_session_id: RefCell<Option<String>>,
+    listening_session_recorded: Cell<bool>,
     updating_progress: Cell<bool>,
     scanning: Cell<bool>,
     shuffle_enabled: Cell<bool>,
@@ -149,6 +159,7 @@ struct AppController {
     playback_source: Cell<PlaybackSource>,
     youtube_state: RefCell<Option<YouTubePlaybackState>>,
     youtube_request_id: Cell<u64>,
+    youtube_search_request_id: Cell<u64>,
     youtube_recovery_in_progress: Cell<bool>,
     youtube_recovery_attempted: Cell<bool>,
     youtube_recovery_resume_us: Cell<i64>,
@@ -312,7 +323,7 @@ impl AppController {
 
         let search_bar = gtk::SearchBar::new();
         let search_entry = gtk::SearchEntry::builder()
-            .placeholder_text("Buscar por título, artista ou álbum")
+            .placeholder_text("Buscar faixa, álbum, artista ou playlist")
             .hexpand(true)
             .build();
         search_bar.set_child(Some(&search_entry));
@@ -607,6 +618,9 @@ impl AppController {
             player,
             state: RefCell::new(AppState::default()),
             config: RefCell::new(config),
+            listening_history: RefCell::new(ListeningHistory::load()),
+            listening_session_id: RefCell::new(None),
+            listening_session_recorded: Cell::new(false),
             updating_progress: Cell::new(false),
             scanning: Cell::new(false),
             shuffle_enabled: Cell::new(false),
@@ -620,6 +634,7 @@ impl AppController {
             playback_source: Cell::new(PlaybackSource::None),
             youtube_state: RefCell::new(None),
             youtube_request_id: Cell::new(0),
+            youtube_search_request_id: Cell::new(0),
             youtube_recovery_in_progress: Cell::new(false),
             youtube_recovery_attempted: Cell::new(false),
             youtube_recovery_resume_us: Cell::new(0),
@@ -704,11 +719,53 @@ impl AppController {
 
         {
             let weak = Rc::downgrade(&controller);
+            let pending_search = Rc::new(RefCell::new(None::<glib::SourceId>));
             search_entry.connect_search_changed(move |entry| {
-                if let Some(controller) = weak.upgrade() {
-                    controller.search_query.replace(entry.text().to_string());
-                    controller.refresh_browser();
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+
+                if let Some(source) = pending_search.borrow_mut().take() {
+                    source.remove();
                 }
+
+                let query = entry.text().trim().to_string();
+                controller.search_query.replace(query.clone());
+                let youtube_only =
+                    controller.config.borrow().startup_source == Some(StartupSource::YouTube);
+
+                if query.is_empty() {
+                    controller
+                        .youtube_search_request_id
+                        .set(controller.youtube_search_request_id.get().wrapping_add(1));
+                    controller.youtube_library.borrow_mut().search =
+                        YouTubeSearchResults::default();
+                    controller.navigate_browser(BrowserRoute::All);
+                    return;
+                }
+
+                if youtube_only {
+                    controller.youtube_library.borrow_mut().search = YouTubeSearchResults {
+                        query: query.clone(),
+                        loading: true,
+                        ..YouTubeSearchResults::default()
+                    };
+                }
+                controller.navigate_browser(BrowserRoute::All);
+
+                if !youtube_only {
+                    return;
+                }
+
+                let delayed_controller = Rc::downgrade(&controller);
+                let delayed_pending = pending_search.clone();
+                let source = glib::timeout_add_local_once(Duration::from_millis(350), move || {
+                    delayed_pending.borrow_mut().take();
+                    if let Some(controller) = delayed_controller.upgrade() {
+                        controller.request_global_youtube_search(query);
+                    }
+                });
+                pending_search.borrow_mut().replace(source);
             });
         }
 
@@ -1360,6 +1417,94 @@ impl AppController {
         });
     }
 
+    fn request_global_youtube_search(&self, query: String) {
+        if query.trim().is_empty()
+            || self.config.borrow().startup_source != Some(StartupSource::YouTube)
+            || self.search_query.borrow().trim() != query.as_str()
+        {
+            return;
+        }
+
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            self.youtube_library.borrow_mut().search = YouTubeSearchResults {
+                query,
+                error: "As dependências do YouTube Music não estão instaladas".to_string(),
+                ..YouTubeSearchResults::default()
+            };
+            self.refresh_browser();
+            return;
+        };
+
+        let request_id = self.youtube_search_request_id.get().wrapping_add(1);
+        self.youtube_search_request_id.set(request_id);
+        self.youtube_library.borrow_mut().search = YouTubeSearchResults {
+            query: query.clone(),
+            loading: true,
+            ..YouTubeSearchResults::default()
+        };
+        self.refresh_browser();
+
+        let sender = self.background_tx.clone();
+        thread::spawn(move || {
+            let filters = ["songs", "albums", "artists", "playlists"];
+            let expected = filters.len();
+            let (result_tx, result_rx) = mpsc::channel();
+            let mut workers = Vec::with_capacity(expected);
+
+            for filter in filters {
+                let bridge = bridge.clone();
+                let result_tx = result_tx.clone();
+                let worker_query = query.clone();
+                workers.push(thread::spawn(move || {
+                    let result = bridge.search(&worker_query, filter);
+                    let _ = result_tx.send((filter, result));
+                }));
+            }
+            drop(result_tx);
+
+            let mut categorized = YouTubeSearchResults {
+                query: query.clone(),
+                ..YouTubeSearchResults::default()
+            };
+            let mut errors = Vec::new();
+
+            for (filter, result) in result_rx {
+                match result {
+                    Ok(items) => match filter {
+                        "songs" => {
+                            categorized.songs =
+                                items.into_iter().filter(YouTubeItem::playable).collect()
+                        }
+                        "albums" => categorized.albums = items,
+                        "artists" => categorized.artists = items,
+                        "playlists" => categorized.playlists = items,
+                        _ => {}
+                    },
+                    Err(error) => errors.push(format!("{filter}: {error}")),
+                }
+            }
+
+            for worker in workers {
+                let _ = worker.join();
+            }
+
+            let result = if errors.len() == expected {
+                Err(errors.join(" | "))
+            } else {
+                if !errors.is_empty() {
+                    categorized.error = errors.join(" | ");
+                }
+                Ok(categorized)
+            };
+
+            let _ = sender.send(BackgroundMessage::YouTubeGlobalSearch {
+                request_id,
+                query,
+                result,
+            });
+        });
+    }
+
     fn handle_youtube_events(&self) {
         while let Some(event) = self.youtube_page.try_recv() {
             let Some(bridge) = self.youtube_bridge.clone() else {
@@ -1608,6 +1753,7 @@ impl AppController {
 
         self.state.borrow_mut().current = None;
         self.playback_source.set(PlaybackSource::YouTube);
+        self.begin_listening_session(format!("youtube:{}", item.video_id));
         self.youtube_state.replace(Some(YouTubePlaybackState {
             queue,
             current: index,
@@ -2617,9 +2763,11 @@ impl AppController {
                         }
                         Err(error) => {
                             eprintln!("Could not load YouTube artist details: {error}");
-                            self.show_toast(&format!(
-                                "Não foi possível carregar os álbuns do artista: {error}"
-                            ));
+                            if self.is_open_youtube_collection(&key) {
+                                self.show_toast(&format!(
+                                    "Não foi possível carregar os álbuns do artista: {error}"
+                                ));
+                            }
                         }
                     }
                     self.refresh_browser();
@@ -2709,6 +2857,35 @@ impl AppController {
                         eprintln!("Could not pre-cache YouTube playlists: {error}");
                     }
                 },
+                BackgroundMessage::YouTubeGlobalSearch {
+                    request_id,
+                    query,
+                    result,
+                } => {
+                    if request_id != self.youtube_search_request_id.get()
+                        || self.search_query.borrow().trim() != query.as_str()
+                        || self.config.borrow().startup_source != Some(StartupSource::YouTube)
+                    {
+                        continue;
+                    }
+
+                    let mut library = self.youtube_library.borrow_mut();
+                    match result {
+                        Ok(mut categorized) => {
+                            categorized.loading = false;
+                            library.search = categorized;
+                        }
+                        Err(error) => {
+                            library.search = YouTubeSearchResults {
+                                query,
+                                error,
+                                ..YouTubeSearchResults::default()
+                            };
+                        }
+                    }
+                    drop(library);
+                    self.refresh_browser();
+                }
                 BackgroundMessage::YouTubeItems { title, result } => match result {
                     Ok(items) => self.youtube_page.show_items(&title, items),
                     Err(error) => self.youtube_page.show_error(&error),
@@ -2793,11 +2970,19 @@ impl AppController {
         if youtube_only {
             effective_config.playlists.clear();
         }
-        let has_library = !effective_tracks.is_empty() || youtube.has_content() || youtube.syncing;
+        let has_library = !query.trim().is_empty()
+            || !effective_tracks.is_empty()
+            || youtube.has_content()
+            || youtube.syncing;
         self.music_stack
             .set_visible_child_name(if has_library { "library" } else { "empty" });
-        self.browser
-            .refresh(effective_tracks, &effective_config, &youtube, &query);
+        self.browser.refresh(
+            effective_tracks,
+            &effective_config,
+            &youtube,
+            &self.listening_history.borrow(),
+            &query,
+        );
         if !youtube_only {
             if let Some(current) = state.current {
                 self.browser.select_track(current);
@@ -2825,6 +3010,7 @@ impl AppController {
             effective_tracks,
             &effective_config,
             &youtube,
+            &self.listening_history.borrow(),
             &query,
         );
         drop(query);
@@ -2864,6 +3050,7 @@ impl AppController {
     fn handle_browser_events(&self) {
         while let Some(event) = self.browser.try_recv() {
             match event {
+                BrowserEvent::RefreshSearch => self.refresh_browser(),
                 BrowserEvent::TrackActivated(index) => {
                     self.prepare_playback_queue(index);
                     self.select_track(index, true);
@@ -2959,6 +3146,11 @@ impl AppController {
         }
 
         self.playback_source.set(PlaybackSource::Local);
+        if let Some(index) = self.state.borrow().current {
+            if let Some(track) = self.state.borrow().tracks.get(index) {
+                self.begin_listening_session(format!("local:{}", track.path.display()));
+            }
+        }
         self.youtube_state.replace(None);
         self.reset_youtube_recovery();
         self.state.borrow_mut().current = Some(index);
@@ -3484,7 +3676,65 @@ impl AppController {
             .set_active(playing && self.visualizer.widget().is_visible());
     }
 
+    fn begin_listening_session(&self, id: String) {
+        self.listening_session_id.replace(Some(id));
+        self.listening_session_recorded.set(false);
+    }
+
+    fn maybe_record_listening(&self) {
+        if self.listening_session_recorded.get() || !self.player.is_playing() {
+            return;
+        }
+        let listened_seconds = (self.player.position_us().max(0) / 1_000_000) as u64;
+        let duration_seconds = (self.player.duration_us().max(0) / 1_000_000) as u64;
+        let completed =
+            duration_seconds > 0 && listened_seconds.saturating_mul(2) >= duration_seconds;
+        if listened_seconds < 30 && !completed {
+            return;
+        }
+
+        let recorded = match self.playback_source.get() {
+            PlaybackSource::Local => {
+                let state = self.state.borrow();
+                let Some(index) = state.current else {
+                    return;
+                };
+                let Some(track) = state.tracks.get(index) else {
+                    return;
+                };
+                self.listening_history.borrow_mut().record(
+                    track.path.to_string_lossy().into_owned(),
+                    track.artist.clone(),
+                    track.album.clone(),
+                    ListeningSource::Local,
+                    listened_seconds,
+                    completed,
+                )
+            }
+            PlaybackSource::YouTube => {
+                let state = self.youtube_state.borrow();
+                let Some(state) = state.as_ref() else {
+                    return;
+                };
+                self.listening_history.borrow_mut().record(
+                    state.item.video_id.clone(),
+                    state.item.artist.clone(),
+                    state.item.album.clone(),
+                    ListeningSource::YouTube,
+                    listened_seconds,
+                    completed,
+                )
+            }
+            PlaybackSource::None => false,
+        };
+        if recorded {
+            self.listening_session_recorded.set(true);
+            self.refresh_browser();
+        }
+    }
+
     fn refresh_progress(&self) {
+        self.maybe_record_listening();
         let timestamp = self.player.position_us().max(0);
         let duration = self.player.duration_us().max(0);
         let fraction = if duration > 0 {

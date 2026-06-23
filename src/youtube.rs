@@ -125,6 +125,7 @@ pub struct YouTubeLibraryCache {
     pub artist_loading: HashSet<String>,
     pub albums: Vec<YouTubeCollectionEntry>,
     pub artists: Vec<YouTubeCollectionEntry>,
+    pub search: YouTubeSearchResults,
 }
 
 impl YouTubeLibraryCache {
@@ -150,6 +151,7 @@ impl YouTubeLibraryCache {
         self.artist_loading.clear();
         self.albums.clear();
         self.artists.clear();
+        self.search = YouTubeSearchResults::default();
     }
 
     pub fn apply(&mut self, snapshot: YouTubeLibrarySnapshot) {
@@ -239,6 +241,17 @@ pub struct YouTubeHomeSuggestions {
     pub playlists: Vec<YouTubeItem>,
     pub albums: Vec<YouTubeItem>,
     pub artists: Vec<YouTubeItem>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct YouTubeSearchResults {
+    pub query: String,
+    pub loading: bool,
+    pub error: String,
+    pub songs: Vec<YouTubeItem>,
+    pub albums: Vec<YouTubeItem>,
+    pub artists: Vec<YouTubeItem>,
+    pub playlists: Vec<YouTubeItem>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1228,6 +1241,7 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
         .filter(|(_, items)| !items.is_empty())
         .collect();
     let mut library = YouTubeLibraryCache {
+        search: Default::default(),
         connected: false,
         syncing: false,
         // Keep this false so a connected account refreshes silently in the background.

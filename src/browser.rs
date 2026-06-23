@@ -1,5 +1,6 @@
 use crate::{
-    config::AppConfig,
+    config::{AppConfig, StartupSource},
+    listening_history::{ListeningHistory, ListeningSource},
     model::Track,
     youtube::{youtube_collection_key, YouTubeCollectionEntry, YouTubeItem, YouTubeLibraryCache},
 };
@@ -16,6 +17,7 @@ use std::{
 };
 
 const ARTWORK_TEXTURE_CACHE_LIMIT: usize = 160;
+const SEARCH_BATCH_SIZE: usize = 5;
 
 #[derive(Default)]
 struct ArtworkTextureCache {
@@ -64,6 +66,7 @@ pub enum BrowserEvent {
     OpenYouTubeCollection(YouTubeItem),
     LoadMoreAlbums,
     LoadMoreArtists,
+    RefreshSearch,
     Navigate(BrowserRoute),
     CreatePlaylist(String),
     AddCurrentToPlaylist(String),
@@ -119,6 +122,12 @@ enum HomeCard {
 pub struct LibraryBrowser {
     root: gtk::Stack,
     home_content: gtk::Box,
+    search_content: gtk::Box,
+    last_search_query: RefCell<String>,
+    search_track_limit: Rc<Cell<usize>>,
+    search_album_limit: Rc<Cell<usize>>,
+    search_artist_limit: Rc<Cell<usize>>,
+    search_playlist_limit: Rc<Cell<usize>>,
     queue: gtk::ListBox,
     queue_title: gtk::Label,
     albums_grid: gtk::FlowBox,
@@ -149,6 +158,21 @@ impl LibraryBrowser {
         home_content.set_hexpand(true);
         home_content.set_vexpand(false);
         home_content.add_css_class("library-home");
+
+        let search_content = gtk::Box::new(gtk::Orientation::Vertical, 22);
+        search_content.set_hexpand(true);
+        search_content.set_vexpand(false);
+        search_content.add_css_class("library-home");
+
+        let search_scroll = gtk::ScrolledWindow::new();
+        search_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+        search_scroll.set_vexpand(true);
+        search_scroll.set_child(Some(&search_content));
+
+        let search_track_limit = Rc::new(Cell::new(SEARCH_BATCH_SIZE));
+        let search_album_limit = Rc::new(Cell::new(SEARCH_BATCH_SIZE));
+        let search_artist_limit = Rc::new(Cell::new(SEARCH_BATCH_SIZE));
+        let search_playlist_limit = Rc::new(Cell::new(SEARCH_BATCH_SIZE));
 
         let home_scroll = gtk::ScrolledWindow::new();
         home_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
@@ -352,6 +376,7 @@ impl LibraryBrowser {
         root.set_transition_type(gtk::StackTransitionType::Crossfade);
         root.set_transition_duration(180);
         root.add_named(&home_scroll, Some("home"));
+        root.add_named(&search_scroll, Some("search"));
         root.add_named(&tracks_page, Some("tracks"));
         root.add_named(&albums_page, Some("albums"));
         root.add_named(&artists_page, Some("artists"));
@@ -361,6 +386,12 @@ impl LibraryBrowser {
         Self {
             root,
             home_content,
+            search_content,
+            last_search_query: RefCell::new(String::new()),
+            search_track_limit,
+            search_album_limit,
+            search_artist_limit,
+            search_playlist_limit,
             queue,
             queue_title,
             albums_grid,
@@ -394,13 +425,14 @@ impl LibraryBrowser {
         tracks: &[Track],
         config: &AppConfig,
         youtube: &YouTubeLibraryCache,
+        history: &ListeningHistory,
         query: &str,
     ) {
         let previous = self.route();
         self.root
             .set_transition_type(route_transition(&previous, &route));
         self.route.replace(route);
-        self.refresh(tracks, config, youtube, query);
+        self.refresh(tracks, config, youtube, history, query);
     }
 
     pub fn refresh(
@@ -408,8 +440,15 @@ impl LibraryBrowser {
         tracks: &[Track],
         config: &AppConfig,
         youtube: &YouTubeLibraryCache,
+        history: &ListeningHistory,
         query: &str,
     ) {
+        if matches!(self.route(), BrowserRoute::All) && !query.trim().is_empty() {
+            self.rebuild_search(tracks, config, youtube, query);
+            self.root.set_visible_child_name("search");
+            return;
+        }
+
         match self.route() {
             BrowserRoute::Albums => {
                 self.rebuild_albums(tracks, youtube, query);
@@ -420,7 +459,7 @@ impl LibraryBrowser {
                 self.root.set_visible_child_name("artists");
             }
             BrowserRoute::YouTubeArtist(title) => {
-                self.rebuild_artist_albums(youtube, &title, query);
+                self.rebuild_artist_albums(youtube, &title, "");
                 self.root.set_visible_child_name("albums");
             }
             BrowserRoute::Playlists => {
@@ -428,7 +467,7 @@ impl LibraryBrowser {
                 self.root.set_visible_child_name("playlists");
             }
             BrowserRoute::All if query.trim().is_empty() => {
-                self.rebuild_home(tracks, config, youtube);
+                self.rebuild_home(tracks, config, youtube, history);
                 self.root.set_visible_child_name("home");
             }
             route => {
@@ -477,6 +516,181 @@ impl LibraryBrowser {
         }
     }
 
+    fn rebuild_search(
+        &self,
+        tracks: &[Track],
+        config: &AppConfig,
+        youtube: &YouTubeLibraryCache,
+        raw_query: &str,
+    ) {
+        let query = raw_query.trim().to_lowercase();
+        let changed = self.last_search_query.borrow().as_str() != query.as_str();
+        if changed {
+            self.last_search_query.replace(query.clone());
+            self.search_track_limit.set(SEARCH_BATCH_SIZE);
+            self.search_album_limit.set(SEARCH_BATCH_SIZE);
+            self.search_artist_limit.set(SEARCH_BATCH_SIZE);
+            self.search_playlist_limit.set(SEARCH_BATCH_SIZE);
+        }
+
+        while let Some(child) = self.search_content.first_child() {
+            self.search_content.remove(&child);
+        }
+
+        self.search_content.append(&page_header(
+            "RESULTADOS DA BUSCA",
+            &format!("Resultados para “{}”", raw_query.trim()),
+        ));
+
+        let local_mode = config.startup_source != Some(StartupSource::YouTube);
+        let online_state_matches =
+            !local_mode && youtube.search.query.eq_ignore_ascii_case(raw_query.trim());
+        let loading = online_state_matches && youtube.search.loading;
+
+        if online_state_matches && !youtube.search.error.is_empty() && !youtube.search.loading {
+            self.search_content
+                .append(&search_status_label(&youtube.search.error));
+        }
+
+        let mut track_matches = Vec::new();
+        if local_mode {
+            let mut indices = (0..tracks.len()).collect::<Vec<_>>();
+            indices.sort_by(|left, right| compare_library_tracks(&tracks[*left], &tracks[*right]));
+            for index in indices {
+                let track = &tracks[index];
+                let haystack =
+                    format!("{} {} {}", track.title, track.artist, track.album).to_lowercase();
+                if haystack.contains(&query) {
+                    track_matches.push(VisibleTrack::Local(index));
+                }
+            }
+        } else if online_state_matches {
+            track_matches.extend(
+                youtube
+                    .search
+                    .songs
+                    .iter()
+                    .filter(|item| item.playable())
+                    .cloned()
+                    .map(VisibleTrack::YouTube),
+            );
+        }
+
+        let search_list = gtk::ListBox::new();
+        search_list.set_selection_mode(gtk::SelectionMode::Single);
+        search_list.add_css_class("queue-list");
+        search_list.add_css_class("search-results-list");
+        let visible_entries = Rc::new(RefCell::new(Vec::<VisibleTrack>::new()));
+        {
+            let tx = self.event_tx.clone();
+            let entries = visible_entries.clone();
+            search_list.connect_row_activated(move |_, row| {
+                let Some(entry) = entries.borrow().get(row.index() as usize).cloned() else {
+                    return;
+                };
+                match entry {
+                    VisibleTrack::Local(index) => {
+                        let _ = tx.send(BrowserEvent::TrackActivated(index));
+                    }
+                    VisibleTrack::YouTube(item) => {
+                        let queue = entries
+                            .borrow()
+                            .iter()
+                            .filter_map(|entry| match entry {
+                                VisibleTrack::YouTube(item) if item.playable() => {
+                                    Some(item.clone())
+                                }
+                                _ => None,
+                            })
+                            .collect::<Vec<_>>();
+                        let index = queue
+                            .iter()
+                            .position(|candidate| candidate.video_id == item.video_id)
+                            .unwrap_or(0);
+                        let _ = tx.send(BrowserEvent::YouTubeTrackActivated { item, queue, index });
+                    }
+                }
+            });
+        }
+
+        let track_limit = self.search_track_limit.get();
+        for (position, entry) in track_matches.iter().take(track_limit).cloned().enumerate() {
+            match &entry {
+                VisibleTrack::Local(index) => {
+                    let track = &tracks[*index];
+                    search_list.append(&track_row(
+                        position + 1,
+                        track,
+                        config.is_liked(&track.path),
+                    ));
+                }
+                VisibleTrack::YouTube(item) => {
+                    let liked = youtube
+                        .liked
+                        .iter()
+                        .any(|candidate| candidate.video_id == item.video_id);
+                    search_list.append(&youtube_track_row(position + 1, item, liked));
+                }
+            }
+            visible_entries.borrow_mut().push(entry);
+        }
+
+        if track_matches.is_empty() {
+            search_list.append(&empty_row(if loading {
+                "Buscando faixas no YouTube Music…"
+            } else {
+                "Nenhuma faixa encontrada"
+            }));
+        }
+
+        let track_section = gtk::Box::new(gtk::Orientation::Vertical, 10);
+        track_section.add_css_class("home-section");
+        track_section.append(&search_section_heading(
+            "Faixas",
+            track_matches.len().min(track_limit),
+            track_matches.len(),
+            loading,
+        ));
+        track_section.append(&search_list);
+        if track_matches.len() > track_limit {
+            track_section.append(&search_more_button(
+                "faixas",
+                track_matches.len() - track_limit,
+                self.search_track_limit.clone(),
+                &self.event_tx,
+            ));
+        }
+        self.search_content.append(&track_section);
+
+        self.search_content.append(&search_list_section(
+            "Álbuns",
+            "álbuns",
+            "Nenhum álbum encontrado",
+            search_album_cards(tracks, youtube, &query, online_state_matches),
+            self.search_album_limit.clone(),
+            &self.event_tx,
+            loading,
+        ));
+        self.search_content.append(&search_list_section(
+            "Artistas",
+            "artistas",
+            "Nenhum artista encontrado",
+            search_artist_cards(tracks, youtube, &query, online_state_matches),
+            self.search_artist_limit.clone(),
+            &self.event_tx,
+            loading,
+        ));
+        self.search_content.append(&search_list_section(
+            "Playlists",
+            "playlists",
+            "Nenhuma playlist encontrada",
+            search_playlist_cards(tracks, config, youtube, &query, online_state_matches),
+            self.search_playlist_limit.clone(),
+            &self.event_tx,
+            loading,
+        ));
+    }
+
     fn rebuild_queue(
         &self,
         tracks: &[Track],
@@ -489,8 +703,24 @@ impl LibraryBrowser {
         self.queue_render_generation.set(render_token);
         clear_list_box(&self.queue);
 
+        let effective_query = match route {
+            BrowserRoute::Album(_)
+            | BrowserRoute::Artist(_)
+            | BrowserRoute::Playlist(_)
+            | BrowserRoute::YouTubeAlbum(_)
+            | BrowserRoute::YouTubeArtist(_)
+            | BrowserRoute::YouTubePlaylist { .. } => "",
+            _ => query,
+        };
+
         if let BrowserRoute::YouTubePlaylist { browse_id, .. } = route {
-            self.rebuild_youtube_playlist_queue(youtube, query, route, browse_id, render_token);
+            self.rebuild_youtube_playlist_queue(
+                youtube,
+                effective_query,
+                route,
+                browse_id,
+                render_token,
+            );
             return;
         }
 
@@ -498,11 +728,11 @@ impl LibraryBrowser {
             route,
             BrowserRoute::YouTubeAlbum(_) | BrowserRoute::YouTubeArtist(_)
         ) {
-            self.rebuild_youtube_collection_queue(youtube, query, route, render_token);
+            self.rebuild_youtube_collection_queue(youtube, effective_query, route, render_token);
             return;
         }
 
-        let query = query.trim().to_lowercase();
+        let query = effective_query.trim().to_lowercase();
         let mut entries = Vec::new();
 
         let mut local_candidates = match route {
@@ -833,7 +1063,13 @@ impl LibraryBrowser {
         });
     }
 
-    fn rebuild_home(&self, tracks: &[Track], config: &AppConfig, youtube: &YouTubeLibraryCache) {
+    fn rebuild_home(
+        &self,
+        tracks: &[Track],
+        config: &AppConfig,
+        youtube: &YouTubeLibraryCache,
+        history: &ListeningHistory,
+    ) {
         while let Some(child) = self.home_content.first_child() {
             self.home_content.remove(&child);
         }
@@ -860,17 +1096,26 @@ impl LibraryBrowser {
             &self.event_tx,
         ));
 
+        // In YouTube-only mode AppController passes an empty local track
+        // slice. This avoids using a populated YouTube cache while the user is
+        // browsing the local source.
+        let active_source = if tracks.is_empty() {
+            ListeningSource::YouTube
+        } else {
+            ListeningSource::Local
+        };
+
         self.home_content.append(&home_section(
-            "Álbuns",
-            "Capas e coleções sincronizadas",
-            home_album_cards(tracks, youtube),
+            "Seus álbuns",
+            "Mais ouvidos e reproduzidos recentemente",
+            ranked_home_album_cards(tracks, youtube, history, active_source),
             &self.event_tx,
         ));
 
         self.home_content.append(&home_section(
-            "Artistas",
-            "Artistas organizados pela biblioteca ativa",
-            home_artist_cards(tracks, youtube),
+            "Seus artistas",
+            "Com base no que você mais escuta",
+            ranked_home_artist_cards(tracks, youtube, history, active_source),
             &self.event_tx,
         ));
 
@@ -1248,6 +1493,280 @@ fn youtube_catalog(youtube: &YouTubeLibraryCache) -> Vec<YouTubeItem> {
         .collect()
 }
 
+fn ranked_home_album_cards(
+    tracks: &[Track],
+    youtube: &YouTubeLibraryCache,
+    history: &ListeningHistory,
+    source: ListeningSource,
+) -> Vec<HomeCard> {
+    let mut names = history
+        .ranked_albums(source, 12)
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect::<Vec<_>>();
+    for album in history.recent_albums(source, 12) {
+        if !names.iter().any(|name| name.eq_ignore_ascii_case(&album)) {
+            names.push(album);
+        }
+        if names.len() == 12 {
+            break;
+        }
+    }
+    let fallback = home_album_cards(tracks, youtube);
+    if names.is_empty() {
+        return fallback;
+    }
+    let mut cards = Vec::new();
+    for name in names {
+        match source {
+            ListeningSource::Local => {
+                let album_tracks = tracks
+                    .iter()
+                    .filter(|track| track.album.eq_ignore_ascii_case(&name))
+                    .collect::<Vec<_>>();
+                if album_tracks.is_empty() {
+                    continue;
+                }
+                let artists = album_tracks
+                    .iter()
+                    .map(|track| track.artist.as_str())
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                cards.push(HomeCard::LocalAlbum {
+                    title: name,
+                    subtitle: artists,
+                    detail: format!("Local • {} faixas", album_tracks.len()),
+                    cover_path: album_tracks
+                        .iter()
+                        .find_map(|track| track.cover_path.clone()),
+                });
+            }
+            ListeningSource::YouTube => {
+                if let Some(entry) = youtube
+                    .albums
+                    .iter()
+                    .find(|entry| entry.title.eq_ignore_ascii_case(&name))
+                {
+                    cards.push(HomeCard::YouTubeAlbum {
+                        item: entry.source.clone(),
+                        subtitle: entry.subtitle.clone(),
+                        detail: entry.detail.clone(),
+                        cover_path: entry.cached_cover().map(Path::to_path_buf),
+                    });
+                }
+            }
+        }
+    }
+    if cards.is_empty() {
+        fallback
+    } else {
+        cards
+    }
+}
+
+fn ranked_home_artist_cards(
+    tracks: &[Track],
+    youtube: &YouTubeLibraryCache,
+    history: &ListeningHistory,
+    source: ListeningSource,
+) -> Vec<HomeCard> {
+    let names = history
+        .ranked_artists(source, 12)
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect::<Vec<_>>();
+    let fallback = home_artist_cards(tracks, youtube);
+    if names.is_empty() {
+        return fallback;
+    }
+    let mut cards = Vec::new();
+    for name in names {
+        match source {
+            ListeningSource::Local => {
+                let artist_tracks = tracks
+                    .iter()
+                    .filter(|track| track.artist.eq_ignore_ascii_case(&name))
+                    .collect::<Vec<_>>();
+                if artist_tracks.is_empty() {
+                    continue;
+                }
+                let albums = artist_tracks
+                    .iter()
+                    .map(|track| track.album.as_str())
+                    .filter(|album| !album.is_empty())
+                    .collect::<BTreeSet<_>>()
+                    .len();
+                cards.push(HomeCard::LocalArtist {
+                    title: name,
+                    subtitle: format!("{albums} álbuns"),
+                    detail: format!("Local • {} faixas", artist_tracks.len()),
+                    cover_path: artist_tracks
+                        .iter()
+                        .find_map(|track| track.cover_path.clone()),
+                });
+            }
+            ListeningSource::YouTube => {
+                if let Some(entry) = youtube
+                    .artists
+                    .iter()
+                    .find(|entry| entry.title.eq_ignore_ascii_case(&name))
+                {
+                    cards.push(HomeCard::YouTubeArtist {
+                        item: entry.source.clone(),
+                        subtitle: entry.subtitle.clone(),
+                        detail: entry.detail.clone(),
+                        cover_path: entry.cached_cover().map(Path::to_path_buf),
+                    });
+                }
+            }
+        }
+    }
+    if cards.is_empty() {
+        fallback
+    } else {
+        cards
+    }
+}
+
+fn search_album_cards(
+    tracks: &[Track],
+    youtube: &YouTubeLibraryCache,
+    query: &str,
+    online_state_matches: bool,
+) -> Vec<HomeCard> {
+    let mut cards = Vec::new();
+    if !tracks.is_empty() {
+        let mut groups: BTreeMap<String, Vec<&Track>> = BTreeMap::new();
+        for track in tracks {
+            groups.entry(track.album.clone()).or_default().push(track);
+        }
+        for (album, album_tracks) in groups {
+            let artists = album_tracks
+                .iter()
+                .map(|track| track.artist.as_str())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>()
+                .join(", ");
+            if !format!("{album} {artists}").to_lowercase().contains(query) {
+                continue;
+            }
+            cards.push(HomeCard::LocalAlbum {
+                title: album,
+                subtitle: artists,
+                detail: format!("Local • {} faixas", album_tracks.len()),
+                cover_path: album_tracks
+                    .iter()
+                    .find_map(|track| track.cover_path.clone()),
+            });
+        }
+    } else if online_state_matches {
+        cards.extend(
+            youtube
+                .search
+                .albums
+                .iter()
+                .cloned()
+                .map(|item| HomeCard::YouTubeAlbum {
+                    subtitle: if item.artist.is_empty() {
+                        item.subtitle.clone()
+                    } else {
+                        item.artist.clone()
+                    },
+                    detail: "Álbum • YouTube Music".to_string(),
+                    cover_path: item.cached_cover().map(Path::to_path_buf),
+                    item,
+                }),
+        );
+    }
+    cards
+}
+
+fn search_artist_cards(
+    tracks: &[Track],
+    youtube: &YouTubeLibraryCache,
+    query: &str,
+    online_state_matches: bool,
+) -> Vec<HomeCard> {
+    let mut cards = Vec::new();
+    if !tracks.is_empty() {
+        let mut groups: BTreeMap<String, Vec<&Track>> = BTreeMap::new();
+        for track in tracks {
+            groups.entry(track.artist.clone()).or_default().push(track);
+        }
+        for (artist, artist_tracks) in groups {
+            if !artist.to_lowercase().contains(query) {
+                continue;
+            }
+            let albums = artist_tracks
+                .iter()
+                .map(|track| track.album.as_str())
+                .filter(|album| !album.is_empty())
+                .collect::<BTreeSet<_>>()
+                .len();
+            cards.push(HomeCard::LocalArtist {
+                title: artist,
+                subtitle: format!("{albums} álbuns"),
+                detail: format!("Local • {} faixas", artist_tracks.len()),
+                cover_path: artist_tracks
+                    .iter()
+                    .find_map(|track| track.cover_path.clone()),
+            });
+        }
+    } else if online_state_matches {
+        cards.extend(
+            youtube
+                .search
+                .artists
+                .iter()
+                .cloned()
+                .map(|item| HomeCard::YouTubeArtist {
+                    subtitle: if item.subtitle.is_empty() {
+                        "Artista".to_string()
+                    } else {
+                        item.subtitle.clone()
+                    },
+                    detail: "Artista • YouTube Music".to_string(),
+                    cover_path: item.cached_cover().map(Path::to_path_buf),
+                    item,
+                }),
+        );
+    }
+    cards
+}
+
+fn search_playlist_cards(
+    tracks: &[Track],
+    config: &AppConfig,
+    youtube: &YouTubeLibraryCache,
+    query: &str,
+    online_state_matches: bool,
+) -> Vec<HomeCard> {
+    let mut cards = Vec::new();
+    if !tracks.is_empty() {
+        for playlist in &config.playlists {
+            if playlist.name.to_lowercase().contains(query) {
+                cards.push(HomeCard::LocalPlaylist {
+                    title: playlist.name.clone(),
+                    subtitle: format!("{} faixas locais", playlist.tracks.len()),
+                });
+            }
+        }
+    } else if online_state_matches {
+        cards.extend(
+            youtube
+                .search
+                .playlists
+                .iter()
+                .cloned()
+                .map(HomeCard::YouTubePlaylist),
+        );
+    }
+    cards
+}
+
 fn home_album_cards(tracks: &[Track], youtube: &YouTubeLibraryCache) -> Vec<HomeCard> {
     let mut cards = Vec::new();
 
@@ -1296,26 +1815,21 @@ fn home_artist_cards(tracks: &[Track], youtube: &YouTubeLibraryCache) -> Vec<Hom
             .push(track);
     }
     for (artist, artist_tracks) in local_groups.into_iter().take(12) {
-        let albums = artist_tracks
-            .iter()
-            .map(|track| track.album.as_str())
-            .collect::<BTreeSet<_>>()
-            .len();
         let cover_path = artist_tracks
             .iter()
             .find_map(|track| track.cover_path.clone());
         cards.push(HomeCard::LocalArtist {
             title: artist,
-            subtitle: format!("{albums} álbuns"),
-            detail: format!("Local • {} faixas", artist_tracks.len()),
+            subtitle: String::new(),
+            detail: String::new(),
             cover_path,
         });
     }
 
     for artist in youtube.artists.iter().take(12) {
         let key = youtube_collection_key("artist", &artist.title);
-        let source = youtube.artist_profiles.get(&key).unwrap_or(&artist.source);
-        cards.push(youtube_artist_home_card_from_source(artist, source));
+        let profile = youtube.artist_profiles.get(&key);
+        cards.push(youtube_artist_home_card_from_source(artist, profile));
     }
 
     cards.truncate(18);
@@ -1333,15 +1847,14 @@ fn youtube_album_home_card(entry: &YouTubeCollectionEntry) -> HomeCard {
 
 fn youtube_artist_home_card_from_source(
     entry: &YouTubeCollectionEntry,
-    source: &YouTubeItem,
+    profile: Option<&YouTubeItem>,
 ) -> HomeCard {
     HomeCard::YouTubeArtist {
-        item: source.clone(),
-        subtitle: entry.subtitle.clone(),
-        detail: entry.detail.clone(),
-        cover_path: source
-            .cached_cover()
-            .or_else(|| entry.cached_cover())
+        item: entry.source.clone(),
+        subtitle: String::new(),
+        detail: String::new(),
+        cover_path: profile
+            .and_then(YouTubeItem::cached_cover)
             .map(Path::to_path_buf),
     }
 }
@@ -1371,6 +1884,273 @@ fn youtube_playlist_subtitle(item: &YouTubeItem) -> &str {
         "recommended" => "Recomendação do YouTube Music",
         _ => "Playlist sincronizada",
     }
+}
+
+fn search_section_heading(title: &str, visible: usize, total: usize, loading: bool) -> gtk::Box {
+    let title_label = gtk::Label::new(Some(title));
+    title_label.set_xalign(0.0);
+    title_label.add_css_class("home-section-title");
+
+    let subtitle = if loading && total == 0 {
+        "Buscando no YouTube Music…".to_string()
+    } else if total == 0 {
+        "Nenhum resultado".to_string()
+    } else {
+        format!("Mostrando {visible} de {total} resultados")
+    };
+    let subtitle_label = gtk::Label::new(Some(&subtitle));
+    subtitle_label.set_xalign(0.0);
+    subtitle_label.add_css_class("dim-label");
+
+    let heading = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    heading.append(&title_label);
+    heading.append(&subtitle_label);
+    heading
+}
+
+fn search_status_label(message: &str) -> gtk::Label {
+    let label = gtk::Label::new(Some(message));
+    label.set_xalign(0.0);
+    label.set_wrap(true);
+    label.add_css_class("dim-label");
+    label
+}
+
+fn search_more_button(
+    category: &str,
+    remaining: usize,
+    limit: Rc<Cell<usize>>,
+    event_tx: &Sender<BrowserEvent>,
+) -> gtk::Button {
+    let next = remaining.min(SEARCH_BATCH_SIZE);
+    let button = gtk::Button::with_label(&format!("Carregar mais {next} {category}"));
+    button.set_halign(gtk::Align::Start);
+    button.add_css_class("pill");
+    let sender = event_tx.clone();
+    button.connect_clicked(move |_| {
+        limit.set(limit.get().saturating_add(SEARCH_BATCH_SIZE));
+        let _ = sender.send(BrowserEvent::RefreshSearch);
+    });
+    button
+}
+
+fn search_list_section(
+    title: &str,
+    category: &str,
+    empty_message: &str,
+    cards: Vec<HomeCard>,
+    limit: Rc<Cell<usize>>,
+    event_tx: &Sender<BrowserEvent>,
+    loading: bool,
+) -> gtk::Box {
+    let total = cards.len();
+    let visible = total.min(limit.get());
+    let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    section.add_css_class("home-section");
+    section.append(&search_section_heading(title, visible, total, loading));
+
+    let list = gtk::ListBox::new();
+    list.set_selection_mode(gtk::SelectionMode::None);
+    list.add_css_class("boxed-list");
+    list.add_css_class("search-results-list");
+
+    if total == 0 {
+        list.append(&empty_row(if loading {
+            "Buscando no YouTube Music…"
+        } else {
+            empty_message
+        }));
+    } else {
+        for card in cards.into_iter().take(visible) {
+            list.append(&search_collection_button(card, event_tx));
+        }
+    }
+    section.append(&list);
+
+    if total > visible {
+        section.append(&search_more_button(
+            category,
+            total - visible,
+            limit,
+            event_tx,
+        ));
+    }
+    section
+}
+
+fn search_collection_button(card: HomeCard, event_tx: &Sender<BrowserEvent>) -> gtk::Button {
+    let (cover_path, icon_name, title, subtitle, detail, online) = match &card {
+        HomeCard::LocalAlbum {
+            title,
+            subtitle,
+            detail,
+            cover_path,
+        } => (
+            cover_path.as_deref(),
+            "media-optical-symbolic",
+            title.as_str(),
+            subtitle.as_str(),
+            detail.as_str(),
+            false,
+        ),
+        HomeCard::YouTubeAlbum {
+            item,
+            subtitle,
+            detail,
+            cover_path,
+        } => (
+            cover_path.as_deref(),
+            "media-optical-symbolic",
+            item.title.as_str(),
+            subtitle.as_str(),
+            detail.as_str(),
+            true,
+        ),
+        HomeCard::LocalArtist {
+            title,
+            subtitle,
+            detail,
+            cover_path,
+        } => (
+            cover_path.as_deref(),
+            "avatar-default-symbolic",
+            title.as_str(),
+            subtitle.as_str(),
+            detail.as_str(),
+            false,
+        ),
+        HomeCard::YouTubeArtist {
+            item,
+            subtitle,
+            detail,
+            cover_path,
+        } => (
+            cover_path.as_deref(),
+            "avatar-default-symbolic",
+            item.title.as_str(),
+            subtitle.as_str(),
+            detail.as_str(),
+            true,
+        ),
+        HomeCard::LocalPlaylist { title, subtitle } => (
+            None,
+            "view-list-symbolic",
+            title.as_str(),
+            subtitle.as_str(),
+            "Playlist local",
+            false,
+        ),
+        HomeCard::YouTubePlaylist(item) => (
+            item.cached_cover(),
+            "view-list-symbolic",
+            item.title.as_str(),
+            youtube_playlist_subtitle(item),
+            youtube_playlist_detail(item),
+            true,
+        ),
+    };
+
+    let leading = search_result_artwork(cover_path, icon_name);
+
+    let title_label = gtk::Label::new(Some(title));
+    title_label.set_xalign(0.0);
+    title_label.set_hexpand(true);
+    title_label.set_single_line_mode(true);
+    title_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    title_label.add_css_class("heading");
+
+    let secondary = if subtitle.is_empty() {
+        detail
+    } else {
+        subtitle
+    };
+    let subtitle_label = gtk::Label::new(Some(secondary));
+    subtitle_label.set_xalign(0.0);
+    subtitle_label.set_single_line_mode(true);
+    subtitle_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    subtitle_label.add_css_class("dim-label");
+
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    text.set_hexpand(true);
+    text.append(&title_label);
+    text.append(&subtitle_label);
+
+    let source = gtk::Label::new(Some(if online { "YouTube" } else { "Local" }));
+    source.add_css_class("pill");
+
+    let arrow = gtk::Image::from_icon_name("go-next-symbolic");
+    arrow.set_pixel_size(16);
+    arrow.add_css_class("dim-label");
+
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    row.set_margin_top(8);
+    row.set_margin_bottom(8);
+    row.set_margin_start(10);
+    row.set_margin_end(10);
+    row.append(&leading);
+    row.append(&text);
+    row.append(&source);
+    row.append(&arrow);
+
+    let button = gtk::Button::new();
+    button.set_child(Some(&row));
+    button.set_hexpand(true);
+    button.set_halign(gtk::Align::Fill);
+    button.add_css_class("flat");
+    button.add_css_class("search-result-button");
+
+    let sender = event_tx.clone();
+    button.connect_clicked(move |_| {
+        let event = match card.clone() {
+            HomeCard::LocalAlbum { title, .. } => {
+                BrowserEvent::Navigate(BrowserRoute::Album(title))
+            }
+            HomeCard::YouTubeAlbum { item, .. } => BrowserEvent::OpenYouTubeCollection(item),
+            HomeCard::LocalArtist { title, .. } => {
+                BrowserEvent::Navigate(BrowserRoute::Artist(title))
+            }
+            HomeCard::YouTubeArtist { item, .. } => BrowserEvent::OpenYouTubeCollection(item),
+            HomeCard::LocalPlaylist { title, .. } => {
+                BrowserEvent::Navigate(BrowserRoute::Playlist(title))
+            }
+            HomeCard::YouTubePlaylist(item) => BrowserEvent::OpenYouTubePlaylist(item),
+        };
+        let _ = sender.send(event);
+    });
+
+    button
+}
+
+fn search_result_artwork(cover_path: Option<&Path>, icon_name: &str) -> gtk::Stack {
+    let placeholder = gtk::Image::from_icon_name(icon_name);
+    placeholder.set_pixel_size(24);
+    placeholder.set_halign(gtk::Align::Center);
+    placeholder.set_valign(gtk::Align::Center);
+    placeholder.add_css_class("cover-icon");
+
+    let picture = gtk::Picture::new();
+    picture.set_content_fit(gtk::ContentFit::Cover);
+    picture.set_size_request(48, 48);
+
+    let stack = gtk::Stack::new();
+    stack.set_size_request(48, 48);
+    stack.set_overflow(gtk::Overflow::Hidden);
+    stack.add_named(&placeholder, Some("placeholder"));
+    stack.add_named(&picture, Some("picture"));
+    stack.add_css_class("collection-artwork");
+
+    if let Some(path) = cover_path.filter(|path| path.is_file()) {
+        if let Some(texture) = cached_square_texture(path, 48) {
+            picture.set_paintable(Some(&texture));
+            stack.set_visible_child_name("picture");
+        } else {
+            stack.set_visible_child_name("placeholder");
+        }
+    } else {
+        stack.set_visible_child_name("placeholder");
+    }
+
+    stack
 }
 
 fn home_section(
@@ -1796,7 +2576,9 @@ fn collection_card(
     }
     card.append(&artwork);
     card.append(&title_label);
-    card.append(&subtitle_label);
+    if !subtitle.is_empty() {
+        card.append(&subtitle_label);
+    }
     bind_responsive_collection_artwork(&card, &artwork, cover_path.map(Path::to_path_buf));
     card
 }
