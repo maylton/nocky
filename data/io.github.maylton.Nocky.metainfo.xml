@@ -25,7 +25,13 @@
   <releases>
     <release version="0.3.0" date="2026-06-23">
       <description>
-        <p>Material 3 Expressive milestone with organized settings, dynamic artwork colors and a redesigned player interface.</p>
+        <ul>
+          <li>Introduces the complete Material 3 Expressive visual mode with dynamic artwork colors.</li>
+          <li>Adds animated navigation, collapsible player surfaces and refined adaptive footer modes.</li>
+          <li>Redesigns Settings, About, keyboard shortcuts, library cards, search and YouTube Music surfaces.</li>
+          <li>Improves local and YouTube Music history, playback, lyrics, theme integration and blur behavior.</li>
+          <li>Provides reviewed Portuguese, English and Spanish interface coverage.</li>
+        </ul>
       </description>
     </release>
     <release version="0.2.7" date="2026-06-23">

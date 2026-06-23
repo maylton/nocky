@@ -1,3 +1,4 @@
+mod animated_page_switcher;
 mod background;
 mod background_handler;
 mod browser;
@@ -16,6 +17,8 @@ mod mpris;
 mod onboarding;
 mod playback;
 mod player_view;
+mod reveal_bounce;
+mod settings_page;
 mod theme;
 mod visual_theme;
 mod visualizer;
@@ -24,6 +27,7 @@ mod youtube;
 mod youtube_playback;
 
 use adw::prelude::*;
+use animated_page_switcher::{AnimatedPageSwitcher, TopPage};
 use background::{BackgroundChannel, BackgroundMessage};
 use browser::{BrowserEvent, BrowserRoute, LibraryBrowser};
 use config::{AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme};
@@ -37,6 +41,8 @@ use lyrics_view::LyricsPresenter;
 use model::{Track, TrackData};
 use playback::{PlaybackEngine, PlaybackEvent};
 use player_view::{PlayerView, PlayerViewHandle};
+use reveal_bounce::RevealBounce;
+use settings_page::SettingsPage;
 use std::{
     cell::{Cell, RefCell},
     collections::{hash_map::DefaultHasher, HashMap, HashSet, VecDeque},
@@ -56,6 +62,8 @@ use youtube::{
 };
 
 const APP_ID: &str = "io.github.maylton.Nocky";
+const HOME_PLAYER_WIDTH: i32 = 454;
+const SIDEBAR_WIDTH: i32 = 252;
 
 #[derive(Default)]
 struct AppState {
@@ -83,6 +91,8 @@ struct YouTubePlaybackState {
 
 struct SidebarParts {
     revealer: gtk::Revealer,
+    motion: gtk::Fixed,
+    content: gtk::Box,
     all_button: gtk::Button,
     all_label: gtk::Label,
     albums_button: gtk::Button,
@@ -130,6 +140,10 @@ struct AppController {
     youtube_library: RefCell<YouTubeLibraryCache>,
 
     sidebar: gtk::Revealer,
+    // reveal_bounce_and_release_0_3_0_v2
+    sidebar_motion: gtk::Fixed,
+    sidebar_content: gtk::Box,
+    sidebar_bounce: Rc<RevealBounce>,
     sidebar_button: gtk::ToggleButton,
     sidebar_all: gtk::Button,
     sidebar_all_label: gtk::Label,
@@ -144,15 +158,27 @@ struct AppController {
     sidebar_section_label: gtk::Label,
     search_button: gtk::ToggleButton,
     folder_button: gtk::Button,
-    menu_button: gtk::MenuButton,
     search_entry: gtk::SearchEntry,
+    // navigable_settings_page_v1
+    settings_button: gtk::ToggleButton,
+    content_stack: gtk::Stack,
+    settings_page: Rc<SettingsPage>,
     views: adw::ViewStack,
     music_page: adw::ViewStackPage,
     lyrics_page: adw::ViewStackPage,
+    // animated_top_page_switcher_v2
+    page_switcher: Rc<AnimatedPageSwitcher>,
     browser: LibraryBrowser,
     lyrics: LyricsPresenter,
     youtube_page: Rc<YouTubePage>,
     player_view: PlayerViewHandle,
+    // home_player_collapse_and_dialog_fix_v2
+    player_revealer: gtk::Revealer,
+    player_motion: gtk::Fixed,
+    player_viewport: gtk::ScrolledWindow,
+    player_bounce: Rc<RevealBounce>,
+    player_toggle_button: gtk::Button,
+    player_toggle_icon: gtk::Image,
     album: gtk::Label,
     now_heading: gtk::Label,
     favorite_button: gtk::Button,
@@ -337,12 +363,19 @@ impl AppController {
         brand.add_css_class("header-brand");
         header.pack_start(&brand);
 
-        let switcher = adw::ViewSwitcher::builder()
-            .stack(&views)
-            .policy(adw::ViewSwitcherPolicy::Wide)
-            .build();
-        switcher.add_css_class("header-view-switcher");
-        header.set_title_widget(Some(&switcher));
+        // home_player_collapse_and_dialog_fix_v2
+        let player_toggle_icon = gtk::Image::from_icon_name("view-grid-symbolic");
+        player_toggle_icon.set_pixel_size(18);
+        let player_toggle_button = gtk::Button::new();
+        player_toggle_button.set_child(Some(&player_toggle_icon));
+        player_toggle_button.add_css_class("flat");
+        player_toggle_button.add_css_class("header-action-button");
+        player_toggle_button.add_css_class("home-player-toggle-button");
+        header.pack_start(&player_toggle_button);
+
+        let page_switcher =
+            AnimatedPageSwitcher::new(tr(Message::MusicTab), tr(Message::LyricsTab));
+        header.set_title_widget(Some(page_switcher.root()));
 
         let search_button = gtk::ToggleButton::builder()
             .icon_name("system-search-symbolic")
@@ -366,13 +399,15 @@ impl AppController {
         folder_button.add_css_class("header-action-button");
         header.pack_end(&folder_button);
 
-        let menu = build_main_menu(config.language);
-        let menu_button = gtk::MenuButton::builder()
-            .icon_name("open-menu-symbolic")
-            .menu_model(&menu)
+        let settings_button = gtk::ToggleButton::builder()
+            .icon_name("preferences-system-symbolic")
+            .tooltip_text(tr(Message::SettingsTitle))
             .build();
-        menu_button.add_css_class("header-action-button");
-        header.pack_end(&menu_button);
+        settings_button.add_css_class("flat");
+        settings_button.add_css_class("header-action-button");
+        settings_button.add_css_class("settings-navigation-button");
+        header.pack_end(&settings_button);
+
         shell.append(&header);
 
         let search_bar = gtk::SearchBar::new();
@@ -425,6 +460,33 @@ impl AppController {
             lyrics,
         } = PlayerView::new(config.language);
 
+        // A viewport is a hard width constraint; size-request alone is only
+        // a minimum and long local metadata can otherwise widen the card.
+        let player_viewport = gtk::ScrolledWindow::new();
+        player_viewport.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Never);
+        player_viewport.set_propagate_natural_width(false);
+        player_viewport.set_propagate_natural_height(true);
+        player_viewport.set_min_content_width(HOME_PLAYER_WIDTH);
+        player_viewport.set_max_content_width(HOME_PLAYER_WIDTH);
+        player_viewport.set_size_request(HOME_PLAYER_WIDTH, -1);
+        player_viewport.set_hexpand(false);
+        player_viewport.set_halign(gtk::Align::Start);
+        player_viewport.set_child(Some(&now_card));
+        player_viewport.add_css_class("home-player-viewport");
+
+        let player_revealer = gtk::Revealer::new();
+        player_revealer.set_transition_type(gtk::RevealerTransitionType::SlideLeft);
+        player_revealer.set_transition_duration(220);
+        player_revealer.set_reveal_child(!config.home_player_collapsed);
+        player_revealer.set_hexpand(false);
+        player_revealer.set_halign(gtk::Align::Start);
+        let player_motion = gtk::Fixed::new();
+        player_motion.set_size_request(HOME_PLAYER_WIDTH, -1);
+        player_motion.set_hexpand(false);
+        player_motion.put(&player_viewport, 0.0, 0.0);
+        player_revealer.set_child(Some(&player_motion));
+        player_revealer.add_css_class("home-player-revealer");
+
         let browser = LibraryBrowser::new();
 
         let dashboard = gtk::Box::new(gtk::Orientation::Horizontal, 22);
@@ -435,7 +497,7 @@ impl AppController {
         dashboard.set_vexpand(true);
         dashboard.set_valign(gtk::Align::Fill);
         dashboard.add_css_class("expressive-dashboard");
-        dashboard.append(&now_card);
+        dashboard.append(&player_revealer);
         dashboard.append(browser.root());
 
         let empty_state = gtk::Box::new(gtk::Orientation::Vertical, 12);
@@ -482,7 +544,18 @@ impl AppController {
         );
 
         let youtube_page = YouTubePage::new();
-        body.append(&views);
+        let settings_page = SettingsPage::new(&config, theme.noctalia_shell_detected());
+
+        let content_stack = gtk::Stack::new();
+        content_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
+        content_stack.set_transition_duration(180);
+        content_stack.set_vexpand(true);
+        content_stack.set_hexpand(true);
+        content_stack.add_named(&views, Some("main"));
+        content_stack.add_named(settings_page.root(), Some("settings"));
+        content_stack.set_visible_child_name("main");
+        content_stack.add_css_class("application-content-stack");
+        body.append(&content_stack);
 
         // material_expressive_footer_v1
         // material_expressive_footer_refinement_v1
@@ -707,6 +780,8 @@ impl AppController {
             .unwrap_or(0x9e37_79b9_7f4a_7c15);
 
         let initial_volume = config.volume.clamp(0.15, 1.0);
+        let sidebar_bounce = RevealBounce::new(false);
+        let player_bounce = RevealBounce::new(!config.home_player_collapsed);
         let controller = Rc::new(Self {
             window,
             toast_overlay,
@@ -739,6 +814,9 @@ impl AppController {
             youtube_pending_playlist: RefCell::new(None),
             youtube_bridge,
             youtube_library: RefCell::new(load_library_cache()),
+            sidebar_motion: sidebar_parts.motion,
+            sidebar_content: sidebar_parts.content,
+            sidebar_bounce: sidebar_bounce.clone(),
             sidebar: sidebar_parts.revealer,
             sidebar_button: sidebar_button.clone(),
             sidebar_all: sidebar_parts.all_button,
@@ -754,15 +832,24 @@ impl AppController {
             sidebar_section_label: sidebar_parts.section_label,
             search_button: search_button.clone(),
             folder_button: folder_button.clone(),
-            menu_button: menu_button.clone(),
             search_entry: search_entry.clone(),
+            settings_button: settings_button.clone(),
+            content_stack: content_stack.clone(),
+            settings_page: settings_page.clone(),
             views,
             music_page,
             lyrics_page,
+            page_switcher: page_switcher.clone(),
             browser,
             lyrics,
             youtube_page,
             player_view,
+            player_revealer: player_revealer.clone(),
+            player_motion: player_motion.clone(),
+            player_viewport: player_viewport.clone(),
+            player_bounce: player_bounce.clone(),
+            player_toggle_button: player_toggle_button.clone(),
+            player_toggle_icon: player_toggle_icon.clone(),
             album,
             now_heading,
             favorite_button: favorite.clone(),
@@ -813,8 +900,46 @@ impl AppController {
             visual_theme_manager,
             _theme: theme,
         });
+        {
+            let weak = Rc::downgrade(&controller);
+            page_switcher.connect_home_clicked(move || {
+                if let Some(controller) = weak.upgrade() {
+                    controller.open_library_home();
+                }
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(&controller);
+            page_switcher.connect_lyrics_clicked(move || {
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+                controller.close_settings_page();
+                controller.views.set_visible_child_name("lyrics");
+                if !controller.lyrics_button.is_active() {
+                    controller.lyrics_button.set_active(true);
+                }
+            });
+        }
+
+        {
+            let page_switcher = page_switcher.clone();
+            controller
+                .views
+                .connect_visible_child_name_notify(move |stack| {
+                    let page = if stack.visible_child_name().as_deref() == Some("lyrics") {
+                        TopPage::Lyrics
+                    } else {
+                        TopPage::Home
+                    };
+                    page_switcher.set_active_page(page, true);
+                });
+        }
+
         controller.apply_translations();
         controller.apply_home_preferences();
+        controller.apply_home_player_visibility();
         controller.apply_volume_icon();
         controller.install_footer_adaptive();
         controller.apply_footer_mode();
@@ -840,23 +965,6 @@ impl AppController {
 
         {
             let weak = Rc::downgrade(&controller);
-            let switcher_for_click = switcher.clone();
-            let click = gtk::GestureClick::new();
-            click.set_button(1);
-            click.set_propagation_phase(gtk::PropagationPhase::Capture);
-            click.connect_released(move |_, _, x, _| {
-                let width = switcher_for_click.width().max(1) as f64;
-                if x <= width / 2.0 {
-                    if let Some(controller) = weak.upgrade() {
-                        controller.open_library_home();
-                    }
-                }
-            });
-            switcher.add_controller(click);
-        }
-
-        {
-            let weak = Rc::downgrade(&controller);
             controller
                 .views
                 .connect_visible_child_name_notify(move |_| {
@@ -876,14 +984,33 @@ impl AppController {
 
                     if expanded {
                         controller.sidebar.add_css_class("sidebar-expanded");
-                        controller.sidebar.set_visible(true);
-                        controller.sidebar.set_reveal_child(true);
                     } else {
                         controller.sidebar.add_css_class("sidebar-collapsed");
-                        controller.sidebar.set_reveal_child(false);
-                        controller.sidebar.set_visible(false);
                     }
+
+                    controller.sidebar_bounce.set_revealed(
+                        &controller.sidebar,
+                        &controller.sidebar_motion,
+                        &controller.sidebar_content,
+                        expanded,
+                        true,
+                    );
                 }
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(&controller);
+            player_toggle_button.connect_clicked(move |_| {
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+
+                let collapsed = !controller.config.borrow().home_player_collapsed;
+                controller.config.borrow_mut().home_player_collapsed = collapsed;
+                controller.save_config();
+                controller.apply_home_player_visibility();
+                controller.apply_footer_mode();
             });
         }
 
@@ -901,20 +1028,6 @@ impl AppController {
                     search_button.set_active(bar.is_search_mode());
                 }
             });
-        }
-
-        {
-            let weak = Rc::downgrade(&controller);
-            let click = gtk::GestureClick::new();
-            click.connect_released(move |_, _, _, _| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
-                if controller.views.visible_child_name().as_deref() == Some("music") {
-                    controller.navigate_browser(BrowserRoute::All);
-                }
-            });
-            switcher.add_controller(click);
         }
 
         {
@@ -966,6 +1079,20 @@ impl AppController {
                     }
                 });
                 pending_search.borrow_mut().replace(source);
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(&controller);
+            settings_button.connect_toggled(move |button| {
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+                if button.is_active() {
+                    controller.open_settings_page();
+                } else {
+                    controller.close_settings_page();
+                }
             });
         }
 
@@ -1317,6 +1444,7 @@ impl AppController {
                 controller.handle_background_messages();
                 controller.handle_browser_events();
                 controller.handle_youtube_events();
+                controller.handle_settings_events();
                 controller.handle_mpris_commands();
                 controller.handle_playback_events();
 
@@ -1352,6 +1480,10 @@ impl AppController {
     fn open_library_home(&self) {
         self.search_query.replace(String::new());
         self.search_entry.set_text("");
+        self.content_stack.set_visible_child_name("main");
+        if self.settings_button.is_active() {
+            self.settings_button.set_active(false);
+        }
         self.views.set_visible_child_name("music");
 
         if self.lyrics_button.is_active() {
@@ -2276,34 +2408,49 @@ impl AppController {
         }
         app.add_action(&toggle_auto);
 
+        let focus_search = gio::SimpleAction::new("focus-search", None);
+        {
+            let weak = Rc::downgrade(self);
+            focus_search.connect_activate(move |_, _| {
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+                controller.close_settings_page();
+                controller.search_button.set_active(true);
+                controller.search_entry.grab_focus();
+            });
+        }
+        app.add_action(&focus_search);
+
         let settings = gio::SimpleAction::new("settings", None);
         {
             let weak = Rc::downgrade(self);
             settings.connect_activate(move |_, _| {
                 if let Some(controller) = weak.upgrade() {
-                    controller.show_settings_dialog();
+                    controller.open_settings_page();
                 }
             });
         }
         app.add_action(&settings);
 
+        let shortcuts = gio::SimpleAction::new("shortcuts", None);
+        {
+            let weak = Rc::downgrade(self);
+            shortcuts.connect_activate(move |_, _| {
+                if let Some(controller) = weak.upgrade() {
+                    controller.show_shortcuts_window();
+                }
+            });
+        }
+        app.add_action(&shortcuts);
+
         let about = gio::SimpleAction::new("about", None);
         {
             let weak = Rc::downgrade(self);
             about.connect_activate(move |_, _| {
-                let Some(controller) = weak.upgrade() else {
-                    return;
-                };
-                let dialog = gtk::AboutDialog::builder()
-                    .transient_for(&controller.window)
-                    .modal(true)
-                    .program_name("Nocky")
-                    .version(env!("CARGO_PKG_VERSION"))
-                    .comments(controller.tr(Message::AboutDescription))
-                    .license_type(gtk::License::Gpl30)
-                    .build();
-                dialog.set_logo_icon_name(Some(APP_ID));
-                dialog.present();
+                if let Some(controller) = weak.upgrade() {
+                    controller.show_about_window();
+                }
             });
         }
         app.add_action(&about);
@@ -2315,6 +2462,8 @@ impl AppController {
         }
         app.add_action(&quit);
 
+        app.set_accels_for_action("app.focus-search", &["<Primary>F"]);
+        app.set_accels_for_action("app.settings", &["<Primary>comma"]);
         app.set_accels_for_action("app.choose-library", &["<Primary>O"]);
         app.set_accels_for_action("app.rescan", &["F5"]);
         app.set_accels_for_action("app.download-lyrics", &["<Primary>L"]);
@@ -2413,6 +2562,9 @@ impl AppController {
         let language = self.config.borrow().language;
         let tr = |message| i18n::text(language, message);
 
+        self.lyrics.set_language(language);
+        self.refresh_browser();
+
         self.sidebar_button
             .set_tooltip_text(Some(tr(Message::SidebarToggle)));
         self.search_button
@@ -2421,8 +2573,8 @@ impl AppController {
             .set_tooltip_text(Some(tr(Message::ChooseMusicFolderTooltip)));
         self.search_entry
             .set_placeholder_text(Some(tr(Message::SearchPlaceholder)));
-        self.menu_button
-            .set_menu_model(Some(&build_main_menu(language)));
+        self.settings_button
+            .set_tooltip_text(Some(tr(Message::SettingsTitle)));
 
         self.sidebar_all_label.set_text(tr(Message::Library));
         self.sidebar_albums_label.set_text(tr(Message::Albums));
@@ -2464,6 +2616,8 @@ impl AppController {
 
         self.music_page.set_title(Some(tr(Message::MusicTab)));
         self.lyrics_page.set_title(Some(tr(Message::LyricsTab)));
+        self.page_switcher
+            .set_labels(tr(Message::MusicTab), tr(Message::LyricsTab));
         self.empty_title.set_text(tr(Message::EmptyLibraryTitle));
         self.empty_text
             .set_text(tr(Message::EmptyLibraryDescription));
@@ -2478,6 +2632,7 @@ impl AppController {
             self.mini_title.set_text(tr(Message::NothingPlaying));
         }
 
+        self.apply_home_player_visibility();
         self.update_footer_source();
         self.apply_volume_icon();
     }
@@ -2522,7 +2677,10 @@ impl AppController {
         // internas: início, álbum, discografia, artista e playlist.
         // Portanto, o footer automático continua compacto durante toda
         // a navegação da Home e só volta ao modo completo fora dela.
-        let home_player_visible = self.views.visible_child_name().as_deref() == Some("music");
+        let home_player_visible = self.content_stack.visible_child_name().as_deref()
+            == Some("main")
+            && (self.views.visible_child_name().as_deref() == Some("music")
+                && !self.config.borrow().home_player_collapsed);
 
         let effective = match configured {
             FooterMode::Automatic => {
@@ -2667,6 +2825,35 @@ impl AppController {
         });
     }
 
+    fn apply_home_player_visibility(&self) {
+        let collapsed = self.config.borrow().home_player_collapsed;
+
+        self.player_bounce.set_revealed(
+            &self.player_revealer,
+            &self.player_motion,
+            &self.player_viewport,
+            !collapsed,
+            false,
+        );
+        self.player_toggle_icon.set_icon_name(Some(if collapsed {
+            "audio-headphones-symbolic"
+        } else {
+            "view-grid-symbolic"
+        }));
+
+        self.player_toggle_button.remove_css_class("active");
+        if collapsed {
+            self.player_toggle_button.add_css_class("active");
+        }
+
+        let tooltip = if collapsed {
+            self.tr(Message::ShowMainPlayer)
+        } else {
+            self.tr(Message::CollapseMainPlayer)
+        };
+        self.player_toggle_button.set_tooltip_text(Some(tooltip));
+    }
+
     fn apply_home_preferences(&self) {
         let config = self.config.borrow();
         self.visualizer
@@ -2681,91 +2868,305 @@ impl AppController {
         self.apply_visual_theme();
     }
 
-    fn show_settings_dialog(self: &Rc<Self>) {
+    fn open_settings_page(&self) {
         let initial = self.config.borrow().clone();
-        let noctalia_available = self._theme.noctalia_shell_detected();
-        let weak = Rc::downgrade(self);
+        self.settings_page
+            .rebuild(&initial, self._theme.noctalia_shell_detected());
+        self.search_button.set_active(false);
+        self.content_stack.set_visible_child_name("settings");
+        if !self.settings_button.is_active() {
+            self.settings_button.set_active(true);
+        }
+        self.apply_footer_mode();
+    }
 
-        dialogs::present_settings(&self.window, &initial, noctalia_available, move |event| {
-            let Some(controller) = weak.upgrade() else {
-                return;
-            };
+    fn close_settings_page(&self) {
+        if self.content_stack.visible_child_name().as_deref() != Some("settings") {
+            return;
+        }
+        self.content_stack.set_visible_child_name("main");
+        if self.settings_button.is_active() {
+            self.settings_button.set_active(false);
+        }
+        self.apply_footer_mode();
+    }
 
-            match event {
-                SettingsEvent::Language(language) => {
-                    controller.config.borrow_mut().language = language;
-                    controller.save_config();
-                    controller.apply_translations();
+    fn handle_settings_events(self: &Rc<Self>) {
+        while let Some(event) = self.settings_page.try_recv() {
+            self.apply_settings_event(event);
+        }
+    }
 
-                    let controller = controller.clone();
-                    glib::idle_add_local_once(move || controller.show_settings_dialog());
-                }
-                SettingsEvent::StartupSource(source) => {
-                    controller.set_startup_source(source);
-                }
-                SettingsEvent::BlurMode(mode) => {
-                    controller.config.borrow_mut().blur_mode = mode;
-                    controller.save_config();
-                    controller.apply_home_preferences();
-                }
-                SettingsEvent::BlurOpacityPreview(value) => {
-                    let custom = {
-                        let mut config = controller.config.borrow_mut();
-                        config.blur_opacity = value;
-                        config.blur_mode == BlurMode::Custom
-                    };
-                    if custom {
-                        controller.apply_home_preferences();
-                    }
-                }
-                SettingsEvent::BlurOpacityCommit(value) => {
-                    controller.config.borrow_mut().blur_opacity = value;
-                    controller.save_config();
-                }
-                SettingsEvent::ShowHomeVisualizer(active) => {
-                    controller.config.borrow_mut().show_home_visualizer = active;
-                    controller.save_config();
-                    controller.apply_home_preferences();
-                }
-                SettingsEvent::ShowHomeLyrics(active) => {
-                    controller.config.borrow_mut().show_home_lyrics = active;
-                    controller.save_config();
-                    controller.apply_home_preferences();
-                }
-                SettingsEvent::VisualTheme(theme) => {
-                    controller.config.borrow_mut().visual_theme = theme;
-                    controller.save_config();
-                    controller.apply_visual_theme();
-                }
-                SettingsEvent::FooterMode(mode) => {
-                    controller.config.borrow_mut().footer_mode = mode;
-                    controller.save_config();
-                    controller.apply_footer_mode();
-                }
-                SettingsEvent::AutoDownloadLyrics(active) => {
-                    controller.config.borrow_mut().auto_download_lyrics = active;
-                    controller.save_config();
-                    controller.apply_home_preferences();
-                }
-                SettingsEvent::YouTubeAutoSync(active) => {
-                    controller.config.borrow_mut().youtube_auto_sync = active;
-                    controller.save_config();
-                    controller.apply_home_preferences();
-                }
-                SettingsEvent::NoctaliaThemeSync(active) => {
-                    controller.config.borrow_mut().noctalia_theme_sync = active;
-                    controller.save_config();
-                    controller.apply_home_preferences();
-                }
-                SettingsEvent::ManageYouTube => {
-                    controller.show_youtube_settings_dialog();
+    fn apply_settings_event(self: &Rc<Self>, event: SettingsEvent) {
+        match event {
+            SettingsEvent::Language(language) => {
+                self.config.borrow_mut().language = language;
+                self.save_config();
+                self.apply_translations();
+                let initial = self.config.borrow().clone();
+                self.settings_page
+                    .rebuild(&initial, self._theme.noctalia_shell_detected());
+            }
+            SettingsEvent::StartupSource(source) => self.set_startup_source(source),
+            SettingsEvent::BlurMode(mode) => {
+                self.config.borrow_mut().blur_mode = mode;
+                self.save_config();
+                self.apply_home_preferences();
+            }
+            SettingsEvent::BlurOpacityPreview(value) => {
+                let custom = {
+                    let mut config = self.config.borrow_mut();
+                    config.blur_opacity = value;
+                    config.blur_mode == BlurMode::Custom
+                };
+                if custom {
+                    self.apply_home_preferences();
                 }
             }
-        });
+            SettingsEvent::BlurOpacityCommit(value) => {
+                self.config.borrow_mut().blur_opacity = value;
+                self.save_config();
+            }
+            SettingsEvent::ShowHomeVisualizer(active) => {
+                self.config.borrow_mut().show_home_visualizer = active;
+                self.save_config();
+                self.apply_home_preferences();
+            }
+            SettingsEvent::ShowHomeLyrics(active) => {
+                self.config.borrow_mut().show_home_lyrics = active;
+                self.save_config();
+                self.apply_home_preferences();
+            }
+            SettingsEvent::VisualTheme(theme) => {
+                self.config.borrow_mut().visual_theme = theme;
+                self.save_config();
+                self.apply_visual_theme();
+            }
+            SettingsEvent::FooterMode(mode) => {
+                self.config.borrow_mut().footer_mode = mode;
+                self.save_config();
+                self.apply_footer_mode();
+            }
+            SettingsEvent::AutoDownloadLyrics(active) => {
+                self.config.borrow_mut().auto_download_lyrics = active;
+                self.save_config();
+                self.apply_home_preferences();
+            }
+            SettingsEvent::YouTubeAutoSync(active) => {
+                self.config.borrow_mut().youtube_auto_sync = active;
+                self.save_config();
+                self.apply_home_preferences();
+            }
+            SettingsEvent::NoctaliaThemeSync(active) => {
+                self.config.borrow_mut().noctalia_theme_sync = active;
+                self.save_config();
+                self.apply_home_preferences();
+            }
+            SettingsEvent::ManageYouTube => self.show_youtube_settings_dialog(),
+        }
     }
 
     fn show_youtube_settings_dialog(self: &Rc<Self>) {
         dialogs::present_youtube_settings(&self.window, self.youtube_page.root());
+    }
+
+    // themed_about_and_shortcuts_windows_v2
+    fn apply_popup_visual_theme<W>(&self, widget: &W)
+    where
+        W: IsA<gtk::Widget>,
+    {
+        widget.remove_css_class("theme-material-expressive");
+        widget.remove_css_class("theme-noctalia");
+
+        if self.window.has_css_class("theme-material-expressive") {
+            widget.add_css_class("theme-material-expressive");
+        } else {
+            widget.add_css_class("theme-noctalia");
+        }
+    }
+
+    fn show_about_window(&self) {
+        let language = self.config.borrow().language;
+        let title = match language {
+            AppLanguage::Portuguese => "Sobre o Nocky",
+            AppLanguage::English => "About Nocky",
+            AppLanguage::Spanish => "Acerca de Nocky",
+        };
+        let license = match language {
+            AppLanguage::Portuguese => "Software livre licenciado sob a GPL-3.0",
+            AppLanguage::English => "Free software licensed under GPL-3.0",
+            AppLanguage::Spanish => "Software libre con licencia GPL-3.0",
+        };
+
+        let window = adw::Window::builder()
+            .title(title)
+            .transient_for(&self.window)
+            .modal(true)
+            .default_width(500)
+            .default_height(520)
+            .resizable(false)
+            .build();
+        window.add_css_class("nocky-about-window");
+        self.apply_popup_visual_theme(&window);
+
+        let toolbar = adw::ToolbarView::new();
+        toolbar.add_css_class("nocky-popup-toolbar");
+        toolbar.add_top_bar(&adw::HeaderBar::new());
+
+        let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        content.set_margin_top(30);
+        content.set_margin_bottom(30);
+        content.set_margin_start(34);
+        content.set_margin_end(34);
+        content.set_halign(gtk::Align::Fill);
+        content.set_valign(gtk::Align::Center);
+        content.add_css_class("nocky-about-content");
+
+        let icon_surface = gtk::CenterBox::new();
+        icon_surface.add_css_class("nocky-about-icon-surface");
+
+        let icon = gtk::Image::from_icon_name(APP_ID);
+        icon.set_pixel_size(96);
+        icon.add_css_class("nocky-about-icon");
+        icon_surface.set_center_widget(Some(&icon));
+
+        let name = gtk::Label::new(Some("Nocky"));
+        name.add_css_class("title-1");
+        name.add_css_class("nocky-about-name");
+
+        // noctalia_about_action_release_polish_v1
+        let version_prefix = match language {
+            AppLanguage::Portuguese => "Versão",
+            AppLanguage::English => "Version",
+            AppLanguage::Spanish => "Versión",
+        };
+        let version = gtk::Label::new(Some(&format!(
+            "{version_prefix} {}",
+            env!("CARGO_PKG_VERSION")
+        )));
+        version.add_css_class("nocky-about-version");
+
+        let description = gtk::Label::new(Some(self.tr(Message::AboutDescription)));
+        description.set_wrap(true);
+        description.set_justify(gtk::Justification::Center);
+        description.set_max_width_chars(48);
+        description.add_css_class("dim-label");
+        description.add_css_class("nocky-about-description");
+
+        let license_label = gtk::Label::new(Some(license));
+        license_label.set_wrap(true);
+        license_label.set_justify(gtk::Justification::Center);
+        license_label.add_css_class("nocky-about-license");
+
+        let technology = gtk::Label::new(Some("Rust · GTK4 · libadwaita"));
+        technology.add_css_class("nocky-about-technology");
+
+        content.append(&icon_surface);
+        content.append(&name);
+        content.append(&version);
+        content.append(&description);
+        content.append(&license_label);
+        content.append(&technology);
+
+        toolbar.set_content(Some(&content));
+        window.set_content(Some(&toolbar));
+        window.present();
+    }
+
+    fn show_shortcuts_window(&self) {
+        let language = self.config.borrow().language;
+        let title = match language {
+            AppLanguage::Portuguese => "Atalhos de teclado",
+            AppLanguage::English => "Keyboard shortcuts",
+            AppLanguage::Spanish => "Atajos de teclado",
+        };
+
+        let rows: [(&str, &str); 6] = match language {
+            AppLanguage::Portuguese => [
+                ("Ctrl+F", "Pesquisar na biblioteca"),
+                ("Ctrl+,", "Abrir Configurações"),
+                ("Ctrl+O", "Escolher pasta de músicas"),
+                ("F5", "Atualizar a biblioteca"),
+                ("Ctrl+L", "Baixar a letra da faixa atual"),
+                ("Ctrl+Q", "Fechar o Nocky"),
+            ],
+            AppLanguage::English => [
+                ("Ctrl+F", "Search the library"),
+                ("Ctrl+,", "Open Settings"),
+                ("Ctrl+O", "Choose the music folder"),
+                ("F5", "Refresh the library"),
+                ("Ctrl+L", "Download lyrics for the current track"),
+                ("Ctrl+Q", "Quit Nocky"),
+            ],
+            AppLanguage::Spanish => [
+                ("Ctrl+F", "Buscar en la biblioteca"),
+                ("Ctrl+,", "Abrir Configuración"),
+                ("Ctrl+O", "Elegir carpeta de música"),
+                ("F5", "Actualizar la biblioteca"),
+                ("Ctrl+L", "Descargar la letra de la canción actual"),
+                ("Ctrl+Q", "Cerrar Nocky"),
+            ],
+        };
+
+        let window = adw::Window::builder()
+            .title(title)
+            .transient_for(&self.window)
+            .modal(true)
+            .default_width(560)
+            .default_height(520)
+            .resizable(false)
+            .build();
+        window.add_css_class("nocky-shortcuts-window");
+        self.apply_popup_visual_theme(&window);
+
+        let toolbar = adw::ToolbarView::new();
+        toolbar.add_css_class("nocky-popup-toolbar");
+        toolbar.add_top_bar(&adw::HeaderBar::new());
+
+        let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        content.set_margin_top(22);
+        content.set_margin_bottom(26);
+        content.set_margin_start(24);
+        content.set_margin_end(24);
+        content.add_css_class("nocky-shortcuts-content");
+
+        let list = gtk::ListBox::new();
+        list.set_selection_mode(gtk::SelectionMode::None);
+        list.add_css_class("boxed-list");
+        list.add_css_class("nocky-shortcuts-list");
+
+        for (shortcut, description) in rows {
+            let shortcut_label = gtk::Label::new(Some(shortcut));
+            shortcut_label.set_width_chars(9);
+            shortcut_label.set_xalign(0.5);
+            shortcut_label.add_css_class("nocky-shortcut-key");
+
+            let description_label = gtk::Label::new(Some(description));
+            description_label.set_xalign(0.0);
+            description_label.set_hexpand(true);
+            description_label.set_wrap(true);
+            description_label.add_css_class("nocky-shortcut-description");
+
+            let row_content = gtk::Box::new(gtk::Orientation::Horizontal, 16);
+            row_content.set_margin_top(12);
+            row_content.set_margin_bottom(12);
+            row_content.set_margin_start(14);
+            row_content.set_margin_end(14);
+            row_content.append(&shortcut_label);
+            row_content.append(&description_label);
+
+            let row = gtk::ListBoxRow::new();
+            row.set_activatable(false);
+            row.set_selectable(false);
+            row.set_child(Some(&row_content));
+            row.add_css_class("nocky-shortcut-row");
+            list.append(&row);
+        }
+
+        content.append(&list);
+        toolbar.set_content(Some(&content));
+        window.set_content(Some(&toolbar));
+        window.present();
     }
 
     fn show_onboarding_wizard(self: &Rc<Self>) {
@@ -3978,7 +4379,7 @@ fn redact_stream_url(message: &str) -> String {
 fn build_sidebar(language: AppLanguage) -> SidebarParts {
     let tr = |message| i18n::text(language, message);
     let content = gtk::Box::new(gtk::Orientation::Vertical, 6);
-    content.set_size_request(252, -1);
+    content.set_size_request(SIDEBAR_WIDTH, -1);
     content.set_margin_top(12);
     content.set_margin_bottom(12);
     content.set_margin_start(10);
@@ -4016,11 +4417,18 @@ fn build_sidebar(language: AppLanguage) -> SidebarParts {
     revealer.set_transition_type(gtk::RevealerTransitionType::SlideRight);
     revealer.set_transition_duration(240);
     revealer.set_reveal_child(true);
-    revealer.set_child(Some(&content));
+    let sidebar_motion = gtk::Fixed::new();
+    sidebar_motion.set_size_request(SIDEBAR_WIDTH, -1);
+    sidebar_motion.set_hexpand(false);
+    sidebar_motion.set_vexpand(true);
+    sidebar_motion.put(&content, 0.0, 0.0);
+    revealer.set_child(Some(&sidebar_motion));
     revealer.add_css_class("sidebar");
 
     SidebarParts {
         revealer,
+        motion: sidebar_motion,
+        content,
         all_button,
         all_label,
         albums_button,
@@ -4056,34 +4464,7 @@ fn sidebar_row(icon_name: &str, text: &str, active: bool) -> (gtk::Button, gtk::
     (button, label)
 }
 
-fn build_main_menu(language: AppLanguage) -> gio::Menu {
-    let tr = |message| i18n::text(language, message);
-    let menu = gio::Menu::new();
-
-    let library_section = gio::Menu::new();
-    library_section.append(
-        Some(tr(Message::MenuChooseMusicFolder)),
-        Some("app.choose-library"),
-    );
-    library_section.append(Some(tr(Message::MenuRescanLibrary)), Some("app.rescan"));
-    library_section.append(
-        Some(tr(Message::MenuDownloadLyrics)),
-        Some("app.download-lyrics"),
-    );
-    library_section.append(
-        Some(tr(Message::MenuToggleAutomaticLyrics)),
-        Some("app.toggle-auto-lyrics"),
-    );
-    menu.append_section(None, &library_section);
-
-    let app_section = gio::Menu::new();
-    app_section.append(Some(tr(Message::MenuSettings)), Some("app.settings"));
-    app_section.append(Some(tr(Message::MenuAbout)), Some("app.about"));
-    app_section.append(Some(tr(Message::MenuQuit)), Some("app.quit"));
-    menu.append_section(None, &app_section);
-
-    menu
-}
+// settings_about_and_remove_overflow_v1
 
 #[derive(Clone)]
 pub(crate) struct CoverView {

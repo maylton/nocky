@@ -1,4 +1,7 @@
-use crate::lyrics::{active_index, LyricLine};
+use crate::{
+    config::AppLanguage,
+    lyrics::{active_index, LyricLine},
+};
 use gtk::{glib, prelude::*};
 use std::{
     cell::{Cell, RefCell},
@@ -15,6 +18,37 @@ const INLINE_TEXT_WIDTH: i32 = 360;
 const INLINE_FOCUSED_HEIGHT: i32 = 44;
 const INLINE_SECONDARY_HEIGHT: i32 = 22;
 const SCROLL_DURATION: Duration = Duration::from_millis(220);
+
+#[derive(Clone, Copy)]
+struct LyricsCopy {
+    full_title: &'static str,
+    full_hint: &'static str,
+    inline_title: &'static str,
+    inline_hint: &'static str,
+}
+
+fn lyrics_copy(language: AppLanguage) -> LyricsCopy {
+    match language {
+        AppLanguage::Portuguese => LyricsCopy {
+            full_title: "As letras aparecerão aqui",
+            full_hint: "Reproduza uma música com letras sincronizadas para acompanhar cada verso.",
+            inline_title: "As letras aparecerão aqui",
+            inline_hint: "Reproduza uma música com letras sincronizadas para ver o contexto.",
+        },
+        AppLanguage::English => LyricsCopy {
+            full_title: "Lyrics will appear here",
+            full_hint: "Play a song with synchronized lyrics to follow every line.",
+            inline_title: "Lyrics will appear here",
+            inline_hint: "Play a song with synchronized lyrics to see the surrounding lines.",
+        },
+        AppLanguage::Spanish => LyricsCopy {
+            full_title: "Las letras aparecerán aquí",
+            full_hint: "Reproduce una canción con letras sincronizadas para seguir cada verso.",
+            inline_title: "Las letras aparecerán aquí",
+            inline_hint: "Reproduce una canción con letras sincronizadas para ver el contexto.",
+        },
+    }
+}
 
 #[derive(Clone)]
 pub struct LyricsPresenter {
@@ -33,6 +67,7 @@ struct LyricsPresenterInner {
     inline_pages: Vec<InlinePage>,
     inline_visible: Cell<usize>,
     scroll_generation: Rc<Cell<u64>>,
+    language: Cell<AppLanguage>,
 }
 
 struct InlinePage {
@@ -41,7 +76,7 @@ struct InlinePage {
 }
 
 impl LyricsPresenter {
-    pub fn new() -> Self {
+    pub fn new(language: AppLanguage) -> Self {
         let full_box = gtk::Box::new(gtk::Orientation::Vertical, 22);
         full_box.set_margin_top(56);
         full_box.set_margin_bottom(56);
@@ -104,16 +139,30 @@ impl LyricsPresenter {
                 inline_pages: vec![page_a, page_b],
                 inline_visible: Cell::new(0),
                 scroll_generation: Rc::new(Cell::new(0)),
+                language: Cell::new(language),
             }),
         };
 
-        presenter.show_state(
-            "As letras aparecerão aqui",
-            Some("Reproduza uma música com letras sincronizadas para acompanhar cada verso."),
-            "As letras aparecerão aqui",
-            Some("Reproduza uma música com letras sincronizadas para ver o contexto."),
-        );
+        presenter.show_default_state();
         presenter
+    }
+
+    // complete_surface_localization_v3
+    pub fn set_language(&self, language: AppLanguage) {
+        self.inner.language.set(language);
+        if self.inner.lines.borrow().is_empty() {
+            self.show_default_state();
+        }
+    }
+
+    fn show_default_state(&self) {
+        let text = lyrics_copy(self.inner.language.get());
+        self.show_state(
+            text.full_title,
+            Some(text.full_hint),
+            text.inline_title,
+            Some(text.inline_hint),
+        );
     }
 
     pub fn full_widget(&self) -> &gtk::ScrolledWindow {

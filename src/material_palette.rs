@@ -824,20 +824,41 @@ window.theme-material-expressive .home-carousel-scroll scrollbar.horizontal slid
   background-color: {surface_container_high};
 }}
 
-/* material_settings_corner_bleed_fix_v1 */
-window.theme-material-expressive.settings-dialog,
-window.theme-material-expressive.youtube-settings-dialog,
-window.theme-material-expressive.startup-dialog,
-.theme-material-expressive.settings-dialog,
-.theme-material-expressive.youtube-settings-dialog,
-.theme-material-expressive.startup-dialog {{
-  background-color: {surface};
+/* m3_settings_surface_priority_fix_v1 */
+dialog.settings-dialog.theme-material-expressive,
+dialog.youtube-settings-dialog.theme-material-expressive,
+dialog.startup-dialog.theme-material-expressive,
+.settings-dialog.theme-material-expressive,
+.youtube-settings-dialog.theme-material-expressive,
+.startup-dialog.theme-material-expressive {{
+  color: {on_surface};
+  background-color: {surface_container_low};
+  background-image:
+    radial-gradient(circle at 12% 0%, alpha({primary}, 0.10), transparent 46%);
 }}
 
-.theme-material-expressive.settings-dialog .material-dialog-toolbar headerbar,
-.theme-material-expressive.youtube-settings-dialog .material-dialog-toolbar headerbar,
-.theme-material-expressive.startup-dialog .material-dialog-toolbar headerbar {{
+dialog.settings-dialog.theme-material-expressive .material-dialog-toolbar,
+dialog.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar,
+dialog.startup-dialog.theme-material-expressive .material-dialog-toolbar,
+.settings-dialog.theme-material-expressive .material-dialog-toolbar,
+.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar,
+.startup-dialog.theme-material-expressive .material-dialog-toolbar {{
+  color: {on_surface};
+  background-color: {surface_container_low};
+  background-image:
+    radial-gradient(circle at 12% 0%, alpha({primary}, 0.08), transparent 48%);
+  border-color: alpha({outline}, 0.20);
+}}
+
+dialog.settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+dialog.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+dialog.startup-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.startup-dialog.theme-material-expressive .material-dialog-toolbar headerbar {{
+  color: {on_surface};
   background-color: {surface_container};
+  background-image: none;
   border-color: alpha({outline}, 0.18);
 }}
 

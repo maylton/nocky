@@ -295,7 +295,7 @@ impl PlayerView {
         controls.append(&shuffle);
 
         let visualizer = SpectrumVisualizer::new();
-        let lyrics = LyricsPresenter::new();
+        let lyrics = LyricsPresenter::new(language);
 
         // stable_home_player_layout_v1
         // stable_standby_slots_v1

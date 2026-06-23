@@ -2577,3 +2577,415 @@ window.theme-material-expressive .player-visualizer-surface,
 window.theme-material-expressive .player-lyrics-surface {
   min-width: 414px;
 }
+/* m3_settings_surface_priority_fix_v1 */
+
+dialog.settings-dialog.theme-material-expressive,
+dialog.youtube-settings-dialog.theme-material-expressive,
+dialog.startup-dialog.theme-material-expressive,
+.settings-dialog.theme-material-expressive,
+.youtube-settings-dialog.theme-material-expressive,
+.startup-dialog.theme-material-expressive {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  background-image:
+    radial-gradient(circle at 12% 0%, alpha(@m3_primary, 0.10), transparent 46%);
+}
+
+dialog.settings-dialog.theme-material-expressive .material-dialog-toolbar,
+dialog.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar,
+dialog.startup-dialog.theme-material-expressive .material-dialog-toolbar,
+.settings-dialog.theme-material-expressive .material-dialog-toolbar,
+.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar,
+.startup-dialog.theme-material-expressive .material-dialog-toolbar {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  background-image:
+    radial-gradient(circle at 12% 0%, alpha(@m3_primary, 0.08), transparent 48%);
+  border-radius: 30px;
+  border: 1px solid alpha(@m3_outline, 0.20);
+  box-shadow: 0 18px 46px alpha(black, 0.34);
+}
+
+dialog.settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+dialog.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+dialog.startup-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.startup-dialog.theme-material-expressive .material-dialog-toolbar headerbar {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  background-image: none;
+}
+
+dialog.settings-dialog.theme-material-expressive scrolledwindow,
+dialog.settings-dialog.theme-material-expressive viewport,
+dialog.settings-dialog.theme-material-expressive clamp,
+dialog.settings-dialog.theme-material-expressive .settings-content,
+dialog.youtube-settings-dialog.theme-material-expressive scrolledwindow,
+dialog.youtube-settings-dialog.theme-material-expressive viewport,
+dialog.youtube-settings-dialog.theme-material-expressive clamp,
+dialog.startup-dialog.theme-material-expressive scrolledwindow,
+dialog.startup-dialog.theme-material-expressive viewport,
+dialog.startup-dialog.theme-material-expressive clamp {
+  background-color: transparent;
+  background-image: none;
+}
+
+window.theme-material-expressive .home-player-viewport,
+window.theme-noctalia .home-player-viewport {
+  min-width: 454px;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .home-player-viewport viewport,
+window.theme-noctalia .home-player-viewport viewport {
+  background-color: transparent;
+  background-image: none;
+}
+
+window.theme-material-expressive .home-player-revealer,
+window.theme-noctalia .home-player-revealer {
+  background-color: transparent;
+  background-image: none;
+}
+
+window.theme-material-expressive .home-player-toggle-button,
+window.theme-noctalia .home-player-toggle-button {
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 20px;
+}
+
+window.theme-material-expressive .home-player-toggle-button {
+  color: @m3_on_surface_variant;
+  background-color: transparent;
+  border: 1px solid transparent;
+}
+
+window.theme-material-expressive .home-player-toggle-button:hover {
+  color: @m3_on_surface;
+  background-color: alpha(@m3_primary, 0.14);
+  border-color: alpha(@m3_primary, 0.22);
+}
+
+window.theme-material-expressive .home-player-toggle-button.active {
+  color: @m3_on_secondary_container;
+  background-color: @m3_secondary_container;
+  border-color: alpha(@m3_primary, 0.24);
+}
+/* m3_settings_explicit_shell_fix_v2 */
+
+dialog.settings-dialog.theme-material-expressive {
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  background-color: transparent;
+  background-image: none;
+}
+
+.settings-dialog-shell.theme-material-expressive {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  background-image:
+    radial-gradient(circle at 10% 0%, alpha(@m3_primary, 0.11), transparent 46%);
+  border: 1px solid alpha(@m3_outline, 0.22);
+  border-radius: 30px;
+  box-shadow: 0 18px 46px alpha(black, 0.34);
+}
+
+.settings-dialog-surface.theme-material-expressive,
+.settings-dialog-shell.theme-material-expressive .material-dialog-toolbar {
+  color: @m3_on_surface;
+  background-color: transparent;
+  background-image: none;
+}
+
+.settings-dialog-shell.theme-material-expressive headerbar {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  background-image: none;
+  border-color: alpha(@m3_outline, 0.18);
+}
+
+.settings-dialog-shell.theme-material-expressive scrolledwindow,
+.settings-dialog-shell.theme-material-expressive viewport,
+.settings-dialog-shell.theme-material-expressive .settings-content {
+  background-color: transparent;
+  background-image: none;
+}
+/* navigable_settings_page_v1 */
+
+window.theme-material-expressive .settings-page-scroll,
+window.theme-material-expressive .settings-page-scroll viewport,
+window.theme-noctalia .settings-page-scroll,
+window.theme-noctalia .settings-page-scroll viewport {
+  background-color: transparent;
+  background-image: none;
+}
+
+window.theme-material-expressive .settings-page {
+  color: @m3_on_surface;
+  background-color: transparent;
+  background-image: none;
+}
+
+window.theme-material-expressive .settings-page .settings-hero {
+  background-image:
+    linear-gradient(120deg, alpha(@m3_primary, 0.19), alpha(@m3_primary_container, 0.82));
+}
+
+window.theme-material-expressive .settings-page .settings-group {
+  background-color: alpha(@m3_surface_container_low, 0.86);
+}
+
+window.theme-material-expressive .settings-navigation-button:checked,
+window.theme-material-expressive .settings-navigation-button.active {
+  color: @m3_on_secondary_container;
+  background-color: @m3_secondary_container;
+  border-color: alpha(@m3_primary, 0.28);
+}
+/* settings_about_and_remove_overflow_v1 */
+
+window.theme-material-expressive .settings-about-group {
+  background-image:
+    linear-gradient(130deg, alpha(@m3_tertiary, 0.08), transparent 58%);
+  border-color: alpha(@m3_tertiary, 0.20);
+}
+
+window.theme-material-expressive .settings-about-action {
+  color: @m3_on_tertiary_container;
+  background-color: @m3_tertiary_container;
+  border-color: alpha(@m3_tertiary, 0.24);
+}
+
+window.theme-material-expressive .settings-about-action:hover {
+  color: @m3_on_tertiary;
+  background-color: @m3_tertiary;
+  border-color: transparent;
+}
+
+window.theme-noctalia .settings-about-group {
+  background-color: alpha(@nm_surface_alt, 0.72);
+}
+
+window.theme-noctalia .settings-about-action {
+  color: @nm_on_primary;
+  background-color: @nm_primary;
+}
+/* settings_shortcuts_and_overflow_cleanup_v1 */
+
+window.theme-material-expressive .settings-about-group {
+  background-image:
+    linear-gradient(130deg, alpha(@m3_tertiary, 0.08), transparent 58%);
+  border-color: alpha(@m3_tertiary, 0.20);
+}
+
+window.theme-material-expressive .settings-about-action {
+  color: @m3_on_tertiary_container;
+  background-color: @m3_tertiary_container;
+  border-color: alpha(@m3_tertiary, 0.24);
+}
+
+window.theme-material-expressive .settings-about-action:hover {
+  color: @m3_on_tertiary;
+  background-color: @m3_tertiary;
+  border-color: transparent;
+}
+
+window.theme-material-expressive .settings-shortcuts-row {
+  background-color: alpha(@m3_surface_container_high, 0.76);
+}
+
+.settings-shortcuts-summary {
+  font-family: monospace;
+  font-size: 0.78rem;
+}
+/* themed_about_and_shortcuts_windows_v2 */
+
+window.nocky-about-window.theme-material-expressive,
+window.nocky-shortcuts-window.theme-material-expressive {
+  color: @m3_on_surface;
+  background-color: @m3_surface;
+  background-image:
+    radial-gradient(circle at 10% 0%, alpha(@m3_primary, 0.12), transparent 48%);
+}
+
+window.nocky-about-window.theme-material-expressive .nocky-popup-toolbar,
+window.nocky-shortcuts-window.theme-material-expressive .nocky-popup-toolbar,
+window.nocky-about-window.theme-material-expressive .nocky-about-content,
+window.nocky-shortcuts-window.theme-material-expressive .nocky-shortcuts-content {
+  color: @m3_on_surface;
+  background-color: transparent;
+  background-image: none;
+}
+
+window.nocky-about-window.theme-material-expressive headerbar,
+window.nocky-shortcuts-window.theme-material-expressive headerbar {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  background-image: none;
+  border-bottom: 1px solid alpha(@m3_outline, 0.18);
+}
+
+window.nocky-about-window.theme-material-expressive .nocky-about-icon-surface {
+  min-width: 132px;
+  min-height: 132px;
+  border-radius: 40px;
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  border: 1px solid alpha(@m3_primary, 0.24);
+}
+
+window.nocky-about-window.theme-material-expressive .nocky-about-name,
+window.nocky-about-window.theme-material-expressive .nocky-about-version,
+window.nocky-about-window.theme-material-expressive .nocky-about-license,
+window.nocky-about-window.theme-material-expressive .nocky-about-technology {
+  color: @m3_on_surface;
+}
+
+window.nocky-about-window.theme-material-expressive .nocky-about-version,
+window.nocky-about-window.theme-material-expressive .nocky-about-technology {
+  color: @m3_on_surface_variant;
+}
+
+window.nocky-shortcuts-window.theme-material-expressive .nocky-shortcuts-list {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  border: 1px solid alpha(@m3_outline, 0.18);
+  border-radius: 26px;
+}
+
+window.nocky-shortcuts-window.theme-material-expressive .nocky-shortcut-row {
+  color: @m3_on_surface;
+  background-color: transparent;
+}
+
+window.nocky-shortcuts-window.theme-material-expressive .nocky-shortcut-key {
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 12px;
+  color: @m3_on_secondary_container;
+  background-color: @m3_secondary_container;
+  border: 1px solid alpha(@m3_secondary, 0.24);
+  font-family: monospace;
+  font-weight: 720;
+}
+
+window.nocky-shortcuts-window.theme-material-expressive .nocky-shortcut-description {
+  color: @m3_on_surface;
+}
+window.theme-material-expressive .settings-shortcuts-action {
+  color: @m3_on_secondary_container;
+  background-color: @m3_secondary_container;
+  border-color: alpha(@m3_secondary, 0.24);
+}
+/* animated_top_page_switcher_v2 */
+
+.animated-page-switcher {
+  min-width: 252px;
+  min-height: 48px;
+  border-radius: 24px;
+}
+
+.animated-page-switcher-track {
+  min-width: 252px;
+  min-height: 48px;
+  border-radius: 24px;
+  background-color: alpha(@window_fg_color, 0.045);
+  border: 1px solid alpha(@window_fg_color, 0.13);
+  box-shadow: inset 0 1px alpha(white, 0.025);
+}
+
+/* animated_switcher_edge_alignment_v1 */
+.animated-page-switcher-indicator {
+  /* animated_switcher_centered_reference_style_v1 */
+  min-width: 118px;
+  min-height: 40px;
+  border-radius: 20px;
+  background-color: @accent_bg_color;
+  box-shadow: 0 4px 12px alpha(black, 0.18);
+}
+
+.animated-page-switcher-button {
+  min-width: 126px;
+  min-height: 48px;
+  /* animated_switcher_outward_content_alignment_v2 */
+  /* animated_switcher_centering_and_bounce_v1 */
+  padding: 0;
+  border: none;
+  border-radius: 24px;
+  color: alpha(@window_fg_color, 0.64);
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  transition: color 150ms ease;
+}
+
+.animated-page-switcher-button:hover {
+  color: alpha(@window_fg_color, 0.86);
+  background-color: transparent;
+}
+
+.animated-page-switcher-button:active {
+  background-color: transparent;
+}
+
+.animated-page-switcher-button.active {
+  color: @accent_fg_color;
+  font-weight: 720;
+}
+
+.animated-page-switcher-button:focus-visible {
+  outline: 2px solid alpha(@accent_color, 0.72);
+  outline-offset: -4px;
+}
+
+window.theme-material-expressive .animated-page-switcher-track {
+  background-color: alpha(@m3_surface_container_high, 0.72);
+  border-color: alpha(@m3_outline, 0.24);
+}
+
+window.theme-material-expressive .animated-page-switcher-indicator {
+  background-color: @m3_secondary_container;
+  box-shadow: 0 5px 14px alpha(black, 0.20);
+}
+
+window.theme-material-expressive .animated-page-switcher-button {
+  color: @m3_on_surface_variant;
+}
+
+window.theme-material-expressive .animated-page-switcher-button:hover {
+  color: @m3_on_surface;
+}
+
+window.theme-material-expressive .animated-page-switcher-button.active {
+  color: @m3_on_secondary_container;
+}
+
+window.theme-material-expressive
+  .animated-page-switcher-button:focus-visible {
+  outline-color: alpha(@m3_primary, 0.76);
+}
+/* noctalia_about_action_release_polish_v1 */
+
+window.theme-noctalia .settings-about-action {
+  color: @accent_fg_color;
+  background-color: @accent_bg_color;
+  background-image: none;
+  border-color: alpha(@accent_color, 0.34);
+  box-shadow:
+    inset 0 1px alpha(white, 0.08),
+    0 2px 8px alpha(black, 0.16);
+}
+
+window.theme-noctalia .settings-about-action:hover {
+  color: @accent_fg_color;
+  background-color: shade(@accent_bg_color, 1.08);
+}
+
+window.theme-noctalia .settings-about-action:active {
+  background-color: shade(@accent_bg_color, 0.94);
+}

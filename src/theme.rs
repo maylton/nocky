@@ -258,30 +258,73 @@ popover.queue-popover.theme-material-expressive > arrow {
   border-color: alpha(@m3_outline, 0.22);
 }
 
-/* material_settings_and_local_player_dimensions_v1 */
-window.settings-dialog.theme-material-expressive,
-window.youtube-settings-dialog.theme-material-expressive,
-window.startup-dialog.theme-material-expressive,
-window.theme-material-expressive.settings-dialog,
-window.theme-material-expressive.youtube-settings-dialog,
-window.theme-material-expressive.startup-dialog {
+/* m3_settings_surface_priority_fix_v1 */
+dialog.settings-dialog.theme-material-expressive,
+dialog.youtube-settings-dialog.theme-material-expressive,
+dialog.startup-dialog.theme-material-expressive,
+.settings-dialog.theme-material-expressive,
+.youtube-settings-dialog.theme-material-expressive,
+.startup-dialog.theme-material-expressive {
   color: @m3_on_surface;
   background-color: @m3_surface_container_low;
-  background-image: none;
+  background-image:
+    radial-gradient(circle at 12% 0%, alpha(@m3_primary, 0.10), transparent 46%);
 }
 
-window.settings-dialog.theme-material-expressive .material-dialog-toolbar,
-window.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar,
-window.startup-dialog.theme-material-expressive .material-dialog-toolbar {
+dialog.settings-dialog.theme-material-expressive .material-dialog-toolbar,
+dialog.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar,
+dialog.startup-dialog.theme-material-expressive .material-dialog-toolbar,
+.settings-dialog.theme-material-expressive .material-dialog-toolbar,
+.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar,
+.startup-dialog.theme-material-expressive .material-dialog-toolbar {
+  color: @m3_on_surface;
   background-color: @m3_surface_container_low;
-  background-image: none;
+  background-image:
+    radial-gradient(circle at 12% 0%, alpha(@m3_primary, 0.08), transparent 48%);
 }
 
-window.settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
-window.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
-window.startup-dialog.theme-material-expressive .material-dialog-toolbar headerbar {
+dialog.settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+dialog.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+dialog.startup-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.startup-dialog.theme-material-expressive .material-dialog-toolbar headerbar {
+  color: @m3_on_surface;
   background-color: @m3_surface_container;
   background-image: none;
+}
+
+/* m3_settings_explicit_shell_fix_v2 */
+dialog.settings-dialog.theme-material-expressive {
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  background-color: transparent;
+  background-image: none;
+}
+
+.settings-dialog-shell.theme-material-expressive {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  background-image:
+    radial-gradient(circle at 10% 0%, alpha(@m3_primary, 0.11), transparent 46%);
+  border: 1px solid alpha(@m3_outline, 0.22);
+  border-radius: 30px;
+  box-shadow: 0 18px 46px alpha(black, 0.34);
+}
+
+.settings-dialog-surface.theme-material-expressive,
+.settings-dialog-shell.theme-material-expressive .material-dialog-toolbar {
+  color: @m3_on_surface;
+  background-color: transparent;
+  background-image: none;
+}
+
+.settings-dialog-shell.theme-material-expressive headerbar {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  background-image: none;
+  border-color: alpha(@m3_outline, 0.18);
 }
 "#,
             );
@@ -496,30 +539,73 @@ popover.queue-popover.theme-material-expressive > arrow {{
   border-color: alpha(@m3_outline, 0.22);
 }}
 
-/* material_settings_and_local_player_dimensions_v1 */
-window.settings-dialog.theme-material-expressive,
-window.youtube-settings-dialog.theme-material-expressive,
-window.startup-dialog.theme-material-expressive,
-window.theme-material-expressive.settings-dialog,
-window.theme-material-expressive.youtube-settings-dialog,
-window.theme-material-expressive.startup-dialog {{
+/* m3_settings_surface_priority_fix_v1 */
+dialog.settings-dialog.theme-material-expressive,
+dialog.youtube-settings-dialog.theme-material-expressive,
+dialog.startup-dialog.theme-material-expressive,
+.settings-dialog.theme-material-expressive,
+.youtube-settings-dialog.theme-material-expressive,
+.startup-dialog.theme-material-expressive {{
   color: @m3_on_surface;
   background-color: @m3_surface_container_low;
-  background-image: none;
+  background-image:
+    radial-gradient(circle at 12% 0%, alpha(@m3_primary, 0.10), transparent 46%);
 }}
 
-window.settings-dialog.theme-material-expressive .material-dialog-toolbar,
-window.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar,
-window.startup-dialog.theme-material-expressive .material-dialog-toolbar {{
+dialog.settings-dialog.theme-material-expressive .material-dialog-toolbar,
+dialog.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar,
+dialog.startup-dialog.theme-material-expressive .material-dialog-toolbar,
+.settings-dialog.theme-material-expressive .material-dialog-toolbar,
+.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar,
+.startup-dialog.theme-material-expressive .material-dialog-toolbar {{
+  color: @m3_on_surface;
   background-color: @m3_surface_container_low;
-  background-image: none;
+  background-image:
+    radial-gradient(circle at 12% 0%, alpha(@m3_primary, 0.08), transparent 48%);
 }}
 
-window.settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
-window.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
-window.startup-dialog.theme-material-expressive .material-dialog-toolbar headerbar {{
+dialog.settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+dialog.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+dialog.startup-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.youtube-settings-dialog.theme-material-expressive .material-dialog-toolbar headerbar,
+.startup-dialog.theme-material-expressive .material-dialog-toolbar headerbar {{
+  color: @m3_on_surface;
   background-color: @m3_surface_container;
   background-image: none;
+}}
+
+/* m3_settings_explicit_shell_fix_v2 */
+dialog.settings-dialog.theme-material-expressive {{
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  background-color: transparent;
+  background-image: none;
+}}
+
+.settings-dialog-shell.theme-material-expressive {{
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  background-image:
+    radial-gradient(circle at 10% 0%, alpha(@m3_primary, 0.11), transparent 46%);
+  border: 1px solid alpha(@m3_outline, 0.22);
+  border-radius: 30px;
+  box-shadow: 0 18px 46px alpha(black, 0.34);
+}}
+
+.settings-dialog-surface.theme-material-expressive,
+.settings-dialog-shell.theme-material-expressive .material-dialog-toolbar {{
+  color: @m3_on_surface;
+  background-color: transparent;
+  background-image: none;
+}}
+
+.settings-dialog-shell.theme-material-expressive headerbar {{
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  background-image: none;
+  border-color: alpha(@m3_outline, 0.18);
 }}
 "#
         ));
