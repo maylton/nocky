@@ -1,0 +1,85 @@
+/*
+ * Material 3 Expressive foundation.
+ * Dynamic artwork colors and the complete player redesign come next.
+ */
+
+@define-color m3_primary #b9c3ff;
+@define-color m3_on_primary #17204f;
+@define-color m3_secondary_container #45475a;
+@define-color m3_on_secondary_container #e1e1f5;
+@define-color m3_surface #111318;
+@define-color m3_surface_container #1d1f25;
+@define-color m3_surface_container_high #282a30;
+@define-color m3_on_surface #e3e2e9;
+@define-color m3_on_surface_variant #c6c5d0;
+@define-color m3_outline #90909b;
+
+window.theme-material-expressive,
+window.theme-material-expressive > toastoverlay,
+window.theme-material-expressive .app-shell {
+  background-color: @m3_surface;
+  color: @m3_on_surface;
+}
+
+window.theme-material-expressive .noctalia-header {
+  background-color: @m3_surface_container;
+  border-bottom: 1px solid alpha(@m3_outline, 0.24);
+}
+
+window.theme-material-expressive .sidebar,
+window.theme-material-expressive .library-panel {
+  background-color: @m3_surface_container;
+}
+
+window.theme-material-expressive .now-playing-card {
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.24);
+  border-radius: 36px;
+  box-shadow: 0 10px 30px alpha(black, 0.22);
+}
+
+window.theme-material-expressive .shell-play-button {
+  min-width: 64px;
+  min-height: 64px;
+  border-radius: 32px;
+  background-color: @m3_primary;
+  color: @m3_on_primary;
+}
+
+window.theme-material-expressive .media-control,
+window.theme-material-expressive .card-icon-button,
+window.theme-material-expressive .footer-control {
+  border-radius: 18px;
+  transition: background-color 180ms ease;
+}
+
+window.theme-material-expressive .media-control:hover,
+window.theme-material-expressive .card-icon-button:hover,
+window.theme-material-expressive .footer-control:hover {
+  background-color: alpha(@m3_primary, 0.14);
+}
+
+window.theme-material-expressive .media-control:checked,
+window.theme-material-expressive .card-icon-button:checked,
+window.theme-material-expressive .footer-control:checked {
+  background-color: @m3_secondary_container;
+  color: @m3_on_secondary_container;
+}
+
+window.theme-material-expressive .player-bar {
+  background-color: @m3_surface_container;
+  border-top: 1px solid alpha(@m3_outline, 0.22);
+}
+
+window.theme-material-expressive entry,
+window.theme-material-expressive searchentry,
+window.theme-material-expressive dropdown,
+window.theme-material-expressive popover > contents {
+  border-radius: 20px;
+}
+
+window.theme-material-expressive .dim-label,
+window.theme-material-expressive .hero-artist,
+window.theme-material-expressive .time-label {
+  color: @m3_on_surface_variant;
+}

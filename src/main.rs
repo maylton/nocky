@@ -15,6 +15,7 @@ mod onboarding;
 mod playback;
 mod player_view;
 mod theme;
+mod visual_theme;
 mod visualizer;
 mod wave_progress;
 mod youtube;
@@ -23,7 +24,7 @@ mod youtube_playback;
 use adw::prelude::*;
 use background::{BackgroundChannel, BackgroundMessage};
 use browser::{BrowserEvent, BrowserRoute, LibraryBrowser};
-use config::{AppLanguage, BlurMode, FooterMode, StartupSource};
+use config::{AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme};
 use dialogs::SettingsEvent;
 use gtk::prelude::FileExt;
 use gtk::{gdk, gio, glib};
@@ -199,6 +200,7 @@ struct AppController {
     shuffle_button: gtk::ToggleButton,
     visualizer: SpectrumVisualizer,
 
+    visual_theme_manager: Rc<visual_theme::VisualThemeManager>,
     _theme: Rc<theme::ThemeBridge>,
 }
 
@@ -280,9 +282,14 @@ fn build_application(app: &adw::Application) {
 impl AppController {
     fn new(app: &adw::Application) -> Rc<Self> {
         let theme = theme::ThemeBridge::install();
+        let visual_theme_manager = visual_theme::VisualThemeManager::install();
         let config = config::AppConfig::load();
         let tr = |message: Message| i18n::text(config.language, message);
-        theme.set_noctalia_enabled(config.noctalia_theme_sync && theme.noctalia_shell_detected());
+        theme.set_noctalia_enabled(
+            config.visual_theme == VisualTheme::Noctalia
+                && config.noctalia_theme_sync
+                && theme.noctalia_shell_detected(),
+        );
         theme.set_blur_preferences(config.blur_mode, config.blur_opacity);
         let player = PlaybackEngine::new(config.volume.clamp(0.0, 1.0))
             .unwrap_or_else(|error| panic!("Nocky playback initialization failed: {error}"));
@@ -748,6 +755,7 @@ impl AppController {
             repeat_button: repeat.clone(),
             shuffle_button: shuffle.clone(),
             visualizer,
+            visual_theme_manager,
             _theme: theme,
         });
         controller.apply_translations();
@@ -1140,6 +1148,7 @@ impl AppController {
             });
         }
 
+        controller.apply_visual_theme();
         controller.refresh_browser();
         controller.refresh_youtube_status();
         controller
@@ -2311,7 +2320,7 @@ impl AppController {
     }
 
     fn apply_progress_style(&self) {
-        let use_m3 = self.config.borrow().use_m3_progress;
+        let use_m3 = self.config.borrow().visual_theme == VisualTheme::MaterialExpressive;
         let child = if use_m3 { "m3" } else { "classic" };
         self.home_progress_stack.set_visible_child_name(child);
         self.footer_progress_stack.set_visible_child_name(child);
@@ -2392,6 +2401,23 @@ impl AppController {
 
         self.update_footer_source();
         self.apply_volume_icon();
+    }
+
+    fn apply_visual_theme(&self) {
+        let (visual_theme, noctalia_sync) = {
+            let config = self.config.borrow();
+            (config.visual_theme, config.noctalia_theme_sync)
+        };
+
+        self.visual_theme_manager.apply(&self.window, visual_theme);
+
+        self._theme.set_noctalia_enabled(
+            visual_theme == VisualTheme::Noctalia
+                && noctalia_sync
+                && self._theme.noctalia_shell_detected(),
+        );
+
+        self.apply_progress_style();
     }
 
     fn apply_footer_mode(&self) {
@@ -2547,13 +2573,10 @@ impl AppController {
         self.player_view
             .set_visualizer_active(config.show_home_visualizer && self.player.is_playing());
         self.player_view.set_lyrics_visible(config.show_home_lyrics);
-        self._theme.set_noctalia_enabled(
-            config.noctalia_theme_sync && self._theme.noctalia_shell_detected(),
-        );
         self._theme
             .set_blur_preferences(config.blur_mode, config.blur_opacity);
         drop(config);
-        self.apply_progress_style();
+        self.apply_visual_theme();
     }
 
     fn show_settings_dialog(self: &Rc<Self>) {
@@ -2607,10 +2630,10 @@ impl AppController {
                     controller.save_config();
                     controller.apply_home_preferences();
                 }
-                SettingsEvent::UseM3Progress(active) => {
-                    controller.config.borrow_mut().use_m3_progress = active;
+                SettingsEvent::VisualTheme(theme) => {
+                    controller.config.borrow_mut().visual_theme = theme;
                     controller.save_config();
-                    controller.apply_home_preferences();
+                    controller.apply_visual_theme();
                 }
                 SettingsEvent::FooterMode(mode) => {
                     controller.config.borrow_mut().footer_mode = mode;
@@ -2665,7 +2688,7 @@ impl AppController {
                     config.blur_mode = choices.blur_mode;
                     config.blur_opacity = choices.blur_opacity;
                     config.footer_mode = choices.footer_mode;
-                    config.use_m3_progress = choices.use_m3_progress;
+                    config.visual_theme = choices.visual_theme;
                     config.noctalia_theme_sync = noctalia_available && choices.noctalia_theme_sync;
                     config.onboarding_completed = true;
 
@@ -3544,7 +3567,8 @@ impl AppController {
         self.hero_play_icon.set_icon_name(Some(icon));
         self.player_view
             .set_visualizer_active(playing && self.visualizer.widget().is_visible());
-        let animate_m3 = playing && self.config.borrow().use_m3_progress;
+        let animate_m3 =
+            playing && self.config.borrow().visual_theme == VisualTheme::MaterialExpressive;
         self.home_wave_progress.set_playing(animate_m3);
         self.footer_progress.set_playing(animate_m3);
     }

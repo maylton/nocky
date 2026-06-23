@@ -1,4 +1,4 @@
-use crate::config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource};
+use crate::config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme};
 use adw::prelude::*;
 use std::{cell::Cell, rc::Rc};
 
@@ -8,7 +8,7 @@ pub struct OnboardingChoices {
     pub blur_mode: BlurMode,
     pub blur_opacity: f64,
     pub footer_mode: FooterMode,
-    pub use_m3_progress: bool,
+    pub visual_theme: VisualTheme,
     pub noctalia_theme_sync: bool,
 }
 
@@ -87,9 +87,9 @@ fn copy(language: AppLanguage) -> Copy {
             blur_off: "Sem desfoque",
             opacity_title: "Transparência do vidro",
             player_title: "Player",
-            player_body: "Escolha o estilo da barra de progresso e o comportamento do footer.",
-            progress_title: "Barra ondulada Material 3",
-            progress_body: "Uma barra de progresso ondulada inspirada no Material Design 3, usada no player principal e no footer completo.",
+            player_body: "Escolha o tema visual e o comportamento do footer.",
+            progress_title: "Tema visual",
+            progress_body: "Escolha entre a integração visual do Noctalia e o estilo Material 3 Expressive.",
             footer_title: "Comportamento do footer",
             footer_body: "O modo Automático evita controles duplicados enquanto o player da Home estiver visível.",
             footer_automatic: "Automático — recomendado",
@@ -101,7 +101,7 @@ fn copy(language: AppLanguage) -> Copy {
             summary_source: "Fonte da Home",
             summary_blur: "Desfoque",
             summary_palette: "Paleta do Noctalia",
-            summary_progress: "Progresso M3",
+            summary_progress: "Tema visual",
             summary_footer: "Footer",
             yes: "Ativado",
             no: "Desativado",
@@ -134,9 +134,9 @@ fn copy(language: AppLanguage) -> Copy {
             blur_off: "No blur",
             opacity_title: "Glass transparency",
             player_title: "Player",
-            player_body: "Choose the progress style and footer behavior.",
-            progress_title: "Material 3 wavy progress",
-            progress_body: "A wavy progress bar inspired by Material Design 3, used in the Home player and complete footer.",
+            player_body: "Choose the visual theme and footer behavior.",
+            progress_title: "Visual theme",
+            progress_body: "Choose between Noctalia integration and the Material 3 Expressive style.",
             footer_title: "Footer behavior",
             footer_body: "Automatic mode avoids duplicate controls while the Home player is visible.",
             footer_automatic: "Automatic — recommended",
@@ -148,7 +148,7 @@ fn copy(language: AppLanguage) -> Copy {
             summary_source: "Home source",
             summary_blur: "Blur",
             summary_palette: "Noctalia palette",
-            summary_progress: "M3 progress",
+            summary_progress: "Visual theme",
             summary_footer: "Footer",
             yes: "Enabled",
             no: "Disabled",
@@ -181,9 +181,9 @@ fn copy(language: AppLanguage) -> Copy {
             blur_off: "Sin desenfoque",
             opacity_title: "Transparencia del cristal",
             player_title: "Reproductor",
-            player_body: "Elige el estilo del progreso y el comportamiento del footer.",
-            progress_title: "Progreso ondulado Material 3",
-            progress_body: "Una barra de progreso ondulada inspirada en Material Design 3, usada en Home y en el footer completo.",
+            player_body: "Elige el tema visual y el comportamiento del footer.",
+            progress_title: "Tema visual",
+            progress_body: "Elige entre la integración visual de Noctalia y el estilo Material 3 Expressive.",
             footer_title: "Comportamiento del footer",
             footer_body: "El modo Automático evita controles duplicados mientras el reproductor de Home está visible.",
             footer_automatic: "Automático — recomendado",
@@ -195,7 +195,7 @@ fn copy(language: AppLanguage) -> Copy {
             summary_source: "Fuente de Home",
             summary_blur: "Desenfoque",
             summary_palette: "Paleta de Noctalia",
-            summary_progress: "Progreso M3",
+            summary_progress: "Tema visual",
             summary_footer: "Footer",
             yes: "Activado",
             no: "Desactivado",
@@ -468,13 +468,15 @@ pub fn present<F>(
     // Player
     let (player_page, player_content) = page_shell(text.player_title, text.player_body);
 
-    let m3_switch = gtk::Switch::new();
-    m3_switch.set_valign(gtk::Align::Center);
-    m3_switch.set_active(initial.use_m3_progress);
+    let visual_theme = gtk::DropDown::from_strings(&["Noctalia", "Material 3 Expressive"]);
+    visual_theme.set_selected(match initial.visual_theme {
+        VisualTheme::Noctalia => 0,
+        VisualTheme::MaterialExpressive => 1,
+    });
     player_content.append(&option_card(
         text.progress_title,
         text.progress_body,
-        &m3_switch,
+        &visual_theme,
     ));
 
     let footer = gtk::DropDown::from_strings(&[
@@ -545,7 +547,7 @@ pub fn present<F>(
         let local_choice = local_choice.clone();
         let blur_mode = blur_mode.clone();
         let palette_switch = palette_switch.clone();
-        let m3_switch = m3_switch.clone();
+        let visual_theme = visual_theme.clone();
         let footer = footer.clone();
         let summary_source = summary_source.clone();
         let summary_blur = summary_blur.clone();
@@ -586,10 +588,10 @@ pub fn present<F>(
                 } else {
                     text.no
                 });
-                summary_progress.set_text(if m3_switch.is_active() {
-                    text.yes
+                summary_progress.set_text(if visual_theme.selected() == 1 {
+                    "Material 3 Expressive"
                 } else {
-                    text.no
+                    "Noctalia"
                 });
                 summary_footer.set_text(match footer.selected() {
                     1 => text.footer_full,
@@ -648,7 +650,11 @@ pub fn present<F>(
                     3 => FooterMode::Hidden,
                     _ => FooterMode::Automatic,
                 },
-                use_m3_progress: m3_switch.is_active(),
+                visual_theme: if visual_theme.selected() == 1 {
+                    VisualTheme::MaterialExpressive
+                } else {
+                    VisualTheme::Noctalia
+                },
                 noctalia_theme_sync: noctalia_available && palette_switch.is_active(),
             };
 

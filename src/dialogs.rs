@@ -1,5 +1,5 @@
 use crate::{
-    config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource},
+    config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme},
     i18n::{self, Message},
 };
 use adw::prelude::*;
@@ -15,7 +15,7 @@ pub(crate) enum SettingsEvent {
     BlurOpacityCommit(f64),
     ShowHomeVisualizer(bool),
     ShowHomeLyrics(bool),
-    UseM3Progress(bool),
+    VisualTheme(VisualTheme),
     FooterMode(FooterMode),
     AutoDownloadLyrics(bool),
     YouTubeAutoSync(bool),
@@ -27,7 +27,6 @@ pub(crate) enum SettingsEvent {
 enum ToggleSetting {
     Visualizer,
     Lyrics,
-    M3Progress,
     AutoLyrics,
     YouTubeSync,
     Noctalia,
@@ -161,11 +160,15 @@ pub(crate) fn present_settings<F>(
         &lyrics,
     ));
 
-    let m3_progress = settings_switch(initial.use_m3_progress);
-    content.append(&switch_row(
+    let visual_theme = gtk::DropDown::from_strings(&["Noctalia", "Material 3 Expressive"]);
+    visual_theme.set_selected(match initial.visual_theme {
+        VisualTheme::Noctalia => 0,
+        VisualTheme::MaterialExpressive => 1,
+    });
+    content.append(&dropdown_row(
         tr(Message::M3Progress),
         tr(Message::M3ProgressDescription),
-        &m3_progress,
+        &visual_theme,
     ));
 
     let footer_mode = gtk::DropDown::from_strings(&[
@@ -291,6 +294,17 @@ pub(crate) fn present_settings<F>(
 
     {
         let emit = emit.clone();
+        visual_theme.connect_selected_notify(move |dropdown| {
+            emit(SettingsEvent::VisualTheme(if dropdown.selected() == 1 {
+                VisualTheme::MaterialExpressive
+            } else {
+                VisualTheme::Noctalia
+            }));
+        });
+    }
+
+    {
+        let emit = emit.clone();
         footer_mode.connect_selected_notify(move |dropdown| {
             let mode = match dropdown.selected() {
                 1 => FooterMode::Full,
@@ -305,7 +319,6 @@ pub(crate) fn present_settings<F>(
     for (switch, setting) in [
         (&visualizer, ToggleSetting::Visualizer),
         (&lyrics, ToggleSetting::Lyrics),
-        (&m3_progress, ToggleSetting::M3Progress),
         (&auto_lyrics, ToggleSetting::AutoLyrics),
         (&youtube_sync, ToggleSetting::YouTubeSync),
         (&noctalia, ToggleSetting::Noctalia),
@@ -316,7 +329,6 @@ pub(crate) fn present_settings<F>(
             let event = match setting {
                 ToggleSetting::Visualizer => SettingsEvent::ShowHomeVisualizer(active),
                 ToggleSetting::Lyrics => SettingsEvent::ShowHomeLyrics(active),
-                ToggleSetting::M3Progress => SettingsEvent::UseM3Progress(active),
                 ToggleSetting::AutoLyrics => SettingsEvent::AutoDownloadLyrics(active),
                 ToggleSetting::YouTubeSync => SettingsEvent::YouTubeAutoSync(active),
                 ToggleSetting::Noctalia => SettingsEvent::NoctaliaThemeSync(active),

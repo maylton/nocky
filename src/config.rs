@@ -21,6 +21,14 @@ pub enum StartupSource {
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+pub enum VisualTheme {
+    #[default]
+    Noctalia,
+    MaterialExpressive,
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum BlurMode {
     Custom,
     #[default]
@@ -79,7 +87,7 @@ pub struct AppConfig {
     pub auto_download_lyrics: bool,
     pub show_home_visualizer: bool,
     pub show_home_lyrics: bool,
-    pub use_m3_progress: bool,
+    pub visual_theme: VisualTheme,
     pub footer_mode: FooterMode,
     pub noctalia_theme_sync: bool,
     pub youtube_auto_sync: bool,
@@ -100,7 +108,7 @@ impl Default for AppConfig {
             auto_download_lyrics: true,
             show_home_visualizer: true,
             show_home_lyrics: true,
-            use_m3_progress: true,
+            visual_theme: VisualTheme::Noctalia,
             footer_mode: FooterMode::Automatic,
             noctalia_theme_sync: true,
             youtube_auto_sync: true,
@@ -134,10 +142,26 @@ impl AppConfig {
             .as_ref()
             .and_then(|value| value.get("onboarding_completed"))
             .is_some();
+        let visual_theme_was_stored = parsed
+            .as_ref()
+            .and_then(|value| value.get("visual_theme"))
+            .is_some();
+        let legacy_m3_progress = parsed
+            .as_ref()
+            .and_then(|value| value.get("use_m3_progress"))
+            .and_then(serde_json::Value::as_bool);
 
         let mut config: Self = parsed
+            .clone()
             .and_then(|value| serde_json::from_value(value).ok())
             .unwrap_or_default();
+
+        if !visual_theme_was_stored {
+            config.visual_theme = match legacy_m3_progress {
+                Some(true) => VisualTheme::MaterialExpressive,
+                _ => VisualTheme::Noctalia,
+            };
+        }
 
         // Existing installations must not be interrupted by the new
         // first-run wizard. Only genuinely new configurations start with
@@ -148,7 +172,7 @@ impl AppConfig {
 
         // Transparently migrate settings from the old project name and
         // persist the onboarding migration marker.
-        if source != path || !onboarding_was_stored {
+        if source != path || !onboarding_was_stored || !visual_theme_was_stored {
             let _ = config.save();
         }
         config

@@ -1,0 +1,10 @@
+/*
+ * Noctalia visual theme.
+ * The generated ~/.config/nocky/theme.css remains the primary source.
+ */
+
+window.theme-noctalia .now-playing-card,
+window.theme-noctalia .player-bar,
+window.theme-noctalia .library-panel {
+  transition: background-color 180ms ease, border-color 180ms ease;
+}
