@@ -1,6 +1,6 @@
 use crate::{
     config::{AppConfig, StartupSource},
-    listening_history::{ListeningHistory, ListeningSource},
+    listening_history::{ListeningHistory, ListeningSource, ListeningStats},
     model::Track,
     youtube::{youtube_collection_key, YouTubeCollectionEntry, YouTubeItem, YouTubeLibraryCache},
 };
@@ -1104,13 +1104,9 @@ impl LibraryBrowser {
             &self.event_tx,
         ));
 
-        // In YouTube-only mode AppController passes an empty local track
-        // slice. This avoids using a populated YouTube cache while the user is
-        // browsing the local source.
-        let active_source = if tracks.is_empty() {
-            ListeningSource::YouTube
-        } else {
-            ListeningSource::Local
+        let active_source = match config.startup_source {
+            Some(StartupSource::YouTube) => ListeningSource::YouTube,
+            _ => ListeningSource::Local,
         };
 
         self.home_content.append(&home_section(
@@ -1507,25 +1503,22 @@ fn ranked_home_album_cards(
     history: &ListeningHistory,
     source: ListeningSource,
 ) -> Vec<HomeCard> {
-    let mut names = history
-        .ranked_albums(source, 12)
-        .into_iter()
-        .map(|(name, _)| name)
-        .collect::<Vec<_>>();
+    let mut ranked = history.ranked_albums(source, 12);
     for album in history.recent_albums(source, 12) {
-        if !names.iter().any(|name| name.eq_ignore_ascii_case(&album)) {
-            names.push(album);
+        if !ranked
+            .iter()
+            .any(|(name, _)| name.eq_ignore_ascii_case(&album))
+        {
+            ranked.push((album, ListeningStats::default()));
         }
-        if names.len() == 12 {
+        if ranked.len() == 12 {
             break;
         }
     }
+
     let fallback = home_album_cards(tracks, youtube);
-    if names.is_empty() {
-        return fallback;
-    }
     let mut cards = Vec::new();
-    for name in names {
+    for (name, stats) in ranked {
         match source {
             ListeningSource::Local => {
                 let album_tracks = tracks
@@ -1542,10 +1535,11 @@ fn ranked_home_album_cards(
                     .into_iter()
                     .collect::<Vec<_>>()
                     .join(", ");
+                let fallback_detail = format!("Local • {} faixas", album_tracks.len());
                 cards.push(HomeCard::LocalAlbum {
                     title: name,
                     subtitle: artists,
-                    detail: format!("Local • {} faixas", album_tracks.len()),
+                    detail: listening_rank_detail(&stats, &fallback_detail),
                     cover_path: album_tracks
                         .iter()
                         .find_map(|track| track.cover_path.clone()),
@@ -1560,18 +1554,15 @@ fn ranked_home_album_cards(
                     cards.push(HomeCard::YouTubeAlbum {
                         item: entry.source.clone(),
                         subtitle: entry.subtitle.clone(),
-                        detail: entry.detail.clone(),
+                        detail: listening_rank_detail(&stats, &entry.detail),
                         cover_path: entry.cached_cover().map(Path::to_path_buf),
                     });
                 }
             }
         }
     }
-    if cards.is_empty() {
-        fallback
-    } else {
-        cards
-    }
+
+    merge_ranked_home_cards(cards, fallback, 12)
 }
 
 fn ranked_home_artist_cards(
@@ -1580,17 +1571,11 @@ fn ranked_home_artist_cards(
     history: &ListeningHistory,
     source: ListeningSource,
 ) -> Vec<HomeCard> {
-    let names = history
-        .ranked_artists(source, 12)
-        .into_iter()
-        .map(|(name, _)| name)
-        .collect::<Vec<_>>();
+    let ranked = history.ranked_artists(source, 12);
     let fallback = home_artist_cards(tracks, youtube);
-    if names.is_empty() {
-        return fallback;
-    }
     let mut cards = Vec::new();
-    for name in names {
+
+    for (name, stats) in ranked {
         match source {
             ListeningSource::Local => {
                 let artist_tracks = tracks
@@ -1600,10 +1585,11 @@ fn ranked_home_artist_cards(
                 if artist_tracks.is_empty() {
                     continue;
                 }
+                let fallback_detail = format!("Local • {} faixas", artist_tracks.len());
                 cards.push(HomeCard::LocalArtist {
                     title: name,
                     subtitle: String::new(),
-                    detail: format!("Local • {} faixas", artist_tracks.len()),
+                    detail: listening_rank_detail(&stats, &fallback_detail),
                     cover_path: artist_tracks
                         .iter()
                         .find_map(|track| track.cover_path.clone()),
@@ -1618,17 +1604,67 @@ fn ranked_home_artist_cards(
                     cards.push(HomeCard::YouTubeArtist {
                         item: entry.source.clone(),
                         subtitle: entry.subtitle.clone(),
-                        detail: entry.detail.clone(),
+                        detail: listening_rank_detail(&stats, &entry.detail),
                         cover_path: entry.cached_cover().map(Path::to_path_buf),
                     });
                 }
             }
         }
     }
-    if cards.is_empty() {
-        fallback
+
+    merge_ranked_home_cards(cards, fallback, 12)
+}
+
+fn listening_rank_detail(stats: &ListeningStats, fallback: &str) -> String {
+    if stats.play_count == 0 {
+        return fallback.to_string();
+    }
+
+    let minutes = stats.total_listened_seconds.div_ceil(60);
+    let plays = if stats.play_count == 1 {
+        "1 reprodução".to_string()
     } else {
-        cards
+        format!("{} reproduções", stats.play_count)
+    };
+    format!("{plays} • {minutes} min ouvidos")
+}
+
+fn merge_ranked_home_cards(
+    ranked: Vec<HomeCard>,
+    fallback: Vec<HomeCard>,
+    limit: usize,
+) -> Vec<HomeCard> {
+    let mut cards = Vec::new();
+    let mut seen = HashSet::new();
+
+    for card in ranked.into_iter().chain(fallback) {
+        if seen.insert(home_card_identity(&card)) {
+            cards.push(card);
+        }
+        if cards.len() == limit {
+            break;
+        }
+    }
+
+    cards
+}
+
+fn home_card_identity(card: &HomeCard) -> String {
+    match card {
+        HomeCard::LocalAlbum { title, .. } => format!("local-album:{}", title.to_lowercase()),
+        HomeCard::YouTubeAlbum { item, .. } => {
+            format!("youtube-album:{}", item.title.to_lowercase())
+        }
+        HomeCard::LocalArtist { title, .. } => format!("local-artist:{}", title.to_lowercase()),
+        HomeCard::YouTubeArtist { item, .. } => {
+            format!("youtube-artist:{}", item.title.to_lowercase())
+        }
+        HomeCard::LocalPlaylist { title, .. } => {
+            format!("local-playlist:{}", title.to_lowercase())
+        }
+        HomeCard::YouTubePlaylist(item) => {
+            format!("youtube-playlist:{}", item.title.to_lowercase())
+        }
     }
 }
 
