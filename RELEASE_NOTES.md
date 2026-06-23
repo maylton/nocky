@@ -1,79 +1,63 @@
-# Nocky 0.2.5 Beta — A More Personal and Expressive Player
+# Nocky 0.2.6 Beta — A Better First Experience
 
-Nocky 0.2.5 is the largest interface and usability update in the 0.2 series. It introduces a personalized Home, a redesigned adaptive footer, synchronized online lyrics, faster collection browsing and a Material 3-inspired animated progress experience.
+Nocky 0.2.6 focuses on the first experience, appearance discovery and clearer synchronized lyrics behavior.
 
-## Highlights
+## First-run onboarding
 
-- Personalized Home sections built from listening history
-- Clear separation between the local library and YouTube Music modes
-- Categorized online search for songs, albums, artists and playlists
-- Synchronized lyrics for local and streamed tracks
-- Material 3-inspired wavy progress bar with smooth, continuous animation
-- Footer 2.0 with large artwork, improved metadata and responsive behavior
-- Four footer modes: Automatic, Full, Compact and Hidden
-- Automatic mode avoids duplicated controls throughout every Home route
-- Clickable local and YouTube playback queue
-- Portuguese, English and Spanish localization
-- Incremental album and artist loading for large libraries
-- More responsive search and cached online collection browsing
-- Automatic recovery when a temporary YouTube stream URL expires
-- Numerous visual fixes for cards, metadata, favorites, controls and blur
+New installations now open a five-step setup wizard before entering the main interface:
 
-## Footer modes
+1. Welcome
+2. Music source
+3. Appearance
+4. Player and footer
+5. Setup summary
 
-### Automatic
+The wizard allows users to choose:
 
-The footer stays compact while the Home player is visible, including album, discography, artist and playlist routes. Outside Home, such as the full Lyrics page, the complete footer returns automatically.
+- local files or YouTube Music as the initial Home source;
+- custom blur, Noctalia blur or an opaque window;
+- Noctalia palette synchronization when Noctalia Shell is running;
+- the Material Design 3-inspired wavy progress bar;
+- Automatic, Full, Compact or Hidden footer behavior.
 
-### Full
+Selecting the local library opens the folder chooser after setup when no directory has been configured.
 
-Displays the complete playback interface, including transport controls, progress, lyrics and volume.
+## YouTube Music explanation
 
-### Compact
+The onboarding clearly explains that YouTube Music support is experimental, uses unofficial interfaces, may require future compatibility updates and does not require connecting an account for public search.
 
-Keeps the track and queue card, lyrics button, mute and volume controls. Playback controls and the progress bar are hidden to avoid duplicating the Home player.
+## Noctalia-aware setup
 
-### Hidden
-
-Removes the footer and restores the available vertical space.
-
-## Local and YouTube Music modes
-
-Local-library mode now stays focused on offline content and does not display online mixes, suggestions or synchronized playlists. YouTube Music mode keeps catalogue search, account synchronization, cached collections, playlists and streamed playback.
+Noctalia-specific palette and blur options are shown only when Noctalia Shell is detected. Other desktops continue receiving custom blur and opaque-window options without misleading settings.
 
 ## Lyrics
 
-Nocky can display synchronized lyrics for both local and YouTube Music tracks. Inline focused lines wrap only when they exceed the available card width.
+The focused inline lyric is now measured with Pango:
 
-## Performance
+- short lines remain on one line;
+- long lines wrap only when the available width is exceeded;
+- wrapping is limited to two lines;
+- embedded whitespace and unexpected line breaks are normalized.
 
-Albums and artists are rendered incrementally, online searches are categorized and processed in batches, and previously loaded YouTube Music data continues to use the local cache before background refreshes.
+## Branding
 
-## Known limitation
+The official Nocky icon now appears:
 
-A minor Home-player layout shift can still appear while inline lyrics move between the loading state and synchronized content. It does not affect playback or lyrics synchronization.
+- in the onboarding welcome page;
+- above the application name in the About dialog.
 
-## Install
+## Existing users
 
-```bash
-./install.sh --install-deps
-```
+Existing configuration files are migrated as already onboarded. Updating from Nocky 0.2.5 will not unexpectedly interrupt users with the setup wizard.
 
-For local-library-only use:
-
-```bash
-./install.sh --install-deps --without-youtube
-```
-
-For development:
+Developers can safely test the flow with:
 
 ```bash
-./scripts/setup-youtube-runtime.sh
-cargo run
+NOCKY_FORCE_ONBOARDING=1 cargo run
 ```
 
 ## Suggested tag
 
 ```text
-v0.2.5-beta
+v0.2.6-beta
 ```

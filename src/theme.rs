@@ -163,6 +163,25 @@ impl ThemeBridge {
         }
     }
 
+    pub fn noctalia_shell_detected(&self) -> bool {
+        let config_present = self.noctalia_config_path.is_file()
+            || glib::user_config_dir().join("noctalia").is_dir()
+            || glib::user_config_dir()
+                .join("quickshell")
+                .join("noctalia")
+                .is_dir();
+
+        if !config_present {
+            return false;
+        }
+
+        Command::new("pgrep")
+            .args(["-f", "[n]octalia"])
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false)
+    }
+
     pub fn set_noctalia_enabled(&self, enabled: bool) {
         self.noctalia_enabled.set(enabled);
         self.reload();

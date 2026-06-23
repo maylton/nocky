@@ -2,6 +2,35 @@
 
 All notable public changes to Nocky are documented here.
 
+## 0.2.6 — 2026-06-23
+
+### Added
+
+- Complete five-step first-run onboarding experience
+- Initial music-source selection between local files and YouTube Music
+- Clear explanation of the experimental and unofficial YouTube Music integration
+- Appearance setup for custom blur, disabled blur and Noctalia-controlled blur
+- Material Design 3 wavy progress preference during onboarding
+- Footer mode selection during onboarding
+- Final setup summary before entering the app
+- `NOCKY_FORCE_ONBOARDING=1` development mode for safely testing the wizard
+
+### Improved
+
+- Noctalia palette and blur choices are available only while Noctalia Shell is detected
+- Existing installations are migrated without unexpectedly showing the first-run wizard
+- Local-library onboarding opens the folder chooser when no music directory is configured
+- The official Nocky icon is used in the onboarding welcome page
+- The official Nocky icon now appears above the application name in the About dialog
+- Onboarding content is available in Portuguese, English and Spanish
+- The wavy progress description explicitly identifies its Material Design 3 inspiration
+
+### Fixed
+
+- Focused inline lyrics remain on one line when their measured text fits
+- Focused inline lyrics wrap to two lines only when the available width is exceeded
+- Hidden whitespace and embedded line breaks in lyric text are normalized before rendering
+- Legacy configuration migration no longer prevents reliable onboarding testing
 ## 0.2.5 — 2026-06-23
 
 ### Added

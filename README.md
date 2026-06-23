@@ -4,8 +4,16 @@
 
 This app is vibe-coded and any improvement suggestion is welcomed, but don't expect much as it's just a free time hobby project =)
 
-> **Status:** Nocky 0.2.5 is a beta release. It introduces a personalized Home, synchronized online lyrics, a Material 3-inspired progress bar and a configurable adaptive footer.
+> **Status:** Nocky 0.2.6 is a beta release. It adds a complete first-run setup wizard, Noctalia-aware appearance choices and truly conditional synchronized-lyrics wrapping.
 
+<!-- noctalia-inspiration:start -->
+> [!NOTE]
+> Nocky is inspired by the visual language, theming system and desktop experience of [Noctalia Shell](https://github.com/noctalia-dev/noctalia).
+>
+> A heartfelt thank-you goes to the Noctalia developers and contributors for creating and sharing such an inspiring project.
+>
+> Nocky is an independent, unofficial hobby project. It is not affiliated with, endorsed by, maintained by, or officially connected to the Noctalia project or its development team.
+<!-- noctalia-inspiration:end -->
 <p align="center">
   <img src="assets/nocky-icon.png" alt="Nocky owl icon" width="180" />
 </p>
@@ -133,6 +141,18 @@ For a system installation:
 ```
 
 The uninstaller intentionally preserves user settings, session data and cache. Disconnect the account in Nocky before uninstalling, or remove `~/.config/nocky/youtube-session.json` manually when Secret Service is not available.
+
+## First-run setup
+
+New installations open a five-step setup wizard before the main interface. It covers the initial music source, the experimental YouTube Music integration, window blur, Noctalia palette synchronization, the Material Design 3-inspired wavy progress bar and footer behavior.
+
+Noctalia-specific appearance options are enabled only when Noctalia Shell is detected. Existing users are migrated as already onboarded and are not interrupted after upgrading.
+
+For development testing:
+
+```bash
+NOCKY_FORCE_ONBOARDING=1 cargo run
+```
 
 ## Lyrics
 

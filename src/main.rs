@@ -8,6 +8,7 @@ mod lyrics_provider;
 mod lyrics_view;
 mod model;
 mod mpris;
+mod onboarding;
 mod playback;
 mod theme;
 mod visualizer;
@@ -288,7 +289,7 @@ impl AppController {
         let theme = theme::ThemeBridge::install();
         let config = config::AppConfig::load();
         let tr = |message: Message| i18n::text(config.language, message);
-        theme.set_noctalia_enabled(config.noctalia_theme_sync);
+        theme.set_noctalia_enabled(config.noctalia_theme_sync && theme.noctalia_shell_detected());
         theme.set_blur_preferences(config.blur_mode, config.blur_opacity);
         let player = PlaybackEngine::new(config.volume.clamp(0.0, 1.0))
             .unwrap_or_else(|error| panic!("Nocky playback initialization failed: {error}"));
@@ -2654,6 +2655,7 @@ impl AppController {
                     .comments(controller.tr(Message::AboutDescription))
                     .license_type(gtk::License::Gpl30)
                     .build();
+                dialog.set_logo_icon_name(Some(APP_ID));
                 dialog.present();
             });
         }
@@ -2677,6 +2679,17 @@ impl AppController {
         if self.lyrics_button.is_active() {
             self.lyrics_button.set_active(false);
         }
+
+        let force_onboarding = std::env::var_os("NOCKY_FORCE_ONBOARDING").is_some();
+
+        if force_onboarding || !self.config.borrow().onboarding_completed {
+            if force_onboarding {
+                eprintln!("NOCKY_FORCE_ONBOARDING is set; showing the first-run wizard");
+            }
+            self.show_onboarding_wizard();
+            return;
+        }
+
         match self.config.borrow().startup_source {
             Some(StartupSource::Local) => self.refresh_browser(),
             Some(StartupSource::YouTube) => {
@@ -2975,7 +2988,9 @@ impl AppController {
         self.lyrics
             .inline_widget()
             .set_visible(config.show_home_lyrics);
-        self._theme.set_noctalia_enabled(config.noctalia_theme_sync);
+        self._theme.set_noctalia_enabled(
+            config.noctalia_theme_sync && self._theme.noctalia_shell_detected(),
+        );
         self._theme
             .set_blur_preferences(config.blur_mode, config.blur_opacity);
         drop(config);
@@ -3040,15 +3055,27 @@ impl AppController {
             &source,
         ));
 
-        let blur_mode = gtk::DropDown::from_strings(&[
-            self.tr(Message::BlurCustom),
-            self.tr(Message::BlurNoctalia),
-            self.tr(Message::BlurOff),
-        ]);
-        blur_mode.set_selected(match config.blur_mode {
-            BlurMode::Custom => 0,
-            BlurMode::Noctalia => 1,
-            BlurMode::Off => 2,
+        let noctalia_available = self._theme.noctalia_shell_detected();
+        let blur_mode = if noctalia_available {
+            gtk::DropDown::from_strings(&[
+                self.tr(Message::BlurCustom),
+                self.tr(Message::BlurNoctalia),
+                self.tr(Message::BlurOff),
+            ])
+        } else {
+            gtk::DropDown::from_strings(&[self.tr(Message::BlurCustom), self.tr(Message::BlurOff)])
+        };
+        blur_mode.set_selected(if noctalia_available {
+            match config.blur_mode {
+                BlurMode::Custom => 0,
+                BlurMode::Noctalia => 1,
+                BlurMode::Off => 2,
+            }
+        } else {
+            match config.blur_mode {
+                BlurMode::Off => 1,
+                _ => 0,
+            }
         });
         content.append(&settings_dropdown_row(
             self.tr(Message::WindowBlur),
@@ -3129,12 +3156,15 @@ impl AppController {
             &youtube_button,
         ));
 
-        let noctalia = settings_switch(config.noctalia_theme_sync);
-        content.append(&settings_switch_row(
+        let noctalia = settings_switch(config.noctalia_theme_sync && noctalia_available);
+        noctalia.set_sensitive(noctalia_available);
+        let noctalia_row = settings_switch_row(
             self.tr(Message::NoctaliaSync),
             self.tr(Message::NoctaliaSyncDescription),
             &noctalia,
-        ));
+        );
+        noctalia_row.set_sensitive(noctalia_available);
+        content.append(&noctalia_row);
 
         {
             let weak = Rc::downgrade(self);
@@ -3175,10 +3205,16 @@ impl AppController {
                 let Some(controller) = weak.upgrade() else {
                     return;
                 };
-                let mode = match dropdown.selected() {
-                    0 => BlurMode::Custom,
-                    2 => BlurMode::Off,
-                    _ => BlurMode::Noctalia,
+                let mode = if noctalia_available {
+                    match dropdown.selected() {
+                        0 => BlurMode::Custom,
+                        2 => BlurMode::Off,
+                        _ => BlurMode::Noctalia,
+                    }
+                } else if dropdown.selected() == 0 {
+                    BlurMode::Custom
+                } else {
+                    BlurMode::Off
                 };
                 opacity_row.set_visible(mode == BlurMode::Custom);
                 controller.config.borrow_mut().blur_mode = mode;
@@ -3297,6 +3333,51 @@ impl AppController {
             dialog.close();
         });
         dialog.present();
+    }
+
+    fn show_onboarding_wizard(self: &Rc<Self>) {
+        let initial = self.config.borrow().clone();
+        let language = initial.language;
+        let noctalia_available = self._theme.noctalia_shell_detected();
+        let weak = Rc::downgrade(self);
+
+        onboarding::present(
+            &self.window,
+            language,
+            &initial,
+            noctalia_available,
+            move |choices| {
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+
+                let choose_local_folder = {
+                    let mut config = controller.config.borrow_mut();
+                    config.startup_source = Some(choices.startup_source);
+                    config.blur_mode = choices.blur_mode;
+                    config.blur_opacity = choices.blur_opacity;
+                    config.footer_mode = choices.footer_mode;
+                    config.use_m3_progress = choices.use_m3_progress;
+                    config.noctalia_theme_sync = noctalia_available && choices.noctalia_theme_sync;
+                    config.onboarding_completed = true;
+
+                    choices.startup_source == StartupSource::Local
+                        && config.music_directory.is_none()
+                };
+
+                controller.save_config();
+                controller.apply_home_preferences();
+                controller.apply_footer_mode();
+                controller.apply_startup_source();
+
+                if choose_local_folder {
+                    let controller = controller.clone();
+                    glib::idle_add_local_once(move || {
+                        controller.choose_library_folder();
+                    });
+                }
+            },
+        );
     }
 
     fn show_startup_source_dialog(self: &Rc<Self>, first_run: bool) {
