@@ -250,7 +250,7 @@ struct AppController {
     footer_progress: WaveProgress,
     footer_elapsed: gtk::Label,
     footer_duration: gtk::Label,
-    volume: gtk::Scale,
+    volume: gtk::Adjustment,
     mute_icon: gtk::Image,
     mute_button: gtk::Button,
     volume_before_mute: Cell<f64>,
@@ -3370,7 +3370,6 @@ impl AppController {
         self.footer_favorite_button.set_visible(plan.full);
         self.mini_artist.set_visible(true);
         self.mute_button.set_visible(true);
-        self.volume.set_visible(true);
 
         if plan.full {
             self.compact_volume_expanded.set(false);
@@ -3403,7 +3402,6 @@ impl AppController {
         let duration = self.footer_duration.clone();
         let shuffle = self.footer_shuffle_button.clone();
         let repeat = self.footer_repeat_button.clone();
-        let volume = self.volume.clone();
 
         self.player_bar.add_tick_callback(move |bar, _| {
             if bar.has_css_class("footer-mode-compact") {
@@ -3431,7 +3429,6 @@ impl AppController {
             duration.set_visible(plan.show_duration);
             shuffle.set_visible(plan.show_shuffle);
             repeat.set_visible(plan.show_repeat);
-            volume.set_visible(plan.show_volume);
 
             glib::ControlFlow::Continue
         });
