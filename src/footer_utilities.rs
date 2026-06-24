@@ -12,8 +12,9 @@ use gtk::prelude::*;
 
 // nocky_rust_ui_phase3f_footer_utilities_v1
 
+// footer_volume_adjustment_model_v2
 const VOLUME_STEP: f64 = 0.01;
-const INITIAL_SCALE_WIDTH: i32 = 96;
+const VOLUME_PAGE_STEP: f64 = 0.05;
 const SLOT_WIDTH: i32 = 124;
 const SLOT_HEIGHT: i32 = 42;
 const CANVAS_WIDTH: i32 = 116;
@@ -31,7 +32,7 @@ pub(crate) struct FooterUtilityParts {
     pub(crate) lyrics_button: gtk::ToggleButton,
     pub(crate) mute_icon: gtk::Image,
     pub(crate) mute_button: gtk::Button,
-    pub(crate) volume: gtk::Scale,
+    pub(crate) volume: gtk::Adjustment,
     pub(crate) volume_revealer: gtk::Revealer,
 }
 
@@ -60,13 +61,17 @@ pub(crate) fn build_footer_utilities(
     mute_button.set_valign(gtk::Align::Center);
     mute_button.set_tooltip_text(Some(tr(Message::Mute)));
 
-    let volume = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 1.0, VOLUME_STEP);
-    volume.set_draw_value(false);
-    volume.set_value(initial_volume.clamp(0.0, 1.0));
-    volume.set_size_request(INITIAL_SCALE_WIDTH, -1);
-    volume.set_valign(gtk::Align::Center);
-    volume.add_css_class("footer-volume");
-    volume.add_css_class("footer-volume-control");
+    // footer_volume_adjustment_model_v2
+    // The visible control is custom-drawn. Use a non-widget Adjustment as its
+    // shared value model so GTK never measures an invisible Scale gadget.
+    let volume = gtk::Adjustment::new(
+        initial_volume.clamp(0.0, 1.0),
+        0.0,
+        1.0,
+        VOLUME_STEP,
+        VOLUME_PAGE_STEP,
+        0.0,
+    );
 
     // nocky_compact_volume_expand_and_flat_modes_v1
     let volume_slot = gtk::Fixed::new();
@@ -77,12 +82,10 @@ pub(crate) fn build_footer_utilities(
     volume_slot.add_css_class("footer-volume-fixed-slot");
 
     // nocky_compact_volume_fixed_slot_reveal_v1
-    volume.set_size_request(CANVAS_WIDTH, CANVAS_HEIGHT);
-    volume.set_has_origin(true);
-    volume.add_css_class("footer-volume-md3");
-
     let md3_volume = Md3VolumeSlider::new(&volume);
-    volume.set_visible(false);
+    md3_volume
+        .widget()
+        .set_size_request(CANVAS_WIDTH, CANVAS_HEIGHT);
     volume_slot.put(md3_volume.widget(), CANVAS_X, 0.0);
 
     // nocky_md3_volume_slider_right_v1
@@ -142,8 +145,8 @@ mod tests {
     }
 
     #[test]
-    fn volume_step_and_initial_width_remain_stable() {
+    fn volume_adjustment_contract_remains_stable() {
         assert_eq!(VOLUME_STEP, 0.01);
-        assert_eq!(INITIAL_SCALE_WIDTH, 96);
+        assert_eq!(VOLUME_PAGE_STEP, 0.05);
     }
 }

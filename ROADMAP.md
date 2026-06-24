@@ -1,10 +1,12 @@
+<!-- optional_personalized_home_history_v1 -->
+<!-- personalized_home_resume_v2 -->
 # Nocky Roadmap
 
 <!-- roadmap_rebaseline_2026_06_24_v2 -->
 
 > Last updated: 2026-06-24  
 > Status legend: ✅ completed · 🟡 in progress · ⬜ planned  
-> Current development priority: **Queue 2.0**
+> Current development priority: **Personalized Home — history and resume**
 
 Nocky is a modern Linux music player built with Rust, GTK4 and Libadwaita,
 combining Material 3 Expressive ideas with close integration with the Noctalia
@@ -148,8 +150,10 @@ now focuses on completing the user-facing history experience.
 
 ### Remaining
 
-- Recently played track carousel.
-- Continue-listening section with resumable position.
+- ✅ Unified chronological recent activity for tracks, albums and playlists.
+- ✅ Resumable position directly on incomplete track cards.
+- ✅ Optional Home visibility control for personalized history sections.
+- ✅ First-run explanation and opt-in control for personalized Home history.
 - Recently added local music.
 - Clear-history action.
 - History privacy controls.
@@ -283,10 +287,10 @@ now focuses on completing the user-facing history experience.
 
 # Next milestone
 
-## 7. ⬜ Queue 2.0
+## 7. ✅ Queue 2.0
 
-Queue 2.0 is the next primary implementation phase because playback, footer,
-metadata motion and dynamic theming now provide a stable base.
+Queue 2.0 is implemented across the source-aware data model, playback bridge,
+dedicated interface, persistence, shuffle history and recovery foundations.
 
 ### Queue data model
 
@@ -379,12 +383,12 @@ metadata motion and dynamic theming now provide a stable base.
 
 # Recommended implementation order
 
-1. Build the source-independent Queue 2.0 data model and tests.
-2. Add queue operations: play next, append, remove and reorder.
-3. Integrate previous, next, repeat and shuffle with the new queue.
-4. Build the dedicated Queue 2.0 interface.
-5. Persist and restore queue state.
-6. Complete Personalized Home history controls and continue listening.
+1. ✅ Build the source-independent Queue 2.0 data model and tests.
+2. ✅ Add queue operations: play next, append, remove and reorder.
+3. ✅ Integrate previous, next, repeat and shuffle with the new queue.
+4. ✅ Build the dedicated Queue 2.0 interface.
+5. ✅ Persist and restore queue state.
+6. 🟡 Complete Personalized Home history controls and continue listening.
 7. Finish card actions and loading placeholders.
 8. Finish search pagination, caching and keyboard navigation.
 9. Harden YouTube unavailable-track and recovery behavior.

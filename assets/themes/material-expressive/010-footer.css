@@ -276,34 +276,7 @@ window.theme-material-expressive
   padding: 0;
 }
 
-/* Volume uses the same straight Material track language as classic progress. */
-window.theme-material-expressive scale.footer-volume-control trough {
-  min-height: 6px;
-  border-radius: 999px;
-  background-color: alpha(@m3_on_surface_variant, 0.22);
-}
-
-window.theme-material-expressive scale.footer-volume-control trough highlight {
-  min-height: 6px;
-  border-radius: 999px;
-  background-color: @m3_primary;
-}
-
-window.theme-material-expressive scale.footer-volume-control slider {
-  min-width: 14px;
-  min-height: 14px;
-  margin: -4px;
-  border-radius: 999px;
-  background-color: @m3_primary;
-  border: 2px solid @m3_surface_container_high;
-  box-shadow: none;
-}
-
-window.theme-material-expressive scale.footer-volume-control:hover slider {
-  min-width: 16px;
-  min-height: 16px;
-  margin: -5px;
-}
+/* footer_volume_adjustment_model_v2: visible volume is custom-drawn. */
 /* remove_compact_footer_transport_v1 */
 
 window.theme-material-expressive

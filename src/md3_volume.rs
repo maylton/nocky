@@ -7,7 +7,8 @@ pub(crate) struct Md3VolumeSlider {
 }
 
 impl Md3VolumeSlider {
-    pub(crate) fn new(model: &gtk::Scale) -> Self {
+    // footer_volume_adjustment_model_v2
+    pub(crate) fn new(model: &gtk::Adjustment) -> Self {
         let root = gtk::DrawingArea::new();
         root.set_size_request(116, 42);
         root.set_hexpand(false);
@@ -117,7 +118,7 @@ impl Md3VolumeSlider {
     }
 }
 
-fn set_model_from_x(model: &gtk::Scale, widget: &gtk::DrawingArea, x: f64) {
+fn set_model_from_x(model: &gtk::Adjustment, widget: &gtk::DrawingArea, x: f64) {
     const SIDE_PADDING: f64 = 8.0;
 
     let width = f64::from(widget.width().max(1));

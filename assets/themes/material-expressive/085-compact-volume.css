@@ -36,56 +36,7 @@ window.theme-material-expressive
   border-radius: 21px;
 }
 
-/* nocky_compact_volume_thickness_match_v1 */
-
-/*
- * Match the compact volume control to the playback progress thickness.
- * Both tracks use a 5 px capsule; the smaller thumb keeps the volume
- * control from looking visually heavier than the progress bar.
- */
-window.theme-material-expressive
-  .footer-volume-revealer
-  scale.footer-volume-control trough,
-window.theme-material-expressive
-  .footer-volume-revealer
-  scale.footer-volume-control trough highlight {
-  min-height: 5px;
-  border-radius: 3px;
-}
-
-window.theme-material-expressive
-  .footer-volume-revealer
-  scale.footer-volume-control slider {
-  min-width: 12px;
-  min-height: 12px;
-  border-radius: 6px;
-  border-width: 1px;
-  margin: 0;
-}
-window.theme-material-expressive
-  .footer-volume-revealer
-  scale.footer-volume-control {
-  min-width: 96px;
-  margin-left: 4px;
-  margin-right: 4px;
-}
-
-window.theme-material-expressive
-  .footer-volume-revealer
-  scale.footer-volume-control slider {
-  min-width: 12px;
-  min-height: 12px;
-  border-radius: 6px;
-  border-width: 1px;
-}
-window.theme-material-expressive
-  .footer-volume-fixed-slot
-  scale.footer-volume-control {
-  min-width: 96px;
-  min-height: 42px;
-  margin: 0;
-  padding: 0;
-}
+/* footer_volume_adjustment_model_v2: GtkAdjustment has no CSS gadget. */
 
 window.theme-material-expressive
   .footer-volume-revealer {
@@ -110,83 +61,7 @@ window.theme-material-expressive
   padding: 0;
 }
 
-window.theme-material-expressive
-  .footer-volume-fixed-slot
-  scale.footer-volume-md3 {
-  min-width: 116px;
-  min-height: 42px;
-  margin: 0;
-  padding: 0;
-  color: @m3_primary;
-}
-
-window.theme-material-expressive
-  .footer-volume-fixed-slot
-  scale.footer-volume-md3
-  trough {
-  min-height: 5px;
-  border-radius: 999px;
-  border: none;
-  background-color: alpha(@m3_on_surface_variant, 0.22);
-  background-image: none;
-  box-shadow: none;
-}
-
-window.theme-material-expressive
-  .footer-volume-fixed-slot
-  scale.footer-volume-md3
-  trough
-  highlight {
-  min-height: 5px;
-  border-radius: 999px;
-  border: none;
-  background-color: @m3_primary;
-  background-image: none;
-  box-shadow: none;
-}
-
-window.theme-material-expressive
-  .footer-volume-fixed-slot
-  scale.footer-volume-md3
-  trough
-  slider {
-  min-width: 10px;
-  min-height: 10px;
-  margin: 0;
-  padding: 0;
-  border-radius: 999px;
-  border: 1px solid @m3_surface_container_highest;
-  color: @m3_primary;
-  background-color: @m3_primary;
-  background-image: none;
-  box-shadow: 0 1px 4px alpha(black, 0.22);
-}
-
-window.theme-material-expressive
-  .footer-volume-fixed-slot
-  scale.footer-volume-md3:hover
-  trough
-  slider {
-  background-color: shade(@m3_primary, 1.07);
-  box-shadow:
-    0 1px 4px alpha(black, 0.22),
-    0 0 0 4px alpha(@m3_primary, 0.10);
-}
-
-window.theme-material-expressive
-  .footer-volume-fixed-slot
-  scale.footer-volume-md3:focus
-  trough
-  slider,
-window.theme-material-expressive
-  .footer-volume-fixed-slot
-  scale.footer-volume-md3:focus-visible
-  trough
-  slider {
-  box-shadow:
-    0 1px 4px alpha(black, 0.22),
-    0 0 0 5px alpha(@m3_primary, 0.14);
-}
+/* The custom DrawingArea below owns all visible volume styling. */
 
 window.theme-material-expressive
   .footer-mode-compact
@@ -237,9 +112,8 @@ window.theme-material-expressive
 /* nocky_custom_md3_volume_canvas_v2 */
 
 /*
- * The visible MD3 volume control is custom-drawn. GtkScale stays unparented
- * as the shared volume model, so no GtkScale slider gadget is compressed
- * during the reveal animation.
+ * The visible MD3 volume control is custom-drawn. GtkAdjustment stores the
+ * shared value without creating any slider gadget for GTK to measure.
  */
 window.theme-material-expressive
   .footer-volume-md3-canvas {

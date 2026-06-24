@@ -1,3 +1,4 @@
+// onboarding_personalized_home_history_v1
 use crate::config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme};
 use adw::prelude::*;
 use std::{cell::Cell, rc::Rc};
@@ -5,6 +6,7 @@ use std::{cell::Cell, rc::Rc};
 #[derive(Clone, Copy, Debug)]
 pub struct OnboardingChoices {
     pub startup_source: StartupSource,
+    pub show_personalized_home_history: bool,
     pub blur_mode: BlurMode,
     pub blur_opacity: f64,
     pub footer_mode: FooterMode,
@@ -26,6 +28,11 @@ struct Copy {
     youtube_body: &'static str,
     experimental_title: &'static str,
     experimental_body: &'static str,
+    learning_title: &'static str,
+    learning_body: &'static str,
+    learning_option_title: &'static str,
+    learning_option_body: &'static str,
+    learning_privacy_note: &'static str,
     appearance_title: &'static str,
     appearance_body: &'static str,
     palette_title: &'static str,
@@ -49,6 +56,7 @@ struct Copy {
     summary_title: &'static str,
     summary_body: &'static str,
     summary_source: &'static str,
+    summary_learning: &'static str,
     summary_blur: &'static str,
     summary_palette: &'static str,
     summary_progress: &'static str,
@@ -76,6 +84,11 @@ fn copy(language: AppLanguage) -> Copy {
             youtube_body: "Use a busca pública e, opcionalmente, conecte sua conta para sincronizar biblioteca e playlists.",
             experimental_title: "Integração experimental",
             experimental_body: "O acesso ao YouTube Music usa interfaces não oficiais e pode precisar de atualizações quando o serviço mudar. A conexão da conta é opcional e os dados de sessão permanecem locais.",
+            learning_title: "O player aprende com você",
+            learning_body: "Conforme você escuta, o Nocky pode organizar uma Home mais útil e pessoal.",
+            learning_option_title: "Histórico personalizado na Home",
+            learning_option_body: "Use seu histórico local para mostrar faixas, álbuns e playlists ouvidos recentemente. Músicas interrompidas também podem ser retomadas de onde você parou.",
+            learning_privacy_note: "Seu histórico permanece neste dispositivo. Você poderá ocultar essas seções depois em Configurações → Reprodução e Home.",
             appearance_title: "Aparência",
             appearance_body: "Escolha o vidro da janela e a integração visual com o desktop.",
             palette_title: "Seguir a paleta do Noctalia Shell",
@@ -99,6 +112,7 @@ fn copy(language: AppLanguage) -> Copy {
             summary_title: "Tudo pronto",
             summary_body: "Revise as escolhas antes de abrir o Nocky.",
             summary_source: "Fonte da Home",
+            summary_learning: "Home personalizada",
             summary_blur: "Desfoque",
             summary_palette: "Paleta do Noctalia",
             summary_progress: "Tema visual",
@@ -123,6 +137,11 @@ fn copy(language: AppLanguage) -> Copy {
             youtube_body: "Use public search and optionally connect an account to synchronize your library and playlists.",
             experimental_title: "Experimental integration",
             experimental_body: "YouTube Music access uses unofficial interfaces and may require updates when the service changes. Account connection is optional and session data remains local.",
+            learning_title: "The player learns with you",
+            learning_body: "As you listen, Nocky can organize a more useful and personal Home.",
+            learning_option_title: "Personalized history on Home",
+            learning_option_body: "Use your local listening history to show recently listened tracks, albums and playlists. Interrupted tracks can also resume where you stopped.",
+            learning_privacy_note: "Your history stays on this device. You can hide these sections later in Settings → Playback and Home.",
             appearance_title: "Appearance",
             appearance_body: "Choose the window glass and desktop visual integration.",
             palette_title: "Follow the Noctalia Shell palette",
@@ -146,6 +165,7 @@ fn copy(language: AppLanguage) -> Copy {
             summary_title: "Ready to go",
             summary_body: "Review your choices before opening Nocky.",
             summary_source: "Home source",
+            summary_learning: "Personalized Home",
             summary_blur: "Blur",
             summary_palette: "Noctalia palette",
             summary_progress: "Visual theme",
@@ -170,6 +190,11 @@ fn copy(language: AppLanguage) -> Copy {
             youtube_body: "Usa la búsqueda pública y conecta una cuenta opcionalmente para sincronizar biblioteca y playlists.",
             experimental_title: "Integración experimental",
             experimental_body: "El acceso a YouTube Music usa interfaces no oficiales y puede necesitar actualizaciones cuando cambie el servicio. Conectar la cuenta es opcional y los datos de sesión permanecen locales.",
+            learning_title: "El reproductor aprende contigo",
+            learning_body: "Mientras escuchas, Nocky puede organizar un inicio más útil y personal.",
+            learning_option_title: "Historial personalizado en inicio",
+            learning_option_body: "Usa tu historial local para mostrar canciones, álbumes y playlists escuchados recientemente. Las canciones interrumpidas también pueden retomarse donde las dejaste.",
+            learning_privacy_note: "Tu historial permanece en este dispositivo. Podrás ocultar estas secciones después en Configuración → Reproducción e inicio.",
             appearance_title: "Apariencia",
             appearance_body: "Elige el cristal de la ventana y la integración visual con el escritorio.",
             palette_title: "Seguir la paleta de Noctalia Shell",
@@ -193,6 +218,7 @@ fn copy(language: AppLanguage) -> Copy {
             summary_title: "Todo listo",
             summary_body: "Revisa tus opciones antes de abrir Nocky.",
             summary_source: "Fuente de Home",
+            summary_learning: "Inicio personalizado",
             summary_blur: "Desenfoque",
             summary_palette: "Paleta de Noctalia",
             summary_progress: "Tema visual",
@@ -392,6 +418,38 @@ pub fn present<F>(
 
     stack.add_named(&source_page, Some("source"));
 
+    // Personalized Home
+    let (learning_page, learning_content) = page_shell(text.learning_title, text.learning_body);
+
+    let personalized_history = gtk::Switch::new();
+    personalized_history.set_valign(gtk::Align::Center);
+    personalized_history.set_active(initial.show_personalized_home_history);
+
+    learning_content.append(&option_card(
+        text.learning_option_title,
+        text.learning_option_body,
+        &personalized_history,
+    ));
+
+    let privacy_note = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    privacy_note.add_css_class("onboarding-warning");
+
+    let privacy_icon = gtk::Image::from_icon_name("security-high-symbolic");
+    privacy_icon.set_pixel_size(20);
+    privacy_icon.set_valign(gtk::Align::Start);
+
+    let privacy_label = gtk::Label::new(Some(text.learning_privacy_note));
+    privacy_label.set_xalign(0.0);
+    privacy_label.set_wrap(true);
+    privacy_label.set_hexpand(true);
+    privacy_label.add_css_class("dim-label");
+
+    privacy_note.append(&privacy_icon);
+    privacy_note.append(&privacy_label);
+    learning_content.append(&privacy_note);
+
+    stack.add_named(&learning_page, Some("learning"));
+
     // Appearance
     let (appearance_page, appearance_content) =
         page_shell(text.appearance_title, text.appearance_body);
@@ -499,12 +557,14 @@ pub fn present<F>(
     let (summary_page, summary_content) = page_shell(text.summary_title, text.summary_body);
 
     let summary_source = gtk::Label::new(None);
+    let summary_learning = gtk::Label::new(None);
     let summary_blur = gtk::Label::new(None);
     let summary_palette = gtk::Label::new(None);
     let summary_progress = gtk::Label::new(None);
     let summary_footer = gtk::Label::new(None);
 
     summary_content.append(&summary_row(text.summary_source, &summary_source));
+    summary_content.append(&summary_row(text.summary_learning, &summary_learning));
     summary_content.append(&summary_row(text.summary_blur, &summary_blur));
     summary_content.append(&summary_row(text.summary_palette, &summary_palette));
     summary_content.append(&summary_row(text.summary_progress, &summary_progress));
@@ -532,7 +592,14 @@ pub fn present<F>(
     nav.append(&finish);
     shell.append(&nav);
 
-    let pages = Rc::new(["welcome", "source", "appearance", "player", "summary"]);
+    let pages = Rc::new([
+        "welcome",
+        "source",
+        "learning",
+        "appearance",
+        "player",
+        "summary",
+    ]);
     let step = Rc::new(Cell::new(0_usize));
 
     let update_navigation: Rc<dyn Fn()> = {
@@ -545,11 +612,13 @@ pub fn present<F>(
         let next = next.clone();
         let finish = finish.clone();
         let local_choice = local_choice.clone();
+        let personalized_history = personalized_history.clone();
         let blur_mode = blur_mode.clone();
         let palette_switch = palette_switch.clone();
         let visual_theme = visual_theme.clone();
         let footer = footer.clone();
         let summary_source = summary_source.clone();
+        let summary_learning = summary_learning.clone();
         let summary_blur = summary_blur.clone();
         let summary_palette = summary_palette.clone();
         let summary_progress = summary_progress.clone();
@@ -569,6 +638,11 @@ pub fn present<F>(
                     text.local_title
                 } else {
                     text.youtube_title
+                });
+                summary_learning.set_text(if personalized_history.is_active() {
+                    text.yes
+                } else {
+                    text.no
                 });
 
                 let blur_label = if noctalia_available {
@@ -606,8 +680,9 @@ pub fn present<F>(
     {
         let update_navigation = update_navigation.clone();
         let step = step.clone();
+        let pages = pages.clone();
         next.connect_clicked(move |_| {
-            step.set((step.get() + 1).min(4));
+            step.set((step.get() + 1).min(pages.len() - 1));
             update_navigation();
         });
     }
@@ -642,6 +717,7 @@ pub fn present<F>(
                 } else {
                     StartupSource::YouTube
                 },
+                show_personalized_home_history: personalized_history.is_active(),
                 blur_mode: blur,
                 blur_opacity: (opacity.value() / 100.0).clamp(0.45, 0.95),
                 footer_mode: match footer.selected() {

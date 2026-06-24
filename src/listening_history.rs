@@ -1,3 +1,4 @@
+// unified_recent_activity_home_v4\n// personalized_home_resume_v2
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -25,11 +26,25 @@ pub enum ListeningSource {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PlayEvent {
     pub track_id: String,
+    #[serde(default)]
+    pub media_id: String,
+    #[serde(default)]
+    pub title: String,
     pub artist: String,
     pub album: String,
     pub source: ListeningSource,
     pub played_at: i64,
     pub listened_seconds: u64,
+    #[serde(default)]
+    pub position_seconds: u64,
+    #[serde(default)]
+    pub duration_seconds: u64,
+    #[serde(default)]
+    pub context_kind: String,
+    #[serde(default)]
+    pub context_id: String,
+    #[serde(default)]
+    pub context_title: String,
     pub completed: bool,
 }
 
@@ -38,6 +53,41 @@ pub struct ListeningStats {
     pub play_count: u64,
     pub last_played_at: i64,
     pub total_listened_seconds: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HistoryTrack {
+    pub media_id: String,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub source: ListeningSource,
+    pub played_at: i64,
+    pub position_seconds: u64,
+    pub duration_seconds: u64,
+    pub completed: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HistoryCollection {
+    pub kind: String,
+    pub id: String,
+    pub title: String,
+    pub source: ListeningSource,
+    pub played_at: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HistoryActivity {
+    Track(HistoryTrack),
+    Collection(HistoryCollection),
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct PlaybackHistoryContext {
+    pub kind: String,
+    pub id: String,
+    pub title: String,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -64,6 +114,7 @@ impl ListeningHistory {
         }
     }
 
+    #[cfg(test)]
     pub fn record_progress(
         &mut self,
         session_id: String,
@@ -71,6 +122,36 @@ impl ListeningHistory {
         album: String,
         source: ListeningSource,
         listened_seconds: u64,
+        completed: bool,
+    ) -> bool {
+        self.record_playback_progress(
+            session_id,
+            String::new(),
+            String::new(),
+            artist,
+            album,
+            source,
+            listened_seconds,
+            listened_seconds,
+            0,
+            PlaybackHistoryContext::default(),
+            completed,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_playback_progress(
+        &mut self,
+        session_id: String,
+        media_id: String,
+        title: String,
+        artist: String,
+        album: String,
+        source: ListeningSource,
+        listened_seconds: u64,
+        position_seconds: u64,
+        duration_seconds: u64,
+        context: PlaybackHistoryContext,
         completed: bool,
     ) -> bool {
         if listened_seconds < 30 && !completed {
@@ -85,26 +166,50 @@ impl ListeningHistory {
             .find(|event| event.track_id == session_id && event.source == source)
         {
             let next_seconds = event.listened_seconds.max(listened_seconds);
+            let next_duration = event.duration_seconds.max(duration_seconds);
             let next_completed = event.completed || completed;
-            let changed =
-                next_seconds != event.listened_seconds || next_completed != event.completed;
+            let changed = next_seconds != event.listened_seconds
+                || position_seconds != event.position_seconds
+                || next_duration != event.duration_seconds
+                || next_completed != event.completed
+                || event.media_id != media_id
+                || event.title != title
+                || event.artist != artist
+                || event.album != album
+                || event.context_kind != context.kind
+                || event.context_id != context.id
+                || event.context_title != context.title;
             if !changed {
                 return false;
             }
 
+            event.media_id = media_id;
+            event.title = title;
             event.artist = artist;
             event.album = album;
             event.listened_seconds = next_seconds;
+            event.position_seconds = position_seconds;
+            event.duration_seconds = next_duration;
+            event.context_kind = context.kind;
+            event.context_id = context.id;
+            event.context_title = context.title;
             event.completed = next_completed;
             event.played_at = now;
         } else {
             self.events.push(PlayEvent {
                 track_id: session_id,
+                media_id,
+                title,
                 artist,
                 album,
                 source,
                 played_at: now,
                 listened_seconds,
+                position_seconds,
+                duration_seconds,
+                context_kind: context.kind,
+                context_id: context.id,
+                context_title: context.title,
                 completed,
             });
         }
@@ -160,6 +265,134 @@ impl ListeningHistory {
             }
         }
         albums
+    }
+
+    pub fn recent_activity(&self, source: ListeningSource, limit: usize) -> Vec<HistoryActivity> {
+        let mut events = self
+            .events
+            .iter()
+            .filter(|event| {
+                event.source == source
+                    && !event.media_id.trim().is_empty()
+                    && !event.title.trim().is_empty()
+            })
+            .collect::<Vec<_>>();
+        events.sort_by_key(|event| std::cmp::Reverse(event.played_at));
+
+        let mut seen = std::collections::HashSet::new();
+        let mut activity = Vec::new();
+
+        for event in events {
+            let kind = event.context_kind.trim();
+            let id = event.context_id.trim();
+            let title = event.context_title.trim();
+
+            if matches!(kind, "album" | "playlist") && !id.is_empty() && !title.is_empty() {
+                let identity = format!("{:?}:{kind}:{}", event.source, id.to_lowercase());
+                if !seen.insert(identity) {
+                    continue;
+                }
+
+                activity.push(HistoryActivity::Collection(HistoryCollection {
+                    kind: kind.to_string(),
+                    id: id.to_string(),
+                    title: title.to_string(),
+                    source: event.source,
+                    played_at: event.played_at,
+                }));
+            } else {
+                let identity =
+                    format!("{:?}:track:{}", event.source, event.media_id.to_lowercase());
+                if !seen.insert(identity) {
+                    continue;
+                }
+
+                activity.push(HistoryActivity::Track(HistoryTrack {
+                    media_id: event.media_id.clone(),
+                    title: event.title.clone(),
+                    artist: event.artist.clone(),
+                    album: event.album.clone(),
+                    source: event.source,
+                    played_at: event.played_at,
+                    position_seconds: event.position_seconds,
+                    duration_seconds: event.duration_seconds,
+                    completed: event.completed,
+                }));
+            }
+
+            if activity.len() == limit {
+                break;
+            }
+        }
+
+        activity
+    }
+
+    #[cfg(test)]
+    pub fn recent_tracks(&self, source: ListeningSource, limit: usize) -> Vec<HistoryTrack> {
+        self.track_history(source, limit, false)
+    }
+
+    #[cfg(test)]
+    pub fn continue_listening(&self, source: ListeningSource, limit: usize) -> Vec<HistoryTrack> {
+        self.track_history(source, limit, true)
+    }
+
+    #[cfg(test)]
+    fn track_history(
+        &self,
+        source: ListeningSource,
+        limit: usize,
+        resumable_only: bool,
+    ) -> Vec<HistoryTrack> {
+        let mut events = self
+            .events
+            .iter()
+            .filter(|event| {
+                event.source == source
+                    && !event.media_id.trim().is_empty()
+                    && !event.title.trim().is_empty()
+            })
+            .collect::<Vec<_>>();
+        events.sort_by_key(|event| std::cmp::Reverse(event.played_at));
+
+        let mut seen = std::collections::HashSet::new();
+        let mut tracks = Vec::new();
+
+        for event in events {
+            if !seen.insert(event.media_id.to_lowercase()) {
+                continue;
+            }
+
+            if resumable_only {
+                if event.completed || event.duration_seconds == 0 || event.position_seconds < 30 {
+                    continue;
+                }
+
+                let progress = event.position_seconds as f64 / event.duration_seconds as f64;
+                if !(0.05..=0.90).contains(&progress) {
+                    continue;
+                }
+            }
+
+            tracks.push(HistoryTrack {
+                media_id: event.media_id.clone(),
+                title: event.title.clone(),
+                artist: event.artist.clone(),
+                album: event.album.clone(),
+                source: event.source,
+                played_at: event.played_at,
+                position_seconds: event.position_seconds,
+                duration_seconds: event.duration_seconds,
+                completed: event.completed,
+            });
+
+            if tracks.len() == limit {
+                break;
+            }
+        }
+
+        tracks
     }
 
     fn save(&self) {
@@ -296,6 +529,13 @@ mod tests {
             source,
             played_at,
             listened_seconds,
+            media_id: String::new(),
+            title: String::new(),
+            position_seconds: listened_seconds,
+            duration_seconds: 0,
+            context_kind: String::new(),
+            context_id: String::new(),
+            context_title: String::new(),
             completed: false,
         }
     }
@@ -359,6 +599,69 @@ mod tests {
         let local = history.ranked_artists(ListeningSource::Local, 10);
         assert_eq!(local.len(), 1);
         assert_eq!(local[0].0, "Local Artist");
+    }
+}
+
+#[cfg(test)]
+mod personalized_home_resume_tests {
+    use super::*;
+
+    fn rich_event(
+        media_id: &str,
+        played_at: i64,
+        position_seconds: u64,
+        duration_seconds: u64,
+        completed: bool,
+    ) -> PlayEvent {
+        PlayEvent {
+            track_id: format!("session:{media_id}:{played_at}"),
+            media_id: media_id.to_string(),
+            title: format!("Track {media_id}"),
+            artist: "Artist".to_string(),
+            album: "Album".to_string(),
+            source: ListeningSource::Local,
+            played_at,
+            listened_seconds: position_seconds,
+            position_seconds,
+            duration_seconds,
+            context_kind: String::new(),
+            context_id: String::new(),
+            context_title: String::new(),
+            completed,
+        }
+    }
+
+    #[test]
+    fn recent_tracks_deduplicate_by_stable_media_id() {
+        let history = ListeningHistory {
+            events: vec![
+                rich_event("a", 10, 40, 200, false),
+                rich_event("b", 20, 50, 200, false),
+                rich_event("a", 30, 80, 200, false),
+            ],
+        };
+
+        let recent = history.recent_tracks(ListeningSource::Local, 10);
+        assert_eq!(recent.len(), 2);
+        assert_eq!(recent[0].media_id, "a");
+        assert_eq!(recent[0].position_seconds, 80);
+        assert_eq!(recent[1].media_id, "b");
+    }
+
+    #[test]
+    fn continue_listening_filters_invalid_progress() {
+        let history = ListeningHistory {
+            events: vec![
+                rich_event("too-early", 10, 5, 200, false),
+                rich_event("resume", 20, 80, 200, false),
+                rich_event("almost-done", 30, 195, 200, false),
+                rich_event("completed", 40, 100, 200, true),
+            ],
+        };
+
+        let resumable = history.continue_listening(ListeningSource::Local, 10);
+        assert_eq!(resumable.len(), 1);
+        assert_eq!(resumable[0].media_id, "resume");
     }
 }
 

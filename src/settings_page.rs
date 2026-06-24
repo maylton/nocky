@@ -334,6 +334,21 @@ fn build_content(
         &lyrics,
     ));
 
+    let personalized_history = settings_switch(initial.show_personalized_home_history);
+    playback_rows.append(&switch_row(
+        group_text(
+            "Histórico personalizado na Home",
+            "Personalized history on Home",
+            "Historial personalizado en inicio",
+        ),
+        group_text(
+            "Exibe Ouvidos recentemente com faixas, álbuns e playlists em ordem cronológica. O histórico salvo é preservado quando esta opção está desativada.",
+            "Shows Recently listened with tracks, albums and playlists in chronological order. Saved history is preserved while this option is disabled.",
+            "Muestra Escuchados recientemente con canciones, álbumes y playlists en orden cronológico. El historial guardado se conserva mientras esta opción está desactivada.",
+        ),
+        &personalized_history,
+    ));
+
     let footer_mode = gtk::DropDown::from_strings(&[
         tr(Message::FooterAutomatic),
         tr(Message::FooterFull),
@@ -512,6 +527,10 @@ fn build_content(
     for (switch, setting) in [
         (&visualizer, ToggleSetting::Visualizer),
         (&lyrics, ToggleSetting::Lyrics),
+        (
+            &personalized_history,
+            ToggleSetting::PersonalizedHomeHistory,
+        ),
         (&auto_lyrics, ToggleSetting::AutoLyrics),
         (&youtube_sync, ToggleSetting::YouTubeSync),
         (&expressive_home_cards, ToggleSetting::ExpressiveHomeCards),
@@ -524,6 +543,9 @@ fn build_content(
             let event = match setting {
                 ToggleSetting::Visualizer => SettingsEvent::ShowHomeVisualizer(active),
                 ToggleSetting::Lyrics => SettingsEvent::ShowHomeLyrics(active),
+                ToggleSetting::PersonalizedHomeHistory => {
+                    SettingsEvent::ShowPersonalizedHomeHistory(active)
+                }
                 ToggleSetting::AutoLyrics => SettingsEvent::AutoDownloadLyrics(active),
                 ToggleSetting::YouTubeSync => SettingsEvent::YouTubeAutoSync(active),
                 ToggleSetting::ExpressiveTransport => {
@@ -545,6 +567,7 @@ fn build_content(
 enum ToggleSetting {
     Visualizer,
     Lyrics,
+    PersonalizedHomeHistory,
     AutoLyrics,
     YouTubeSync,
     ExpressiveTransport,

@@ -1,3 +1,4 @@
+// personalized_home_resume_v2
 mod animated_page_switcher;
 mod background;
 mod background_handler;
@@ -148,6 +149,8 @@ struct AppController {
     listening_history: RefCell<ListeningHistory>,
     listening_session_id: RefCell<Option<String>>,
     listening_session_last_saved_seconds: Cell<u64>,
+    listening_history_context: RefCell<listening_history::PlaybackHistoryContext>,
+    pending_resume_position_us: Cell<Option<i64>>,
     updating_progress: Cell<bool>,
     scanning: Cell<bool>,
     shuffle_enabled: Cell<bool>,
@@ -700,6 +703,10 @@ impl AppController {
             listening_history: RefCell::new(ListeningHistory::load()),
             listening_session_id: RefCell::new(None),
             listening_session_last_saved_seconds: Cell::new(0),
+            listening_history_context: RefCell::new(
+                listening_history::PlaybackHistoryContext::default(),
+            ),
+            pending_resume_position_us: Cell::new(None),
             updating_progress: Cell::new(false),
             scanning: Cell::new(false),
             shuffle_enabled: Cell::new(false),
@@ -3546,6 +3553,11 @@ impl AppController {
                 self.save_config();
                 self.apply_home_preferences();
             }
+            SettingsEvent::ShowPersonalizedHomeHistory(active) => {
+                self.config.borrow_mut().show_personalized_home_history = active;
+                self.save_config();
+                self.refresh_browser();
+            }
             SettingsEvent::VisualTheme(theme) => {
                 self.config.borrow_mut().visual_theme = theme;
                 self.save_config();
@@ -3808,6 +3820,7 @@ impl AppController {
                 let choose_local_folder = {
                     let mut config = controller.config.borrow_mut();
                     config.startup_source = Some(choices.startup_source);
+                    config.show_personalized_home_history = choices.show_personalized_home_history;
                     config.blur_mode = choices.blur_mode;
                     config.blur_opacity = choices.blur_opacity;
                     config.footer_mode = choices.footer_mode;
@@ -4043,15 +4056,75 @@ impl AppController {
         }
     }
 
+    fn update_listening_history_context_from_route(&self) {
+        let context = match self.browser.route() {
+            BrowserRoute::Album(title) => listening_history::PlaybackHistoryContext {
+                kind: "album".to_string(),
+                id: title.to_lowercase(),
+                title,
+            },
+            BrowserRoute::Playlist(title) => listening_history::PlaybackHistoryContext {
+                kind: "playlist".to_string(),
+                id: title.to_lowercase(),
+                title,
+            },
+            BrowserRoute::YouTubeAlbum(title) => listening_history::PlaybackHistoryContext {
+                kind: "album".to_string(),
+                id: title.to_lowercase(),
+                title,
+            },
+            BrowserRoute::YouTubePlaylist { title, browse_id } => {
+                listening_history::PlaybackHistoryContext {
+                    kind: "playlist".to_string(),
+                    id: if browse_id.is_empty() {
+                        title.to_lowercase()
+                    } else {
+                        browse_id
+                    },
+                    title,
+                }
+            }
+            _ => listening_history::PlaybackHistoryContext::default(),
+        };
+        self.listening_history_context.replace(context);
+    }
+
     fn handle_browser_events(&self) {
         while let Some(event) = self.browser.try_recv() {
             match event {
                 BrowserEvent::RefreshSearch => self.refresh_browser(),
                 BrowserEvent::TrackActivated(index) => {
+                    self.update_listening_history_context_from_route();
+                    self.pending_resume_position_us.set(None);
                     self.prepare_playback_queue(index);
                     self.select_track(index, true);
                 }
+                BrowserEvent::ResumeLocalTrack {
+                    index,
+                    position_seconds,
+                } => {
+                    self.prepare_playback_queue(index);
+                    self.select_track(index, true);
+                    self.pending_resume_position_us.set(Some(
+                        position_seconds
+                            .saturating_mul(1_000_000)
+                            .min(i64::MAX as u64) as i64,
+                    ));
+                }
+                BrowserEvent::ResumeYouTubeTrack {
+                    item,
+                    position_seconds,
+                } => {
+                    self.pending_resume_position_us.set(Some(
+                        position_seconds
+                            .saturating_mul(1_000_000)
+                            .min(i64::MAX as u64) as i64,
+                    ));
+                    self.resolve_youtube_track(item.clone(), vec![item], 0, false);
+                }
                 BrowserEvent::YouTubeTrackActivated { item, queue, index } => {
+                    self.update_listening_history_context_from_route();
+                    self.pending_resume_position_us.set(None);
                     self.resolve_youtube_track(item, queue, index, false);
                 }
                 BrowserEvent::QueueLocalPlayNext(index) => {
@@ -4999,8 +5072,8 @@ impl AppController {
     fn maybe_record_listening(&self) {
         let listened_seconds = (self.player.position_us().max(0) / 1_000_000) as u64;
         let duration_seconds = (self.player.duration_us().max(0) / 1_000_000) as u64;
-        let completed =
-            duration_seconds > 0 && listened_seconds.saturating_mul(2) >= duration_seconds;
+        let completed = duration_seconds > 0
+            && listened_seconds.saturating_mul(100) >= duration_seconds.saturating_mul(90);
 
         if listened_seconds < 30 && !completed {
             return;
@@ -5025,28 +5098,42 @@ impl AppController {
                 let Some(track) = state.tracks.get(index) else {
                     return;
                 };
-                self.listening_history.borrow_mut().record_progress(
-                    session_id,
-                    track.artist.clone(),
-                    track.album.clone(),
-                    ListeningSource::Local,
-                    listened_seconds,
-                    completed,
-                )
+                self.listening_history
+                    .borrow_mut()
+                    .record_playback_progress(
+                        session_id,
+                        track.path.to_string_lossy().into_owned(),
+                        track.title.clone(),
+                        track.artist.clone(),
+                        track.album.clone(),
+                        ListeningSource::Local,
+                        listened_seconds,
+                        listened_seconds,
+                        duration_seconds.max(track.duration_seconds),
+                        self.listening_history_context.borrow().clone(),
+                        completed,
+                    )
             }
             PlaybackSource::YouTube => {
                 let state = self.youtube_state.borrow();
                 let Some(state) = state.as_ref() else {
                     return;
                 };
-                self.listening_history.borrow_mut().record_progress(
-                    session_id,
-                    state.item.artist.clone(),
-                    state.item.album.clone(),
-                    ListeningSource::YouTube,
-                    listened_seconds,
-                    completed,
-                )
+                self.listening_history
+                    .borrow_mut()
+                    .record_playback_progress(
+                        session_id,
+                        state.item.video_id.clone(),
+                        state.item.title.clone(),
+                        state.item.artist.clone(),
+                        state.item.album.clone(),
+                        ListeningSource::YouTube,
+                        listened_seconds,
+                        listened_seconds,
+                        duration_seconds,
+                        self.listening_history_context.borrow().clone(),
+                        completed,
+                    )
             }
             PlaybackSource::None => false,
         };
@@ -5058,6 +5145,13 @@ impl AppController {
     }
 
     fn refresh_progress(&self) {
+        if let Some(position) = self.pending_resume_position_us.get() {
+            if self.player.is_seekable() && self.player.duration_us() > 0 {
+                self.pending_resume_position_us.set(None);
+                self.seek_to(position, false);
+            }
+        }
+
         self.maybe_record_listening();
         let timestamp = self.player.position_us().max(0);
         let duration = self.player.duration_us().max(0);

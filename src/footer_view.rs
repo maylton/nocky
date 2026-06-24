@@ -50,7 +50,7 @@ pub(crate) struct FooterViewParts {
     pub(crate) lyrics_button: gtk::ToggleButton,
     pub(crate) mute_icon: gtk::Image,
     pub(crate) mute_button: gtk::Button,
-    pub(crate) volume: gtk::Scale,
+    pub(crate) volume: gtk::Adjustment,
     pub(crate) volume_revealer: gtk::Revealer,
 }
 

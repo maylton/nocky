@@ -26,6 +26,7 @@ pub(crate) enum SettingsEvent {
     BlurOpacityCommit(f64),
     ShowHomeVisualizer(bool),
     ShowHomeLyrics(bool),
+    ShowPersonalizedHomeHistory(bool),
     VisualTheme(VisualTheme),
     FooterMode(FooterMode),
     ExpressiveTransportEffects(bool),
