@@ -137,31 +137,65 @@ window.theme-material-expressive
   min-width: 220px;
 }
 
+/* dynamic_collection_control_theme_v1 */
 .collection-card-context-action {
   min-width: 42px;
   min-height: 42px;
   padding: 0;
   border-radius: 999px;
-  background-color: @accent_bg_color;
-  color: @accent_fg_color;
-  box-shadow: 0 3px 12px alpha(black, 0.28);
+  background-color: @m3_primary;
+  color: @m3_on_primary;
+  border: 1px solid alpha(@m3_on_primary, 0.16);
+  box-shadow:
+    0 3px 12px alpha(black, 0.28),
+    0 0 0 1px alpha(@m3_primary, 0.16);
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease,
+    transform 120ms ease;
 }
 
 .collection-card-context-action:hover {
-  background-color: shade(@accent_bg_color, 1.08);
+  background-color: mix(@m3_primary, white, 0.10);
+  color: @m3_on_primary;
+  box-shadow:
+    0 5px 16px alpha(black, 0.32),
+    0 0 0 3px alpha(@m3_primary, 0.18);
 }
 
-.collection-card-context-action:active,
+.collection-card-context-action:active {
+  background-color: mix(@m3_primary, black, 0.10);
+  color: @m3_on_primary;
+  box-shadow:
+    0 2px 8px alpha(black, 0.26),
+    0 0 0 2px alpha(@m3_primary, 0.22);
+}
+
 .collection-card-context-action.active {
-  background-color: shade(@accent_bg_color, 0.92);
+  background-color: @m3_primary_container;
+  color: @m3_on_primary_container;
+  border-color: alpha(@m3_primary, 0.44);
+  box-shadow:
+    0 4px 14px alpha(black, 0.30),
+    0 0 0 3px alpha(@m3_primary, 0.24);
+}
+
+.collection-card-context-action.active:hover {
+  background-color: mix(@m3_primary_container, @m3_primary, 0.18);
+  color: @m3_on_primary_container;
 }
 
 .collection-card.collection-card-playing {
+  border-color: alpha(@m3_primary, 0.68);
   box-shadow:
-    inset 0 0 0 2px @accent_bg_color,
+    inset 0 0 0 2px @m3_primary,
+    0 8px 22px alpha(@m3_primary, 0.13),
     0 2px 12px alpha(black, 0.12);
 }
 
 .collection-card.collection-card-playing .collection-artwork {
-  box-shadow: inset 0 0 0 1px alpha(@accent_fg_color, 0.34);
+  box-shadow:
+    inset 0 0 0 1px alpha(@m3_on_primary, 0.30),
+    0 0 0 2px alpha(@m3_primary, 0.22);
 }
