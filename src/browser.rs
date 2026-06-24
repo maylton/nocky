@@ -2541,7 +2541,8 @@ fn home_section(
     scroll.set_overlay_scrolling(false);
 
     // nocky_home_cards_edge_spring_v4
-    install_home_carousel_edge_spring(&scroll, &rail);
+    // nocky_home_cards_edge_spring_v6
+    install_home_carousel_edge_spring(&scroll, &rail, card_effects);
 
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
     section.add_css_class("home-section");
@@ -2550,38 +2551,62 @@ fn home_section(
     section
 }
 
-// nocky_home_cards_edge_spring_v4: bounded carousel edge spring
+// nocky_home_cards_edge_spring_v6: reliable bounded carousel edge spring
 
 #[derive(Clone)]
 struct HomeCarouselEdgeCard {
-    widget: gtk::Widget,
-    original_width_request: i32,
-    base_width: i32,
+    button: gtk::Widget,
+    surface: Option<gtk::Widget>,
+    original_button_width_request: i32,
+    original_surface_width_request: Option<i32>,
+    base_button_width: i32,
+    base_surface_width: i32,
 }
 
 type HomeCarouselEdgeCards = Rc<RefCell<Vec<HomeCarouselEdgeCard>>>;
 
-fn install_home_carousel_edge_spring(scroll: &gtk::ScrolledWindow, rail: &gtk::Box) {
+fn install_home_carousel_edge_spring(scroll: &gtk::ScrolledWindow, rail: &gtk::Box, enabled: bool) {
+    if !enabled {
+        return;
+    }
+
+    scroll.set_kinetic_scrolling(true);
+
+    let ready = Rc::new(Cell::new(false));
     let active = Rc::new(Cell::new(false));
     let generation = Rc::new(Cell::new(0_u64));
     let active_cards: HomeCarouselEdgeCards = Rc::new(RefCell::new(Vec::new()));
 
-    {
-        let rail = rail.clone();
+    let trigger: Rc<dyn Fn(gtk::PositionType)> = {
+        let scroll_weak = scroll.downgrade();
+        let rail_weak = rail.downgrade();
+        let ready = ready.clone();
         let active = active.clone();
         let generation = generation.clone();
         let active_cards = active_cards.clone();
 
-        scroll.connect_edge_overshot(move |scroll, position| {
+        Rc::new(move |position| {
+            if !ready.get() || active.replace(true) {
+                return;
+            }
+
             let from_start = match position {
                 gtk::PositionType::Left => true,
                 gtk::PositionType::Right => false,
-                _ => return,
+                _ => {
+                    active.set(false);
+                    return;
+                }
             };
 
-            if active.replace(true) {
+            let Some(scroll) = scroll_weak.upgrade() else {
+                active.set(false);
                 return;
-            }
+            };
+            let Some(rail) = rail_weak.upgrade() else {
+                active.set(false);
+                return;
+            };
 
             let cards = home_carousel_edge_cards(&rail, from_start, 3);
             if cards.is_empty() {
@@ -2596,14 +2621,33 @@ fn install_home_carousel_edge_spring(scroll: &gtk::ScrolledWindow, rail: &gtk::B
                 let mut stored = active_cards.borrow_mut();
                 stored.clear();
 
-                for card in cards {
-                    let base_width = card.width().max(COLLECTION_CARD_MAX_WIDTH);
+                for button in cards {
+                    let surface = button
+                        .first_child()
+                        .filter(|child| child.has_css_class("collection-card"));
+
+                    let base_button_width = button.width().max(COLLECTION_CARD_MAX_WIDTH);
+                    let base_surface_width = surface
+                        .as_ref()
+                        .map(|surface| surface.width())
+                        .unwrap_or(base_button_width)
+                        .max(COLLECTION_CARD_MAX_WIDTH);
+
+                    button.add_css_class("home-card-edge-spring");
+                    if let Some(surface) = surface.as_ref() {
+                        surface.add_css_class("home-card-edge-spring-surface");
+                    }
+
                     stored.push(HomeCarouselEdgeCard {
-                        widget: card.clone(),
-                        original_width_request: card.width_request(),
-                        base_width,
+                        button: button.clone(),
+                        surface: surface.clone(),
+                        original_button_width_request: button.width_request(),
+                        original_surface_width_request: surface
+                            .as_ref()
+                            .map(|surface| surface.width_request()),
+                        base_button_width,
+                        base_surface_width,
                     });
-                    card.add_css_class("home-card-edge-spring");
                 }
             }
 
@@ -2612,7 +2656,7 @@ fn install_home_carousel_edge_spring(scroll: &gtk::ScrolledWindow, rail: &gtk::B
             let generation = generation.clone();
             let active_cards = active_cards.clone();
 
-            scroll.add_tick_callback(move |_, frame_clock| {
+            scroll.add_tick_callback(move |scroll, frame_clock| {
                 if generation.get() != token {
                     restore_home_carousel_edge_cards(&active_cards);
                     active.set(false);
@@ -2627,19 +2671,31 @@ fn install_home_carousel_edge_spring(scroll: &gtk::ScrolledWindow, rail: &gtk::B
                     return glib::ControlFlow::Continue;
                 }
 
-                let progress = ((now - start) as f64 / 440_000.0).clamp(0.0, 1.0);
+                let progress = ((now - start) as f64 / 520_000.0).clamp(0.0, 1.0);
                 let displacement = home_carousel_spring_displacement(progress);
-                let strengths: [f64; 3] = [1.0, 0.58, 0.30];
+                let strengths: [f64; 3] = [1.0, 0.60, 0.32];
 
                 {
                     let stored = active_cards.borrow();
                     for (index, card) in stored.iter().enumerate() {
                         let stretch = (displacement * strengths[index.min(2)]).round() as i32;
 
-                        card.widget.set_width_request(
-                            (card.base_width + stretch).max(COLLECTION_CARD_MIN_WIDTH),
+                        card.button.set_width_request(
+                            (card.base_button_width + stretch).max(COLLECTION_CARD_MIN_WIDTH),
                         );
+
+                        if let Some(surface) = card.surface.as_ref() {
+                            surface.set_width_request(
+                                (card.base_surface_width + stretch).max(COLLECTION_CARD_MIN_WIDTH),
+                            );
+                        }
                     }
+                }
+
+                if !from_start {
+                    let adjustment = scroll.hadjustment();
+                    let end = (adjustment.upper() - adjustment.page_size()).max(adjustment.lower());
+                    adjustment.set_value(end);
                 }
 
                 if progress >= 1.0 {
@@ -2650,15 +2706,72 @@ fn install_home_carousel_edge_spring(scroll: &gtk::ScrolledWindow, rail: &gtk::B
                     glib::ControlFlow::Continue
                 }
             });
+        })
+    };
+
+    {
+        let ready = ready.clone();
+        scroll.connect_map(move |scroll| {
+            ready.set(false);
+            let ready = ready.clone();
+            let weak_scroll = scroll.downgrade();
+
+            glib::timeout_add_local_once(Duration::from_millis(180), move || {
+                if weak_scroll.upgrade().is_some() {
+                    ready.set(true);
+                }
+            });
         });
     }
 
     {
+        let trigger = trigger.clone();
+        scroll.connect_edge_reached(move |_, position| {
+            trigger(position);
+        });
+    }
+
+    {
+        let trigger = trigger.clone();
+        scroll.connect_edge_overshot(move |_, position| {
+            trigger(position);
+        });
+    }
+
+    {
+        let adjustment = scroll.hadjustment();
+        let last_value = Rc::new(Cell::new(adjustment.value()));
+        let ready = ready.clone();
+        let trigger = trigger.clone();
+
+        adjustment.connect_value_changed(move |adjustment| {
+            let value = adjustment.value();
+            let previous = last_value.replace(value);
+
+            if !ready.get() {
+                return;
+            }
+
+            let lower = adjustment.lower();
+            let upper = (adjustment.upper() - adjustment.page_size()).max(lower);
+            const EDGE_EPSILON: f64 = 0.75;
+
+            if value <= lower + EDGE_EPSILON && previous > value + EDGE_EPSILON {
+                trigger(gtk::PositionType::Left);
+            } else if value >= upper - EDGE_EPSILON && previous < value - EDGE_EPSILON {
+                trigger(gtk::PositionType::Right);
+            }
+        });
+    }
+
+    {
+        let ready = ready.clone();
         let active = active.clone();
         let generation = generation.clone();
         let active_cards = active_cards.clone();
 
         scroll.connect_unmap(move |_| {
+            ready.set(false);
             generation.set(generation.get().wrapping_add(1));
             restore_home_carousel_edge_cards(&active_cards);
             active.set(false);
@@ -2695,28 +2808,34 @@ fn home_carousel_edge_cards(rail: &gtk::Box, from_start: bool, limit: usize) -> 
 
 fn restore_home_carousel_edge_cards(cards: &HomeCarouselEdgeCards) {
     for card in cards.borrow_mut().drain(..) {
-        card.widget.set_width_request(card.original_width_request);
-        card.widget.remove_css_class("home-card-edge-spring");
+        card.button
+            .set_width_request(card.original_button_width_request);
+        card.button.remove_css_class("home-card-edge-spring");
+
+        if let Some(surface) = card.surface {
+            surface.set_width_request(card.original_surface_width_request.unwrap_or(-1));
+            surface.remove_css_class("home-card-edge-spring-surface");
+        }
     }
 }
 
 fn home_carousel_spring_displacement(progress: f64) -> f64 {
-    if progress < 0.22 {
-        16.0 * home_edge_ease_out_cubic(progress / 0.22)
-    } else if progress < 0.50 {
+    if progress < 0.20 {
+        24.0 * home_edge_ease_out_cubic(progress / 0.20)
+    } else if progress < 0.48 {
         home_edge_lerp(
-            16.0,
-            -4.5,
-            home_edge_ease_in_out_cubic((progress - 0.22) / 0.28),
+            24.0,
+            -7.0,
+            home_edge_ease_in_out_cubic((progress - 0.20) / 0.28),
         )
-    } else if progress < 0.74 {
+    } else if progress < 0.73 {
         home_edge_lerp(
-            -4.5,
-            2.5,
-            home_edge_ease_in_out_cubic((progress - 0.50) / 0.24),
+            -7.0,
+            4.0,
+            home_edge_ease_in_out_cubic((progress - 0.48) / 0.25),
         )
     } else {
-        home_edge_lerp(2.5, 0.0, home_edge_ease_out_cubic((progress - 0.74) / 0.26))
+        home_edge_lerp(4.0, 0.0, home_edge_ease_out_cubic((progress - 0.73) / 0.27))
     }
 }
 

@@ -3657,3 +3657,22 @@ window.theme-material-expressive
     0 11px 28px alpha(black, 0.25),
     0 0 0 3px alpha(@m3_primary, 0.10);
 }
+
+
+/* nocky_home_cards_edge_spring_v6 */
+
+/*
+ * The spring width is driven frame-by-frame in Rust. These selectors only
+ * reinforce the active edge state without introducing competing geometry
+ * transitions.
+ */
+window.theme-material-expressive
+  button.home-card-button.home-card-edge-spring
+  .collection-card,
+window.theme-material-expressive
+  .collection-card.home-card-edge-spring-surface {
+  border-color: alpha(@m3_primary, 0.58);
+  box-shadow:
+    0 12px 30px alpha(black, 0.27),
+    0 0 0 3px alpha(@m3_primary, 0.12);
+}
