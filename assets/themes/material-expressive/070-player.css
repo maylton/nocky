@@ -79,15 +79,19 @@ window.theme-material-expressive
     0 0 8px alpha(@m3_primary, 0.18);
 }
 
-/* pixel_player_expressive_transport_v1 */
+/* nocky_css_transport_consolidation_phase2a_v1 */
 
 /*
- * Fixed-slot expressive transport controls.
+ * Expressive transport component
+ * ------------------------------
  *
- * All geometry animation happens inside GtkFixed containers whose outer size
- * never changes. This prevents hover/click motion from resizing the Home card,
- * footer, or surrounding controls.
+ * This replaces the historical corrective layers that accumulated while the
+ * PixelPlayer-inspired controls were being tuned. Rust owns button geometry
+ * and click animation inside fixed slots. CSS owns only the stable visual
+ * states.
  */
+
+/* Shared reset: fixed-slot animation must never affect outer allocation. */
 window.theme-material-expressive
   .expressive-transport-enabled
   button.expressive-transport-primary,
@@ -99,13 +103,9 @@ window.theme-material-expressive
   padding: 0;
   background-image: none;
   transform: none;
-  transition:
-    background-color 150ms ease-out,
-    border-color 150ms ease-out,
-    box-shadow 170ms ease-out,
-    color 150ms ease-out;
 }
 
+/* Primary Play/Pause surface. */
 window.theme-material-expressive
   .expressive-transport-enabled
   button.expressive-transport-primary {
@@ -113,9 +113,62 @@ window.theme-material-expressive
   background-color: @m3_primary;
   border: 1px solid transparent;
   border-radius: 999px;
-  box-shadow: 0 7px 20px alpha(@m3_primary, 0.25);
+  transition:
+    background-color 150ms ease-out,
+    color 150ms ease-out;
 }
 
+/*
+ * The expressive component fully owns every primary state. This neutralizes
+ * legacy GtkButton focus rings, icon shadows and player-control hover effects
+ * without changing the approved background or geometry.
+ */
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary:hover,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary:active,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary:focus,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary:focus-visible,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary:checked,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary:backdrop {
+  outline: none;
+  outline-width: 0;
+  outline-offset: 0;
+  border-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  text-shadow: none;
+  -gtk-icon-shadow: none;
+  filter: none;
+  transform: none;
+}
+
+/* Keep the play glyph free from theme-provided cross glows. */
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary
+  image {
+  background-image: none;
+  box-shadow: none;
+  text-shadow: none;
+  -gtk-icon-shadow: none;
+  filter: none;
+}
+
+/* Resting Play/Pause remains circular in every pointer/focus state. */
 window.theme-material-expressive
   .expressive-transport-enabled
   button.expressive-transport-primary.is-resting,
@@ -134,6 +187,7 @@ window.theme-material-expressive
   border-radius: 999px;
 }
 
+/* Playing geometry intentionally differs by surface size. */
 window.theme-material-expressive
   .expressive-transport-enabled.expressive-transport-main
   button.expressive-transport-primary.is-playing,
@@ -170,21 +224,7 @@ window.theme-material-expressive
   border-radius: 19px;
 }
 
-window.theme-material-expressive
-  .expressive-transport-enabled
-  button.expressive-transport-primary:hover {
-  box-shadow:
-    0 10px 25px alpha(@m3_primary, 0.31),
-    0 0 0 3px alpha(@m3_primary, 0.07);
-}
-
-/* pixel_player_transport_no_primary_click_glow_v4 */
-window.theme-material-expressive
-  .expressive-transport-enabled
-  button.expressive-transport-primary:active {
-  box-shadow: 0 3px 8px alpha(black, 0.16);
-}
-
+/* Secondary Previous/Next tonal surfaces. */
 window.theme-material-expressive
   .expressive-transport-enabled
   button.expressive-transport-secondary {
@@ -194,6 +234,11 @@ window.theme-material-expressive
   outline: none;
   border-radius: 18px;
   box-shadow: 0 3px 10px alpha(black, 0.12);
+  transition:
+    background-color 150ms ease-out,
+    border-color 150ms ease-out,
+    box-shadow 170ms ease-out,
+    color 150ms ease-out;
 }
 
 window.theme-material-expressive
@@ -206,8 +251,6 @@ window.theme-material-expressive
   .expressive-transport-enabled
   button.expressive-transport-secondary:hover {
   background-color: @m3_secondary_container;
-  border: none;
-  outline: none;
   box-shadow:
     0 6px 16px alpha(black, 0.16),
     0 0 0 2px alpha(@m3_primary, 0.05);
@@ -220,164 +263,6 @@ window.theme-material-expressive
   box-shadow: 0 3px 9px alpha(black, 0.13);
 }
 
-/* pixel_player_transport_one_second_v3 */
-
-/*
- * Tonal previous/next controls without the generic light GTK outline.
- * Keyboard focus uses a restrained primary-colored halo instead.
- */
-window.theme-material-expressive
-  .expressive-transport-enabled
-  button.expressive-transport-secondary,
-window.theme-material-expressive
-  .expressive-transport-enabled
-  button.expressive-transport-secondary:hover,
-window.theme-material-expressive
-  .expressive-transport-enabled
-  button.expressive-transport-secondary:active,
-window.theme-material-expressive
-  .expressive-transport-enabled
-  button.expressive-transport-secondary:focus {
-  border: none;
-  outline: none;
-}
-
-window.theme-material-expressive
-  .expressive-transport-enabled
-  button.expressive-transport-secondary:focus-visible {
-  border: none;
-  outline: none;
-  box-shadow:
-    0 5px 14px alpha(black, 0.15),
-    0 0 0 2px alpha(@m3_primary, 0.30);
-}
-
-/* pixel_player_transport_remove_cross_glow_v5 */
-
-/*
- * Remove every colored ring from the expressive primary transport action.
- * The pointer remains over the button after a click, so :hover, :focus and
- * :active all need an explicit neutral treatment.
- */
-window.theme-material-expressive
-  .expressive-transport-enabled
-  button.expressive-transport-primary,
-window.theme-material-expressive
-  .expressive-transport-enabled
-  button.expressive-transport-primary:hover,
-window.theme-material-expressive
-  .expressive-transport-enabled
-  button.expressive-transport-primary:active,
-window.theme-material-expressive
-  .expressive-transport-enabled
-  button.expressive-transport-primary:focus,
-window.theme-material-expressive
-  .expressive-transport-enabled
-  button.expressive-transport-primary:focus-visible {
-  outline: none;
-  border-color: transparent;
-  background-image: none;
-  text-shadow: none;
-  -gtk-icon-shadow: none;
-  filter: none;
-}
-
-window.theme-material-expressive
-  .expressive-transport-enabled
-  button.expressive-transport-primary {
-  box-shadow: 0 6px 16px alpha(black, 0.14);
-}
-
-window.theme-material-expressive
-  .expressive-transport-enabled
-  button.expressive-transport-primary:hover {
-  box-shadow: 0 8px 18px alpha(black, 0.17);
-}
-
-window.theme-material-expressive
-  .expressive-transport-enabled
-  button.expressive-transport-primary:active {
-  box-shadow: 0 3px 8px alpha(black, 0.15);
-}
-
-window.theme-material-expressive
-  .expressive-transport-enabled
-  button.expressive-transport-primary:focus,
-window.theme-material-expressive
-  .expressive-transport-enabled
-  button.expressive-transport-primary:focus-visible {
-  box-shadow: 0 6px 16px alpha(black, 0.14);
-}
-
-/* pixel_player_transport_click_only_v6 */
-
-/*
- * Click-only interaction model.
- *
- * Hover and keyboard focus keep the exact resting appearance. Geometry and
- * emphasis change only through ExpressiveTransport's coordinated click
- * animation, matching the PixelPlayer reference more closely.
- */
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-main
-  button.shell-play-button.player-primary-control.expressive-transport-primary,
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-main
-  button.shell-play-button.player-primary-control.expressive-transport-primary:hover,
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-main
-  button.shell-play-button.player-primary-control.expressive-transport-primary:active,
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-main
-  button.shell-play-button.player-primary-control.expressive-transport-primary:focus,
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-main
-  button.shell-play-button.player-primary-control.expressive-transport-primary:focus-visible,
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-footer
-  button.mini-play-button.footer-primary-control.expressive-transport-primary,
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-footer
-  button.mini-play-button.footer-primary-control.expressive-transport-primary:hover,
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-footer
-  button.mini-play-button.footer-primary-control.expressive-transport-primary:active,
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-footer
-  button.mini-play-button.footer-primary-control.expressive-transport-primary:focus,
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-footer
-  button.mini-play-button.footer-primary-control.expressive-transport-primary:focus-visible {
-  outline: none;
-  border-color: transparent;
-  background-image: none;
-  box-shadow: none;
-  text-shadow: none;
-  -gtk-icon-shadow: none;
-  filter: none;
-  transform: none;
-  transition:
-    background-color 150ms ease-out,
-    color 150ms ease-out;
-}
-
-/* Prevent the icon itself from producing a cross-shaped focus/click glow. */
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-main
-  button.shell-play-button.player-primary-control.expressive-transport-primary
-  image,
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-footer
-  button.mini-play-button.footer-primary-control.expressive-transport-primary
-  image {
-  background-image: none;
-  box-shadow: none;
-  text-shadow: none;
-  -gtk-icon-shadow: none;
-  filter: none;
-}
-
-/* Secondary controls also keep fixed geometry on hover. */
 window.theme-material-expressive
   .expressive-transport-enabled
   button.expressive-transport-secondary:hover,
@@ -387,49 +272,15 @@ window.theme-material-expressive
 window.theme-material-expressive
   .expressive-transport-enabled
   button.expressive-transport-secondary:focus-visible {
+  border: none;
   outline: none;
   transform: none;
 }
 
-/* pixel_player_transport_detach_legacy_main_glow_v7 */
-
-/*
- * The Expressive component fully owns the main Play/Pause surface.
- * No shadow, ring, outline or icon shadow from the legacy shell button may
- * remain during normal, hover, focus or click states.
- */
 window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-main
-  button.expressive-transport-primary,
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-main
-  button.expressive-transport-primary:hover,
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-main
-  button.expressive-transport-primary:active,
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-main
-  button.expressive-transport-primary:focus,
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-main
-  button.expressive-transport-primary:focus-visible,
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-main
-  button.expressive-transport-primary:checked,
-window.theme-material-expressive
-  .expressive-transport-enabled.expressive-transport-main
-  button.expressive-transport-primary:backdrop {
-  outline: none;
-  outline-width: 0;
-  outline-offset: 0;
-  border-color: transparent;
-  background-image: none;
-  box-shadow: none;
-  text-shadow: none;
-  -gtk-icon-shadow: none;
-  filter: none;
-  transform: none;
-  transition:
-    background-color 150ms ease-out,
-    color 150ms ease-out;
+  .expressive-transport-enabled
+  button.expressive-transport-secondary:focus-visible {
+  box-shadow:
+    0 5px 14px alpha(black, 0.15),
+    0 0 0 2px alpha(@m3_primary, 0.30);
 }

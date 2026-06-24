@@ -53,3 +53,18 @@ The report guides Phase 2. Repeated selectors are not treated as errors yet.
 - consolidate repeated hover and checked states;
 - replace patch-oriented selectors with semantic component classes;
 - move unavoidable compatibility rules to the final ordered module.
+
+## Phase 2A — Expressive transport consolidation
+
+The historical PixelPlayer transport correction layers were replaced by one
+semantic component block in `070-player.css`.
+
+This phase intentionally leaves transport geometry and Rust behavior untouched.
+It establishes the pattern for later consolidation work:
+
+1. identify the final computed component behavior;
+2. preserve component-specific geometry;
+3. replace corrective layers with one semantic definition;
+4. remove obsolete version markers;
+5. record before/after metrics;
+6. validate visually before moving to the next component.
