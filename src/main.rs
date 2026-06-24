@@ -1,3 +1,4 @@
+// youtube_playlist_background_autoplay_v1
 // contextual_collection_controls_v5
 // recent_activity_exact_fix_v1
 // personalized_home_resume_v2
@@ -173,6 +174,7 @@ struct AppController {
     youtube_recovery_attempted: Cell<bool>,
     youtube_recovery_resume_us: Cell<i64>,
     youtube_playlist_request_id: Cell<u64>,
+    youtube_playlist_play_request_id: Cell<u64>,
     youtube_collection_prefetching: Cell<bool>,
     youtube_playlist_loading: Cell<bool>,
     youtube_playlist_prefetching: Cell<bool>,
@@ -729,6 +731,7 @@ impl AppController {
             youtube_recovery_attempted: Cell::new(false),
             youtube_recovery_resume_us: Cell::new(0),
             youtube_playlist_request_id: Cell::new(0),
+            youtube_playlist_play_request_id: Cell::new(0),
             youtube_collection_prefetching: Cell::new(false),
             youtube_playlist_loading: Cell::new(false),
             youtube_playlist_prefetching: Cell::new(false),
@@ -4303,7 +4306,40 @@ impl AppController {
         self.select_track(first, true);
     }
 
-    fn play_youtube_collection(&self, item: YouTubeItem, playlist: bool) {
+    fn load_youtube_playlist_for_playback(&self, playlist: YouTubeItem) {
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            self.show_toast("As dependências do YouTube Music não estão instaladas");
+            return;
+        };
+
+        let request_id = self.youtube_playlist_play_request_id.get().wrapping_add(1);
+        self.youtube_playlist_play_request_id.set(request_id);
+
+        let browse_id = playlist.browse_id.clone();
+        if !browse_id.is_empty() {
+            self.youtube_library
+                .borrow_mut()
+                .playlist_loading
+                .insert(browse_id);
+        }
+
+        self.show_toast("Carregando playlist do YouTube Music…");
+
+        let sender = self.background.sender();
+        thread::spawn(move || {
+            let result = bridge.playlist(&playlist).map(|mut items| {
+                cache_items_for_browser(&mut items);
+                items
+            });
+            let _ = sender.send(BackgroundMessage::YouTubePlaylistPlaybackLoaded {
+                request_id,
+                playlist,
+                result,
+            });
+        });
+    }
+
+    pub(crate) fn play_youtube_collection(&self, item: YouTubeItem, playlist: bool) {
         let kind = if playlist { "playlist" } else { "album" };
         let id = if item.browse_id.trim().is_empty() {
             item.title.to_lowercase()
@@ -4331,10 +4367,7 @@ impl AppController {
 
         if items.is_empty() {
             if playlist {
-                self.load_youtube_playlist_for_browser(item);
-                self.show_toast(
-                    "Carregando a playlist; toque em reproduzir novamente quando ela abrir",
-                );
+                self.load_youtube_playlist_for_playback(item);
             } else {
                 self.load_youtube_collection_for_browser(item);
                 self.show_toast(

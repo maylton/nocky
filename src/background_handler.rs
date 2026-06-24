@@ -1,3 +1,4 @@
+// youtube_playlist_background_autoplay_v1
 use crate::{
     background::BackgroundMessage,
     config::StartupSource,
@@ -194,6 +195,63 @@ impl AppController {
                         ));
                     }
                 },
+                BackgroundMessage::YouTubePlaylistPlaybackLoaded {
+                    request_id,
+                    playlist,
+                    result,
+                } => {
+                    let browse_id = playlist.browse_id.clone();
+                    if !browse_id.is_empty() {
+                        self.youtube_library
+                            .borrow_mut()
+                            .playlist_loading
+                            .remove(&browse_id);
+                    }
+
+                    if request_id != self.youtube_playlist_play_request_id.get() {
+                        continue;
+                    }
+
+                    match result {
+                        Ok(items) if !items.is_empty() => {
+                            self.youtube_library
+                                .borrow_mut()
+                                .playlist_tracks
+                                .insert(browse_id.clone(), items);
+
+                            if cacheable_youtube_playlist(&playlist) {
+                                if let Err(error) =
+                                    save_library_cache(&self.youtube_library.borrow())
+                                {
+                                    eprintln!("Could not save the YouTube playlist cache: {error}");
+                                }
+                            }
+
+                            self.show_toast("Playlist carregada. Iniciando reprodução…");
+                            self.play_youtube_collection(playlist, true);
+                        }
+                        Ok(_) => {
+                            self.youtube_library
+                                .borrow_mut()
+                                .playlist_tracks
+                                .remove(&browse_id);
+                            self.show_toast(
+                                "Esta playlist não retornou faixas reproduzíveis agora",
+                            );
+                            self.refresh_browser();
+                        }
+                        Err(error) => {
+                            self.youtube_library
+                                .borrow_mut()
+                                .playlist_tracks
+                                .remove(&browse_id);
+                            self.show_toast(&format!(
+                                "Não foi possível carregar a playlist: {error}"
+                            ));
+                            self.refresh_browser();
+                        }
+                    }
+                }
                 BackgroundMessage::YouTubeBrowserPlaylist {
                     request_id,
                     playlist,
