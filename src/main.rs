@@ -8,6 +8,7 @@ mod dialogs;
 mod expressive_transport;
 mod footer_layout;
 mod footer_now_playing;
+mod footer_transport;
 mod i18n;
 mod library;
 mod listening_history;
@@ -40,9 +41,10 @@ use browser::{BrowserEvent, BrowserRoute, LibraryBrowser};
 use compact_volume_motion::{run_compact_volume_spring, CompactVolumeSpring};
 use config::{AppLanguage, BlurMode, StartupSource, VisualTheme};
 use dialogs::SettingsEvent;
-use expressive_transport::{ExpressiveTransport, TransportVariant};
+use expressive_transport::ExpressiveTransport;
 use footer_layout::{footer_mode_plan, AdaptiveFooterTier};
 use footer_now_playing::{build_footer_now_playing, FooterNowPlayingParts};
+use footer_transport::{build_footer_transport, FooterTransportParts};
 use gtk::prelude::FileExt;
 use gtk::{gdk, gio, glib};
 use i18n::Message;
@@ -594,63 +596,21 @@ impl AppController {
             favorite_icon: footer_favorite_icon,
         } = build_footer_now_playing(config.language, &mini_cover.stack);
 
-        let footer_shuffle = mode_toggle::new_mode_toggle(
-            "media-playlist-shuffle-symbolic",
-            tr(Message::Shuffle),
-            mode_toggle::ModeToggleKind::Shuffle,
-        );
-        footer_shuffle.add_css_class("flat");
-        footer_shuffle.add_css_class("footer-control");
-        footer_shuffle.add_css_class("footer-mode-control");
-
-        let footer_previous = gtk::Button::from_icon_name("media-skip-backward-symbolic");
-        footer_previous.set_tooltip_text(Some(tr(Message::PreviousTrack)));
-        footer_previous.add_css_class("flat");
-        footer_previous.add_css_class("footer-control");
-        footer_previous.add_css_class("footer-skip-control");
-
-        let play_icon = gtk::Image::from_icon_name("media-playback-start-symbolic");
-        play_icon.set_pixel_size(20);
-        let play = gtk::Button::new();
-        play.set_child(Some(&play_icon));
-        play.add_css_class("flat");
-        play.add_css_class("mini-play-button");
-        play.add_css_class("footer-primary-control");
-        play.set_tooltip_text(Some(tr(Message::PlayPause)));
-
-        let footer_next = gtk::Button::from_icon_name("media-skip-forward-symbolic");
-        footer_next.set_tooltip_text(Some(tr(Message::NextTrack)));
-        footer_next.add_css_class("flat");
-        footer_next.add_css_class("footer-control");
-        footer_next.add_css_class("footer-skip-control");
-
-        let footer_repeat = mode_toggle::new_mode_toggle(
-            "media-playlist-repeat-symbolic",
-            tr(Message::RepeatTrack),
-            mode_toggle::ModeToggleKind::RepeatOne,
-        );
-        footer_repeat.add_css_class("flat");
-        footer_repeat.add_css_class("footer-control");
-        footer_repeat.add_css_class("footer-mode-control");
-
-        let footer_transport_motion = ExpressiveTransport::new(
-            TransportVariant::Footer,
-            &footer_previous,
-            &play,
-            &footer_next,
-            &play_icon,
+        // nocky_rust_ui_phase3d_footer_transport_v2
+        let FooterTransportParts {
+            root: footer_transport,
+            shuffle: footer_shuffle,
+            previous: footer_previous,
+            play_button: play,
+            play_icon,
+            motion: footer_transport_motion,
+            next: footer_next,
+            repeat: footer_repeat,
+        } = build_footer_transport(
+            config.language,
             config.expressive_transport_effects
                 && config.visual_theme == VisualTheme::MaterialExpressive,
         );
-
-        let footer_transport = gtk::Box::new(gtk::Orientation::Horizontal, 7);
-        footer_transport.set_margin_top(0);
-        footer_transport.set_halign(gtk::Align::Center);
-        footer_transport.set_valign(gtk::Align::Center);
-        footer_transport.add_css_class("footer-transport-controls");
-        footer_transport.append(&footer_shuffle);
-        footer_transport.append(footer_transport_motion.root());
-        footer_transport.append(&footer_repeat);
 
         let footer_progress = WaveProgress::new();
         footer_progress
