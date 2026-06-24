@@ -1,3 +1,4 @@
+// playback_persistence_resume_2_v1
 // queue_collection_cover_fallback_v1
 // preserve_home_carousel_scroll_v1
 // collection_card_inline_loading_fix_v2
@@ -36,6 +37,7 @@ mod model;
 mod mpris;
 mod onboarding;
 mod playback;
+mod playback_session;
 mod player_view;
 pub mod queue_model;
 mod queue_store;
@@ -73,6 +75,7 @@ use lyrics::LyricLine;
 use lyrics_view::LyricsPresenter;
 use model::{Track, TrackData};
 use playback::{PlaybackEngine, PlaybackEvent};
+use playback_session::PlaybackSession;
 use player_view::{PlayerView, PlayerViewHandle};
 use queue_model::{
     queue_end_action, PlaybackQueue, QueueEndAction, QueueEntryId, QueueMedia, QueueSnapshot,
@@ -162,6 +165,9 @@ struct AppController {
     listening_session_last_saved_seconds: Cell<u64>,
     listening_history_context: RefCell<listening_history::PlaybackHistoryContext>,
     pending_resume_position_us: Cell<Option<i64>>,
+    restored_playback_session: RefCell<Option<PlaybackSession>>,
+    playback_session_last_position_seconds: Cell<u64>,
+    playback_session_restore_attempts: Cell<u8>,
     updating_progress: Cell<bool>,
     scanning: Cell<bool>,
     shuffle_enabled: Cell<bool>,
@@ -353,7 +359,10 @@ fn build_application(app: &adw::Application) {
     controller.window.present();
 
     let startup_controller = controller.clone();
-    glib::idle_add_local_once(move || startup_controller.apply_startup_source());
+    glib::idle_add_local_once(move || {
+        startup_controller.apply_startup_source();
+        startup_controller.try_restore_playback_session();
+    });
 
     // Keep the controller alive for as long as the application is running.
     let keep_alive = controller.clone();
@@ -363,6 +372,7 @@ fn build_application(app: &adw::Application) {
         // serialized final snapshot so the latest playback session is kept.
         keep_alive.listening_history.borrow().flush();
         keep_alive.persist_queue_now();
+        keep_alive.persist_playback_session_now();
         keep_alive.player.shutdown();
         keep_alive.mpris.send(mpris::MprisUpdate::Shutdown);
     });
@@ -699,6 +709,7 @@ impl AppController {
         }
         let restored_queue = queue_load.queue;
         let restored_queue_snapshot = restored_queue.snapshot();
+        let restored_playback_session = playback_session::load();
 
         let initial_volume = config.volume.clamp(0.15, 1.0);
         let sidebar_bounce = RevealBounce::new(false);
@@ -720,6 +731,9 @@ impl AppController {
                 listening_history::PlaybackHistoryContext::default(),
             ),
             pending_resume_position_us: Cell::new(None),
+            restored_playback_session: RefCell::new(restored_playback_session),
+            playback_session_last_position_seconds: Cell::new(0),
+            playback_session_restore_attempts: Cell::new(0),
             updating_progress: Cell::new(false),
             scanning: Cell::new(false),
             shuffle_enabled: Cell::new(false),
@@ -882,6 +896,8 @@ impl AppController {
                     return glib::ControlFlow::Break;
                 };
                 controller.persist_queue_if_changed();
+                controller.persist_playback_session_if_changed();
+                controller.try_restore_playback_session();
                 glib::ControlFlow::Continue
             });
         }
@@ -4432,6 +4448,149 @@ impl AppController {
             });
         self.pending_resume_position_us.set(None);
         self.resolve_youtube_track(items[0].clone(), items, 0, false);
+    }
+
+    fn playback_session_snapshot(&self) -> Option<PlaybackSession> {
+        let queue = self.playback_queue_v2.borrow();
+        let current = queue.current()?;
+        let context = self.listening_history_context.borrow();
+
+        let mut session = PlaybackSession::new(&current.media.source);
+        session.position_us = self.player.position_us().max(0);
+        session.was_playing = self.player.is_playing();
+        session.shuffle_enabled = self.shuffle_enabled.get();
+        session.repeat_enabled = self.repeat_button.is_active();
+        session.context_kind = context.kind.clone();
+        session.context_id = context.id.clone();
+        session.context_title = context.title.clone();
+        session.saved_at_unix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_secs())
+            .unwrap_or_default();
+        Some(session)
+    }
+
+    fn persist_playback_session_if_changed(&self) {
+        let Some(session) = self.playback_session_snapshot() else {
+            return;
+        };
+
+        let seconds = (session.position_us.max(0) as u64) / 1_000_000;
+        if seconds == self.playback_session_last_position_seconds.get() {
+            return;
+        }
+
+        self.playback_session_last_position_seconds.set(seconds);
+        if let Err(error) = playback_session::save(&session) {
+            eprintln!("Could not save playback session: {error}");
+        }
+    }
+
+    fn persist_playback_session_now(&self) {
+        if let Some(session) = self.playback_session_snapshot() {
+            if let Err(error) = playback_session::save(&session) {
+                eprintln!("Could not save playback session: {error}");
+            }
+        } else if let Err(error) = playback_session::clear() {
+            eprintln!("Could not clear playback session: {error}");
+        }
+    }
+
+    fn try_restore_playback_session(&self) {
+        let Some(session) = self.restored_playback_session.borrow().clone() else {
+            return;
+        };
+
+        let attempts = self.playback_session_restore_attempts.get();
+        if attempts >= 30 {
+            self.restored_playback_session.replace(None);
+            return;
+        }
+        self.playback_session_restore_attempts
+            .set(attempts.saturating_add(1));
+
+        let current_media = self
+            .playback_queue_v2
+            .borrow()
+            .current()
+            .map(|entry| entry.media.clone());
+
+        let Some(current_media) = current_media else {
+            self.restored_playback_session.replace(None);
+            return;
+        };
+
+        if current_media.source.stable_key() != session.source_key {
+            self.restored_playback_session.replace(None);
+            return;
+        }
+
+        self.shuffle_enabled.set(session.shuffle_enabled);
+        self.shuffle_button.set_active(session.shuffle_enabled);
+        self.footer_shuffle_button
+            .set_active(session.shuffle_enabled);
+        self.repeat_button.set_active(session.repeat_enabled);
+        self.footer_repeat_button.set_active(session.repeat_enabled);
+        self.listening_history_context
+            .replace(listening_history::PlaybackHistoryContext {
+                kind: session.context_kind.clone(),
+                id: session.context_id.clone(),
+                title: session.context_title.clone(),
+            });
+        self.pending_resume_position_us
+            .set(Some(session.position_us.max(0)));
+
+        match &current_media.source {
+            QueueSource::Local { path } => {
+                let index = self
+                    .state
+                    .borrow()
+                    .tracks
+                    .iter()
+                    .position(|track| &track.path == path);
+                let Some(index) = index else {
+                    return;
+                };
+                self.select_track(index, session.was_playing);
+            }
+            QueueSource::YouTube { video_id } => {
+                let queue = self
+                    .playback_queue_v2
+                    .borrow()
+                    .entries()
+                    .iter()
+                    .filter_map(|entry| match &entry.media.source {
+                        QueueSource::YouTube { video_id } => Some(YouTubeItem {
+                            result_type: "song".to_string(),
+                            title: entry.media.title.clone(),
+                            artist: entry.media.artist.clone(),
+                            album: entry.media.album.clone(),
+                            duration_seconds: entry.media.duration_seconds,
+                            video_id: video_id.clone(),
+                            cover_path: entry
+                                .media
+                                .cover_path
+                                .as_ref()
+                                .map(|path| path.to_string_lossy().to_string())
+                                .unwrap_or_default(),
+                            ..YouTubeItem::default()
+                        }),
+                        QueueSource::Local { .. } => None,
+                    })
+                    .collect::<Vec<_>>();
+                let Some(index) = queue.iter().position(|item| item.video_id == *video_id) else {
+                    self.restored_playback_session.replace(None);
+                    return;
+                };
+                self.resolve_youtube_track(queue[index].clone(), queue, index, session.was_playing);
+            }
+        }
+
+        self.playback_session_last_position_seconds
+            .set((session.position_us.max(0) as u64) / 1_000_000);
+        self.restored_playback_session.replace(None);
+        self.playback_session_restore_attempts.set(0);
+        self.show_toast("Reprodução anterior restaurada");
     }
 
     fn current_track_path(&self) -> Option<PathBuf> {
