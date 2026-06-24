@@ -5,9 +5,10 @@
 The Material Expressive theme was migrated from one large CSS file to an
 ordered set of modules in `assets/themes/material-expressive/`.
 
-Phase 1 is deliberately mechanical. The generated modules concatenate to the
-exact bytes of the former monolith, so selector order and cascade behavior do
-not change.
+The initial migration preserved the exact bytes and cascade order of the former
+monolith. Later phases consolidated component boundaries, removed superseded
+rules and deleted orphan implementations while preserving the approved
+runtime presentation.
 
 ## Loading
 
@@ -43,7 +44,9 @@ python3 scripts/audit_css.py
 python3 scripts/audit_css.py --check
 ```
 
-The report guides Phase 2. Repeated selectors are not treated as errors yet.
+Repeated selectors and declaration shapes remain diagnostic signals rather
+than automatic errors. Structural failures—module inventory, order, naming,
+balance and byte contract—are enforced by `--check`.
 
 ## Phase 2 targets
 
@@ -132,3 +135,38 @@ The active player continues to update metadata immediately through
 `PlayerViewHandle::set_metadata`.
 
 Marker: `nocky_remove_orphan_track_transition_phase2h_v2`.
+
+## Current module manifest
+
+`src/theme_css.rs` is the source of truth for the embedded module order.
+The manifest is named and follows the numeric filename order:
+
+| Module | Cascade position |
+|---|---:|
+| `000-foundation.css` | 1 |
+| `010-footer.css` | 2 |
+| `020-navigation.css` | 3 |
+| `030-dialogs-settings.css` | 4 |
+| `040-dialogs-settings.css` | 5 |
+| `050-dialogs-settings.css` | 6 |
+| `060-dialogs-settings.css` | 7 |
+| `070-player.css` | 8 |
+| `080-home-browser.css` | 9 |
+| `085-compact-volume.css` | 10 |
+| `095-controls.css` | 11 |
+| `096-tonal-surfaces.css` | 12 |
+
+The audit fails when a module exists on disk but is not loaded, when a loaded
+module is missing, when order differs, when prefixes collide, when CSS is
+empty or structurally unbalanced, or when the byte contract is stale.
+
+## Phase 2I — Architecture closure
+
+The CSS refactor is considered architecturally complete.
+
+This phase does not alter CSS bytes or visual behavior. It replaces the
+anonymous loader list with a named manifest, strengthens structural auditing,
+adds Rust tests for module identity/order/naming and records the final module
+inventory.
+
+Marker: `nocky_css_architecture_closure_phase2i_v1`.

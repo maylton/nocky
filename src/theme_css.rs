@@ -1,37 +1,73 @@
-// nocky_css_architecture_phase1_v3
+// nocky_css_architecture_closure_phase2i_v1
 //
-// Module order is identical to the former monolithic file.
-// Phase 1 changes packaging only; cascade order is preserved.
+// Material Expressive CSS is embedded as one explicitly named, ordered
+// manifest. The numeric filename prefix is the cascade order contract.
 
 const NOCTALIA_CSS: &str = include_str!("../assets/themes/noctalia.css");
 
-const MATERIAL_EXPRESSIVE_PARTS: &[&str] = &[
-    include_str!("../assets/themes/material-expressive/000-foundation.css"),
-    include_str!("../assets/themes/material-expressive/010-footer.css"),
-    include_str!("../assets/themes/material-expressive/020-navigation.css"),
-    include_str!("../assets/themes/material-expressive/030-dialogs-settings.css"),
-    include_str!("../assets/themes/material-expressive/040-dialogs-settings.css"),
-    include_str!("../assets/themes/material-expressive/050-dialogs-settings.css"),
-    include_str!("../assets/themes/material-expressive/060-dialogs-settings.css"),
-    include_str!("../assets/themes/material-expressive/070-player.css"),
-    include_str!("../assets/themes/material-expressive/080-home-browser.css"),
-    include_str!("../assets/themes/material-expressive/085-compact-volume.css"),
-    include_str!("../assets/themes/material-expressive/095-controls.css"),
-    include_str!("../assets/themes/material-expressive/096-tonal-surfaces.css"),
+const MATERIAL_EXPRESSIVE_MODULES: &[(&str, &str)] = &[
+    (
+        "000-foundation.css",
+        include_str!("../assets/themes/material-expressive/000-foundation.css"),
+    ),
+    (
+        "010-footer.css",
+        include_str!("../assets/themes/material-expressive/010-footer.css"),
+    ),
+    (
+        "020-navigation.css",
+        include_str!("../assets/themes/material-expressive/020-navigation.css"),
+    ),
+    (
+        "030-dialogs-settings.css",
+        include_str!("../assets/themes/material-expressive/030-dialogs-settings.css"),
+    ),
+    (
+        "040-dialogs-settings.css",
+        include_str!("../assets/themes/material-expressive/040-dialogs-settings.css"),
+    ),
+    (
+        "050-dialogs-settings.css",
+        include_str!("../assets/themes/material-expressive/050-dialogs-settings.css"),
+    ),
+    (
+        "060-dialogs-settings.css",
+        include_str!("../assets/themes/material-expressive/060-dialogs-settings.css"),
+    ),
+    (
+        "070-player.css",
+        include_str!("../assets/themes/material-expressive/070-player.css"),
+    ),
+    (
+        "080-home-browser.css",
+        include_str!("../assets/themes/material-expressive/080-home-browser.css"),
+    ),
+    (
+        "085-compact-volume.css",
+        include_str!("../assets/themes/material-expressive/085-compact-volume.css"),
+    ),
+    (
+        "095-controls.css",
+        include_str!("../assets/themes/material-expressive/095-controls.css"),
+    ),
+    (
+        "096-tonal-surfaces.css",
+        include_str!("../assets/themes/material-expressive/096-tonal-surfaces.css"),
+    ),
 ];
 
 pub(crate) fn combined_theme_css() -> String {
-    let material_len = MATERIAL_EXPRESSIVE_PARTS
+    let material_len = MATERIAL_EXPRESSIVE_MODULES
         .iter()
-        .map(|part| part.len())
+        .map(|(_, css)| css.len())
         .sum::<usize>();
 
     let mut css = String::with_capacity(NOCTALIA_CSS.len() + 1 + material_len);
     css.push_str(NOCTALIA_CSS);
     css.push('\n');
 
-    for part in MATERIAL_EXPRESSIVE_PARTS {
-        css.push_str(part);
+    for (_, module_css) in MATERIAL_EXPRESSIVE_MODULES {
+        css.push_str(module_css);
     }
 
     css
@@ -44,10 +80,10 @@ mod tests {
     const EXPECTED_MATERIAL_EXPRESSIVE_BYTES: usize = 108383;
 
     #[test]
-    fn material_modules_keep_original_size() {
-        let actual = MATERIAL_EXPRESSIVE_PARTS
+    fn material_modules_keep_expected_size() {
+        let actual = MATERIAL_EXPRESSIVE_MODULES
             .iter()
-            .map(|part| part.len())
+            .map(|(_, css)| css.len())
             .sum::<usize>();
 
         assert_eq!(actual, EXPECTED_MATERIAL_EXPRESSIVE_BYTES);
@@ -55,8 +91,34 @@ mod tests {
 
     #[test]
     fn material_modules_are_not_empty() {
-        assert!(MATERIAL_EXPRESSIVE_PARTS
+        assert!(MATERIAL_EXPRESSIVE_MODULES
             .iter()
-            .all(|part| !part.trim().is_empty()));
+            .all(|(_, css)| !css.trim().is_empty()));
+    }
+
+    #[test]
+    fn material_module_names_are_unique_and_ordered() {
+        let names = MATERIAL_EXPRESSIVE_MODULES
+            .iter()
+            .map(|(name, _)| *name)
+            .collect::<Vec<_>>();
+
+        let mut sorted = names.clone();
+        sorted.sort_unstable();
+        assert_eq!(names, sorted);
+
+        let original_len = sorted.len();
+        sorted.dedup();
+        assert_eq!(sorted.len(), original_len);
+    }
+
+    #[test]
+    fn material_module_names_follow_the_prefix_contract() {
+        assert!(MATERIAL_EXPRESSIVE_MODULES.iter().all(|(name, _)| {
+            name.len() > 8
+                && name.as_bytes()[..3].iter().all(u8::is_ascii_digit)
+                && name.as_bytes()[3] == b'-'
+                && name.ends_with(".css")
+        }));
     }
 }
