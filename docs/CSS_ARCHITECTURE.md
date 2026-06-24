@@ -68,3 +68,13 @@ It establishes the pattern for later consolidation work:
 4. remove obsolete version markers;
 5. record before/after metrics;
 6. validate visually before moving to the next component.
+
+## Phase 2B — Shared playback mode controls
+
+Repeat and Shuffle now have one semantic presentation module:
+`095-controls.css`.
+
+The Rust factory remains the single source for widget construction. CSS shares
+all visual states and retains player/footer classes only where the approved
+geometry differs. The toggle system is no longer coupled to compact-volume
+overrides or early foundation rules.

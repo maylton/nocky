@@ -1,10 +1,4 @@
 
-window.theme-material-expressive .footer-mode-control:checked {
-  border-radius: 20px;
-  color: @m3_on_tertiary_container;
-  background-color: @m3_tertiary_container;
-}
-
 window.theme-material-expressive .footer-progress-row {
   min-height: 22px;
   padding: 0 5px;
@@ -167,17 +161,6 @@ window.theme-material-expressive .footer-skip-control {
   min-width: 40px;
   min-height: 40px;
   border-radius: 20px;
-}
-
-window.theme-material-expressive .footer-mode-control {
-  min-width: 38px;
-  min-height: 38px;
-  border-radius: 13px;
-}
-
-window.theme-material-expressive .footer-mode-control:hover,
-window.theme-material-expressive .footer-mode-control:checked {
-  border-radius: 19px;
 }
 
 window.theme-material-expressive .footer-progress-row {

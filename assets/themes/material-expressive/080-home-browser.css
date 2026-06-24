@@ -204,40 +204,7 @@ window.theme-material-expressive
     0 0 0 3px alpha(@m3_primary, 0.12);
 }
 
-/* nocky_compact_volume_expand_and_flat_modes_v1 */
-
-/*
- * Repeat and shuffle remain icon actions. Their active state is communicated
- * through color instead of another filled capsule inside the transport card.
- */
-window.theme-material-expressive button.player-mode-control,
-window.theme-material-expressive button.player-mode-control:hover,
-window.theme-material-expressive button.player-mode-control:active,
-window.theme-material-expressive button.player-mode-control:focus,
-window.theme-material-expressive button.player-mode-control:focus-visible,
-window.theme-material-expressive button.player-mode-control:checked,
-window.theme-material-expressive button.footer-mode-control,
-window.theme-material-expressive button.footer-mode-control:hover,
-window.theme-material-expressive button.footer-mode-control:active,
-window.theme-material-expressive button.footer-mode-control:focus,
-window.theme-material-expressive button.footer-mode-control:focus-visible,
-window.theme-material-expressive button.footer-mode-control:checked {
-  background-color: transparent;
-  background-image: none;
-  border-color: transparent;
-  box-shadow: none;
-  outline: none;
-}
-
-window.theme-material-expressive button.player-mode-control:hover,
-window.theme-material-expressive button.footer-mode-control:hover {
-  color: @m3_on_surface;
-}
-
-window.theme-material-expressive button.player-mode-control:checked,
-window.theme-material-expressive button.footer-mode-control:checked {
-  color: @m3_primary;
-}
+/* Compact footer volume reveal and utility surface */
 
 /*
  * In compact mode the revealer contributes its animated natural width to the

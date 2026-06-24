@@ -271,29 +271,6 @@ window.theme-material-expressive .player-skip-control:hover {
   background-color: shade(@m3_secondary_container, 1.12);
 }
 
-window.theme-material-expressive .player-mode-control {
-  min-width: 44px;
-  min-height: 44px;
-  border-radius: 15px;
-  color: @m3_on_surface_variant;
-  background-color: alpha(@m3_surface_container_highest, 0.72);
-  transition:
-    border-radius 180ms ease,
-    background-color 180ms ease;
-}
-
-window.theme-material-expressive .player-mode-control:hover {
-  border-radius: 22px;
-  color: @m3_on_surface;
-  background-color: @m3_surface_container_highest;
-}
-
-window.theme-material-expressive .player-mode-control:checked {
-  border-radius: 22px;
-  color: @m3_on_tertiary_container;
-  background-color: @m3_tertiary_container;
-}
-
 /* Supporting content stays calm but visibly grouped */
 window.theme-material-expressive .player-visualizer-surface,
 window.theme-material-expressive .player-lyrics-surface {
@@ -426,12 +403,4 @@ window.theme-material-expressive .footer-skip-control {
   border-radius: 21px;
   color: @m3_on_secondary_container;
   background-color: @m3_secondary_container;
-}
-
-window.theme-material-expressive .footer-mode-control {
-  min-width: 40px;
-  min-height: 40px;
-  border-radius: 14px;
-  color: @m3_on_surface_variant;
-  background-color: alpha(@m3_surface_container_highest, 0.76);
 }

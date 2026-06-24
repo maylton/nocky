@@ -1,4 +1,8 @@
-// nocky_md3_repeat_shuffle_toggles_v1
+//! Shared Repeat and Shuffle toggle construction.
+//!
+//! Geometry and child structure are created once here. Theme-specific
+//! presentation belongs to `095-controls.css`.
+
 use gtk::prelude::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
