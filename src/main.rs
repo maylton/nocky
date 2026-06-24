@@ -6,6 +6,7 @@ mod compact_volume_motion;
 mod config;
 mod dialogs;
 mod expressive_transport;
+mod footer_layout;
 mod i18n;
 mod library;
 mod listening_history;
@@ -36,9 +37,10 @@ use animated_page_switcher::{AnimatedPageSwitcher, TopPage};
 use background::{BackgroundChannel, BackgroundMessage};
 use browser::{BrowserEvent, BrowserRoute, LibraryBrowser};
 use compact_volume_motion::{run_compact_volume_spring, CompactVolumeSpring};
-use config::{AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme};
+use config::{AppLanguage, BlurMode, StartupSource, VisualTheme};
 use dialogs::SettingsEvent;
 use expressive_transport::{ExpressiveTransport, TransportVariant};
+use footer_layout::{footer_mode_plan, AdaptiveFooterTier};
 use gtk::prelude::FileExt;
 use gtk::{gdk, gio, glib};
 use i18n::Message;
@@ -2878,34 +2880,24 @@ impl AppController {
 
     fn apply_footer_mode(&self) {
         let configured = self.config.borrow().footer_mode;
-        // O player principal da Home permanece visível em todas as rotas
-        // internas: início, álbum, discografia, artista e playlist.
-        // Portanto, o footer automático continua compacto durante toda
-        // a navegação da Home e só volta ao modo completo fora dela.
+
+        // The main Home player remains visible across internal music routes.
+        // Automatic therefore stays compact while that player is visible and
+        // returns to Full outside it.
         let home_player_visible = self.content_stack.visible_child_name().as_deref()
             == Some("main")
             && (self.views.visible_child_name().as_deref() == Some("music")
                 && !self.config.borrow().home_player_collapsed);
-
-        let effective = match configured {
-            FooterMode::Automatic => {
-                if home_player_visible {
-                    FooterMode::Compact
-                } else {
-                    FooterMode::Full
-                }
-            }
-            other => other,
-        };
+        let plan = footer_mode_plan(configured, home_player_visible);
 
         self.player_bar.remove_css_class("footer-mode-full");
         self.player_bar.remove_css_class("footer-mode-compact");
         self.player_bar.remove_css_class("footer-mode-hidden");
 
-        if effective == FooterMode::Hidden {
+        if !plan.bar_visible {
             self.compact_volume_expanded.set(false);
             self.volume_revealer.set_reveal_child(false);
-            self.player_bar.add_css_class("footer-mode-hidden");
+            self.player_bar.add_css_class(plan.css_class);
             self.player_bar.set_visible(false);
             return;
         }
@@ -2913,52 +2905,48 @@ impl AppController {
         self.player_bar.set_visible(true);
         self.footer_now_playing.set_visible(true);
 
-        let full = effective == FooterMode::Full;
-
-        // No compacto: faixa + anterior/play/próxima + letras. O controle de
-        // volume começa recolhido e é revelado pelo próprio ícone.
-        self.footer_center.set_visible(full);
+        self.footer_center.set_visible(plan.full);
         self.footer_center.set_valign(gtk::Align::Center);
         self.footer_center.set_margin_top(0);
         self.footer_center.set_margin_bottom(0);
         self.footer_right_controls.set_visible(true);
         self.footer_right_controls.set_valign(gtk::Align::Center);
 
-        self.footer_progress_stack.set_visible(full);
-        self.footer_elapsed.set_visible(full);
-        self.footer_duration.set_visible(full);
+        self.footer_progress_stack.set_visible(plan.full);
+        self.footer_elapsed.set_visible(plan.full);
+        self.footer_duration.set_visible(plan.full);
         self.footer_previous.set_visible(true);
         self.footer_next.set_visible(true);
         self.footer_play_button.set_visible(true);
-        self.footer_repeat_button.set_visible(full);
-        self.footer_shuffle_button.set_visible(full);
-        self.footer_source.set_visible(full);
-        self.footer_favorite_button.set_visible(full);
+        self.footer_repeat_button.set_visible(plan.full);
+        self.footer_shuffle_button.set_visible(plan.full);
+        self.footer_source.set_visible(plan.full);
+        self.footer_favorite_button.set_visible(plan.full);
         self.mini_artist.set_visible(true);
         self.mute_button.set_visible(true);
         self.volume.set_visible(true);
 
-        if full {
+        if plan.full {
             self.compact_volume_expanded.set(false);
-            self.player_bar.add_css_class("footer-mode-full");
-            self.player_bar.set_height_request(86);
-            self.footer_now_playing.set_size_request(330, 54);
-            self.footer_center.set_size_request(470, 56);
-            self.footer_right_controls.set_size_request(190, 52);
-        } else {
-            self.player_bar.add_css_class("footer-mode-compact");
-            self.player_bar.set_height_request(70);
-            self.footer_now_playing.set_size_request(292, 52);
-            self.footer_center.set_size_request(0, 52);
         }
 
-        // nocky_compact_volume_expand_and_flat_modes_v1
+        self.player_bar.add_css_class(plan.css_class);
+        self.player_bar.set_height_request(plan.bar_height);
+        self.footer_now_playing
+            .set_size_request(plan.now_playing_size.0, plan.now_playing_size.1);
+        self.footer_center
+            .set_size_request(plan.center_size.0, plan.center_size.1);
+
+        if let Some((width, height)) = plan.right_size {
+            self.footer_right_controls.set_size_request(width, height);
+        }
+
         self.apply_compact_volume_expansion();
     }
 
     fn install_footer_adaptive(&self) {
-        let mode = Rc::new(Cell::new(u8::MAX));
-        let mode_state = mode.clone();
+        let tier = Rc::new(Cell::new(None::<AdaptiveFooterTier>));
+        let tier_state = tier.clone();
         let now_playing = self.footer_now_playing.clone();
         let center = self.footer_center.clone();
         let right = self.footer_right_controls.clone();
@@ -2971,63 +2959,28 @@ impl AppController {
         let volume = self.volume.clone();
 
         self.player_bar.add_tick_callback(move |bar, _| {
-            let width = bar.width();
-
             if bar.has_css_class("footer-mode-compact") {
-                mode_state.set(u8::MAX);
+                tier_state.set(None);
                 return glib::ControlFlow::Continue;
             }
-            let next_mode = if width >= 1040 {
-                0
-            } else if width >= 790 {
-                1
-            } else {
-                2
-            };
 
-            if mode_state.get() == next_mode {
+            let next_tier = AdaptiveFooterTier::for_width(bar.width());
+            if tier_state.get() == Some(next_tier) {
                 return glib::ControlFlow::Continue;
             }
-            mode_state.set(next_mode);
+            tier_state.set(Some(next_tier));
 
-            match next_mode {
-                0 => {
-                    now_playing.set_size_request(350, 56);
-                    center.set_size_request(500, 60);
-                    right.set_size_request(220, 56);
-                    source.set_visible(true);
-                    artist.set_visible(true);
-                    elapsed.set_visible(true);
-                    duration.set_visible(true);
-                    shuffle.set_visible(true);
-                    repeat.set_visible(true);
-                    volume.set_visible(true);
-                }
-                1 => {
-                    now_playing.set_size_request(280, 56);
-                    center.set_size_request(390, 60);
-                    right.set_size_request(98, 56);
-                    source.set_visible(false);
-                    artist.set_visible(true);
-                    elapsed.set_visible(false);
-                    duration.set_visible(false);
-                    shuffle.set_visible(true);
-                    repeat.set_visible(true);
-                    volume.set_visible(false);
-                }
-                _ => {
-                    now_playing.set_size_request(190, 56);
-                    center.set_size_request(190, 60);
-                    right.set_size_request(92, 56);
-                    source.set_visible(false);
-                    artist.set_visible(false);
-                    elapsed.set_visible(false);
-                    duration.set_visible(false);
-                    shuffle.set_visible(false);
-                    repeat.set_visible(false);
-                    volume.set_visible(false);
-                }
-            }
+            let plan = next_tier.plan();
+            now_playing.set_size_request(plan.now_playing_size.0, plan.now_playing_size.1);
+            center.set_size_request(plan.center_size.0, plan.center_size.1);
+            right.set_size_request(plan.right_size.0, plan.right_size.1);
+            source.set_visible(plan.show_source);
+            artist.set_visible(plan.show_artist);
+            elapsed.set_visible(plan.show_elapsed);
+            duration.set_visible(plan.show_duration);
+            shuffle.set_visible(plan.show_shuffle);
+            repeat.set_visible(plan.show_repeat);
+            volume.set_visible(plan.show_volume);
 
             glib::ControlFlow::Continue
         });
