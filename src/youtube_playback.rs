@@ -126,8 +126,40 @@ impl AppController {
         stream: YouTubeStream,
         cover_path: Option<PathBuf>,
     ) {
-        self.sync_youtube_queue_v2(&queue, index);
         let recovering = self.youtube_recovery_in_progress.replace(false);
+        let pending = self.queue_v2_pending_entry.replace(None);
+        let preserved_id = if recovering {
+            self.playback_queue_v2
+                .borrow()
+                .entries()
+                .iter()
+                .find_map(|entry| match &entry.media.source {
+                    crate::queue_model::QueueSource::YouTube {
+                        video_id: candidate,
+                    } if candidate == &item.video_id => Some(entry.id),
+                    _ => None,
+                })
+        } else {
+            pending.filter(|id| {
+                self.playback_queue_v2
+                    .borrow()
+                    .entry(*id)
+                    .is_some_and(|entry| {
+                        matches!(
+                            &entry.media.source,
+                            crate::queue_model::QueueSource::YouTube {
+                                video_id: candidate,
+                            } if candidate == &item.video_id
+                        )
+                    })
+            })
+        };
+
+        if let Some(id) = preserved_id {
+            let _ = self.playback_queue_v2.borrow_mut().select(id);
+        } else {
+            self.sync_youtube_queue_v2(&queue, index);
+        }
         if !recovering {
             self.maybe_record_listening();
         }
