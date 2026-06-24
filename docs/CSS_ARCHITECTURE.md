@@ -122,3 +122,13 @@ CSS were removed.
 The approved implementation remains the fixed `collection-card` surface with
 allocation-stable hover and the browser-owned carousel edge spring. Every
 active edge-spring selector retained the same final cascade.
+
+## Phase 2H — Orphan track transition removal
+
+The unregistered `src/track_transition.rs` module and its dedicated
+`090-footer.css` presentation were removed together.
+
+The active player continues to update metadata immediately through
+`PlayerViewHandle::set_metadata`.
+
+Marker: `nocky_remove_orphan_track_transition_phase2h_v2`.

@@ -16,7 +16,6 @@ const MATERIAL_EXPRESSIVE_PARTS: &[&str] = &[
     include_str!("../assets/themes/material-expressive/070-player.css"),
     include_str!("../assets/themes/material-expressive/080-home-browser.css"),
     include_str!("../assets/themes/material-expressive/085-compact-volume.css"),
-    include_str!("../assets/themes/material-expressive/090-footer.css"),
     include_str!("../assets/themes/material-expressive/095-controls.css"),
     include_str!("../assets/themes/material-expressive/096-tonal-surfaces.css"),
 ];
@@ -42,7 +41,7 @@ pub(crate) fn combined_theme_css() -> String {
 mod tests {
     use super::*;
 
-    const EXPECTED_MATERIAL_EXPRESSIVE_BYTES: usize = 109025;
+    const EXPECTED_MATERIAL_EXPRESSIVE_BYTES: usize = 108383;
 
     #[test]
     fn material_modules_keep_original_size() {
