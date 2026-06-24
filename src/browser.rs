@@ -1,3 +1,6 @@
+// restore_circular_artist_covers_v2
+// preserve_home_carousel_scroll_v1
+// collection_card_inline_loading_fix_v2
 // collection_card_loading_spinner_v3\n// collection_overflow_icon_label_fix_v2
 // collection_card_overflow_and_play_state_v2
 // contextual_collection_controls_v5
@@ -445,7 +448,54 @@ pub struct LibraryBrowser {
     events: Receiver<BrowserEvent>,
 }
 
+fn collect_scrolled_windows(widget: &gtk::Widget, output: &mut Vec<gtk::ScrolledWindow>) {
+    if let Ok(scrolled) = widget.clone().downcast::<gtk::ScrolledWindow>() {
+        output.push(scrolled);
+    }
+
+    let mut child = widget.first_child();
+    while let Some(current) = child {
+        collect_scrolled_windows(&current, output);
+        child = current.next_sibling();
+    }
+}
+
 impl LibraryBrowser {
+    pub fn home_scroll_positions(&self) -> Vec<f64> {
+        let Some(content) = self.home_stack.visible_child() else {
+            return Vec::new();
+        };
+
+        let mut scrolled_windows = Vec::new();
+        collect_scrolled_windows(&content, &mut scrolled_windows);
+        scrolled_windows
+            .into_iter()
+            .map(|scrolled| scrolled.hadjustment().value())
+            .collect()
+    }
+
+    pub fn restore_home_scroll_positions(&self, positions: Vec<f64>) {
+        if positions.is_empty() {
+            return;
+        }
+
+        let home_stack = self.home_stack.clone();
+        glib::idle_add_local_once(move || {
+            let Some(content) = home_stack.visible_child() else {
+                return;
+            };
+
+            let mut scrolled_windows = Vec::new();
+            collect_scrolled_windows(&content, &mut scrolled_windows);
+
+            for (scrolled, value) in scrolled_windows.into_iter().zip(positions) {
+                let adjustment = scrolled.hadjustment();
+                let maximum = (adjustment.upper() - adjustment.page_size()).max(0.0);
+                adjustment.set_value(value.clamp(0.0, maximum));
+            }
+        });
+    }
+
     pub fn new() -> Self {
         let (event_tx, events) = mpsc::channel();
         let visible_tracks = Rc::new(RefCell::new(Vec::new()));
@@ -3581,8 +3631,20 @@ fn home_card_button(
         && playback.matches_collection(collection_kind, &collection_id, &collection_title);
     let is_loading = play_event.is_some()
         && playback.collection_is_loading(collection_kind, &collection_id, &collection_title);
+    let inline_loading_on_click = !is_active
+        && matches!(
+            &card,
+            HomeCard::YouTubeAlbum { .. } | HomeCard::YouTubePlaylist(_)
+        );
 
     let card_widget = collection_card(cover_path, title, subtitle, detail, online);
+    if matches!(
+        &card,
+        HomeCard::LocalArtist { .. } | HomeCard::YouTubeArtist { .. }
+    ) {
+        card_widget.add_css_class("artist-collection-card");
+    }
+
     card_widget.add_css_class("home-card");
     card_widget.add_css_class("expressive-collection-card");
     if is_active {
@@ -3673,7 +3735,21 @@ fn home_card_button(
             }
 
             let sender = event_tx.clone();
-            control.connect_clicked(move |_| {
+            control.connect_clicked(move |button| {
+                if inline_loading_on_click {
+                    let spinner = gtk::Spinner::new();
+                    spinner.set_spinning(true);
+                    spinner.set_size_request(18, 18);
+                    button.set_child(Some(&spinner));
+                    button.set_sensitive(false);
+                    button.add_css_class("loading");
+                    button.set_tooltip_text(Some(match language {
+                        AppLanguage::Portuguese => "Carregando coleção…",
+                        AppLanguage::English => "Loading collection…",
+                        AppLanguage::Spanish => "Cargando colección…",
+                    }));
+                }
+
                 let _ = sender.send(control_event.clone());
             });
         }

@@ -1,3 +1,4 @@
+// youtube_collection_background_playback_v1
 // youtube_collection_queue_background_load_v1
 // youtube_playlist_background_autoplay_v1
 use crate::{
@@ -43,9 +44,10 @@ pub(crate) enum BackgroundMessage {
         play_next: bool,
         result: Result<Vec<YouTubeItem>, String>,
     },
-    YouTubePlaylistPlaybackLoaded {
+    YouTubeCollectionPlaybackLoaded {
         request_id: u64,
-        playlist: YouTubeItem,
+        item: YouTubeItem,
+        playlist: bool,
         result: Result<Vec<YouTubeItem>, String>,
     },
     YouTubeBrowserPlaylist {

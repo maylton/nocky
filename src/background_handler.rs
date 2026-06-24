@@ -1,3 +1,4 @@
+// youtube_collection_background_playback_v1
 // collection_card_loading_spinner_v3\n// youtube_collection_queue_background_load_v1
 // youtube_playlist_background_autoplay_v1
 use crate::{
@@ -261,60 +262,106 @@ impl AppController {
 
                     self.refresh_browser();
                 }
-                BackgroundMessage::YouTubePlaylistPlaybackLoaded {
+                BackgroundMessage::YouTubeCollectionPlaybackLoaded {
                     request_id,
+                    item,
                     playlist,
                     result,
                 } => {
-                    let browse_id = playlist.browse_id.clone();
-                    if !browse_id.is_empty() {
+                    let cache_key = if playlist {
+                        item.browse_id.clone()
+                    } else {
+                        youtube_collection_key("album", &item.title)
+                    };
+
+                    if playlist {
+                        if !cache_key.is_empty() {
+                            self.youtube_library
+                                .borrow_mut()
+                                .playlist_loading
+                                .remove(&cache_key);
+                        }
+                    } else {
                         self.youtube_library
                             .borrow_mut()
-                            .playlist_loading
-                            .remove(&browse_id);
+                            .collection_loading
+                            .remove(&cache_key);
                     }
 
                     self.refresh_browser();
 
-                    if request_id != self.youtube_playlist_play_request_id.get() {
+                    if request_id != self.youtube_collection_play_request_id.get() {
                         continue;
                     }
 
                     match result {
                         Ok(items) if !items.is_empty() => {
-                            self.youtube_library
-                                .borrow_mut()
-                                .playlist_tracks
-                                .insert(browse_id.clone(), items);
+                            if playlist {
+                                self.youtube_library
+                                    .borrow_mut()
+                                    .playlist_tracks
+                                    .insert(cache_key.clone(), items);
+                            } else {
+                                self.youtube_library
+                                    .borrow_mut()
+                                    .collection_tracks
+                                    .insert(cache_key.clone(), items);
+                            }
 
-                            if cacheable_youtube_playlist(&playlist) {
+                            let should_save = !playlist || cacheable_youtube_playlist(&item);
+                            if should_save {
                                 if let Err(error) =
                                     save_library_cache(&self.youtube_library.borrow())
                                 {
-                                    eprintln!("Could not save the YouTube playlist cache: {error}");
+                                    eprintln!(
+                                        "Could not save the YouTube collection cache: {error}"
+                                    );
                                 }
                             }
 
-                            self.show_toast("Playlist carregada. Iniciando reprodução…");
-                            self.play_youtube_collection(playlist, true);
+                            self.show_toast(if playlist {
+                                "Playlist carregada. Iniciando reprodução…"
+                            } else {
+                                "Álbum carregado. Iniciando reprodução…"
+                            });
+                            self.play_youtube_collection(item, playlist);
                         }
                         Ok(_) => {
-                            self.youtube_library
-                                .borrow_mut()
-                                .playlist_tracks
-                                .remove(&browse_id);
-                            self.show_toast(
-                                "Esta playlist não retornou faixas reproduzíveis agora",
-                            );
+                            if playlist {
+                                self.youtube_library
+                                    .borrow_mut()
+                                    .playlist_tracks
+                                    .remove(&cache_key);
+                            } else {
+                                self.youtube_library
+                                    .borrow_mut()
+                                    .collection_tracks
+                                    .remove(&cache_key);
+                            }
+
+                            self.show_toast(if playlist {
+                                "Esta playlist não retornou faixas reproduzíveis agora"
+                            } else {
+                                "Este álbum não retornou faixas reproduzíveis agora"
+                            });
                             self.refresh_browser();
                         }
                         Err(error) => {
-                            self.youtube_library
-                                .borrow_mut()
-                                .playlist_tracks
-                                .remove(&browse_id);
+                            if playlist {
+                                self.youtube_library
+                                    .borrow_mut()
+                                    .playlist_tracks
+                                    .remove(&cache_key);
+                            } else {
+                                self.youtube_library
+                                    .borrow_mut()
+                                    .collection_tracks
+                                    .remove(&cache_key);
+                            }
+
                             self.show_toast(&format!(
-                                "Não foi possível carregar a playlist: {error}"
+                                "Não foi possível carregar {}: {error}",
+                                if playlist { "a playlist" } else { "o álbum" }
                             ));
                             self.refresh_browser();
                         }
