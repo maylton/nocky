@@ -28,3 +28,9 @@
 - architecture audit;
 - Rust format/check/test/clippy gate;
 - visual comparison in both themes.
+
+## Settings placement
+
+The two Material Expressive effect controls are displayed in the Appearance
+section, directly after the visual theme and Noctalia integration controls.
+Their theme-dependent visibility and stored values are unchanged.

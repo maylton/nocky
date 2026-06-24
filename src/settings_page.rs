@@ -282,6 +282,44 @@ fn build_content(
     noctalia_row.set_sensitive(noctalia_available);
     appearance_rows.append(&noctalia_row);
 
+    // nocky_expressive_settings_in_appearance_v1: Expressive controls belong to Appearance
+    // nocky_theme_scoped_expressive_effects_v1: Expressive controls are Material-only
+    let material_expressive = initial.visual_theme == VisualTheme::MaterialExpressive;
+
+    let expressive_transport = settings_switch(initial.expressive_transport_effects);
+    let expressive_transport_row = switch_row(
+        group_text(
+            "Animações expressivas de reprodução",
+            "Expressive playback animations",
+            "Animaciones expresivas de reproducción",
+        ),
+        group_text(
+            "Expande e reorganiza os controles com efeito de mola no modo Material 3. Desative para usar o comportamento clássico.",
+            "Expands and rearranges the controls with spring motion in Material 3 mode. Disable it to use the classic behavior.",
+            "Expande y reorganiza los controles con movimiento de resorte en el modo Material 3. Desactívalo para usar el comportamiento clásico.",
+        ),
+        &expressive_transport,
+    );
+    expressive_transport_row.set_visible(material_expressive);
+    appearance_rows.append(&expressive_transport_row);
+
+    let expressive_home_cards = settings_switch(initial.expressive_home_card_effects);
+    let expressive_home_cards_row = switch_row(
+        group_text(
+            "Resposta expressiva dos carrosséis",
+            "Expressive carousel response",
+            "Respuesta expresiva de los carruseles",
+        ),
+        group_text(
+            "Ativa a resposta elástica nas extremidades dos carrosséis da Home no tema Material 3.",
+            "Enables elastic edge feedback for Home carousels in the Material 3 theme.",
+            "Activa la respuesta elástica en los extremos de los carruseles de inicio con el tema Material 3.",
+        ),
+        &expressive_home_cards,
+    );
+    expressive_home_cards_row.set_visible(material_expressive);
+    appearance_rows.append(&expressive_home_cards_row);
+
     let visualizer = settings_switch(initial.show_home_visualizer);
     playback_rows.append(&switch_row(
         tr(Message::HomeVisualizer),
@@ -313,43 +351,6 @@ fn build_content(
         tr(Message::FooterModeDescription),
         &footer_mode,
     ));
-
-    // nocky_theme_scoped_expressive_effects_v1: Expressive controls are Material-only
-    let material_expressive = initial.visual_theme == VisualTheme::MaterialExpressive;
-
-    let expressive_transport = settings_switch(initial.expressive_transport_effects);
-    let expressive_transport_row = switch_row(
-        group_text(
-            "Animações expressivas de reprodução",
-            "Expressive playback animations",
-            "Animaciones expresivas de reproducción",
-        ),
-        group_text(
-            "Expande e reorganiza os controles com efeito de mola no modo Material 3. Desative para usar o comportamento clássico.",
-            "Expands and rearranges the controls with spring motion in Material 3 mode. Disable it to use the classic behavior.",
-            "Expande y reorganiza los controles con movimiento de resorte en el modo Material 3. Desactívalo para usar el comportamiento clásico.",
-        ),
-        &expressive_transport,
-    );
-    expressive_transport_row.set_visible(material_expressive);
-    playback_rows.append(&expressive_transport_row);
-
-    let expressive_home_cards = settings_switch(initial.expressive_home_card_effects);
-    let expressive_home_cards_row = switch_row(
-        group_text(
-            "Resposta expressiva dos carrosséis",
-            "Expressive carousel response",
-            "Respuesta expresiva de los carruseles",
-        ),
-        group_text(
-            "Ativa a resposta elástica nas extremidades dos carrosséis da Home no tema Material 3.",
-            "Enables elastic edge feedback for Home carousels in the Material 3 theme.",
-            "Activa la respuesta elástica en los extremos de los carruseles de inicio con el tema Material 3.",
-        ),
-        &expressive_home_cards,
-    );
-    expressive_home_cards_row.set_visible(material_expressive);
-    playback_rows.append(&expressive_home_cards_row);
 
     let auto_lyrics = settings_switch(initial.auto_download_lyrics);
     lyrics_rows.append(&switch_row(
