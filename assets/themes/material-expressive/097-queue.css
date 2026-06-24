@@ -1,0 +1,180 @@
+/* queue2_interface_polish_v1 */
+
+.queue2-row {
+  border-radius: 18px;
+  opacity: 1;
+  transition:
+    opacity 150ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.queue2-row.queue2-row-entering,
+.queue2-row.queue2-row-leaving {
+  opacity: 0;
+}
+
+.queue2-row.queue2-live-dragging {
+  opacity: 0.48;
+}
+
+button.queue2-drag-handle {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 17px;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+button.queue2-drag-handle:focus-visible {
+  outline-width: 2px;
+  outline-offset: 1px;
+}
+
+.queue2-drop-indicator {
+  min-height: 9px;
+}
+
+progressbar.queue2-drop-indicator-line {
+  min-height: 3px;
+}
+
+progressbar.queue2-drop-indicator-line trough {
+  min-height: 3px;
+  border-radius: 999px;
+  background-color: transparent;
+}
+
+progressbar.queue2-drop-indicator-line trough progress {
+  min-height: 3px;
+  border-radius: 999px;
+  transition:
+    background-color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.queue2-state {
+  min-height: 104px;
+  padding: 18px;
+  border-radius: 22px;
+}
+
+.queue2-state-title {
+  font-weight: 760;
+}
+
+.queue2-state-description {
+  font-size: 0.78rem;
+}
+
+.queue2-end-state {
+  min-height: 52px;
+  margin: 7px 4px 3px 4px;
+  padding: 8px 12px;
+  border-radius: 18px;
+}
+
+window.theme-material-expressive .queue2-row {
+  color: @m3_on_surface;
+  background-color: alpha(@m3_surface_container, 0.72);
+  border: 1px solid alpha(@m3_outline, 0.12);
+}
+
+window.theme-material-expressive .queue2-row:hover {
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.24);
+}
+
+window.theme-material-expressive .queue2-row.active {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.72);
+  border-color: alpha(@m3_primary, 0.30);
+}
+
+window.theme-material-expressive button.queue2-drag-handle {
+  color: @m3_on_surface_variant;
+}
+
+window.theme-material-expressive button.queue2-drag-handle:hover,
+window.theme-material-expressive button.queue2-drag-handle:focus-visible {
+  color: @m3_primary;
+  background-color: alpha(@m3_primary, 0.10);
+}
+
+window.theme-material-expressive button.queue2-drag-handle:focus-visible {
+  outline-color: alpha(@m3_primary, 0.72);
+}
+
+window.theme-material-expressive
+  progressbar.queue2-drop-indicator-line
+  trough
+  progress {
+  background-color: @m3_primary;
+  box-shadow:
+    0 0 0 1px alpha(@m3_on_primary, 0.14),
+    0 2px 10px alpha(@m3_primary, 0.38);
+}
+
+window.theme-material-expressive .queue2-state,
+window.theme-material-expressive .queue2-end-state {
+  color: @m3_on_surface_variant;
+  background-color: alpha(@m3_surface_container_high, 0.68);
+  border: 1px solid alpha(@m3_outline, 0.14);
+}
+
+window.theme-material-expressive .queue2-state-icon,
+window.theme-material-expressive .queue2-end-icon {
+  color: @m3_primary;
+}
+
+window.theme-noctalia .queue2-row {
+  background-color: alpha(@window_fg_color, 0.035);
+  border: 1px solid alpha(@window_fg_color, 0.09);
+}
+
+window.theme-noctalia .queue2-row:hover {
+  background-color: alpha(@window_fg_color, 0.07);
+  border-color: alpha(@accent_color, 0.32);
+}
+
+window.theme-noctalia .queue2-row.active {
+  background-color: alpha(@accent_color, 0.13);
+  border-color: alpha(@accent_color, 0.38);
+}
+
+window.theme-noctalia button.queue2-drag-handle {
+  color: alpha(@window_fg_color, 0.70);
+}
+
+window.theme-noctalia button.queue2-drag-handle:hover,
+window.theme-noctalia button.queue2-drag-handle:focus-visible {
+  color: @accent_color;
+  background-color: alpha(@accent_color, 0.12);
+}
+
+window.theme-noctalia button.queue2-drag-handle:focus-visible {
+  outline-color: alpha(@accent_color, 0.78);
+}
+
+window.theme-noctalia
+  progressbar.queue2-drop-indicator-line
+  trough
+  progress {
+  background-color: @accent_color;
+  box-shadow:
+    0 0 0 1px alpha(@accent_fg_color, 0.12),
+    0 2px 10px alpha(@accent_color, 0.36);
+}
+
+window.theme-noctalia .queue2-state,
+window.theme-noctalia .queue2-end-state {
+  color: alpha(@window_fg_color, 0.76);
+  background-color: alpha(@window_fg_color, 0.045);
+  border: 1px solid alpha(@window_fg_color, 0.10);
+}
+
+window.theme-noctalia .queue2-state-icon,
+window.theme-noctalia .queue2-end-icon {
+  color: @accent_color;
+}

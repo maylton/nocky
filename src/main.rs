@@ -1469,26 +1469,45 @@ impl AppController {
         );
 
         if entries.is_empty() {
-            let empty = gtk::Box::new(gtk::Orientation::Vertical, 8);
-            empty.set_margin_top(28);
-            empty.set_margin_bottom(28);
-            empty.set_margin_start(18);
-            empty.set_margin_end(18);
-            empty.set_halign(gtk::Align::Center);
+            // queue2_interface_polish_v1: richer empty state
+            let empty = gtk::Box::new(gtk::Orientation::Vertical, 7);
+            empty.set_margin_top(18);
+            empty.set_margin_bottom(18);
+            empty.set_margin_start(12);
+            empty.set_margin_end(12);
+            empty.set_halign(gtk::Align::Fill);
+            empty.set_valign(gtk::Align::Center);
+            empty.add_css_class("queue2-state");
+            empty.add_css_class("queue2-empty-state");
 
             let icon = gtk::Image::from_icon_name("view-list-symbolic");
-            icon.set_pixel_size(32);
-            icon.add_css_class("dim-label");
+            icon.set_pixel_size(34);
+            icon.add_css_class("queue2-state-icon");
 
-            let label = gtk::Label::new(Some(match language {
+            let title = gtk::Label::new(Some(match language {
                 AppLanguage::Portuguese => "A fila está vazia",
                 AppLanguage::English => "The queue is empty",
                 AppLanguage::Spanish => "La cola está vacía",
             }));
-            label.add_css_class("dim-label");
+            title.add_css_class("queue2-state-title");
+
+            let description = gtk::Label::new(Some(match language {
+                AppLanguage::Portuguese => {
+                    "Use “Reproduzir em seguida” ou “Adicionar ao fim” nas faixas."
+                }
+                AppLanguage::English => "Use “Play next” or “Add to end” from any track.",
+                AppLanguage::Spanish => {
+                    "Usa “Reproducir después” o “Añadir al final” en una pista."
+                }
+            }));
+            description.set_wrap(true);
+            description.set_justify(gtk::Justification::Center);
+            description.add_css_class("dim-label");
+            description.add_css_class("queue2-state-description");
 
             empty.append(&icon);
-            empty.append(&label);
+            empty.append(&title);
+            empty.append(&description);
             list.append(&empty);
             return;
         }
@@ -1513,21 +1532,23 @@ impl AppController {
             let drag_icon = gtk::Image::from_icon_name("list-drag-handle-symbolic");
             drag_icon.set_pixel_size(18);
             drag_icon.set_can_target(false);
-            drag_icon.add_css_class("dim-label");
 
-            let drag_handle = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+            // queue2_interface_polish_v1: semantic drag handle with keyboard operation
+            let drag_handle = gtk::Button::new();
             drag_handle.set_size_request(34, 34);
             drag_handle.set_halign(gtk::Align::Center);
             drag_handle.set_valign(gtk::Align::Center);
-            drag_handle.set_can_target(true);
+            drag_handle.set_focusable(true);
             drag_handle.set_cursor_from_name(Some("grab"));
             drag_handle.set_tooltip_text(Some(match language {
-                AppLanguage::Portuguese => "Arraste para reordenar",
-                AppLanguage::English => "Drag to reorder",
-                AppLanguage::Spanish => "Arrastra para reordenar",
+                AppLanguage::Portuguese => "Arraste ou use Alt+↑ / Alt+↓ para reordenar",
+                AppLanguage::English => "Drag or use Alt+↑ / Alt+↓ to reorder",
+                AppLanguage::Spanish => "Arrastra o usa Alt+↑ / Alt+↓ para reordenar",
             }));
+            drag_handle.add_css_class("flat");
+            drag_handle.add_css_class("circular");
             drag_handle.add_css_class("queue2-drag-handle");
-            drag_handle.append(&drag_icon);
+            drag_handle.set_child(Some(&drag_icon));
 
             let drag_origin = Rc::new(Cell::new(position));
             let drag_target = Rc::new(Cell::new(position));
@@ -1731,6 +1752,68 @@ impl AppController {
             }
 
             drag_handle.add_controller(drag_gesture);
+
+            // queue2_interface_polish_v1: Alt+Up / Alt+Down mirrors pointer reordering.
+            let key_controller = gtk::EventControllerKey::new();
+            {
+                let weak = Rc::downgrade(self);
+                let list = list.clone();
+                let summary = summary.clone();
+                let clear_upcoming = clear_upcoming.clone();
+                let queue_popover = popover.clone();
+                let id = entry.id;
+
+                key_controller.connect_key_pressed(move |_, key, _, state| {
+                    if !state.contains(gdk::ModifierType::ALT_MASK) {
+                        return glib::Propagation::Proceed;
+                    }
+
+                    let target = match key {
+                        gdk::Key::Up if position > 0 => Some(position - 1),
+                        gdk::Key::Down if position + 1 < count => Some(position + 1),
+                        _ => None,
+                    };
+                    let Some(target) = target else {
+                        return glib::Propagation::Proceed;
+                    };
+
+                    let Some(controller) = weak.upgrade() else {
+                        return glib::Propagation::Proceed;
+                    };
+
+                    if let Err(error) = controller
+                        .playback_queue_v2
+                        .borrow_mut()
+                        .move_entry(id, target)
+                    {
+                        controller.show_toast(&error.to_string());
+                        return glib::Propagation::Stop;
+                    }
+
+                    controller.rebuild_queue_popover(
+                        &list,
+                        &summary,
+                        &clear_upcoming,
+                        &queue_popover,
+                    );
+
+                    let focus_list = list.clone();
+                    glib::idle_add_local_once(move || {
+                        let mut child = focus_list.first_child();
+                        for _ in 0..target {
+                            child = child.and_then(|widget| widget.next_sibling());
+                        }
+                        if let Some(row) = child {
+                            if let Some(handle) = row.first_child() {
+                                handle.grab_focus();
+                            }
+                        }
+                    });
+
+                    glib::Propagation::Stop
+                });
+            }
+            drag_handle.add_controller(key_controller);
             row.append(&drag_handle);
 
             let play_area = gtk::Button::new();
@@ -1913,31 +1996,73 @@ impl AppController {
             remove.set_sensitive(!is_current);
             {
                 let weak = Rc::downgrade(self);
+                let row = row.clone();
                 let list = list.clone();
                 let summary = summary.clone();
                 let clear_upcoming = clear_upcoming.clone();
                 let queue_popover = popover.clone();
                 let id = entry.id;
-                remove.connect_clicked(move |_| {
-                    let Some(controller) = weak.upgrade() else {
-                        return;
-                    };
-                    let result = controller.playback_queue_v2.borrow_mut().remove(id);
-                    if let Err(error) = result {
-                        controller.show_toast(&error.to_string());
-                        return;
-                    }
-                    controller.rebuild_queue_popover(
-                        &list,
-                        &summary,
-                        &clear_upcoming,
-                        &queue_popover,
-                    );
+                remove.connect_clicked(move |button| {
+                    button.set_sensitive(false);
+                    row.add_css_class("queue2-row-leaving");
+
+                    let weak = weak.clone();
+                    let list = list.clone();
+                    let summary = summary.clone();
+                    let clear_upcoming = clear_upcoming.clone();
+                    let queue_popover = queue_popover.clone();
+
+                    glib::timeout_add_local_once(Duration::from_millis(150), move || {
+                        let Some(controller) = weak.upgrade() else {
+                            return;
+                        };
+                        let result = controller.playback_queue_v2.borrow_mut().remove(id);
+                        if let Err(error) = result {
+                            controller.show_toast(&error.to_string());
+                            return;
+                        }
+                        controller.rebuild_queue_popover(
+                            &list,
+                            &summary,
+                            &clear_upcoming,
+                            &queue_popover,
+                        );
+                    });
                 });
             }
             row.append(&remove);
 
+            row.add_css_class("queue2-row-entering");
             list.append(&row);
+            let entering_row = row.clone();
+            glib::idle_add_local_once(move || {
+                entering_row.remove_css_class("queue2-row-entering");
+            });
+        }
+
+        if current_index.is_some_and(|position| position.saturating_add(1) >= count) {
+            // queue2_interface_polish_v1: explicit end-of-queue state
+            let end_state = gtk::Box::new(gtk::Orientation::Horizontal, 9);
+            end_state.set_halign(gtk::Align::Fill);
+            end_state.set_valign(gtk::Align::Center);
+            end_state.add_css_class("queue2-end-state");
+
+            let icon = gtk::Image::from_icon_name("emblem-ok-symbolic");
+            icon.set_pixel_size(18);
+            icon.add_css_class("queue2-end-icon");
+
+            let label = gtk::Label::new(Some(match language {
+                AppLanguage::Portuguese => "Fim da fila",
+                AppLanguage::English => "End of queue",
+                AppLanguage::Spanish => "Fin de la cola",
+            }));
+            label.set_xalign(0.0);
+            label.set_hexpand(true);
+            label.add_css_class("dim-label");
+
+            end_state.append(&icon);
+            end_state.append(&label);
+            list.append(&end_state);
         }
     }
 
@@ -1977,6 +2102,11 @@ impl AppController {
         let summary = gtk::Label::new(None);
         summary.set_xalign(0.0);
         summary.add_css_class("dim-label");
+        summary.set_tooltip_text(Some(match self.config.borrow().language {
+            AppLanguage::Portuguese => "Atalho de reordenação: Alt+↑ / Alt+↓",
+            AppLanguage::English => "Reorder shortcut: Alt+↑ / Alt+↓",
+            AppLanguage::Spanish => "Atajo para reordenar: Alt+↑ / Alt+↓",
+        }));
 
         heading_text.append(&heading);
         heading_text.append(&summary);
