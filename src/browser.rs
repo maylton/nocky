@@ -1,4 +1,4 @@
-// collection_overflow_icon_label_fix_v2
+// collection_card_loading_spinner_v3\n// collection_overflow_icon_label_fix_v2
 // collection_card_overflow_and_play_state_v2
 // contextual_collection_controls_v5
 // smooth_home_crossfade_v1
@@ -115,6 +115,7 @@ pub struct BrowserPlaybackState {
     pub collection_kind: String,
     pub collection_id: String,
     pub collection_title: String,
+    pub loading_collections: HashSet<String>,
 }
 
 impl BrowserPlaybackState {
@@ -130,6 +131,17 @@ impl BrowserPlaybackState {
         (!id.trim().is_empty() && stored_id.eq_ignore_ascii_case(id.trim()))
             || (!normalized_title.is_empty() && stored_id.eq_ignore_ascii_case(&normalized_title))
             || (!title.trim().is_empty() && stored_title.eq_ignore_ascii_case(title.trim()))
+    }
+
+    fn collection_is_loading(&self, kind: &str, id: &str, title: &str) -> bool {
+        let normalized_id = id.trim().to_lowercase();
+        let normalized_title = title.trim().to_lowercase();
+        let typed_title = format!("{}:{normalized_title}", kind.trim().to_lowercase());
+
+        (!normalized_id.is_empty() && self.loading_collections.contains(&normalized_id))
+            || (!normalized_title.is_empty()
+                && self.loading_collections.contains(&normalized_title))
+            || (!normalized_title.is_empty() && self.loading_collections.contains(&typed_title))
     }
 }
 
@@ -3567,12 +3579,17 @@ fn home_card_button(
 
     let is_active = play_event.is_some()
         && playback.matches_collection(collection_kind, &collection_id, &collection_title);
+    let is_loading = play_event.is_some()
+        && playback.collection_is_loading(collection_kind, &collection_id, &collection_title);
 
     let card_widget = collection_card(cover_path, title, subtitle, detail, online);
     card_widget.add_css_class("home-card");
     card_widget.add_css_class("expressive-collection-card");
     if is_active {
         card_widget.add_css_class("collection-card-playing");
+    }
+    if is_loading {
+        card_widget.add_css_class("collection-card-loading");
     }
 
     let main_button = gtk::Button::new();
@@ -3606,46 +3623,61 @@ fn home_card_button(
     overlay.add_css_class("home-card-context-overlay");
 
     if let Some(play_event) = play_event {
-        let control_event = if is_active {
-            BrowserEvent::TogglePlayback
-        } else {
-            play_event
-        };
-        let icon_name = if is_active && playback.playing {
-            "media-playback-pause-symbolic"
-        } else {
-            "media-playback-start-symbolic"
-        };
-        let tooltip = match (language, is_active, playback.playing) {
-            (AppLanguage::Portuguese, true, true) => "Pausar coleção",
-            (AppLanguage::Portuguese, true, false) => "Continuar coleção",
-            (AppLanguage::Portuguese, false, _) => "Reproduzir coleção",
-            (AppLanguage::English, true, true) => "Pause collection",
-            (AppLanguage::English, true, false) => "Resume collection",
-            (AppLanguage::English, false, _) => "Play collection",
-            (AppLanguage::Spanish, true, true) => "Pausar colección",
-            (AppLanguage::Spanish, true, false) => "Continuar colección",
-            (AppLanguage::Spanish, false, _) => "Reproducir colección",
-        };
-
-        let control = gtk::Button::builder()
-            .icon_name(icon_name)
-            .tooltip_text(tooltip)
-            .build();
+        let control = gtk::Button::new();
         control.set_halign(gtk::Align::End);
         control.set_valign(gtk::Align::Start);
         control.set_margin_top(12);
         control.set_margin_end(12);
         control.add_css_class("circular");
         control.add_css_class("collection-card-context-action");
-        if is_active {
-            control.add_css_class("active");
+
+        if is_loading {
+            let spinner = gtk::Spinner::new();
+            spinner.set_spinning(true);
+            spinner.set_size_request(18, 18);
+            control.set_child(Some(&spinner));
+            control.set_sensitive(false);
+            control.add_css_class("loading");
+            control.set_tooltip_text(Some(match language {
+                AppLanguage::Portuguese => "Carregando coleção…",
+                AppLanguage::English => "Loading collection…",
+                AppLanguage::Spanish => "Cargando colección…",
+            }));
+        } else {
+            let control_event = if is_active {
+                BrowserEvent::TogglePlayback
+            } else {
+                play_event
+            };
+            let icon_name = if is_active && playback.playing {
+                "media-playback-pause-symbolic"
+            } else {
+                "media-playback-start-symbolic"
+            };
+            let tooltip = match (language, is_active, playback.playing) {
+                (AppLanguage::Portuguese, true, true) => "Pausar coleção",
+                (AppLanguage::Portuguese, true, false) => "Continuar coleção",
+                (AppLanguage::Portuguese, false, _) => "Reproduzir coleção",
+                (AppLanguage::English, true, true) => "Pause collection",
+                (AppLanguage::English, true, false) => "Resume collection",
+                (AppLanguage::English, false, _) => "Play collection",
+                (AppLanguage::Spanish, true, true) => "Pausar colección",
+                (AppLanguage::Spanish, true, false) => "Continuar colección",
+                (AppLanguage::Spanish, false, _) => "Reproducir colección",
+            };
+
+            control.set_icon_name(icon_name);
+            control.set_tooltip_text(Some(tooltip));
+            if is_active {
+                control.add_css_class("active");
+            }
+
+            let sender = event_tx.clone();
+            control.connect_clicked(move |_| {
+                let _ = sender.send(control_event.clone());
+            });
         }
 
-        let sender = event_tx.clone();
-        control.connect_clicked(move |_| {
-            let _ = sender.send(control_event.clone());
-        });
         overlay.add_overlay(&control);
     }
 
@@ -3664,6 +3696,7 @@ fn home_card_button(
         menu_button.set_margin_start(12);
         menu_button.add_css_class("circular");
         menu_button.add_css_class("collection-card-overflow-button");
+        menu_button.set_sensitive(!is_loading);
 
         let popover = gtk::Popover::new();
         popover.add_css_class("collection-card-overflow-popover");

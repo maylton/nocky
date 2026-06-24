@@ -1,4 +1,4 @@
-// youtube_collection_queue_background_load_v1
+// collection_card_loading_spinner_v3\n// youtube_collection_queue_background_load_v1
 // collection_card_overflow_and_play_state_v2
 // youtube_playlist_background_autoplay_v1
 // contextual_collection_controls_v5
@@ -3976,11 +3976,20 @@ impl AppController {
 
     fn browser_playback_state(&self) -> BrowserPlaybackState {
         let context = self.listening_history_context.borrow();
+        let youtube = self.youtube_library.borrow();
+        let loading_collections = youtube
+            .playlist_loading
+            .iter()
+            .chain(youtube.collection_loading.iter())
+            .map(|key| key.trim().to_lowercase())
+            .collect::<HashSet<_>>();
+
         BrowserPlaybackState {
             playing: self.play_icon.icon_name().as_deref() == Some("media-playback-pause-symbolic"),
             collection_kind: context.kind.clone(),
             collection_id: context.id.clone(),
             collection_title: context.title.clone(),
+            loading_collections,
         }
     }
 
@@ -4342,6 +4351,7 @@ impl AppController {
         }
 
         self.show_toast("Carregando playlist do YouTube Music…");
+        self.refresh_browser();
 
         let sender = self.background.sender();
         thread::spawn(move || {
@@ -4795,6 +4805,7 @@ impl AppController {
             (AppLanguage::Spanish, false) => "Cargando colección para añadirla a la cola…",
         };
         self.show_toast(message);
+        self.refresh_browser();
 
         let sender = self.background.sender();
         thread::spawn(move || {

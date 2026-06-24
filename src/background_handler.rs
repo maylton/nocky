@@ -1,4 +1,4 @@
-// youtube_collection_queue_background_load_v1
+// collection_card_loading_spinner_v3\n// youtube_collection_queue_background_load_v1
 // youtube_playlist_background_autoplay_v1
 use crate::{
     background::BackgroundMessage,
@@ -218,6 +218,8 @@ impl AppController {
                             .remove(&youtube_collection_key("album", &item.title));
                     }
 
+                    self.refresh_browser();
+
                     if request_id != self.youtube_collection_queue_request_id.get() {
                         continue;
                     }
@@ -271,6 +273,8 @@ impl AppController {
                             .playlist_loading
                             .remove(&browse_id);
                     }
+
+                    self.refresh_browser();
 
                     if request_id != self.youtube_playlist_play_request_id.get() {
                         continue;
