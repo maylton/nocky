@@ -126,6 +126,7 @@ impl AppController {
         stream: YouTubeStream,
         cover_path: Option<PathBuf>,
     ) {
+        self.sync_youtube_queue_v2(&queue, index);
         let recovering = self.youtube_recovery_in_progress.replace(false);
         if !recovering {
             self.maybe_record_listening();
@@ -258,60 +259,6 @@ impl AppController {
             (state.queue.clone(), state.current)
         };
         thread::spawn(move || bridge.preload_streams(&queue, current, 4));
-    }
-
-    pub(super) fn youtube_next_track(&self) {
-        let state = self.youtube_state.borrow();
-        let Some(current) = state.as_ref() else {
-            return;
-        };
-        if current.queue.is_empty() {
-            return;
-        }
-        let next = if self.shuffle_enabled.get() && current.queue.len() > 1 {
-            let mut value = self.rng_state.get();
-            value ^= value << 13;
-            value ^= value >> 7;
-            value ^= value << 17;
-            self.rng_state.set(value);
-            let mut position = value as usize % current.queue.len();
-            if position == current.current {
-                position = (position + 1) % current.queue.len();
-            }
-            Some(position)
-        } else {
-            current
-                .current
-                .checked_add(1)
-                .filter(|position| *position < current.queue.len())
-        };
-        let Some(next) = next else {
-            return;
-        };
-        let queue = current.queue.clone();
-        let item = queue[next].clone();
-        drop(state);
-        self.resolve_youtube_track(item, queue, next, false);
-    }
-
-    pub(super) fn youtube_previous_track(&self) {
-        if self.player.position_us() > 5_000_000 {
-            self.seek_to(0, true);
-            return;
-        }
-        let state = self.youtube_state.borrow();
-        let Some(current) = state.as_ref() else {
-            return;
-        };
-        let Some(previous) = current.current.checked_sub(1) else {
-            drop(state);
-            self.seek_to(0, true);
-            return;
-        };
-        let queue = current.queue.clone();
-        let item = queue[previous].clone();
-        drop(state);
-        self.resolve_youtube_track(item, queue, previous, false);
     }
 
     fn publish_mpris_youtube(

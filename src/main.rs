@@ -61,6 +61,7 @@ use lyrics_view::LyricsPresenter;
 use model::{Track, TrackData};
 use playback::{PlaybackEngine, PlaybackEvent};
 use player_view::{PlayerView, PlayerViewHandle};
+use queue_model::{PlaybackQueue, QueueEntryId, QueueMedia, QueueSource};
 use reveal_bounce::RevealBounce;
 use settings_page::SettingsPage;
 use std::{
@@ -132,6 +133,8 @@ struct AppController {
     toast_overlay: adw::ToastOverlay,
     player: PlaybackEngine,
     state: RefCell<AppState>,
+    // queue2_playback_bridge_v1
+    playback_queue_v2: RefCell<PlaybackQueue>,
     config: RefCell<config::AppConfig>,
     listening_history: RefCell<ListeningHistory>,
     listening_session_id: RefCell<Option<String>>,
@@ -663,6 +666,7 @@ impl AppController {
             toast_overlay,
             player,
             state: RefCell::new(AppState::default()),
+            playback_queue_v2: RefCell::new(PlaybackQueue::new()),
             config: RefCell::new(config),
             listening_history: RefCell::new(ListeningHistory::load()),
             listening_session_id: RefCell::new(None),
@@ -3574,6 +3578,7 @@ impl AppController {
         self.youtube_state.replace(None);
         self.reset_youtube_recovery();
         self.state.borrow_mut().current = Some(index);
+        self.ensure_local_queue_v2(index);
         self.player_view
             .set_metadata(&track.title, &track.artist, &track.album);
         self.set_footer_metadata(&track.title, &track.artist);
@@ -3709,12 +3714,223 @@ impl AppController {
             .set_opacity(if liked { 0.98 } else { 0.28 });
     }
 
+    // queue2_playback_bridge_v1
+    fn local_queue_media(track: &Track) -> QueueMedia {
+        QueueMedia::local(
+            track.path.clone(),
+            track.title.clone(),
+            track.artist.clone(),
+            track.album.clone(),
+            track.duration_seconds,
+            track.cover_path.clone(),
+        )
+    }
+
+    fn youtube_queue_media(item: &YouTubeItem) -> QueueMedia {
+        QueueMedia::youtube(
+            item.video_id.clone(),
+            item.title.clone(),
+            item.artist.clone(),
+            item.album.clone(),
+            item.duration_seconds,
+            item.cached_cover().map(Path::to_path_buf),
+        )
+    }
+
+    fn sync_local_queue_v2(&self, sequence: &[usize], selected: usize) {
+        let (media, selected_position) = {
+            let state = self.state.borrow();
+            let media = sequence
+                .iter()
+                .filter_map(|index| state.tracks.get(*index))
+                .map(Self::local_queue_media)
+                .collect::<Vec<_>>();
+            let selected_position = sequence.iter().position(|index| *index == selected);
+            (media, selected_position)
+        };
+
+        let incoming_keys = media
+            .iter()
+            .map(|item| item.source.stable_key())
+            .collect::<Vec<_>>();
+        let current_keys = self
+            .playback_queue_v2
+            .borrow()
+            .entries()
+            .iter()
+            .map(|entry| entry.media.source.stable_key())
+            .collect::<Vec<_>>();
+
+        let mut queue = self.playback_queue_v2.borrow_mut();
+        if incoming_keys != current_keys {
+            queue.replace(media, selected_position);
+        } else if let Some(position) = selected_position {
+            queue.select_index(position);
+        }
+    }
+
+    fn sync_youtube_queue_v2(&self, items: &[YouTubeItem], selected: usize) {
+        let media = items
+            .iter()
+            .filter(|item| item.playable())
+            .map(Self::youtube_queue_media)
+            .collect::<Vec<_>>();
+        let selected_video_id = items.get(selected).map(|item| item.video_id.as_str());
+        let selected_position = selected_video_id.and_then(|video_id| {
+            media.iter().position(|item| {
+                matches!(
+                    &item.source,
+                    QueueSource::YouTube {
+                        video_id: candidate
+                    } if candidate == video_id
+                )
+            })
+        });
+
+        let incoming_keys = media
+            .iter()
+            .map(|item| item.source.stable_key())
+            .collect::<Vec<_>>();
+        let current_keys = self
+            .playback_queue_v2
+            .borrow()
+            .entries()
+            .iter()
+            .map(|entry| entry.media.source.stable_key())
+            .collect::<Vec<_>>();
+
+        let mut queue = self.playback_queue_v2.borrow_mut();
+        if incoming_keys != current_keys {
+            queue.replace(media, selected_position);
+        } else if let Some(position) = selected_position {
+            queue.select_index(position);
+        }
+    }
+
+    fn ensure_local_queue_v2(&self, selected: usize) {
+        let selected_path = {
+            let state = self.state.borrow();
+            state.tracks.get(selected).map(|track| track.path.clone())
+        };
+        let Some(selected_path) = selected_path else {
+            return;
+        };
+
+        let matching_id = self
+            .playback_queue_v2
+            .borrow()
+            .entries()
+            .iter()
+            .find_map(|entry| match &entry.media.source {
+                QueueSource::Local { path } if path == &selected_path => Some(entry.id),
+                _ => None,
+            });
+
+        if let Some(id) = matching_id {
+            let _ = self.playback_queue_v2.borrow_mut().select(id);
+            return;
+        }
+
+        let sequence = self.playback_sequence();
+        self.sync_local_queue_v2(&sequence, selected);
+    }
+
+    fn ensure_active_queue_v2(&self) {
+        match self.playback_source.get() {
+            PlaybackSource::Local => {
+                if let Some(selected) = self.state.borrow().current {
+                    self.ensure_local_queue_v2(selected);
+                }
+            }
+            PlaybackSource::YouTube => {
+                let state = self.youtube_state.borrow();
+                if let Some(state) = state.as_ref() {
+                    self.sync_youtube_queue_v2(&state.queue, state.current);
+                }
+            }
+            PlaybackSource::None => {}
+        }
+    }
+
+    fn random_queue_entry_id(&self) -> Option<QueueEntryId> {
+        let queue = self.playback_queue_v2.borrow();
+        if queue.is_empty() {
+            return None;
+        }
+        if queue.len() == 1 {
+            return queue.entries().first().map(|entry| entry.id);
+        }
+
+        let current = queue.current_id();
+        let candidates = queue
+            .entries()
+            .iter()
+            .filter(|entry| Some(entry.id) != current)
+            .map(|entry| entry.id)
+            .collect::<Vec<_>>();
+        drop(queue);
+
+        if candidates.is_empty() {
+            return current;
+        }
+
+        let mut value = self.rng_state.get();
+        value ^= value << 13;
+        value ^= value >> 7;
+        value ^= value << 17;
+        self.rng_state.set(value);
+        candidates.get(value as usize % candidates.len()).copied()
+    }
+
+    fn play_queue_entry(&self, id: QueueEntryId, autoplay: bool) {
+        let source = self
+            .playback_queue_v2
+            .borrow()
+            .entry(id)
+            .map(|entry| entry.media.source.clone());
+        let Some(source) = source else {
+            return;
+        };
+
+        match source {
+            QueueSource::Local { path } => {
+                let index = self
+                    .state
+                    .borrow()
+                    .tracks
+                    .iter()
+                    .position(|track| track.path == path);
+                if let Some(index) = index {
+                    self.select_track(index, autoplay);
+                }
+            }
+            QueueSource::YouTube { video_id } => {
+                let resolved = {
+                    let state = self.youtube_state.borrow();
+                    let Some(state) = state.as_ref() else {
+                        return;
+                    };
+                    let queue = state.queue.clone();
+                    let Some(position) = queue.iter().position(|item| item.video_id == video_id)
+                    else {
+                        return;
+                    };
+                    let item = queue[position].clone();
+                    (item, queue, position)
+                };
+                let (item, queue, position) = resolved;
+                self.resolve_youtube_track(item, queue, position, false);
+            }
+        }
+    }
+
     fn prepare_playback_queue(&self, selected: usize) {
         let mut sequence = self.browser.visible_indices();
         if sequence.is_empty() || !sequence.contains(&selected) {
             sequence = (0..self.state.borrow().tracks.len()).collect();
         }
-        self.state.borrow_mut().playback_queue = sequence;
+        self.state.borrow_mut().playback_queue = sequence.clone();
+        self.sync_local_queue_v2(&sequence, selected);
     }
 
     fn playback_sequence(&self) -> Vec<usize> {
@@ -3778,74 +3994,45 @@ impl AppController {
     }
 
     fn next_track(&self) {
-        if self.playback_source.get() == PlaybackSource::YouTube {
-            self.youtube_next_track();
-            return;
-        }
-        let sequence = self.playback_sequence();
-        if sequence.is_empty() {
-            return;
-        }
-        let current = self.state.borrow().current;
+        self.ensure_active_queue_v2();
+
         let next = if self.shuffle_enabled.get() {
-            self.random_visible_index(&sequence, current)
+            self.random_queue_entry_id()
         } else {
-            current
-                .and_then(|current| sequence.iter().position(|index| *index == current))
-                .and_then(|position| sequence.get(position + 1).copied())
-                .or_else(|| current.is_none().then_some(sequence[0]))
+            let queue = self.playback_queue_v2.borrow();
+            match queue.current_index() {
+                Some(position) => queue.entries().get(position + 1).map(|entry| entry.id),
+                None => queue.entries().first().map(|entry| entry.id),
+            }
         };
+
         if let Some(next) = next {
-            self.select_track(next, true);
+            self.play_queue_entry(next, true);
         }
     }
 
     fn previous_track(&self) {
-        if self.playback_source.get() == PlaybackSource::YouTube {
-            self.youtube_previous_track();
-            return;
-        }
         if self.player.position_us() > 5_000_000 {
             self.seek_to(0, true);
             return;
         }
 
-        let sequence = self.playback_sequence();
-        let current = self.state.borrow().current;
-        let previous = current
-            .and_then(|current| sequence.iter().position(|index| *index == current))
-            .and_then(|position| position.checked_sub(1))
-            .and_then(|position| sequence.get(position).copied());
+        self.ensure_active_queue_v2();
+        let (previous, has_current) = {
+            let queue = self.playback_queue_v2.borrow();
+            let previous = queue
+                .current_index()
+                .and_then(|position| position.checked_sub(1))
+                .and_then(|position| queue.entries().get(position))
+                .map(|entry| entry.id);
+            (previous, queue.current_id().is_some())
+        };
 
         if let Some(previous) = previous {
-            self.select_track(previous, true);
-        } else if current.is_some() {
+            self.play_queue_entry(previous, true);
+        } else if has_current {
             self.seek_to(0, true);
         }
-    }
-
-    fn random_visible_index(&self, sequence: &[usize], current: Option<usize>) -> Option<usize> {
-        if sequence.is_empty() {
-            return None;
-        }
-        if sequence.len() == 1 {
-            return sequence.first().copied();
-        }
-
-        let mut value = self.rng_state.get();
-        value ^= value << 13;
-        value ^= value >> 7;
-        value ^= value << 17;
-        self.rng_state.set(value);
-        let mut candidate = sequence[value as usize % sequence.len()];
-        if Some(candidate) == current {
-            let position = sequence
-                .iter()
-                .position(|index| *index == candidate)
-                .unwrap_or(0);
-            candidate = sequence[(position + 1) % sequence.len()];
-        }
-        Some(candidate)
     }
 
     fn play_current(&self) {
@@ -3912,30 +4099,14 @@ impl AppController {
             return;
         }
 
-        if self.playback_source.get() == PlaybackSource::YouTube {
-            let has_next = self.youtube_state.borrow().as_ref().is_some_and(|state| {
-                self.shuffle_enabled.get() && state.queue.len() > 1
-                    || state.current + 1 < state.queue.len()
-            });
-            if has_next {
-                self.youtube_next_track();
+        self.ensure_active_queue_v2();
+        let has_next = {
+            let queue = self.playback_queue_v2.borrow();
+            if self.shuffle_enabled.get() {
+                queue.len() > 1
             } else {
-                let _ = self.player.pause();
-                self.update_play_icons(false);
-                self.mpris
-                    .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Stopped));
+                queue.has_next()
             }
-            return;
-        }
-
-        let sequence = self.playback_sequence();
-        let current = self.state.borrow().current;
-        let has_next = if self.shuffle_enabled.get() {
-            sequence.len() > 1
-        } else {
-            current
-                .and_then(|current| sequence.iter().position(|index| *index == current))
-                .is_some_and(|position| position + 1 < sequence.len())
         };
 
         if has_next {
@@ -4261,6 +4432,7 @@ impl AppController {
         let _ = self.player.stop();
         self.playback_source.set(PlaybackSource::None);
         self.youtube_state.replace(None);
+        self.playback_queue_v2.borrow_mut().clear();
         self.reset_youtube_recovery();
         self.player_view.set_metadata(
             self.tr(Message::IntegratedMusic),
