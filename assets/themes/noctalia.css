@@ -82,3 +82,31 @@ window.theme-noctalia .audio-visualizer {
   margin: 2px 0;
   border-radius: 18px;
 }
+
+/* nocky_footer_full_metadata_visual_density_v7 */
+
+window.theme-noctalia
+  .expressive-footer.footer-mode-full
+  .footer-info-card {
+  min-height: 70px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+window.theme-noctalia
+  .expressive-footer.footer-mode-full
+  .footer-metadata {
+  margin-left: 2px;
+}
+
+window.theme-noctalia
+  .expressive-footer.footer-mode-full
+  .footer-title-row {
+  margin-bottom: 3px;
+}
+
+window.theme-noctalia
+  .expressive-footer.footer-mode-full
+  .footer-artist-row {
+  margin-bottom: 3px;
+}

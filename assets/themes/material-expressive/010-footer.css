@@ -356,3 +356,46 @@ window.theme-material-expressive .header-action-button {
     border-radius 180ms ease,
     background-color 180ms ease;
 }
+
+/* nocky_footer_full_metadata_visual_density_v7 */
+
+/*
+ * Full mode intentionally uses a roomier information hierarchy.
+ * Compact mode keeps the existing dense geometry unchanged.
+ */
+window.theme-material-expressive
+  .expressive-footer.footer-mode-full
+  .footer-info-card {
+  min-height: 70px;
+  padding: 3px 12px 3px 4px;
+}
+
+window.theme-material-expressive
+  .expressive-footer.footer-mode-full
+  .footer-metadata {
+  margin-left: 2px;
+}
+
+window.theme-material-expressive
+  .expressive-footer.footer-mode-full
+  .footer-title-row {
+  margin-bottom: 3px;
+}
+
+window.theme-material-expressive
+  .expressive-footer.footer-mode-full
+  .footer-artist-row {
+  margin-bottom: 3px;
+}
+
+window.theme-material-expressive
+  .expressive-footer.footer-mode-full
+  .footer-track-title {
+  font-size: 0.97rem;
+}
+
+window.theme-material-expressive
+  .expressive-footer.footer-mode-full
+  .footer-track-artist {
+  font-size: 0.79rem;
+}

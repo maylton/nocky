@@ -13,6 +13,9 @@ use gtk::prelude::*;
 
 // nocky_footer_optical_alignment_metadata_width_v1
 
+// nocky_footer_metadata_full_mode_breathing_room_v4
+// nocky_footer_full_metadata_visual_density_v7
+
 const TITLE_MAX_WIDTH_CHARS: i32 = 22;
 const ARTIST_MAX_WIDTH_CHARS: i32 = 18;
 
@@ -104,13 +107,16 @@ pub(crate) fn build_footer_now_playing(
 
     let button = gtk::Button::new();
     button.set_child(Some(&content));
-    button.set_size_request(350, 56);
+    button.set_size_request(350, 72);
     button.set_hexpand(false);
     button.set_halign(gtk::Align::Start);
     button.add_css_class("flat");
     button.add_css_class("footer-now-playing-button");
     button.add_css_class("footer-info-card");
     button.set_tooltip_text(Some("Abrir fila de reprodução"));
+    // nocky_footer_metadata_fill_available_height_v8
+    // nocky_footer_compact_restores_vertical_air_v12
+    button.set_vexpand(false);
     button.set_valign(gtk::Align::Center);
 
     FooterNowPlayingParts {

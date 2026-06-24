@@ -45,7 +45,10 @@ use compact_volume_motion::{run_compact_volume_spring, CompactVolumeSpring};
 use config::{AppLanguage, BlurMode, StartupSource, VisualTheme};
 use dialogs::SettingsEvent;
 use expressive_transport::ExpressiveTransport;
-use footer_layout::{footer_mode_plan, AdaptiveFooterTier};
+use footer_layout::{
+    footer_full_artwork_size_for_card_height, footer_mode_plan, AdaptiveFooterTier,
+    FOOTER_ARTWORK_SOURCE_SIZE,
+};
 use footer_view::{build_footer_view, FooterViewParts};
 use gtk::prelude::FileExt;
 use gtk::{gdk, gio, glib};
@@ -587,7 +590,7 @@ impl AppController {
         body.append(&content_stack);
 
         // nocky_rust_ui_phase3g_footer_view_assembly_v1
-        let mini_cover = build_cover(50);
+        let mini_cover = build_cover(FOOTER_ARTWORK_SOURCE_SIZE);
         let FooterViewParts {
             root: player_bar,
             now_playing_button: footer_now_playing,
@@ -2693,6 +2696,28 @@ impl AppController {
         self.player_bar.set_visible(true);
         self.footer_now_playing.set_visible(true);
 
+        // nocky_footer_metadata_fill_available_height_v8
+        // nocky_footer_compact_restores_vertical_air_v12
+        let card_margin = if plan.full {
+            0
+        } else {
+            footer_layout::FOOTER_COMPACT_CARD_MARGIN
+        };
+        self.footer_now_playing.set_vexpand(plan.full);
+        self.footer_now_playing.set_valign(if plan.full {
+            gtk::Align::Fill
+        } else {
+            gtk::Align::Center
+        });
+        self.footer_now_playing.set_margin_top(card_margin);
+        self.footer_now_playing.set_margin_bottom(card_margin);
+
+        // nocky_footer_metadata_full_mode_breathing_room_v4
+        self.mini_cover
+            .set_display_size(plan.now_playing_artwork_size);
+        self.mini_title.set_margin_bottom(plan.metadata_spacing);
+        self.mini_artist.set_margin_bottom(plan.metadata_spacing);
+
         self.footer_center.set_visible(plan.full);
         self.footer_center.set_valign(gtk::Align::Center);
         self.footer_center.set_margin_top(0);
@@ -2736,6 +2761,7 @@ impl AppController {
         let tier = Rc::new(Cell::new(None::<AdaptiveFooterTier>));
         let tier_state = tier.clone();
         let now_playing = self.footer_now_playing.clone();
+        let cover = self.mini_cover.clone();
         let center = self.footer_center.clone();
         let right = self.footer_right_controls.clone();
         let source = self.footer_source.clone();
@@ -2751,6 +2777,10 @@ impl AppController {
                 tier_state.set(None);
                 return glib::ControlFlow::Continue;
             }
+
+            // nocky_footer_artwork_tracks_card_height_v11
+            let artwork_size = footer_full_artwork_size_for_card_height(now_playing.height());
+            cover.set_display_size(artwork_size);
 
             let next_tier = AdaptiveFooterTier::for_width(bar.width());
             if tier_state.get() == Some(next_tier) {
@@ -4430,10 +4460,24 @@ fn sidebar_row(icon_name: &str, text: &str, active: bool) -> (gtk::Button, gtk::
 pub(crate) struct CoverView {
     pub(crate) stack: gtk::Stack,
     picture: gtk::Picture,
+    placeholder: gtk::Box,
+    icon: gtk::Image,
     size: i32,
 }
 
 impl CoverView {
+    fn set_display_size(&self, size: i32) {
+        let size = size.max(1);
+        if self.stack.width_request() == size && self.stack.height_request() == size {
+            return;
+        }
+
+        self.stack.set_size_request(size, size);
+        self.picture.set_size_request(size, size);
+        self.placeholder.set_size_request(size, size);
+        self.icon.set_pixel_size((f64::from(size) * 0.30) as i32);
+    }
+
     fn set_path(&self, path: Option<&Path>) {
         let Some(path) = path.filter(|path| path.is_file()) else {
             self.picture.set_paintable(None::<&gdk::Texture>);
@@ -4519,6 +4563,8 @@ pub(crate) fn build_cover(size: i32) -> CoverView {
     CoverView {
         stack,
         picture,
+        placeholder,
+        icon,
         size,
     }
 }
