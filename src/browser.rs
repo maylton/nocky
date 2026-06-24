@@ -1,3 +1,5 @@
+// collection_overflow_icon_label_fix_v2
+// collection_card_overflow_and_play_state_v2
 // contextual_collection_controls_v5
 // smooth_home_crossfade_v1
 // recent_album_cover_resolution_v1
@@ -80,6 +82,16 @@ pub enum BrowserEvent {
     QueueLocalAppend(usize),
     QueueYouTubePlayNext(YouTubeItem),
     QueueYouTubeAppend(YouTubeItem),
+    QueueLocalCollection {
+        kind: String,
+        title: String,
+        play_next: bool,
+    },
+    QueueYouTubeCollection {
+        item: YouTubeItem,
+        playlist: bool,
+        play_next: bool,
+    },
     TogglePlayback,
     PlayLocalAlbum(String),
     PlayLocalPlaylist(String),
@@ -3452,21 +3464,72 @@ fn home_card_button(
         ),
     };
 
-    let (play_event, collection_kind, collection_id, collection_title) = match &card {
+    let open_event = match &card {
+        HomeCard::LocalAlbum { title, .. } => {
+            BrowserEvent::Navigate(BrowserRoute::Album(title.clone()))
+        }
+        HomeCard::YouTubeAlbum { item, .. } => BrowserEvent::OpenYouTubeCollection(item.clone()),
+        HomeCard::LocalArtist { title, .. } => {
+            BrowserEvent::Navigate(BrowserRoute::Artist(title.clone()))
+        }
+        HomeCard::YouTubeArtist { item, .. } => BrowserEvent::OpenYouTubeCollection(item.clone()),
+        HomeCard::LocalPlaylist { title, .. } => {
+            BrowserEvent::Navigate(BrowserRoute::Playlist(title.clone()))
+        }
+        HomeCard::YouTubePlaylist(item) => BrowserEvent::OpenYouTubePlaylist(item.clone()),
+    };
+
+    let (play_event, queue_events, collection_kind, collection_id, collection_title) = match &card {
         HomeCard::LocalAlbum { title, .. } => (
             Some(BrowserEvent::PlayLocalAlbum(title.clone())),
+            Some((
+                BrowserEvent::QueueLocalCollection {
+                    kind: "album".to_string(),
+                    title: title.clone(),
+                    play_next: true,
+                },
+                BrowserEvent::QueueLocalCollection {
+                    kind: "album".to_string(),
+                    title: title.clone(),
+                    play_next: false,
+                },
+            )),
             "album",
             title.to_lowercase(),
             title.clone(),
         ),
         HomeCard::LocalPlaylist { title, .. } => (
             Some(BrowserEvent::PlayLocalPlaylist(title.clone())),
+            Some((
+                BrowserEvent::QueueLocalCollection {
+                    kind: "playlist".to_string(),
+                    title: title.clone(),
+                    play_next: true,
+                },
+                BrowserEvent::QueueLocalCollection {
+                    kind: "playlist".to_string(),
+                    title: title.clone(),
+                    play_next: false,
+                },
+            )),
             "playlist",
             title.to_lowercase(),
             title.clone(),
         ),
         HomeCard::YouTubeAlbum { item, .. } => (
             Some(BrowserEvent::PlayYouTubeAlbum(item.clone())),
+            Some((
+                BrowserEvent::QueueYouTubeCollection {
+                    item: item.clone(),
+                    playlist: false,
+                    play_next: true,
+                },
+                BrowserEvent::QueueYouTubeCollection {
+                    item: item.clone(),
+                    playlist: false,
+                    play_next: false,
+                },
+            )),
             "album",
             if item.browse_id.trim().is_empty() {
                 item.title.to_lowercase()
@@ -3477,6 +3540,18 @@ fn home_card_button(
         ),
         HomeCard::YouTubePlaylist(item) => (
             Some(BrowserEvent::PlayYouTubePlaylist(item.clone())),
+            Some((
+                BrowserEvent::QueueYouTubeCollection {
+                    item: item.clone(),
+                    playlist: true,
+                    play_next: true,
+                },
+                BrowserEvent::QueueYouTubeCollection {
+                    item: item.clone(),
+                    playlist: true,
+                    play_next: false,
+                },
+            )),
             "playlist",
             if item.browse_id.trim().is_empty() {
                 item.title.to_lowercase()
@@ -3486,7 +3561,7 @@ fn home_card_button(
             item.title.clone(),
         ),
         HomeCard::LocalArtist { .. } | HomeCard::YouTubeArtist { .. } => {
-            (None, "", String::new(), String::new())
+            (None, None, "", String::new(), String::new())
         }
     };
 
@@ -3510,31 +3585,21 @@ fn home_card_button(
     main_button.add_css_class("home-card-no-hover-scale");
     main_button.set_child(Some(&card_widget));
 
-    let sender = event_tx.clone();
-    main_button.connect_clicked(move |_| {
-        let event = match card.clone() {
-            HomeCard::LocalAlbum { title, .. } => {
-                BrowserEvent::Navigate(BrowserRoute::Album(title))
+    {
+        let sender = event_tx.clone();
+        let event = open_event.clone();
+        main_button.connect_clicked(move |_| {
+            if card_effects {
+                let sender = sender.clone();
+                let event = event.clone();
+                glib::timeout_add_local_once(Duration::from_millis(120), move || {
+                    let _ = sender.send(event);
+                });
+            } else {
+                let _ = sender.send(event.clone());
             }
-            HomeCard::YouTubeAlbum { item, .. } => BrowserEvent::OpenYouTubeCollection(item),
-            HomeCard::LocalArtist { title, .. } => {
-                BrowserEvent::Navigate(BrowserRoute::Artist(title))
-            }
-            HomeCard::YouTubeArtist { item, .. } => BrowserEvent::OpenYouTubeCollection(item),
-            HomeCard::LocalPlaylist { title, .. } => {
-                BrowserEvent::Navigate(BrowserRoute::Playlist(title))
-            }
-            HomeCard::YouTubePlaylist(item) => BrowserEvent::OpenYouTubePlaylist(item),
-        };
-        if card_effects {
-            let sender = sender.clone();
-            glib::timeout_add_local_once(Duration::from_millis(120), move || {
-                let _ = sender.send(event);
-            });
-        } else {
-            let _ = sender.send(event);
-        }
-    });
+        });
+    }
 
     let overlay = gtk::Overlay::new();
     overlay.set_child(Some(&main_button));
@@ -3582,6 +3647,86 @@ fn home_card_button(
             let _ = sender.send(control_event.clone());
         });
         overlay.add_overlay(&control);
+    }
+
+    if let Some((play_next_event, append_event)) = queue_events {
+        let menu_button = gtk::MenuButton::builder()
+            .icon_name("view-more-symbolic")
+            .tooltip_text(match language {
+                AppLanguage::Portuguese => "Mais opções",
+                AppLanguage::English => "More options",
+                AppLanguage::Spanish => "Más opciones",
+            })
+            .build();
+        menu_button.set_halign(gtk::Align::Start);
+        menu_button.set_valign(gtk::Align::Start);
+        menu_button.set_margin_top(12);
+        menu_button.set_margin_start(12);
+        menu_button.add_css_class("circular");
+        menu_button.add_css_class("collection-card-overflow-button");
+
+        let popover = gtk::Popover::new();
+        popover.add_css_class("collection-card-overflow-popover");
+
+        let actions = gtk::Box::new(gtk::Orientation::Vertical, 4);
+        actions.set_margin_top(8);
+        actions.set_margin_bottom(8);
+        actions.set_margin_start(8);
+        actions.set_margin_end(8);
+
+        let labels = match language {
+            AppLanguage::Portuguese => (
+                "Reproduzir em seguida",
+                "Adicionar ao fim da fila",
+                "Abrir coleção",
+            ),
+            AppLanguage::English => ("Play next", "Add to queue", "Open collection"),
+            AppLanguage::Spanish => (
+                "Reproducir a continuación",
+                "Añadir al final de la cola",
+                "Abrir colección",
+            ),
+        };
+
+        for (label, event, icon_name) in [
+            (labels.0, play_next_event, "media-skip-forward-symbolic"),
+            (labels.1, append_event, "list-add-symbolic"),
+            (labels.2, open_event, "go-next-symbolic"),
+        ] {
+            let icon = gtk::Image::from_icon_name(icon_name);
+            icon.set_pixel_size(18);
+            icon.add_css_class("collection-card-overflow-action-icon");
+
+            let text = gtk::Label::new(Some(label));
+            text.set_xalign(0.0);
+            text.set_hexpand(true);
+            text.add_css_class("collection-card-overflow-action-label");
+
+            let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+            content.set_hexpand(true);
+            content.set_halign(gtk::Align::Fill);
+            content.append(&icon);
+            content.append(&text);
+
+            let button = gtk::Button::new();
+            button.set_child(Some(&content));
+            button.set_halign(gtk::Align::Fill);
+            button.set_hexpand(true);
+            button.add_css_class("flat");
+            button.add_css_class("collection-card-overflow-action");
+
+            let sender = event_tx.clone();
+            let popover = popover.clone();
+            button.connect_clicked(move |_| {
+                popover.popdown();
+                let _ = sender.send(event.clone());
+            });
+            actions.append(&button);
+        }
+
+        popover.set_child(Some(&actions));
+        menu_button.set_popover(Some(&popover));
+        overlay.add_overlay(&menu_button);
     }
 
     overlay.upcast()
