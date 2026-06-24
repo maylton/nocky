@@ -11,6 +11,7 @@ mod footer_now_playing;
 mod footer_progress;
 mod footer_transport;
 mod footer_utilities;
+mod footer_view;
 mod i18n;
 mod library;
 mod listening_history;
@@ -45,10 +46,7 @@ use config::{AppLanguage, BlurMode, StartupSource, VisualTheme};
 use dialogs::SettingsEvent;
 use expressive_transport::ExpressiveTransport;
 use footer_layout::{footer_mode_plan, AdaptiveFooterTier};
-use footer_now_playing::{build_footer_now_playing, FooterNowPlayingParts};
-use footer_progress::{build_footer_progress, FooterProgressParts};
-use footer_transport::{build_footer_transport, FooterTransportParts};
-use footer_utilities::{build_footer_utilities, FooterUtilityParts};
+use footer_view::{build_footer_view, FooterViewParts};
 use gtk::prelude::FileExt;
 use gtk::{gdk, gio, glib};
 use i18n::Message;
@@ -588,52 +586,42 @@ impl AppController {
         content_stack.add_css_class("application-content-stack");
         body.append(&content_stack);
 
-        // nocky_rust_ui_phase3c_footer_now_playing_v1
+        // nocky_rust_ui_phase3g_footer_view_assembly_v1
         let mini_cover = build_cover(50);
-        let FooterNowPlayingParts {
-            button: footer_now_playing,
+        let FooterViewParts {
+            root: player_bar,
+            now_playing_button: footer_now_playing,
             title: mini_title,
             artist: mini_artist,
             source: footer_source,
             favorite_button: footer_favorite,
             favorite_icon: footer_favorite_icon,
-        } = build_footer_now_playing(config.language, &mini_cover.stack);
-
-        // nocky_rust_ui_phase3d_footer_transport_v2
-        let FooterTransportParts {
-            root: footer_transport,
-            shuffle: footer_shuffle,
+            center: footer_center,
+            progress_stack: footer_progress_stack,
+            traditional_progress: footer_traditional_progress,
+            wave_progress: footer_progress,
+            elapsed: footer_elapsed,
+            duration: footer_duration,
             previous: footer_previous,
             play_button: play,
             play_icon,
-            motion: footer_transport_motion,
+            transport_motion: footer_transport_motion,
             next: footer_next,
             repeat: footer_repeat,
-        } = build_footer_transport(
-            config.language,
-            config.expressive_transport_effects
-                && config.visual_theme == VisualTheme::MaterialExpressive,
-        );
-
-        // nocky_rust_ui_phase3e_footer_progress_v1
-        let FooterProgressParts {
-            root: footer_center,
-            stack: footer_progress_stack,
-            traditional: footer_traditional_progress,
-            wave: footer_progress,
-            elapsed: footer_elapsed,
-            duration: footer_duration,
-        } = build_footer_progress(&footer_transport);
-
-        // nocky_rust_ui_phase3f_footer_utilities_v1
-        let FooterUtilityParts {
-            root: right_controls,
+            shuffle: footer_shuffle,
+            right_controls,
             lyrics_button,
             mute_icon,
             mute_button,
             volume,
             volume_revealer,
-        } = build_footer_utilities(config.language, config.volume);
+        } = build_footer_view(
+            config.language,
+            config.volume,
+            config.expressive_transport_effects
+                && config.visual_theme == VisualTheme::MaterialExpressive,
+            &mini_cover.stack,
+        );
 
         // nocky_custom_md3_volume_canvas_v2
         {
@@ -650,14 +638,6 @@ impl AppController {
             });
         }
 
-        let player_bar = gtk::CenterBox::new();
-        player_bar.set_height_request(88);
-        player_bar.add_css_class("player-bar");
-        player_bar.add_css_class("player-bar-v2");
-        player_bar.add_css_class("expressive-footer");
-        player_bar.set_start_widget(Some(&footer_now_playing));
-        player_bar.set_center_widget(Some(&footer_center));
-        player_bar.set_end_widget(Some(&right_controls));
         shell.append(&player_bar);
 
         let mpris = mpris::MprisBridge::start(config.volume);
