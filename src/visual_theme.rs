@@ -1,5 +1,5 @@
 // material_dynamic_palette_v1
-use crate::{config::VisualTheme, material_palette::MaterialPalette};
+use crate::{config::VisualTheme, material_palette::MaterialPalette, theme_css};
 use gtk::{gdk, glib, prelude::*};
 use std::{
     cell::{Cell, RefCell},
@@ -26,11 +26,7 @@ impl VisualThemeManager {
     pub fn install() -> Rc<Self> {
         let display = gdk::Display::default().expect("A display is required");
         let provider = gtk::CssProvider::new();
-        provider.load_from_string(concat!(
-            include_str!("../assets/themes/noctalia.css"),
-            "\n",
-            include_str!("../assets/themes/material-expressive.css"),
-        ));
+        provider.load_from_string(&theme_css::combined_theme_css());
         gtk::style_context_add_provider_for_display(
             &display,
             &provider,

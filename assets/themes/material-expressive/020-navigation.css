@@ -1,0 +1,437 @@
+
+window.theme-material-expressive .header-navigation-button:hover,
+window.theme-material-expressive .header-action-button:hover {
+  border-radius: 21px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+}
+
+window.theme-material-expressive .header-navigation-button:checked,
+window.theme-material-expressive .header-action-button:checked {
+  border-radius: 21px;
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+}
+
+window.theme-material-expressive .header-view-switcher {
+  min-height: 42px;
+  padding: 3px;
+  border-radius: 21px;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.16);
+}
+
+window.theme-material-expressive .header-view-switcher button {
+  min-height: 36px;
+  border-radius: 18px;
+  color: @m3_on_surface_variant;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .header-view-switcher button:hover {
+  color: @m3_on_surface;
+  background-color: alpha(@m3_primary, 0.10);
+}
+
+window.theme-material-expressive .header-view-switcher button:checked {
+  color: @m3_on_secondary_container;
+  background-color: @m3_secondary_container;
+}
+
+window.theme-material-expressive .expressive-search-bar {
+  margin: 6px 12px 0 12px;
+  padding: 5px 8px;
+  border-radius: 22px;
+  background-color: @m3_surface_container_low;
+  border: 1px solid alpha(@m3_outline, 0.16);
+}
+
+window.theme-material-expressive .expressive-search-entry {
+  min-height: 42px;
+  border-radius: 21px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.18);
+}
+
+window.theme-material-expressive .expressive-search-entry:focus {
+  border-color: @m3_primary;
+  box-shadow: 0 0 0 2px alpha(@m3_primary, 0.18);
+}
+
+window.theme-material-expressive .expressive-body {
+  background-color: @m3_surface;
+}
+
+window.theme-material-expressive .navigation-rail-revealer {
+  background-color: transparent;
+}
+
+window.theme-material-expressive .sidebar {
+  min-width: 220px;
+  margin: 8px 0 8px 8px;
+  padding: 10px 8px;
+  border-radius: 28px;
+  border: 1px solid alpha(@m3_outline, 0.18);
+  background-color: @m3_surface_container_low;
+  box-shadow: 0 8px 22px alpha(black, 0.14);
+}
+
+window.theme-material-expressive button.sidebar-row {
+  min-height: 48px;
+  margin: 2px 0;
+  padding: 0 12px;
+  border-radius: 18px;
+  color: @m3_on_surface_variant;
+  background-color: transparent;
+  box-shadow: none;
+  font-weight: 620;
+  transition:
+    border-radius 180ms ease,
+    background-color 180ms ease;
+}
+
+window.theme-material-expressive button.sidebar-row:hover {
+  border-radius: 24px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+}
+
+window.theme-material-expressive button.sidebar-row.active,
+window.theme-material-expressive button.sidebar-row:checked {
+  border-radius: 24px;
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  font-weight: 760;
+}
+
+window.theme-material-expressive .sidebar .section-title,
+window.theme-material-expressive .sidebar .sidebar-section-label {
+  margin: 12px 10px 6px 10px;
+  color: @m3_on_surface_variant;
+  font-size: 0.69rem;
+  font-weight: 820;
+  letter-spacing: 1.15px;
+}
+
+window.theme-material-expressive .expressive-dashboard {
+  border-radius: 30px;
+}
+
+window.theme-material-expressive .expressive-empty-state {
+  margin: 28px;
+  padding: 36px;
+  border-radius: 32px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  border: 1px solid alpha(@m3_outline, 0.18);
+}
+
+window.theme-material-expressive .expressive-empty-state .empty-icon {
+  color: @m3_primary;
+}
+
+window.theme-material-expressive .expressive-empty-action {
+  min-height: 46px;
+  padding: 0 20px;
+  border-radius: 23px;
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  box-shadow: 0 6px 16px alpha(@m3_primary, 0.22);
+}
+/* material_search_bar_separator_cleanup_v1 */
+
+/*
+ * Keep the collapsed SearchBar dimensionless. The previous container border
+ * remained visible as a thin separator between the header and the content.
+ * The actual SearchEntry keeps the Material surface when search is opened.
+ */
+window.theme-material-expressive .expressive-search-bar {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .expressive-search-entry {
+  margin: 6px 12px 0 12px;
+}
+/* material_expressive_library_cards_v1 */
+
+/* Section hierarchy */
+window.theme-material-expressive .home-section {
+  margin: 0 0 8px 0;
+  padding: 14px 14px 12px 14px;
+  border-radius: 28px;
+  background-color: alpha(@m3_surface_container_low, 0.72);
+  border: 1px solid alpha(@m3_outline, 0.14);
+}
+
+window.theme-material-expressive .home-section-heading {
+  padding: 0 4px 4px 4px;
+}
+
+window.theme-material-expressive .home-section-title,
+window.theme-material-expressive .collection-page-title {
+  color: @m3_on_surface;
+  font-weight: 820;
+  letter-spacing: -0.28px;
+}
+
+window.theme-material-expressive .home-carousel-scroll,
+window.theme-material-expressive .home-carousel {
+  background-color: transparent;
+}
+
+/* Album, artist, playlist and mix cards */
+window.theme-material-expressive .home-card-button,
+window.theme-material-expressive .collection-card-button {
+  padding: 0;
+  border-radius: 26px;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .home-card-button:hover,
+window.theme-material-expressive .collection-card-button:hover {
+  background-color: transparent;
+}
+
+window.theme-material-expressive .collection-card {
+  padding: 9px;
+  border-radius: 24px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  border: 1px solid alpha(@m3_outline, 0.18);
+  box-shadow: 0 5px 16px alpha(black, 0.13);
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+window.theme-material-expressive .home-card-button:hover .collection-card,
+window.theme-material-expressive .collection-card-button:hover .collection-card {
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.34);
+  box-shadow: 0 9px 24px alpha(black, 0.22);
+}
+
+window.theme-material-expressive .home-card-button:active .collection-card,
+window.theme-material-expressive .collection-card-button:active .collection-card {
+  background-color: @m3_secondary_container;
+  border-color: alpha(@m3_primary, 0.46);
+}
+
+window.theme-material-expressive .youtube-collection-card {
+  background-image:
+    linear-gradient(145deg, alpha(@m3_tertiary, 0.075), transparent 58%);
+}
+
+window.theme-material-expressive .collection-artwork,
+window.theme-material-expressive .expressive-artwork {
+  border-radius: 19px;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.18);
+  box-shadow: 0 5px 14px alpha(black, 0.18);
+}
+
+window.theme-material-expressive .collection-card-title,
+window.theme-material-expressive .expressive-card-title {
+  color: @m3_on_surface;
+  font-weight: 760;
+  font-size: 0.93rem;
+}
+
+window.theme-material-expressive .collection-card .dim-label,
+window.theme-material-expressive .expressive-card-subtitle {
+  color: @m3_on_surface_variant;
+  font-size: 0.78rem;
+}
+
+/* Collection pages */
+window.theme-material-expressive .collection-page,
+window.theme-material-expressive .expressive-library-page {
+  margin: 10px 12px 12px 12px;
+  padding: 16px;
+  border-radius: 30px;
+  background-color: @m3_surface_container_low;
+  border: 1px solid alpha(@m3_outline, 0.16);
+}
+
+window.theme-material-expressive .collection-page-header,
+window.theme-material-expressive .expressive-page-header {
+  min-height: 58px;
+  padding: 7px 12px;
+  border-radius: 22px;
+  background-color: @m3_surface_container;
+  border: 1px solid alpha(@m3_outline, 0.15);
+}
+
+window.theme-material-expressive .collection-page-icon {
+  min-width: 42px;
+  min-height: 42px;
+  border-radius: 16px;
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+}
+
+/* Artist rows */
+window.theme-material-expressive .artist-list-button {
+  min-height: 50px;
+  margin: 3px 0;
+  border-radius: 19px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  border: 1px solid alpha(@m3_outline, 0.14);
+  box-shadow: none;
+}
+
+window.theme-material-expressive .artist-list-button:hover {
+  border-radius: 25px;
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.28);
+}
+
+/* Track and playlist rows */
+window.theme-material-expressive .queue-list,
+window.theme-material-expressive .playlist-list {
+  background-color: transparent;
+}
+
+window.theme-material-expressive .queue-list row.media-list-row,
+window.theme-material-expressive .playlist-list row.playlist-card-row {
+  min-height: 58px;
+  margin: 3px 2px;
+  border-radius: 18px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  border: 1px solid alpha(@m3_outline, 0.13);
+  transition:
+    border-radius 180ms ease,
+    background-color 180ms ease;
+}
+
+window.theme-material-expressive .queue-list row.media-list-row:hover,
+window.theme-material-expressive .playlist-list row.playlist-card-row:hover {
+  border-radius: 24px;
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.26);
+}
+
+window.theme-material-expressive .queue-list row.media-list-row:selected,
+window.theme-material-expressive .playlist-list row.playlist-card-row:selected {
+  border-radius: 24px;
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  border-color: alpha(@m3_primary, 0.34);
+}
+
+window.theme-material-expressive row.youtube-media-row,
+window.theme-material-expressive row.youtube-playlist-row {
+  background-image:
+    linear-gradient(100deg, alpha(@m3_tertiary, 0.06), transparent 48%);
+}
+
+window.theme-material-expressive .track-title {
+  color: @m3_on_surface;
+  font-weight: 690;
+}
+
+window.theme-material-expressive .track-number {
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 14px;
+  color: @m3_on_surface_variant;
+  background-color: alpha(@m3_surface_container_highest, 0.72);
+}
+
+window.theme-material-expressive .source-badge {
+  min-height: 23px;
+  padding: 0 8px;
+  border-radius: 12px;
+  color: @m3_on_secondary_container;
+  background-color: @m3_secondary_container;
+  font-size: 0.67rem;
+  font-weight: 720;
+}
+
+window.theme-material-expressive .youtube-source-badge {
+  color: @m3_on_tertiary_container;
+  background-color: @m3_tertiary_container;
+}
+
+window.theme-material-expressive row.list-section-row {
+  margin-top: 8px;
+  background-color: transparent;
+  border: none;
+}
+
+window.theme-material-expressive row.list-section-row .section-title {
+  color: @m3_on_surface_variant;
+  font-size: 0.69rem;
+  font-weight: 820;
+  letter-spacing: 1.05px;
+}
+
+/* Search results */
+window.theme-material-expressive .search-result-button {
+  margin: 3px 0;
+  padding: 5px 8px;
+  border-radius: 19px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  border: 1px solid alpha(@m3_outline, 0.14);
+  box-shadow: none;
+}
+
+window.theme-material-expressive .search-result-button:hover {
+  border-radius: 25px;
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.28);
+}
+
+window.theme-material-expressive .search-result-button .collection-artwork {
+  border-radius: 15px;
+}
+
+/* Playlist management controls */
+window.theme-material-expressive .playlist-editor-surface {
+  padding: 12px;
+  border-radius: 24px;
+  background-color: @m3_surface_container;
+  border: 1px solid alpha(@m3_outline, 0.15);
+}
+
+window.theme-material-expressive .playlist-editor-entry,
+window.theme-material-expressive .playlist-editor-dropdown {
+  min-height: 44px;
+  border-radius: 20px;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.18);
+}
+
+window.theme-material-expressive .playlist-editor-action {
+  min-height: 42px;
+  border-radius: 19px;
+}
+
+window.theme-material-expressive .playlist-create-action {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+}
+/* material_search_surfaces_sidebar_collapse_v1 */
+
+/* A collapsed navigation rail must be dimensionless. */
+window.theme-material-expressive
+  .navigation-rail-revealer.sidebar-collapsed {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  box-shadow: none;
+}

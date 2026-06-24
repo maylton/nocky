@@ -24,6 +24,7 @@ mod player_view;
 mod reveal_bounce;
 mod settings_page;
 mod theme;
+mod theme_css;
 mod visual_theme;
 mod visualizer;
 mod wave_progress;

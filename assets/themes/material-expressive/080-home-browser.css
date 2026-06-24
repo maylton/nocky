@@ -1,0 +1,437 @@
+
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary
+  image,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:hover
+  image,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:active
+  image,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:focus
+  image,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:focus-visible
+  image {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  text-shadow: none;
+  -gtk-icon-shadow: none;
+  filter: none;
+}
+
+/* expressive_home_card_motion_v1 */
+window.theme-material-expressive
+  .expressive-library-home
+  button.expressive-home-card-button {
+  min-width: 228px;
+  min-height: 224px;
+  padding: 0;
+  border: none;
+  outline: none;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+}
+
+window.theme-material-expressive
+  .expressive-library-home
+  .expressive-home-card-slot {
+  min-width: 228px;
+  min-height: 224px;
+}
+
+window.theme-material-expressive
+  .expressive-library-home
+  .expressive-home-card-motion {
+  border: 1px solid alpha(@m3_outline, 0.16);
+  border-radius: 24px;
+  background-color: alpha(@m3_surface_container_high, 0.78);
+  box-shadow: 0 5px 15px alpha(black, 0.16);
+  transition:
+    border-radius 180ms ease-out,
+    border-color 180ms ease-out,
+    background-color 180ms ease-out,
+    box-shadow 180ms ease-out;
+}
+
+window.theme-material-expressive
+  .expressive-library-home
+  button.expressive-home-card-button.is-hovered
+  .expressive-home-card-motion {
+  border-radius: 30px;
+  border-color: alpha(@m3_primary, 0.26);
+  background-color: alpha(@m3_surface_container_highest, 0.88);
+  box-shadow: 0 11px 25px alpha(black, 0.24);
+}
+
+window.theme-material-expressive
+  .expressive-library-home
+  button.expressive-home-card-button.is-clicking
+  .expressive-home-card-motion {
+  border-color: alpha(@m3_primary, 0.34);
+  box-shadow: 0 8px 21px alpha(black, 0.22);
+}
+
+window.theme-material-expressive
+  .expressive-library-home
+  .expressive-home-media-artwork,
+window.theme-material-expressive
+  .expressive-library-home
+  .expressive-home-media-artwork picture {
+  border-radius: 22px;
+  transition:
+    border-radius 180ms ease-out,
+    box-shadow 180ms ease-out;
+}
+
+window.theme-material-expressive
+  .expressive-library-home
+  button.expressive-home-card-button.is-hovered
+  .expressive-home-media-artwork,
+window.theme-material-expressive
+  .expressive-library-home
+  button.expressive-home-card-button.is-hovered
+  .expressive-home-media-artwork picture {
+  border-radius: 28px;
+}
+
+window.theme-material-expressive
+  .expressive-library-home
+  .expressive-home-artist-artwork,
+window.theme-material-expressive
+  .expressive-library-home
+  .expressive-home-artist-artwork picture {
+  border-radius: 999px;
+}
+
+window.theme-material-expressive
+  .expressive-library-home
+  .expressive-home-artist-artwork {
+  border: 1px solid alpha(@m3_primary, 0.20);
+  box-shadow: 0 5px 15px alpha(black, 0.18);
+  transition:
+    border-color 180ms ease-out,
+    box-shadow 180ms ease-out;
+}
+
+window.theme-material-expressive
+  .expressive-library-home
+  button.expressive-home-card-button.is-hovered
+  .expressive-home-artist-artwork,
+window.theme-material-expressive
+  .expressive-library-home
+  button.expressive-home-card-button.is-clicking
+  .expressive-home-artist-artwork {
+  border-color: alpha(@m3_primary, 0.42);
+  box-shadow: 0 9px 22px alpha(black, 0.24);
+}
+
+window.theme-material-expressive
+  .expressive-library-home
+  .expressive-home-mix-card {
+  background-image:
+    linear-gradient(145deg, alpha(@m3_primary, 0.08), transparent 58%),
+    linear-gradient(30deg, alpha(@m3_tertiary, 0.055), transparent 62%);
+}
+
+/* nocky_home_cards_edge_spring_v4 */
+
+/* Hover remains highlighted, but never changes card geometry. */
+window.theme-material-expressive
+  button.home-card-button.home-card-no-hover-scale,
+window.theme-material-expressive
+  button.home-card-button.home-card-no-hover-scale:hover,
+window.theme-material-expressive
+  button.home-card-button.home-card-no-hover-scale:active,
+window.theme-material-expressive
+  button.home-card-button.home-card-no-hover-scale:focus,
+window.theme-material-expressive
+  button.home-card-button.home-card-no-hover-scale:focus-visible,
+window.theme-material-expressive
+  button.home-card-button.home-card-no-hover-scale
+  .collection-card,
+window.theme-material-expressive
+  button.home-card-button.home-card-no-hover-scale:hover
+  .collection-card {
+  transform: none;
+}
+
+window.theme-material-expressive
+  button.home-card-button.home-card-no-hover-scale:hover
+  .collection-card {
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.42);
+  box-shadow:
+    0 10px 26px alpha(black, 0.24),
+    0 0 0 2px alpha(@m3_primary, 0.08);
+}
+
+window.theme-material-expressive
+  .home-card-edge-spring
+  .collection-card {
+  border-color: alpha(@m3_primary, 0.52);
+  box-shadow:
+    0 11px 28px alpha(black, 0.25),
+    0 0 0 3px alpha(@m3_primary, 0.10);
+}
+
+
+/* nocky_home_cards_edge_spring_v6 */
+
+/*
+ * The spring width is driven frame-by-frame in Rust. These selectors only
+ * reinforce the active edge state without introducing competing geometry
+ * transitions.
+ */
+window.theme-material-expressive
+  button.home-card-button.home-card-edge-spring
+  .collection-card,
+window.theme-material-expressive
+  .collection-card.home-card-edge-spring-surface {
+  border-color: alpha(@m3_primary, 0.58);
+  box-shadow:
+    0 12px 30px alpha(black, 0.27),
+    0 0 0 3px alpha(@m3_primary, 0.12);
+}
+
+/* nocky_compact_volume_expand_and_flat_modes_v1 */
+
+/*
+ * Repeat and shuffle remain icon actions. Their active state is communicated
+ * through color instead of another filled capsule inside the transport card.
+ */
+window.theme-material-expressive button.player-mode-control,
+window.theme-material-expressive button.player-mode-control:hover,
+window.theme-material-expressive button.player-mode-control:active,
+window.theme-material-expressive button.player-mode-control:focus,
+window.theme-material-expressive button.player-mode-control:focus-visible,
+window.theme-material-expressive button.player-mode-control:checked,
+window.theme-material-expressive button.footer-mode-control,
+window.theme-material-expressive button.footer-mode-control:hover,
+window.theme-material-expressive button.footer-mode-control:active,
+window.theme-material-expressive button.footer-mode-control:focus,
+window.theme-material-expressive button.footer-mode-control:focus-visible,
+window.theme-material-expressive button.footer-mode-control:checked {
+  background-color: transparent;
+  background-image: none;
+  border-color: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+window.theme-material-expressive button.player-mode-control:hover,
+window.theme-material-expressive button.footer-mode-control:hover {
+  color: @m3_on_surface;
+}
+
+window.theme-material-expressive button.player-mode-control:checked,
+window.theme-material-expressive button.footer-mode-control:checked {
+  color: @m3_primary;
+}
+
+/*
+ * In compact mode the revealer contributes its animated natural width to the
+ * utility surface. Because the surface is end-aligned, it grows toward the
+ * center of the footer while the volume icon stays anchored on the right.
+ */
+window.theme-material-expressive .footer-volume-revealer {
+  min-width: 0;
+}
+
+window.theme-material-expressive
+  .footer-volume-revealer
+  scale.footer-volume-control {
+  margin-left: 4px;
+  margin-right: 4px;
+}
+
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-utility-group {
+  transition:
+    background-color 180ms ease-out,
+    border-color 180ms ease-out,
+    box-shadow 200ms ease-out;
+}
+
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-utility-group.volume-expanded {
+  background-color: @m3_surface_container_highest;
+  border-color: alpha(@m3_primary, 0.34);
+  box-shadow:
+    0 8px 20px alpha(black, 0.18),
+    0 0 0 2px alpha(@m3_primary, 0.07);
+}
+
+window.theme-material-expressive
+  .footer-mode-compact
+  button.footer-utility-action.volume-panel-open {
+  color: @m3_primary;
+  background-color: alpha(@m3_primary, 0.14);
+  border-radius: 21px;
+}
+
+/* nocky_compact_volume_thickness_match_v1 */
+
+/*
+ * Match the compact volume control to the playback progress thickness.
+ * Both tracks use a 5 px capsule; the smaller thumb keeps the volume
+ * control from looking visually heavier than the progress bar.
+ */
+window.theme-material-expressive
+  .footer-volume-revealer
+  scale.footer-volume-control trough,
+window.theme-material-expressive
+  .footer-volume-revealer
+  scale.footer-volume-control trough highlight {
+  min-height: 5px;
+  border-radius: 3px;
+}
+
+window.theme-material-expressive
+  .footer-volume-revealer
+  scale.footer-volume-control slider {
+  min-width: 12px;
+  min-height: 12px;
+  border-radius: 6px;
+  border-width: 1px;
+  margin: 0;
+}
+
+/* nocky_compact_volume_safe_width_animation_v1 */
+
+/*
+ * The volume card width is animated in Rust. The revealer only crossfades
+ * after enough width exists, preventing negative GtkScale allocations.
+ */
+window.theme-material-expressive
+  .footer-volume-revealer {
+  min-width: 0;
+  padding: 0;
+}
+
+window.theme-material-expressive
+  .footer-volume-revealer
+  scale.footer-volume-control {
+  min-width: 96px;
+  margin-left: 4px;
+  margin-right: 4px;
+}
+
+window.theme-material-expressive
+  .footer-volume-revealer
+  scale.footer-volume-control slider {
+  min-width: 12px;
+  min-height: 12px;
+  border-radius: 6px;
+  border-width: 1px;
+}
+
+/* nocky_compact_volume_fixed_slot_reveal_v1 */
+
+/*
+ * The fixed slot is the stable 104 px payload animated by GtkRevealer.
+ * GtkScale remains fully allocated inside it and is merely clipped while
+ * entering or leaving, avoiding negative slider measurements.
+ */
+window.theme-material-expressive
+  .footer-volume-fixed-slot {
+  min-width: 104px;
+  min-height: 42px;
+  padding: 0;
+}
+
+window.theme-material-expressive
+  .footer-volume-fixed-slot
+  scale.footer-volume-control {
+  min-width: 96px;
+  min-height: 42px;
+  margin: 0;
+  padding: 0;
+}
+
+window.theme-material-expressive
+  .footer-volume-revealer {
+  min-width: 0;
+  padding: 0;
+}
+
+/* nocky_md3_volume_slider_right_v1 */
+
+/*
+ * Material 3 compact volume control:
+ * - thin rounded track
+ * - primary active segment
+ * - quiet inactive segment
+ * - small circular thumb
+ * - no classic GTK bevel or oversized handle
+ */
+window.theme-material-expressive
+  .footer-volume-fixed-slot {
+  min-width: 124px;
+  min-height: 42px;
+  padding: 0;
+}
+
+window.theme-material-expressive
+  .footer-volume-fixed-slot
+  scale.footer-volume-md3 {
+  min-width: 116px;
+  min-height: 42px;
+  margin: 0;
+  padding: 0;
+  color: @m3_primary;
+}
+
+window.theme-material-expressive
+  .footer-volume-fixed-slot
+  scale.footer-volume-md3
+  trough {
+  min-height: 5px;
+  border-radius: 999px;
+  border: none;
+  background-color: alpha(@m3_on_surface_variant, 0.22);
+  background-image: none;
+  box-shadow: none;
+}
+
+window.theme-material-expressive
+  .footer-volume-fixed-slot
+  scale.footer-volume-md3
+  trough
+  highlight {
+  min-height: 5px;
+  border-radius: 999px;
+  border: none;
+  background-color: @m3_primary;
+  background-image: none;
+  box-shadow: none;
+}
+
+window.theme-material-expressive
+  .footer-volume-fixed-slot
+  scale.footer-volume-md3
+  trough
+  slider {
+  min-width: 10px;
+  min-height: 10px;
+  margin: 0;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid @m3_surface_container_highest;
+  color: @m3_primary;
+  background-color: @m3_primary;
+  background-image: none;
+  box-shadow: 0 1px 4px alpha(black, 0.22);
+}

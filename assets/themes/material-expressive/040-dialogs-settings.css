@@ -1,0 +1,431 @@
+
+.theme-material-expressive scrollbar slider:hover {
+  background-color: alpha(@m3_primary, 0.62);
+}
+
+/* Tooltips and toasts */
+.theme-material-expressive tooltip.background,
+.theme-material-expressive tooltip {
+  border-radius: 14px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_highest;
+  border: 1px solid alpha(@m3_outline, 0.20);
+}
+
+.theme-material-expressive toast {
+  border-radius: 20px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_highest;
+  border: 1px solid alpha(@m3_outline, 0.20);
+}
+
+/* Check and radio controls */
+.theme-material-expressive checkbutton check,
+.theme-material-expressive checkbutton radio {
+  min-width: 20px;
+  min-height: 20px;
+  border-radius: 7px;
+  color: @m3_on_primary;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.34);
+  box-shadow: none;
+}
+
+.theme-material-expressive checkbutton check:checked,
+.theme-material-expressive checkbutton radio:checked {
+  background-color: @m3_primary;
+  border-color: @m3_primary;
+}
+/* organized_settings_milestone_v1 */
+
+.theme-material-expressive .settings-content {
+  padding: 4px 6px 12px 6px;
+}
+
+.theme-material-expressive .settings-hero {
+  min-height: 96px;
+  padding: 16px 18px;
+  border-radius: 30px;
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  background-image:
+    linear-gradient(125deg, alpha(@m3_primary, 0.12), transparent 58%);
+  border: 1px solid alpha(@m3_primary, 0.28);
+  box-shadow: 0 8px 24px alpha(black, 0.18);
+}
+
+.theme-material-expressive .settings-hero-icon-container {
+  min-width: 58px;
+  min-height: 58px;
+  border-radius: 22px;
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+}
+
+.theme-material-expressive .settings-hero-icon {
+  color: @m3_on_primary;
+}
+
+.theme-material-expressive .settings-hero-copy {
+  padding-left: 2px;
+}
+
+.theme-material-expressive .settings-hero .settings-title {
+  color: @m3_on_primary_container;
+  font-size: 1.36rem;
+}
+
+.theme-material-expressive .settings-hero .settings-description {
+  color: alpha(@m3_on_primary_container, 0.74);
+}
+
+.theme-material-expressive .settings-version-badge {
+  min-height: 30px;
+  padding: 0 11px;
+  border-radius: 15px;
+  color: @m3_on_tertiary_container;
+  background-color: @m3_tertiary_container;
+  border: 1px solid alpha(@m3_tertiary, 0.22);
+  font-size: 0.72rem;
+  font-weight: 780;
+}
+
+.theme-material-expressive .settings-group {
+  padding: 12px;
+  border-radius: 28px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  border: 1px solid alpha(@m3_outline, 0.17);
+  box-shadow: 0 5px 16px alpha(black, 0.11);
+}
+
+.theme-material-expressive .settings-group-header {
+  min-height: 52px;
+  padding: 2px 6px 10px 6px;
+}
+
+.theme-material-expressive .settings-group-icon-container {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 17px;
+  color: @m3_on_secondary_container;
+  background-color: @m3_secondary_container;
+}
+
+.theme-material-expressive .settings-group-icon {
+  color: @m3_on_secondary_container;
+}
+
+.theme-material-expressive .settings-group-copy {
+  padding-left: 2px;
+}
+
+.theme-material-expressive .settings-group-title {
+  color: @m3_on_surface;
+  font-size: 1.02rem;
+  font-weight: 820;
+  letter-spacing: -0.12px;
+}
+
+.theme-material-expressive .settings-group-description {
+  color: @m3_on_surface_variant;
+  font-size: 0.78rem;
+}
+
+.theme-material-expressive .settings-group-rows {
+  padding: 3px;
+  border-radius: 22px;
+  background-color: alpha(@m3_surface, 0.22);
+}
+
+.theme-material-expressive .settings-group .settings-surface-row {
+  min-height: 68px;
+  margin: 2px 0;
+  padding: 10px 12px;
+  border-radius: 19px;
+  background-color: @m3_surface_container;
+  border-color: alpha(@m3_outline, 0.13);
+}
+
+.theme-material-expressive .settings-group .settings-surface-row:hover {
+  border-radius: 23px;
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.25);
+}
+/* material_final_polish_v1 */
+
+/* Settings/dialog backdrop: use a tonal scrim instead of a plain black field. */
+.theme-material-expressive.settings-dialog,
+.theme-material-expressive.youtube-settings-dialog,
+.theme-material-expressive.startup-dialog,
+window.theme-material-expressive.settings-dialog,
+window.theme-material-expressive.youtube-settings-dialog,
+window.theme-material-expressive.startup-dialog {
+  background-color: alpha(@m3_surface, 0.78);
+  background-image:
+    linear-gradient(140deg, alpha(@m3_primary, 0.07), transparent 62%);
+}
+
+.theme-material-expressive.settings-dialog .material-dialog-toolbar,
+.theme-material-expressive.youtube-settings-dialog .material-dialog-toolbar,
+.theme-material-expressive.startup-dialog .material-dialog-toolbar,
+.theme-material-expressive.settings-dialog scrolledwindow,
+.theme-material-expressive.youtube-settings-dialog scrolledwindow,
+.theme-material-expressive.startup-dialog scrolledwindow,
+.theme-material-expressive.settings-dialog viewport,
+.theme-material-expressive.youtube-settings-dialog viewport,
+.theme-material-expressive.startup-dialog viewport,
+.theme-material-expressive.settings-dialog clamp,
+.theme-material-expressive.youtube-settings-dialog clamp,
+.theme-material-expressive.startup-dialog clamp,
+.theme-material-expressive.settings-dialog .settings-content,
+.theme-material-expressive.youtube-settings-dialog .settings-content,
+.theme-material-expressive.startup-dialog .startup-dialog-content,
+.theme-material-expressive.youtube-settings-dialog .youtube-settings-host {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+}
+
+/* Thin down the card stroke/spacing a touch. */
+window.theme-material-expressive .collection-card {
+  padding: 7px;
+  border-radius: 22px;
+  border-width: 1px;
+  box-shadow: 0 4px 12px alpha(black, 0.11);
+}
+
+window.theme-material-expressive .home-card-button:hover .collection-card,
+window.theme-material-expressive .collection-card-button:hover .collection-card {
+  box-shadow: 0 7px 18px alpha(black, 0.18);
+}
+
+window.theme-material-expressive .collection-artwork,
+window.theme-material-expressive .expressive-artwork {
+  border-radius: 17px;
+  box-shadow: 0 4px 10px alpha(black, 0.15);
+}
+
+/* Prevent the visualizer card from showing a second contour inside. */
+window.theme-material-expressive .player-visualizer-surface {
+  padding: 2px 5px;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .player-visualizer-surface .stable-visualizer-slot,
+window.theme-material-expressive .player-visualizer-surface > box,
+window.theme-material-expressive .player-visualizer-surface frame,
+window.theme-material-expressive .player-visualizer-surface frame > border,
+window.theme-material-expressive .player-visualizer-surface viewport {
+  border: none;
+  outline: none;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+}
+
+/* Remove the remaining blue background from the search dropdown/open search area. */
+window.theme-material-expressive .expressive-search-bar,
+window.theme-material-expressive .expressive-search-bar > box,
+window.theme-material-expressive .expressive-search-bar > revealer,
+window.theme-material-expressive .expressive-search-bar > revealer > box,
+window.theme-material-expressive .expressive-search-bar box,
+window.theme-material-expressive .expressive-search-bar revealer {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* Popover arrows and menu shells should follow the Material surface too. */
+.theme-material-expressive popover.background > arrow,
+.theme-material-expressive popover > arrow {
+  color: @m3_surface_container_high;
+  background-color: @m3_surface_container_high;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+}
+
+.theme-material-expressive popover.background.menu > contents,
+.theme-material-expressive popover.menu > contents,
+.theme-material-expressive popover.background.modelbutton > contents {
+  background-color: @m3_surface_container_high;
+  background-image: none;
+}
+/* material_final_polish_v2 */
+
+/* Keep cards exactly as they were before the mistaken card-thinning patch. */
+window.theme-material-expressive .collection-card {
+  padding: 9px;
+  border-radius: 24px;
+  border-width: 1px;
+  box-shadow: 0 5px 16px alpha(black, 0.13);
+}
+
+window.theme-material-expressive .home-card-button:hover .collection-card,
+window.theme-material-expressive .collection-card-button:hover .collection-card {
+  box-shadow: 0 9px 24px alpha(black, 0.22);
+}
+
+window.theme-material-expressive .collection-artwork,
+window.theme-material-expressive .expressive-artwork {
+  border-radius: 19px;
+  box-shadow: 0 5px 14px alpha(black, 0.18);
+}
+
+/* Let Libadwaita show the app behind the modal scrim instead of a black field. */
+.theme-material-expressive.settings-dialog,
+.theme-material-expressive.youtube-settings-dialog,
+.theme-material-expressive.startup-dialog,
+window.theme-material-expressive.settings-dialog,
+window.theme-material-expressive.youtube-settings-dialog,
+window.theme-material-expressive.startup-dialog {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+}
+
+.theme-material-expressive.settings-dialog .material-dialog-toolbar,
+.theme-material-expressive.youtube-settings-dialog .material-dialog-toolbar,
+.theme-material-expressive.startup-dialog .material-dialog-toolbar {
+  border-radius: 30px;
+  color: @m3_on_surface;
+  background-color: @m3_surface;
+  border: 1px solid alpha(@m3_outline, 0.20);
+  box-shadow: 0 16px 42px alpha(black, 0.34);
+}
+
+.theme-material-expressive.settings-dialog scrolledwindow,
+.theme-material-expressive.youtube-settings-dialog scrolledwindow,
+.theme-material-expressive.startup-dialog scrolledwindow,
+.theme-material-expressive.settings-dialog viewport,
+.theme-material-expressive.youtube-settings-dialog viewport,
+.theme-material-expressive.startup-dialog viewport,
+.theme-material-expressive.settings-dialog clamp,
+.theme-material-expressive.youtube-settings-dialog clamp,
+.theme-material-expressive.startup-dialog clamp,
+.theme-material-expressive.settings-dialog .settings-content,
+.theme-material-expressive.youtube-settings-dialog .youtube-settings-host,
+.theme-material-expressive.startup-dialog .startup-dialog-content {
+  background-color: transparent;
+  background-image: none;
+}
+
+/* Thin horizontal carousel scrollbar — cards themselves remain unchanged. */
+window.theme-material-expressive scrollbar.horizontal,
+window.theme-material-expressive .home-carousel-scroll scrollbar.horizontal {
+  min-height: 8px;
+  background-color: transparent;
+}
+
+window.theme-material-expressive scrollbar.horizontal trough,
+window.theme-material-expressive .home-carousel-scroll scrollbar.horizontal trough {
+  min-height: 8px;
+  background-color: transparent;
+  border: none;
+}
+
+window.theme-material-expressive scrollbar.horizontal slider,
+window.theme-material-expressive .home-carousel-scroll scrollbar.horizontal slider {
+  min-width: 38px;
+  min-height: 4px;
+  margin: 2px 0;
+  border-radius: 999px;
+  background-color: alpha(@m3_on_surface_variant, 0.34);
+  border: none;
+  box-shadow: none;
+}
+
+window.theme-material-expressive scrollbar.horizontal slider:hover,
+window.theme-material-expressive .home-carousel-scroll scrollbar.horizontal slider:hover {
+  min-height: 5px;
+  margin: 1px 0 2px 0;
+  background-color: alpha(@m3_primary, 0.68);
+}
+
+/* Remove the inner contour so the visualizer has only one frame. */
+window.theme-material-expressive .player-visualizer-surface {
+  box-shadow: none;
+}
+
+window.theme-material-expressive .player-visualizer-surface > box,
+window.theme-material-expressive .player-visualizer-surface frame,
+window.theme-material-expressive .player-visualizer-surface frame > border,
+window.theme-material-expressive .player-visualizer-surface viewport,
+window.theme-material-expressive .player-visualizer-surface .stable-visualizer-slot {
+  border: none;
+  outline: none;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+}
+
+/* Remove the remaining blue shell behind the expanded search field. */
+window.theme-material-expressive searchbar,
+window.theme-material-expressive searchbar > revealer,
+window.theme-material-expressive searchbar > revealer > box,
+window.theme-material-expressive searchbar box,
+window.theme-material-expressive .expressive-search-bar,
+window.theme-material-expressive .expressive-search-bar > revealer,
+window.theme-material-expressive .expressive-search-bar > revealer > box,
+window.theme-material-expressive .expressive-search-bar box {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* Popover arrows should match the menu surface, not the old blue accent. */
+.theme-material-expressive popover.background > arrow,
+.theme-material-expressive popover > arrow {
+  color: @m3_surface_container_high;
+  background-color: @m3_surface_container_high;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+/* material_visualizer_single_outline_v1 */
+
+/* Keep only one contour around the visualizer card. */
+window.theme-material-expressive .player-visualizer-surface {
+  padding: 0;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .player-visualizer-surface > box,
+window.theme-material-expressive .player-visualizer-surface > widget,
+window.theme-material-expressive .player-visualizer-surface frame,
+window.theme-material-expressive .player-visualizer-surface frame > border,
+window.theme-material-expressive .player-visualizer-surface viewport,
+window.theme-material-expressive .player-visualizer-surface .stable-visualizer-slot,
+window.theme-material-expressive .player-visualizer-surface .visualizer-slot,
+window.theme-material-expressive .player-visualizer-surface .visualizer-frame,
+window.theme-material-expressive .player-visualizer-surface .visualizer-shell {
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background-color: transparent;
+  background-image: none;
+}
+
+/* Preserve the inner breathing room using layout padding instead of a nested border. */
+window.theme-material-expressive .player-visualizer-surface .stable-visualizer-slot,
+window.theme-material-expressive .player-visualizer-surface .visualizer-slot,
+window.theme-material-expressive .player-visualizer-surface .visualizer-frame,
+window.theme-material-expressive .player-visualizer-surface .visualizer-shell {
+  min-height: 72px;
+}
+
+window.theme-material-expressive .player-visualizer-surface .visualizer-bars,
+window.theme-material-expressive .player-visualizer-surface drawingarea,
+window.theme-material-expressive .player-visualizer-surface picture,
+window.theme-material-expressive .player-visualizer-surface image {
+  margin: 10px 16px;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+}

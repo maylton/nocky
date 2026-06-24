@@ -1,0 +1,434 @@
+
+window.theme-material-expressive
+  .navigation-rail-revealer.sidebar-collapsed
+  .sidebar {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+/* Search gets dedicated tonal surfaces instead of generic dark panels. */
+window.theme-material-expressive .search-results-page {
+  padding: 10px 12px 18px 12px;
+  background-color: transparent;
+}
+
+window.theme-material-expressive .search-section-card {
+  margin: 0 0 6px 0;
+  padding: 13px;
+  border-radius: 28px;
+  background-color: alpha(@m3_primary_container, 0.30);
+  background-image:
+    linear-gradient(130deg, alpha(@m3_primary, 0.055), transparent 54%);
+  border: 1px solid alpha(@m3_primary, 0.24);
+  box-shadow: 0 6px 18px alpha(black, 0.14);
+}
+
+window.theme-material-expressive .search-section-heading {
+  padding: 0 3px 5px 3px;
+}
+
+window.theme-material-expressive .search-section-heading .home-section-title {
+  color: @m3_on_primary_container;
+}
+
+window.theme-material-expressive .search-section-heading .dim-label {
+  color: alpha(@m3_on_primary_container, 0.68);
+}
+
+window.theme-material-expressive .search-results-surface {
+  padding: 5px;
+  border-radius: 22px;
+  background-color: alpha(@m3_surface_container, 0.84);
+  border: 1px solid alpha(@m3_outline, 0.14);
+}
+
+window.theme-material-expressive .search-results-surface row {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .search-results-surface row:hover,
+window.theme-material-expressive .search-results-surface row:selected {
+  background-color: transparent;
+}
+
+window.theme-material-expressive .search-result-button {
+  margin: 3px 1px;
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.18);
+}
+
+window.theme-material-expressive .search-result-button:hover {
+  background-color: @m3_surface_container_highest;
+  border-color: alpha(@m3_primary, 0.38);
+}
+
+window.theme-material-expressive .search-result-row {
+  min-height: 54px;
+}
+
+window.theme-material-expressive .search-source-badge {
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 12px;
+  color: @m3_on_tertiary_container;
+  background-color: @m3_tertiary_container;
+  font-size: 0.67rem;
+  font-weight: 720;
+}
+
+window.theme-material-expressive .search-result-arrow {
+  color: @m3_on_surface_variant;
+}
+
+window.theme-material-expressive
+  .search-results-surface
+  row.media-list-row {
+  margin: 3px 1px;
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.16);
+}
+
+window.theme-material-expressive
+  .search-results-surface
+  row.media-list-row:hover {
+  background-color: @m3_surface_container_highest;
+  border-color: alpha(@m3_primary, 0.34);
+}
+/* material_expressive_remaining_interface_v1 */
+
+/* Dialog surfaces */
+.theme-material-expressive.settings-dialog,
+.theme-material-expressive.youtube-settings-dialog,
+.theme-material-expressive.startup-dialog {
+  color: @m3_on_surface;
+  background-color: @m3_surface;
+}
+
+.theme-material-expressive .material-dialog-toolbar {
+  color: @m3_on_surface;
+  background-color: @m3_surface;
+}
+
+.theme-material-expressive .material-dialog-toolbar headerbar {
+  min-height: 56px;
+  padding: 4px 10px;
+  border-radius: 0 0 24px 24px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  border-bottom: 1px solid alpha(@m3_outline, 0.18);
+  box-shadow: none;
+}
+
+.theme-material-expressive .settings-content,
+.theme-material-expressive .startup-dialog-content {
+  padding: 2px;
+  color: @m3_on_surface;
+}
+
+.theme-material-expressive .settings-title,
+.theme-material-expressive .startup-dialog-title {
+  color: @m3_on_surface;
+  font-weight: 850;
+  letter-spacing: -0.3px;
+}
+
+.theme-material-expressive .settings-description,
+.theme-material-expressive .startup-dialog-description {
+  color: @m3_on_surface_variant;
+}
+
+/* Settings rows and controls */
+.theme-material-expressive .settings-surface-row {
+  min-height: 72px;
+  padding: 12px 14px;
+  margin: 2px 0;
+  border-radius: 22px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  border: 1px solid alpha(@m3_outline, 0.15);
+}
+
+.theme-material-expressive .settings-surface-row:hover {
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.24);
+}
+
+.theme-material-expressive .settings-row-text {
+  padding-right: 12px;
+}
+
+.theme-material-expressive .settings-row-title {
+  color: @m3_on_surface;
+  font-weight: 720;
+}
+
+.theme-material-expressive .settings-row-subtitle {
+  color: @m3_on_surface_variant;
+  font-size: 0.79rem;
+}
+
+.theme-material-expressive .settings-dropdown,
+.theme-material-expressive dropdown.settings-dropdown > button,
+.theme-material-expressive .settings-row-action {
+  min-height: 42px;
+  border-radius: 19px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.19);
+  box-shadow: none;
+}
+
+.theme-material-expressive dropdown.settings-dropdown > button:hover,
+.theme-material-expressive .settings-row-action:hover {
+  border-radius: 22px;
+  background-color: @m3_surface_container_highest;
+  border-color: alpha(@m3_primary, 0.32);
+}
+
+.theme-material-expressive .settings-primary-action {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  border-color: transparent;
+}
+
+.theme-material-expressive .settings-scale trough {
+  min-height: 6px;
+  border-radius: 999px;
+  background-color: alpha(@m3_on_surface_variant, 0.22);
+}
+
+.theme-material-expressive .settings-scale trough highlight {
+  min-height: 6px;
+  border-radius: 999px;
+  background-color: @m3_primary;
+}
+
+.theme-material-expressive .settings-scale slider {
+  min-width: 16px;
+  min-height: 16px;
+  margin: -5px;
+  border-radius: 999px;
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  border: 2px solid @m3_surface_container;
+  box-shadow: none;
+}
+
+/* Switches */
+.theme-material-expressive switch.settings-switch,
+.theme-material-expressive switch {
+  min-width: 48px;
+  min-height: 28px;
+  border-radius: 999px;
+  color: @m3_on_surface_variant;
+  background-color: @m3_surface_container_highest;
+  border: 1px solid alpha(@m3_outline, 0.30);
+  box-shadow: none;
+}
+
+.theme-material-expressive switch slider {
+  min-width: 20px;
+  min-height: 20px;
+  margin: 3px;
+  border-radius: 999px;
+  background-color: @m3_on_surface_variant;
+  box-shadow: none;
+}
+
+.theme-material-expressive switch:checked {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  border-color: transparent;
+}
+
+.theme-material-expressive switch:checked slider {
+  background-color: @m3_on_primary;
+}
+
+/* Startup choice dialog */
+.theme-material-expressive .startup-choice-group {
+  padding: 8px;
+  border-radius: 26px;
+  background-color: @m3_surface_container_low;
+  border: 1px solid alpha(@m3_outline, 0.16);
+}
+
+.theme-material-expressive .source-choice-button {
+  min-height: 54px;
+  padding: 0 18px;
+  border-radius: 22px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.18);
+  box-shadow: none;
+}
+
+.theme-material-expressive .source-choice-button:hover {
+  border-radius: 27px;
+  background-color: @m3_surface_container_highest;
+  border-color: alpha(@m3_primary, 0.32);
+}
+
+.theme-material-expressive .source-choice-button.suggested-action {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  border-color: transparent;
+}
+
+.theme-material-expressive .startup-cancel-action {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 20px;
+}
+
+/* Generic menus, popovers and dropdown lists */
+.theme-material-expressive popover.background > contents,
+.theme-material-expressive popover > contents {
+  padding: 7px;
+  border-radius: 22px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.22);
+  box-shadow: 0 12px 30px alpha(black, 0.30);
+}
+
+.theme-material-expressive popover modelbutton,
+.theme-material-expressive popover button,
+.theme-material-expressive popover listview row {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 16px;
+  color: @m3_on_surface;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+.theme-material-expressive popover modelbutton:hover,
+.theme-material-expressive popover button:hover,
+.theme-material-expressive popover listview row:hover {
+  border-radius: 20px;
+  background-color: @m3_surface_container_highest;
+}
+
+.theme-material-expressive popover modelbutton:checked,
+.theme-material-expressive popover listview row:selected {
+  color: @m3_on_secondary_container;
+  background-color: @m3_secondary_container;
+}
+
+.theme-material-expressive popover separator {
+  min-height: 1px;
+  margin: 5px 8px;
+  background-color: alpha(@m3_outline, 0.18);
+}
+
+.theme-material-expressive dropdown > button,
+.theme-material-expressive combobox > button {
+  min-height: 42px;
+  border-radius: 19px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.18);
+  box-shadow: none;
+}
+
+.theme-material-expressive dropdown > button:hover,
+.theme-material-expressive combobox > button:hover {
+  background-color: @m3_surface_container_highest;
+  border-color: alpha(@m3_primary, 0.30);
+}
+
+/* Entries, text views and spin controls */
+.theme-material-expressive entry,
+.theme-material-expressive spinbutton,
+.theme-material-expressive textview,
+.theme-material-expressive textview text {
+  min-height: 42px;
+  border-radius: 19px;
+  color: @m3_on_surface;
+  caret-color: @m3_primary;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.18);
+  box-shadow: none;
+}
+
+.theme-material-expressive entry:focus,
+.theme-material-expressive spinbutton:focus,
+.theme-material-expressive textview:focus {
+  border-color: @m3_primary;
+  box-shadow: 0 0 0 2px alpha(@m3_primary, 0.17);
+}
+
+.theme-material-expressive entry selection,
+.theme-material-expressive textview text selection {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+}
+
+/* Generic buttons and destructive actions inside dialogs */
+.theme-material-expressive .suggested-action {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  border-color: transparent;
+}
+
+.theme-material-expressive .destructive-action {
+  border-radius: 20px;
+}
+
+.theme-material-expressive button.pill {
+  min-height: 40px;
+  padding: 0 17px;
+  border-radius: 20px;
+}
+
+/* Playback queue and remaining list surfaces */
+.theme-material-expressive .expressive-media-list,
+.theme-material-expressive .queue-list,
+.theme-material-expressive .playlist-list {
+  padding: 5px;
+  border-radius: 24px;
+  color: @m3_on_surface;
+  background-color: alpha(@m3_surface_container_low, 0.78);
+  border: 1px solid alpha(@m3_outline, 0.14);
+}
+
+.theme-material-expressive .expressive-media-list row,
+.theme-material-expressive .queue-list row,
+.theme-material-expressive .playlist-list row {
+  color: @m3_on_surface;
+}
+
+.theme-material-expressive .expressive-media-list row:selected,
+.theme-material-expressive .queue-list row:selected,
+.theme-material-expressive .playlist-list row:selected {
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+}
+
+.theme-material-expressive .expressive-media-list row:selected .dim-label,
+.theme-material-expressive .queue-list row:selected .dim-label,
+.theme-material-expressive .playlist-list row:selected .dim-label {
+  color: alpha(@m3_on_primary_container, 0.72);
+}
+
+/* Scrollbars */
+.theme-material-expressive scrollbar {
+  background-color: transparent;
+}
+
+.theme-material-expressive scrollbar slider {
+  min-width: 8px;
+  min-height: 34px;
+  border-radius: 999px;
+  background-color: alpha(@m3_on_surface_variant, 0.32);
+  border: none;
+}
