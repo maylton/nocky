@@ -14,6 +14,8 @@ mod lyrics;
 mod lyrics_provider;
 mod lyrics_view;
 mod material_palette;
+mod md3_volume;
+mod mode_toggle;
 mod model;
 mod mpris;
 mod onboarding;
@@ -41,6 +43,7 @@ use i18n::Message;
 use listening_history::{ListeningHistory, ListeningSource};
 use lyrics::LyricLine;
 use lyrics_view::LyricsPresenter;
+use md3_volume::Md3VolumeSlider;
 use model::{Track, TrackData};
 use playback::{PlaybackEngine, PlaybackEvent};
 use player_view::{PlayerView, PlayerViewHandle};
@@ -195,6 +198,7 @@ struct AppController {
     footer_now_playing: gtk::Button,
     footer_center: gtk::Box,
     footer_right_controls: gtk::Box,
+    volume_revealer: gtk::Revealer,
     music_stack: gtk::Stack,
     empty_title: gtk::Label,
     empty_text: gtk::Label,
@@ -222,6 +226,8 @@ struct AppController {
     mute_icon: gtk::Image,
     mute_button: gtk::Button,
     volume_before_mute: Cell<f64>,
+    compact_volume_expanded: Cell<bool>,
+    compact_volume_spring_generation: Rc<Cell<u64>>,
     lyrics_button: gtk::ToggleButton,
     footer_previous: gtk::Button,
     footer_play_button: gtk::Button,
@@ -314,6 +320,116 @@ fn build_application(app: &adw::Application) {
         keep_alive.player.shutdown();
         keep_alive.mpris.send(mpris::MprisUpdate::Shutdown);
     });
+}
+
+// nocky_compact_volume_light_spring_v1
+struct CompactVolumeSpring {
+    group: gtk::Box,
+    generation: Rc<Cell<u64>>,
+    token: u64,
+    from_width: i32,
+    target_width: i32,
+    expanding: bool,
+    delay_ms: u64,
+}
+
+fn run_compact_volume_spring(animation: CompactVolumeSpring) {
+    glib::timeout_add_local_once(Duration::from_millis(animation.delay_ms), move || {
+        if animation.generation.get() != animation.token {
+            return;
+        }
+
+        let started_at = Rc::new(Cell::new(0_i64));
+        let group = animation.group.clone();
+        let animated_group = group.clone();
+        let generation = animation.generation.clone();
+
+        group.add_css_class("volume-spring-active");
+        group.add_tick_callback(move |_, frame_clock| {
+            if generation.get() != animation.token {
+                animated_group.remove_css_class("volume-spring-active");
+                return glib::ControlFlow::Break;
+            }
+
+            let now = frame_clock.frame_time();
+            let start = started_at.get();
+
+            if start == 0 {
+                started_at.set(now);
+                return glib::ControlFlow::Continue;
+            }
+
+            let progress = ((now - start) as f64 / 360_000.0).clamp(0.0, 1.0);
+            let width = compact_volume_spring_width(
+                animation.from_width,
+                animation.target_width,
+                progress,
+                animation.expanding,
+            );
+
+            animated_group.set_size_request(width, 52);
+
+            if progress >= 1.0 {
+                animated_group.set_size_request(animation.target_width, 52);
+                animated_group.remove_css_class("volume-spring-active");
+                glib::ControlFlow::Break
+            } else {
+                glib::ControlFlow::Continue
+            }
+        });
+    });
+}
+
+fn compact_volume_spring_width(
+    from_width: i32,
+    target_width: i32,
+    progress: f64,
+    expanding: bool,
+) -> i32 {
+    let overshoot = if expanding { 7.0 } else { -5.0 };
+    let rebound = if expanding { -2.5 } else { 2.0 };
+    let target = target_width as f64;
+    let from = from_width as f64;
+
+    let width = if progress < 0.68 {
+        compact_volume_lerp(
+            from,
+            target + overshoot,
+            compact_volume_ease_out_cubic(progress / 0.68),
+        )
+    } else if progress < 0.86 {
+        compact_volume_lerp(
+            target + overshoot,
+            target + rebound,
+            compact_volume_ease_in_out_cubic((progress - 0.68) / 0.18),
+        )
+    } else {
+        compact_volume_lerp(
+            target + rebound,
+            target,
+            compact_volume_ease_out_cubic((progress - 0.86) / 0.14),
+        )
+    };
+
+    width.round().max(96.0) as i32
+}
+
+fn compact_volume_ease_out_cubic(value: f64) -> f64 {
+    1.0 - (1.0 - value.clamp(0.0, 1.0)).powi(3)
+}
+
+fn compact_volume_ease_in_out_cubic(value: f64) -> f64 {
+    let value = value.clamp(0.0, 1.0);
+
+    if value < 0.5 {
+        4.0 * value.powi(3)
+    } else {
+        1.0 - (-2.0 * value + 2.0).powi(3) / 2.0
+    }
+}
+
+fn compact_volume_lerp(start: f64, end: f64, progress: f64) -> f64 {
+    start + (end - start) * progress
 }
 
 impl AppController {
@@ -650,10 +766,11 @@ impl AppController {
         footer_now_playing.set_tooltip_text(Some("Abrir fila de reprodução"));
         footer_now_playing.set_valign(gtk::Align::Center);
 
-        let footer_shuffle = gtk::ToggleButton::builder()
-            .icon_name("media-playlist-shuffle-symbolic")
-            .tooltip_text(tr(Message::Shuffle))
-            .build();
+        let footer_shuffle = mode_toggle::new_mode_toggle(
+            "media-playlist-shuffle-symbolic",
+            tr(Message::Shuffle),
+            mode_toggle::ModeToggleKind::Shuffle,
+        );
         footer_shuffle.add_css_class("flat");
         footer_shuffle.add_css_class("footer-control");
         footer_shuffle.add_css_class("footer-mode-control");
@@ -679,10 +796,11 @@ impl AppController {
         footer_next.add_css_class("footer-control");
         footer_next.add_css_class("footer-skip-control");
 
-        let footer_repeat = gtk::ToggleButton::builder()
-            .icon_name("media-playlist-repeat-symbolic")
-            .tooltip_text(tr(Message::RepeatTrack))
-            .build();
+        let footer_repeat = mode_toggle::new_mode_toggle(
+            "media-playlist-repeat-symbolic",
+            tr(Message::RepeatTrack),
+            mode_toggle::ModeToggleKind::RepeatOne,
+        );
         footer_repeat.add_css_class("flat");
         footer_repeat.add_css_class("footer-control");
         footer_repeat.add_css_class("footer-mode-control");
@@ -773,6 +891,38 @@ impl AppController {
         volume.add_css_class("footer-volume");
         volume.add_css_class("footer-volume-control");
 
+        // nocky_compact_volume_expand_and_flat_modes_v1
+        // The scale lives inside a revealer so the compact utility card grows
+        // and contracts around it instead of abruptly showing another widget.
+        let volume_slot = gtk::Fixed::new();
+        volume_slot.set_size_request(124, 42);
+        volume_slot.set_hexpand(false);
+        volume_slot.set_vexpand(false);
+        volume_slot.set_overflow(gtk::Overflow::Hidden);
+        volume_slot.add_css_class("footer-volume-fixed-slot");
+
+        // nocky_compact_volume_fixed_slot_reveal_v1
+        // GtkScale keeps its full 96 px allocation inside GtkFixed while the
+        // revealer clips the slot. This lets the card animate horizontally
+        // without ever squeezing the scale into a negative allocation.
+        volume.set_size_request(116, 42);
+        volume.set_has_origin(true);
+        volume.add_css_class("footer-volume-md3");
+        let md3_volume = Md3VolumeSlider::new(&volume);
+        volume.set_visible(false);
+        volume_slot.put(md3_volume.widget(), 4.0, 0.0);
+
+        // nocky_md3_volume_slider_right_v1
+
+        let volume_revealer = gtk::Revealer::new();
+        volume_revealer.set_transition_type(gtk::RevealerTransitionType::SlideRight);
+        volume_revealer.set_transition_duration(280);
+        volume_revealer.set_reveal_child(true);
+        volume_revealer.set_halign(gtk::Align::Start);
+        volume_revealer.set_valign(gtk::Align::Center);
+        volume_revealer.set_child(Some(&volume_slot));
+        volume_revealer.add_css_class("footer-volume-revealer");
+
         let right_controls = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         right_controls.set_margin_top(8);
         right_controls.set_halign(gtk::Align::End);
@@ -781,7 +931,22 @@ impl AppController {
         right_controls.set_size_request(220, 56);
         right_controls.append(&lyrics_button);
         right_controls.append(&mute_button);
-        right_controls.append(&volume);
+        right_controls.append(&volume_revealer);
+
+        // nocky_custom_md3_volume_canvas_v2
+        {
+            let group = right_controls.clone();
+            volume_revealer.connect_child_revealed_notify(move |revealer| {
+                let reveal_child = revealer.property::<bool>("reveal-child");
+                let child_revealed = revealer.property::<bool>("child-revealed");
+
+                if !reveal_child && !child_revealed {
+                    revealer.set_visible(false);
+                    group.set_size_request(-1, 52);
+                    group.queue_allocate();
+                }
+            });
+        }
 
         let player_bar = gtk::CenterBox::new();
         player_bar.set_height_request(88);
@@ -885,6 +1050,7 @@ impl AppController {
             footer_now_playing: footer_now_playing.clone(),
             footer_center,
             footer_right_controls: right_controls,
+            volume_revealer: volume_revealer.clone(),
             music_stack,
             empty_title,
             empty_text,
@@ -911,6 +1077,8 @@ impl AppController {
             mute_icon,
             mute_button: mute_button.clone(),
             volume_before_mute: Cell::new(initial_volume),
+            compact_volume_expanded: Cell::new(false),
+            compact_volume_spring_generation: Rc::new(Cell::new(0)),
             lyrics_button,
             footer_previous: footer_previous.clone(),
             footer_play_button: play.clone(),
@@ -1177,16 +1345,29 @@ impl AppController {
         {
             let weak = Rc::downgrade(&controller);
             mute_button.connect_clicked(move |_| {
-                if let Some(controller) = weak.upgrade() {
-                    let current = controller.volume.value();
-                    if current > 0.001 {
-                        controller.volume_before_mute.set(current);
-                        controller.volume.set_value(0.0);
-                    } else {
-                        controller
-                            .volume
-                            .set_value(controller.volume_before_mute.get().clamp(0.15, 1.0));
-                    }
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+
+                // nocky_compact_volume_expand_and_flat_modes_v1
+                // Compact mode uses the icon as a disclosure control. Full
+                // mode keeps the familiar mute/unmute behavior.
+                if controller.player_bar.has_css_class("footer-mode-compact") {
+                    controller
+                        .compact_volume_expanded
+                        .set(!controller.compact_volume_expanded.get());
+                    controller.apply_compact_volume_expansion();
+                    return;
+                }
+
+                let current = controller.volume.value();
+                if current > 0.001 {
+                    controller.volume_before_mute.set(current);
+                    controller.volume.set_value(0.0);
+                } else {
+                    controller
+                        .volume
+                        .set_value(controller.volume_before_mute.get().clamp(0.15, 1.0));
                 }
             });
         }
@@ -2564,11 +2745,93 @@ impl AppController {
             "audio-volume-high-symbolic"
         };
         self.mute_icon.set_icon_name(Some(icon));
-        self.mute_button.set_tooltip_text(Some(if value <= 0.001 {
+
+        let compact = self.player_bar.has_css_class("footer-mode-compact");
+        let tooltip = if compact {
+            if self.compact_volume_expanded.get() {
+                self.tr(Message::HideVolumeControl)
+            } else {
+                self.tr(Message::AdjustVolume)
+            }
+        } else if value <= 0.001 {
             self.tr(Message::Unmute)
         } else {
             self.tr(Message::Mute)
-        }));
+        };
+        self.mute_button.set_tooltip_text(Some(tooltip));
+    }
+
+    // nocky_compact_volume_expand_and_flat_modes_v1
+    fn apply_compact_volume_expansion(&self) {
+        let compact = self.player_bar.has_css_class("footer-mode-compact");
+        let expanded = compact && self.compact_volume_expanded.get();
+
+        self.footer_right_controls
+            .remove_css_class("volume-expanded");
+        self.mute_button.remove_css_class("volume-panel-open");
+
+        if expanded {
+            self.footer_right_controls.add_css_class("volume-expanded");
+            self.mute_button.add_css_class("volume-panel-open");
+        }
+
+        let token = self.compact_volume_spring_generation.get().wrapping_add(1);
+        self.compact_volume_spring_generation.set(token);
+
+        if !compact {
+            self.volume_revealer.set_visible(true);
+            self.volume_revealer.set_reveal_child(true);
+            self.footer_right_controls.set_size_request(190, 52);
+            self.apply_volume_icon();
+            return;
+        }
+
+        let current_width = self
+            .footer_right_controls
+            .width()
+            .max(self.footer_right_controls.width_request())
+            .max(100);
+        let target_width = if expanded { 234 } else { 100 };
+
+        // nocky_compact_volume_no_reserved_space_v1
+        // A closed GtkRevealer still counts as a visible child of GtkBox,
+        // which preserves one spacing slot after the volume button. Hide the
+        // revealer after the closing animation so the compact card contains
+        // only the two icon buttons and no invisible reserved column.
+        if expanded {
+            self.volume_revealer.set_visible(true);
+            self.volume_revealer.set_reveal_child(false);
+
+            let revealer = self.volume_revealer.clone();
+            let generation = self.compact_volume_spring_generation.clone();
+            glib::timeout_add_local_once(Duration::from_millis(16), move || {
+                if generation.get() == token {
+                    revealer.set_reveal_child(true);
+                }
+            });
+        } else {
+            self.volume_revealer.set_reveal_child(false);
+
+            let revealer = self.volume_revealer.clone();
+            let generation = self.compact_volume_spring_generation.clone();
+            glib::timeout_add_local_once(Duration::from_millis(380), move || {
+                if generation.get() == token {
+                    revealer.set_visible(false);
+                }
+            });
+        }
+
+        run_compact_volume_spring(CompactVolumeSpring {
+            group: self.footer_right_controls.clone(),
+            generation: self.compact_volume_spring_generation.clone(),
+            token,
+            from_width: current_width,
+            target_width,
+            expanding: expanded,
+            delay_ms: if expanded { 18 } else { 0 },
+        });
+
+        self.apply_volume_icon();
     }
 
     fn apply_expressive_transport_effects(&self) {
@@ -2734,6 +2997,8 @@ impl AppController {
         self.player_bar.remove_css_class("footer-mode-hidden");
 
         if effective == FooterMode::Hidden {
+            self.compact_volume_expanded.set(false);
+            self.volume_revealer.set_reveal_child(false);
             self.player_bar.add_css_class("footer-mode-hidden");
             self.player_bar.set_visible(false);
             return;
@@ -2744,9 +3009,8 @@ impl AppController {
 
         let full = effective == FooterMode::Full;
 
-        // No compacto: faixa + anterior/play/próxima + letras.
-        // Progresso, modos de reprodução e volume ficam no modo completo.
-        // remove_compact_footer_transport_v1
+        // No compacto: faixa + anterior/play/próxima + letras. O controle de
+        // volume começa recolhido e é revelado pelo próprio ícone.
         self.footer_center.set_visible(full);
         self.footer_center.set_valign(gtk::Align::Center);
         self.footer_center.set_margin_top(0);
@@ -2765,11 +3029,11 @@ impl AppController {
         self.footer_source.set_visible(full);
         self.footer_favorite_button.set_visible(full);
         self.mini_artist.set_visible(true);
-        // material_footer_compact_volume_polish_v1
         self.mute_button.set_visible(true);
-        self.volume.set_visible(full);
+        self.volume.set_visible(true);
 
         if full {
+            self.compact_volume_expanded.set(false);
             self.player_bar.add_css_class("footer-mode-full");
             self.player_bar.set_height_request(86);
             self.footer_now_playing.set_size_request(330, 54);
@@ -2780,8 +3044,10 @@ impl AppController {
             self.player_bar.set_height_request(70);
             self.footer_now_playing.set_size_request(292, 52);
             self.footer_center.set_size_request(0, 52);
-            self.footer_right_controls.set_size_request(104, 52);
         }
+
+        // nocky_compact_volume_expand_and_flat_modes_v1
+        self.apply_compact_volume_expansion();
     }
 
     fn install_footer_adaptive(&self) {

@@ -258,10 +258,11 @@ impl PlayerView {
         time_row.append(&duration);
         time_row.add_css_class("player-time-row");
 
-        let repeat = gtk::ToggleButton::builder()
-            .icon_name("media-playlist-repeat-symbolic")
-            .tooltip_text(tr(Message::RepeatTrack))
-            .build();
+        let repeat = crate::mode_toggle::new_mode_toggle(
+            "media-playlist-repeat-symbolic",
+            tr(Message::RepeatTrack),
+            crate::mode_toggle::ModeToggleKind::RepeatOne,
+        );
         repeat.add_css_class("media-control");
         repeat.add_css_class("player-mode-control");
         let previous = gtk::Button::from_icon_name("media-skip-backward-symbolic");
@@ -281,10 +282,11 @@ impl PlayerView {
         next.set_tooltip_text(Some(tr(Message::NextTrack)));
         next.add_css_class("media-control");
         next.add_css_class("player-skip-control");
-        let shuffle = gtk::ToggleButton::builder()
-            .icon_name("media-playlist-shuffle-symbolic")
-            .tooltip_text(tr(Message::Shuffle))
-            .build();
+        let shuffle = crate::mode_toggle::new_mode_toggle(
+            "media-playlist-shuffle-symbolic",
+            tr(Message::Shuffle),
+            crate::mode_toggle::ModeToggleKind::Shuffle,
+        );
         shuffle.add_css_class("media-control");
         shuffle.add_css_class("player-mode-control");
 
@@ -300,9 +302,9 @@ impl PlayerView {
         let controls = gtk::Box::new(gtk::Orientation::Horizontal, 18);
         controls.set_halign(gtk::Align::Center);
         controls.add_css_class("player-transport-controls");
-        controls.append(&repeat);
-        controls.append(transport_motion.root());
         controls.append(&shuffle);
+        controls.append(transport_motion.root());
+        controls.append(&repeat);
 
         let visualizer = SpectrumVisualizer::new();
         let lyrics = LyricsPresenter::new(language);
