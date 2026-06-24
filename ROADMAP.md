@@ -1,298 +1,377 @@
 # Nocky Roadmap
 
+<!-- roadmap_rebaseline_2026_06_24_v2 -->
+
 > Last updated: 2026-06-24  
-> Status legend: ✅ completed · 🟡 in progress · ⬜ planned
+> Status legend: ✅ completed · 🟡 in progress · ⬜ planned  
+> Current development priority: **Queue 2.0**
 
 Nocky is a modern Linux music player built with Rust, GTK4 and Libadwaita,
-combining Material 3 Expressive ideas with close integration with the
-Noctalia desktop experience.
+combining Material 3 Expressive ideas with close integration with the Noctalia
+desktop experience.
 
-This roadmap records both the planned work and the visual decisions already
-made, so future changes remain consistent.
+This roadmap reflects the current implementation rather than only the original
+feature plan. Completed foundations remain documented, while partially
+implemented areas list only the work still required.
 
 ---
 
 ## Product principles
 
 - Keep the interface expressive without sacrificing GTK responsiveness.
-- Prefer subtle spring, tonal and shared-element motion over simple scaling.
-- Preserve a clear visual hierarchy: play is primary; mode controls are
-  secondary.
-- Keep the compact footer focused and free from transport controls.
-- Respect reduced-motion preferences.
+- Prefer subtle spring, tonal, crossfade and shared-element motion over layout
+  scaling.
+- Preserve a clear playback hierarchy: play/pause is primary; skip, repeat and
+  shuffle are secondary.
+- Keep the compact footer focused on track information and utilities.
+- Respect reduced-motion preferences throughout the application.
 - Keep local-library and YouTube Music behavior clearly separated.
-- Avoid UI elements that reserve invisible layout space.
-- Validate every implementation with:
+- Never reserve invisible layout space for collapsed controls.
+- Prevent stale asynchronous results after rapid navigation or track changes.
+- Validate implementation changes with:
   - `cargo fmt --all`
   - `git diff --check`
   - `cargo check --all-targets --all-features`
   - `cargo test --all-targets --all-features`
   - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `./scripts/quality-gate.sh`, when available
 
 ---
 
-## Current foundation
+# Current foundation
 
-### ✅ Footer modes
+## ✅ Native playback and media integration
 
-- Complete, compact and hidden footer modes.
-- Compact mode keeps track information, lyrics and volume utilities.
-- Compact mode intentionally hides transport controls and progress.
-- Home pages use the compact presentation.
-- Pages outside Home may use the complete footer.
-- Manual Complete / Compact / Hidden modes remain available as overrides.
+- Local playback through the native Rust/GStreamer engine.
+- YouTube Music playback integration.
+- MPRIS metadata, playback, volume, repeat and shuffle controls.
+- Local and YouTube playback sources represented independently.
+- Automatic stream recovery infrastructure for temporary YouTube URLs.
+- Synchronized play state between the main player and full footer.
 
-### ✅ Compact volume utility
+## ✅ Adaptive footer architecture
 
-- Volume button expands a Material 3-styled slider to the right.
-- Custom-drawn MD3 slider avoids `GtkScale` allocation warnings.
-- Slider supports click, drag and mouse-wheel interaction.
-- Light spring motion on expand and collapse.
-- Collapsed state releases hidden layout width.
-- Rounded capsule geometry aligned with circular utility buttons.
-- Full-footer volume button retains mute/unmute behavior.
+- Full, compact, automatic and hidden footer modes.
+- Full footer includes playback transport, progress, source and utilities.
+- Compact footer prioritizes metadata, lyrics and volume.
+- Automatic mode adapts to the current application surface.
+- Hidden controls release their layout allocation.
+- Footer implementation is split into focused modules:
+  - layout;
+  - now playing;
+  - transport;
+  - progress;
+  - utilities;
+  - view composition.
 
-### ✅ Home card motion
+## ✅ Material Expressive transport
 
-- Horizontal carousel cards use edge-aware spring motion.
-- Hover growth that destabilized layout was removed.
-- Motion is designed to avoid clipping and card displacement.
-
----
-
-### ✅ Repeat and shuffle MD3 toggles
-
-- Shared 40 px circular geometry in the main player and complete footer.
-- Transparent inactive state and tonal active state.
+- PixelPlayer-inspired playback hierarchy.
+- Dominant play/pause control.
+- Smaller permanent previous and next controls.
+- Press compression and state motion.
+- Repeat-one and shuffle use shared MD3 toggle geometry.
 - Explicit repeat-one `1` badge.
-- Consistent order: Shuffle — Previous — Play/Pause — Next — Repeat.
-- Hidden from compact footer mode.
-
----
-
-# Development phases
-
-## 1. 🟡 PixelPlayer-inspired playback system
-
-This phase replaces the older generic proposal to merely “unify the main
-playback buttons.”
-
-The agreed direction is a shared PixelPlayer-inspired playback language for
-the main player and the complete footer.
-
-### Expressive play controls
-
-- Bind the main play button and complete-footer play button to the same state.
-- Shared states:
-  - `Idle`
-  - `Playing`
-  - `Paused`
-- Main-player play button remains clearly dominant over skip and mode controls.
-- Previous and next use smaller permanent tonal circular buttons.
-- Play/pause uses a larger, softer and slightly elevated treatment.
-- Add subtle press compression and state transition motion.
-- Keep the compact footer outside this transport-control system.
-
-### PixelPlayer-style WaveSeekBar
-
-- Replace the conventional progress presentation with a custom wavy fill.
-- Progress follows:
-
-  `progress_x = width × (position / duration)`
-
-- Wave shape follows a sinusoidal path based on frequency, amplitude and phase.
-- Animate the wave while music is playing.
-- Calm or stop the wave while paused.
-- Slightly increase wave response while dragging.
-- Derive active colors from the current album palette.
-- Keep seeking precise despite the expressive rendering.
-- Provide a reduced-motion fallback with a stable rounded track.
-
-### ✅ Repeat and shuffle toggles
-
-- Transparent background while inactive.
-- Circular tonal state layer on hover.
-- Tonal filled circle only while active.
-- Active icon uses the appropriate primary-container foreground.
-- Repeat-one displays a small, clear `1` indicator.
-- Keep repeat and shuffle hidden in compact footer mode.
-- Preserve the order:
+- Consistent order:
 
   `Shuffle — Previous — Play/Pause — Next — Repeat`
 
----
+## ✅ WaveSeekBar
 
-## 2. 🟡 Track-change transitions and dynamic palette
+- Custom animated wavy progress rendering.
+- Precise click and drag seeking.
+- Active animation during playback.
+- Calm state while paused.
+- Material palette integration.
+- Traditional progress fallback outside Material Expressive.
+- Reduced-motion-compatible behavior.
 
-### ✅ Metadata and artwork motion
+## ✅ Track-change motion
 
-- Crossfade or gently slide the title when the track changes.
-- Introduce the artist text with a slight stagger.
-- Transition cover art with controlled opacity and scale.
-- Reset progress smoothly without flashing.
-- Coordinate the main player and complete footer transitions.
+- Real title, artist and album transitions.
+- Staggered metadata entrance.
+- Coordinated main-player and footer updates.
+- Artwork fade during real cover-to-cover replacement.
+- Generation-based cancellation for rapid track changes.
+- Reduced-motion fallback.
 
-### Dynamic Material palette
+## ✅ Dynamic Material palette
 
-- Extract representative colors from album artwork.
-- Generate accessible Material 3 tonal roles.
-- Animate between the previous and next palettes.
-- Apply colors consistently to:
+- Representative color extraction from album artwork.
+- Accessible Material tonal-role generation.
+- Stable fallback when artwork is unavailable.
+- Background extraction outside GTK's main loop.
+- Generation protection against stale palette results.
+- Smooth interpolation between album palettes.
+- Palette application to:
   - player surfaces;
   - footer;
   - WaveSeekBar;
-  - active toggles;
-  - utility cards;
+  - repeat and shuffle states;
+  - utility surfaces;
   - visualizer.
-- Provide a stable fallback when artwork is unavailable.
-- Refine automatic synchronization with Noctalia theme templates.
+- Noctalia/Album Aura integration remains compatible with the established
+  artwork and palette contract.
+
+## ✅ Core visual and interaction foundations
+
+- Expressive library cards and stable carousel motion.
+- Compact expandable volume control.
+- Material and Noctalia visual themes.
+- Configurable blur behavior.
+- English, Portuguese and Spanish interface foundations.
+- Stable about, settings and shortcut surfaces.
+- Zero-warning quality gate.
 
 ---
 
-## 3. ⬜ Personalized Home
+# Active development
 
-Use listening history instead of generic static recommendations.
+## 1. 🟡 Personalized Home
 
-### Local library
+Listening history and personalized ranking are already implemented. This phase
+now focuses on completing the user-facing history experience.
 
-- Recently played tracks.
-- Most-played artists.
-- Most-played albums.
-- Continue listening.
-- Recently added music.
-- Do not show suggested playlists or mixtapes while the local source is active.
+### Implemented
 
-### YouTube Music
+- Persistent listening events.
+- Separate Local and YouTube history sources.
+- Play count, last-played time and total-listening duration.
+- Completed-listen signal.
+- Protection against counting accidental plays shorter than 30 seconds.
+- Background and atomic history writes.
+- Ranked artists and albums.
+- Recently played album data.
+- Home sections based on listening behavior.
+- Suggested playlists and mixtapes hidden from local-only Home.
+- YouTube recommendations kept separate from local statistics.
 
-- Recently played.
-- Personalized albums and artists.
-- Relevant playlists and mixes.
-- Continue listening across sessions.
-- Keep YouTube-derived sections separate from local statistics.
+### Remaining
 
-### History infrastructure
-
-- Record play count, last-played date and completed-listen signals.
-- Avoid counting accidental very short plays.
-- Store history efficiently.
-- Allow history clearing and privacy controls.
+- Recently played track carousel.
+- Continue-listening section with resumable position.
+- Recently added local music.
+- Clear-history action.
+- History privacy controls.
+- Per-section empty states.
+- Better deduplication when metadata differs only slightly.
+- Optional time-window filters such as recent week or recent month.
 
 ---
 
-## 4. ⬜ Richer album, artist and playlist cards
+## 2. 🟡 Richer album, artist and playlist cards
 
-- Current-playing indicator.
-- Contextual play button.
-- Contextual favorite action.
-- Quick overflow menu.
-- Skeleton placeholders during loading.
+### Implemented
+
+- Material Expressive card surfaces.
+- Artwork texture cache.
+- Stable edge-aware carousel motion.
+- Local and YouTube card variants.
+- Listening-based details for artists and albums.
+- Navigation from cards to collection pages.
+- Current playback information on media rows.
+
+### Remaining
+
+- Contextual play button on collection cards.
+- Quick favorite action.
+- Overflow menu.
+- Skeleton placeholders during remote loading.
 - Palette-based placeholders for missing artwork.
-- Smooth insertion and removal animations.
-- Preserve edge-spring behavior without layout shifts.
+- Animated insertion and removal.
+- Clear current-playing indicator directly on every relevant card.
+- Shared card component to reduce duplicated card construction.
 
 ---
 
-## 5. ⬜ Shared transitions and navigation polish
+## 3. 🟡 Categorized and incremental search
 
-- Animate an album cover from its card into the album header.
-- Return it toward its previous position when navigating back.
-- Coordinate title, artist and artwork motion.
-- Use overlays and snapshots where native GTK transitions are insufficient.
-- Respect reduced-motion settings.
-- Preserve keyboard and screen-reader navigation during transitions.
+### Implemented
 
----
-
-## 6. ⬜ Queue 2.0
-
-- Reorder tracks by drag and drop.
-- Remove individual queue entries.
-- “Play next.”
-- “Add to end of queue.”
-- Clear current-playing indication.
-- Display local or YouTube source.
-- Persist and restore the queue between sessions.
-- Animate item insertion, movement and removal.
-- Preserve queue state when recovering an expired stream URL.
-
----
-
-## 7. ⬜ Categorized and incremental search
-
-- Separate results into:
-  - tracks;
-  - albums;
-  - artists;
-  - playlists.
-- Immediate local-library search.
+- Separate track, album, artist and playlist result groups.
+- Immediate local-library filtering.
 - Debounced remote YouTube search.
-- Incremental loading and pagination.
-- Search-result cache.
-- Clear loading, empty and error states.
+- Independent incremental limits for each result category.
+- Loading, empty and error state foundations.
+- Local and YouTube results remain source-aware.
+
+### Remaining
+
+- True remote pagination beyond the initial batches.
+- Search-result cache with expiration.
 - Keyboard-first result navigation.
+- Search history and recent queries.
+- Better ranking across mixed local and remote results.
+- Cancellation of unnecessary remote requests after route changes.
+- Accessibility announcements when results update.
 
 ---
 
-## 8. ⬜ YouTube Music robustness
+## 4. 🟡 YouTube Music robustness
 
-- Refresh expired temporary playback URLs automatically.
-- Retry playback without forcing the user to restart the track.
-- Cache metadata and artwork.
-- Recover gracefully from unavailable tracks.
-- Incrementally synchronize library changes.
-- Avoid reloading entire collections unnecessarily.
-- Preserve playback and queue state during recovery.
-- Surface useful errors without exposing implementation details.
+### Implemented
+
+- Temporary stream URL recovery.
+- Retry without manually restarting the track.
+- Cached library metadata and artwork.
+- Playlist and collection prefetch.
+- Concurrent bounded background workers.
+- Loading states before slow network requests complete.
+- Redacted stream URLs in diagnostic messages.
+- User-facing playback error messages.
+- Request-generation protection for stale responses.
+
+### Remaining
+
+- Preserve the complete edited Queue 2.0 state during stream recovery.
+- More explicit handling for unavailable or region-blocked tracks.
+- Incremental library synchronization.
+- Cache expiration and invalidation rules.
+- Offline indicators for cached-only content.
+- Retry policy with bounded exponential delay.
+- Diagnostics view for connection and runtime problems.
 
 ---
 
-## 9. ⬜ Synced lyrics improvements
+## 5. 🟡 Synced lyrics
 
-- More natural transitions between lyric lines.
-- Word-level highlighting when timestamps are available.
-- Karaoke-style view.
+### Implemented
+
+- Automatic lyric lookup and download.
+- Sidecar lyric storage.
+- Synchronized line presentation.
+- Inline Home lyrics.
+- Dedicated lyrics page.
+- Manual refresh.
+- Automatic download preference.
+- Focused-line recentering.
+
+### Remaining
+
+- More natural line-to-line motion.
+- Word-level highlighting when timestamps support it.
+- Karaoke presentation mode.
 - Manual lyric-version selection.
-- Per-track offset correction.
-- Save corrected offsets.
-- Better fallback for unsynchronized lyrics.
-- Optional floating lyrics integrated with the desktop shell.
+- Per-track timing offset.
+- Persist corrected offsets.
+- Better unsynchronized lyric fallback.
+- Optional floating lyrics integration with Noctalia.
 
 ---
 
-## 10. ⬜ Audio visualizer refinement
+## 6. 🟡 Audio visualizer
 
-- Colors derived from album artwork.
-- Intensity related to actual playback volume.
-- Smooth decay while pausing.
+### Implemented
+
+- Native visualizer surface.
+- Playback-aware activation.
+- Material palette integration.
+- Visibility preference.
+- Stable layout allocation.
+
+### Remaining
+
+- Intensity related to actual audio level.
+- Smoother decay during pause and stop.
 - Multiple visualization modes.
-- Optional compact visualization.
-- Better rhythm response with controlled CPU use.
-- Disable or simplify under reduced-motion or power-saving settings.
+- Optional compact visualizer.
+- Better rhythm response.
+- CPU-budget controls.
+- Reduced-motion and power-saving simplification.
 
 ---
 
-## 11. ⬜ Accessibility, responsiveness and performance
+# Next milestone
 
-- Full keyboard navigation.
-- Reliable focus rings and focus order.
-- Screen-reader labels for every icon-only control.
-- Reduced-motion support for springs, waves and shared transitions.
-- High-contrast validation for dynamic palettes.
-- Narrow-window and HiDPI testing.
-- Avoid negative GTK size allocations.
+## 7. ⬜ Queue 2.0
+
+Queue 2.0 is the next primary implementation phase because playback, footer,
+metadata motion and dynamic theming now provide a stable base.
+
+### Queue data model
+
+- Introduce stable queue-entry IDs independent of library indexes.
+- Represent local and YouTube entries through one source-aware queue type.
+- Track the current entry explicitly.
+- Separate the active queue from browser-visible collections.
+- Preserve queue mutations when the library view changes.
+- Keep queue invariants testable without GTK.
+
+### Queue operations
+
+- Play next.
+- Add to end of queue.
+- Remove an individual entry.
+- Clear upcoming entries.
+- Reorder entries through drag and drop.
+- Jump directly to an entry.
+- Keep the current track anchored during edits.
+- Define repeat and shuffle behavior after manual queue changes.
+
+### Queue interface
+
+- Upgrade the footer queue popover into a dedicated Queue 2.0 view.
+- Show artwork, title, artist and source.
+- Display a clear current-playing indicator.
+- Add drag handles and keyboard reordering.
+- Animate insertion, movement and removal.
+- Provide empty and end-of-queue states.
+- Keep full keyboard and screen-reader operation.
+
+### Persistence and recovery
+
+- Persist queue order and current position.
+- Restore local entries safely after a library rescan.
+- Restore YouTube entries from cached metadata.
+- Ignore missing entries without invalidating the whole queue.
+- Preserve edited queue state during temporary stream URL recovery.
+- Version the persisted queue schema for future migrations.
+
+### Queue 2.0 completion criteria
+
+- Queue behavior is covered by unit tests.
+- Reordering never changes the current track unexpectedly.
+- Previous and next follow the edited order.
+- Shuffle does not destroy the manually arranged queue.
+- Local and YouTube entries can coexist safely.
+- Recovery and restart preserve the expected queue state.
+- No GTK warnings, Clippy warnings or quality-gate failures.
+
+---
+
+# Planned work
+
+## 8. ⬜ Shared transitions and navigation polish
+
+- Animate artwork from a card into an album or artist header.
+- Return artwork toward its original card while navigating back.
+- Coordinate collection title, subtitle and artwork motion.
+- Use snapshots or overlays where native GTK transitions are insufficient.
+- Preserve focus, keyboard navigation and screen-reader context.
+- Provide reduced-motion alternatives.
+
+## 9. ⬜ Accessibility, responsiveness and performance
+
+- Complete keyboard navigation across every view and popover.
+- Audit focus order and visible focus rings.
+- Add accessible names for every icon-only control.
+- Announce changing search, queue and playback states.
+- Validate dynamic-palette contrast across representative artwork.
+- Test narrow windows, HiDPI and fractional scaling.
+- Continue eliminating negative GTK allocations.
 - Lazy-load artwork and remote sections.
-- Profile CPU and memory use during long playback sessions.
+- Profile CPU and memory during long playback sessions.
+- Add power-saving behavior for animation-heavy components.
 
----
+## 10. ⬜ Packaging and release readiness
 
-## 12. ⬜ Packaging and release readiness
-
-- Final Flatpak permissions review.
+- Final Flatpak permission review.
 - Stable application ID and desktop metadata.
-- AppStream metadata and screenshots.
-- Translation completion for Portuguese, English and Spanish.
-- Migration handling for configuration and history schema changes.
-- Release notes and changelog.
+- Complete AppStream metadata.
+- Updated screenshots for Material and Noctalia modes.
+- Translation review for Portuguese, English and Spanish.
+- Configuration, history and queue-schema migrations.
+- Release notes and changelog automation.
 - Automated CI validation.
 - AUR packaging after the Flatpak release path is stable.
 
@@ -300,16 +379,17 @@ Use listening history instead of generic static recommendations.
 
 # Recommended implementation order
 
-1. Finish repeat and shuffle toggle states.
-2. Complete PixelPlayer-inspired play-button synchronization.
-3. Implement the WaveSeekBar.
-4. Add track-change and palette transitions.
-5. Build the personalized-history Home.
-6. Upgrade the queue.
-7. Implement categorized incremental search.
-8. Improve YouTube playback recovery.
-9. Add shared card-to-page transitions.
-10. Finish lyrics, visualizer, accessibility and release polish.
+1. Build the source-independent Queue 2.0 data model and tests.
+2. Add queue operations: play next, append, remove and reorder.
+3. Integrate previous, next, repeat and shuffle with the new queue.
+4. Build the dedicated Queue 2.0 interface.
+5. Persist and restore queue state.
+6. Complete Personalized Home history controls and continue listening.
+7. Finish card actions and loading placeholders.
+8. Finish search pagination, caching and keyboard navigation.
+9. Harden YouTube unavailable-track and recovery behavior.
+10. Add shared card-to-page transitions.
+11. Finish lyrics, visualizer, accessibility and release polish.
 
 ---
 
@@ -317,34 +397,51 @@ Use listening history instead of generic static recommendations.
 
 ## Playback hierarchy
 
-- The main player and complete footer share one expressive playback language.
-- The main play button is visually dominant.
-- The compact footer intentionally has no transport controls.
+- The main player and full footer share one expressive playback language.
+- Play/pause remains visually dominant.
+- Skip and mode controls remain secondary.
+- Compact footer behavior is adaptive and intentionally simpler than the full
+  footer.
 
 ## PixelPlayer influence
 
-- PixelPlayer replaces the earlier generic play-button proposal.
-- Its influence covers both the synchronized expressive controls and the
-  animated wavy progress presentation.
-- Nocky adapts the concept to GTK rather than copying Android implementation
-  details.
+- PixelPlayer inspired the expressive transport hierarchy and WaveSeekBar.
+- Nocky implements those ideas natively for GTK rather than copying Android
+  implementation details.
 
-## Repeat and shuffle
+## Track transitions
 
-- Inactive: transparent.
-- Active: tonal circular container.
-- Repeat-one must have an explicit `1` indicator.
-- These controls remain secondary to play/pause.
+- Metadata must not update as an imperceptible direct text replacement.
+- Title, artist and album use coordinated staggered motion.
+- Artwork replacement must animate even when both tracks have real covers.
+- Rapid track changes invalidate stale animation callbacks.
+
+## Dynamic palette
+
+- Album artwork is the Material palette source.
+- Color extraction occurs outside GTK's main loop.
+- Every asynchronous result carries generation protection.
+- Palette changes interpolate rather than flash.
+- Foreground roles remain contrast-safe during interpolation.
+- Missing artwork uses a stable fallback palette.
+
+## Queue
+
+- Queue order must be independent from the currently visible browser route.
+- Manual ordering must survive navigation, recovery and restart.
+- Shuffle must not silently destroy a user-curated order.
+- Local and YouTube queue entries share behavior but retain their source.
 
 ## Motion
 
-- Prefer edge spring, reveal, crossfade and shared motion.
+- Prefer reveal, crossfade, spring and shared motion.
 - Avoid hover scaling that changes layout allocation.
-- Every expressive animation must have a reduced-motion fallback.
+- Every expressive animation requires a reduced-motion fallback.
+- Hidden controls must release all unused allocation.
 
-## Compact footer
+## Source separation
 
-- Keep track information and utilities.
-- Hide transport controls and progress.
-- Lyrics and volume remain accessible.
-- Expandable controls must release all hidden layout space when collapsed.
+- Local history and YouTube recommendations remain separate.
+- Local-only mode must not display suggested YouTube playlists or mixtapes.
+- Source badges and error states should remain clear to the user.
+
