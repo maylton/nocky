@@ -10,6 +10,7 @@ mod footer_layout;
 mod footer_now_playing;
 mod footer_progress;
 mod footer_transport;
+mod footer_utilities;
 mod i18n;
 mod library;
 mod listening_history;
@@ -47,13 +48,13 @@ use footer_layout::{footer_mode_plan, AdaptiveFooterTier};
 use footer_now_playing::{build_footer_now_playing, FooterNowPlayingParts};
 use footer_progress::{build_footer_progress, FooterProgressParts};
 use footer_transport::{build_footer_transport, FooterTransportParts};
+use footer_utilities::{build_footer_utilities, FooterUtilityParts};
 use gtk::prelude::FileExt;
 use gtk::{gdk, gio, glib};
 use i18n::Message;
 use listening_history::{ListeningHistory, ListeningSource};
 use lyrics::LyricLine;
 use lyrics_view::LyricsPresenter;
-use md3_volume::Md3VolumeSlider;
 use model::{Track, TrackData};
 use playback::{PlaybackEngine, PlaybackEvent};
 use player_view::{PlayerView, PlayerViewHandle};
@@ -624,74 +625,15 @@ impl AppController {
             duration: footer_duration,
         } = build_footer_progress(&footer_transport);
 
-        let lyrics_button = gtk::ToggleButton::builder()
-            .icon_name("audio-input-microphone-symbolic")
-            .tooltip_text(tr(Message::LyricsTooltip))
-            .build();
-        lyrics_button.add_css_class("flat");
-        lyrics_button.add_css_class("footer-control");
-        lyrics_button.add_css_class("footer-lyrics-button");
-        lyrics_button.add_css_class("footer-utility-action");
-        lyrics_button.set_valign(gtk::Align::Center);
-
-        let mute_icon = gtk::Image::from_icon_name("audio-volume-high-symbolic");
-        let mute_button = gtk::Button::new();
-        mute_button.set_child(Some(&mute_icon));
-        mute_button.add_css_class("flat");
-        mute_button.add_css_class("footer-control");
-        mute_button.add_css_class("footer-utility-action");
-        mute_button.set_valign(gtk::Align::Center);
-        mute_button.set_tooltip_text(Some(tr(Message::Mute)));
-
-        let volume = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 1.0, 0.01);
-        volume.set_draw_value(false);
-        volume.set_value(config.volume.clamp(0.0, 1.0));
-        volume.set_size_request(96, -1);
-        volume.set_valign(gtk::Align::Center);
-        volume.add_css_class("footer-volume");
-        volume.add_css_class("footer-volume-control");
-
-        // nocky_compact_volume_expand_and_flat_modes_v1
-        // The scale lives inside a revealer so the compact utility card grows
-        // and contracts around it instead of abruptly showing another widget.
-        let volume_slot = gtk::Fixed::new();
-        volume_slot.set_size_request(124, 42);
-        volume_slot.set_hexpand(false);
-        volume_slot.set_vexpand(false);
-        volume_slot.set_overflow(gtk::Overflow::Hidden);
-        volume_slot.add_css_class("footer-volume-fixed-slot");
-
-        // nocky_compact_volume_fixed_slot_reveal_v1
-        // GtkScale keeps its full 96 px allocation inside GtkFixed while the
-        // revealer clips the slot. This lets the card animate horizontally
-        // without ever squeezing the scale into a negative allocation.
-        volume.set_size_request(116, 42);
-        volume.set_has_origin(true);
-        volume.add_css_class("footer-volume-md3");
-        let md3_volume = Md3VolumeSlider::new(&volume);
-        volume.set_visible(false);
-        volume_slot.put(md3_volume.widget(), 4.0, 0.0);
-
-        // nocky_md3_volume_slider_right_v1
-
-        let volume_revealer = gtk::Revealer::new();
-        volume_revealer.set_transition_type(gtk::RevealerTransitionType::SlideRight);
-        volume_revealer.set_transition_duration(280);
-        volume_revealer.set_reveal_child(true);
-        volume_revealer.set_halign(gtk::Align::Start);
-        volume_revealer.set_valign(gtk::Align::Center);
-        volume_revealer.set_child(Some(&volume_slot));
-        volume_revealer.add_css_class("footer-volume-revealer");
-
-        let right_controls = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        right_controls.set_margin_top(8);
-        right_controls.set_halign(gtk::Align::End);
-        right_controls.set_valign(gtk::Align::Center);
-        right_controls.add_css_class("footer-utility-group");
-        right_controls.set_size_request(220, 56);
-        right_controls.append(&lyrics_button);
-        right_controls.append(&mute_button);
-        right_controls.append(&volume_revealer);
+        // nocky_rust_ui_phase3f_footer_utilities_v1
+        let FooterUtilityParts {
+            root: right_controls,
+            lyrics_button,
+            mute_icon,
+            mute_button,
+            volume,
+            volume_revealer,
+        } = build_footer_utilities(config.language, config.volume);
 
         // nocky_custom_md3_volume_canvas_v2
         {
