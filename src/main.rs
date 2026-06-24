@@ -8,6 +8,7 @@ mod dialogs;
 mod expressive_transport;
 mod footer_layout;
 mod footer_now_playing;
+mod footer_progress;
 mod footer_transport;
 mod i18n;
 mod library;
@@ -44,6 +45,7 @@ use dialogs::SettingsEvent;
 use expressive_transport::ExpressiveTransport;
 use footer_layout::{footer_mode_plan, AdaptiveFooterTier};
 use footer_now_playing::{build_footer_now_playing, FooterNowPlayingParts};
+use footer_progress::{build_footer_progress, FooterProgressParts};
 use footer_transport::{build_footer_transport, FooterTransportParts};
 use gtk::prelude::FileExt;
 use gtk::{gdk, gio, glib};
@@ -612,45 +614,15 @@ impl AppController {
                 && config.visual_theme == VisualTheme::MaterialExpressive,
         );
 
-        let footer_progress = WaveProgress::new();
-        footer_progress
-            .widget()
-            .add_css_class("footer-progress-wave");
-
-        let footer_traditional_progress =
-            gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 1.0, 0.001);
-        footer_traditional_progress.set_draw_value(false);
-        footer_traditional_progress.set_hexpand(true);
-        footer_traditional_progress.add_css_class("footer-classic-progress");
-        footer_traditional_progress.add_css_class("footer-progress-track");
-
-        let footer_progress_stack = gtk::Stack::new();
-        footer_progress_stack.set_hexpand(true);
-        footer_progress_stack.add_css_class("footer-progress-stack");
-        footer_progress_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
-        footer_progress_stack.set_transition_duration(160);
-        footer_progress_stack.add_named(&footer_traditional_progress, Some("classic"));
-        footer_progress_stack.add_named(footer_progress.widget(), Some("m3"));
-
-        let footer_elapsed = gtk::Label::new(Some("0:00"));
-        footer_elapsed.add_css_class("time-label");
-        let footer_duration = gtk::Label::new(Some("0:00"));
-        footer_duration.add_css_class("time-label");
-
-        let footer_progress_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        footer_progress_row.set_hexpand(true);
-        footer_progress_row.add_css_class("footer-progress-row");
-        footer_progress_row.append(&footer_elapsed);
-        footer_progress_row.append(&footer_progress_stack);
-        footer_progress_row.append(&footer_duration);
-
-        let footer_center = gtk::Box::new(gtk::Orientation::Vertical, 2);
-        footer_center.set_size_request(500, 60);
-        footer_center.set_halign(gtk::Align::Center);
-        footer_center.set_valign(gtk::Align::Center);
-        footer_center.add_css_class("footer-center-surface");
-        footer_center.append(&footer_transport);
-        footer_center.append(&footer_progress_row);
+        // nocky_rust_ui_phase3e_footer_progress_v1
+        let FooterProgressParts {
+            root: footer_center,
+            stack: footer_progress_stack,
+            traditional: footer_traditional_progress,
+            wave: footer_progress,
+            elapsed: footer_elapsed,
+            duration: footer_duration,
+        } = build_footer_progress(&footer_transport);
 
         let lyrics_button = gtk::ToggleButton::builder()
             .icon_name("audio-input-microphone-symbolic")
