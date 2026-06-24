@@ -24,9 +24,24 @@ impl Rgb {
     fn hex(self) -> String {
         format!("#{:02x}{:02x}{:02x}", self.red, self.green, self.blue)
     }
+
+    fn mix(self, target: Self, amount: f64) -> Self {
+        let amount = amount.clamp(0.0, 1.0);
+        let channel = |from: u8, to: u8| {
+            (f64::from(from) + (f64::from(to) - f64::from(from)) * amount)
+                .round()
+                .clamp(0.0, 255.0) as u8
+        };
+
+        Self::new(
+            channel(self.red, target.red),
+            channel(self.green, target.green),
+            channel(self.blue, target.blue),
+        )
+    }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct MaterialPalette {
     primary: Rgb,
     on_primary: Rgb,
@@ -54,6 +69,48 @@ impl MaterialPalette {
 
     pub(crate) fn from_cover(path: &Path) -> Option<Self> {
         dominant_seed(path).map(Self::from_seed)
+    }
+
+    // material_palette_transition_animation_v1
+    pub(crate) fn interpolate(self, target: Self, amount: f64) -> Self {
+        let primary = self.primary.mix(target.primary, amount);
+        let primary_container = self.primary_container.mix(target.primary_container, amount);
+        let secondary_container = self
+            .secondary_container
+            .mix(target.secondary_container, amount);
+        let tertiary = self.tertiary.mix(target.tertiary, amount);
+        let tertiary_container = self
+            .tertiary_container
+            .mix(target.tertiary_container, amount);
+        let surface = self.surface.mix(target.surface, amount);
+
+        Self {
+            primary,
+            on_primary: readable_on(primary),
+            primary_container,
+            on_primary_container: readable_on(primary_container),
+            secondary_container,
+            on_secondary_container: readable_on(secondary_container),
+            tertiary,
+            tertiary_container,
+            on_tertiary_container: readable_on(tertiary_container),
+            surface,
+            surface_container: self.surface_container.mix(target.surface_container, amount),
+            surface_container_low: self
+                .surface_container_low
+                .mix(target.surface_container_low, amount),
+            surface_container_high: self
+                .surface_container_high
+                .mix(target.surface_container_high, amount),
+            surface_container_highest: self
+                .surface_container_highest
+                .mix(target.surface_container_highest, amount),
+            on_surface: readable_on(surface),
+            on_surface_variant: self
+                .on_surface_variant
+                .mix(target.on_surface_variant, amount),
+            outline: self.outline.mix(target.outline, amount),
+        }
     }
 
     fn from_seed(seed: Rgb) -> Self {
@@ -1069,6 +1126,30 @@ fn relative_luminance(rgb: Rgb) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn palette_interpolation_keeps_exact_endpoints() {
+        let start = MaterialPalette::from_seed(Rgb::new(220, 48, 80));
+        let target = MaterialPalette::from_seed(Rgb::new(30, 110, 220));
+
+        assert_eq!(start.interpolate(target, 0.0), start);
+        assert_eq!(start.interpolate(target, 1.0), target);
+    }
+
+    #[test]
+    fn palette_interpolation_keeps_accessible_core_pairs() {
+        let start = MaterialPalette::from_seed(Rgb::new(220, 48, 80));
+        let target = MaterialPalette::from_seed(Rgb::new(30, 180, 110));
+
+        for step in 0..=20 {
+            let palette = start.interpolate(target, f64::from(step) / 20.0);
+            assert_accessible(palette.primary, palette.on_primary);
+            assert_accessible(palette.primary_container, palette.on_primary_container);
+            assert_accessible(palette.secondary_container, palette.on_secondary_container);
+            assert_accessible(palette.tertiary_container, palette.on_tertiary_container);
+            assert_accessible(palette.surface, palette.on_surface);
+        }
+    }
 
     fn assert_accessible(background: Rgb, foreground: Rgb) {
         assert!(

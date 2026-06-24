@@ -10,7 +10,7 @@ use std::{
         mpsc, Arc,
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 pub struct VisualThemeManager {
@@ -20,6 +20,9 @@ pub struct VisualThemeManager {
     artwork: RefCell<Option<PathBuf>>,
     palette_tx: mpsc::Sender<(u64, MaterialPalette)>,
     generation: Arc<AtomicU64>,
+    current_palette: Cell<MaterialPalette>,
+    palette_animation_generation: Cell<u64>,
+    animations_enabled: Cell<bool>,
 }
 
 impl VisualThemeManager {
@@ -42,6 +45,7 @@ impl VisualThemeManager {
 
         let (palette_tx, palette_rx) = mpsc::channel();
         let generation = Arc::new(AtomicU64::new(0));
+        let fallback = MaterialPalette::fallback();
 
         let manager = Rc::new(Self {
             _provider: provider,
@@ -50,8 +54,11 @@ impl VisualThemeManager {
             artwork: RefCell::new(None),
             palette_tx,
             generation,
+            current_palette: Cell::new(fallback),
+            palette_animation_generation: Cell::new(0),
+            animations_enabled: Cell::new(true),
         });
-        manager.apply_palette(MaterialPalette::fallback());
+        manager.apply_palette(fallback);
 
         let weak = Rc::downgrade(&manager);
         glib::timeout_add_local(Duration::from_millis(80), move || {
@@ -63,7 +70,7 @@ impl VisualThemeManager {
                 let latest = manager.generation.load(Ordering::Acquire);
                 if generation == latest && manager.current.get() == VisualTheme::MaterialExpressive
                 {
-                    manager.apply_palette(palette);
+                    manager.transition_to_palette(palette);
                 }
             }
 
@@ -84,11 +91,15 @@ impl VisualThemeManager {
             VisualTheme::MaterialExpressive => "theme-material-expressive",
         });
         self.current.set(theme);
+        self.animations_enabled
+            .set(adw::is_animations_enabled(root));
 
         if theme == VisualTheme::MaterialExpressive {
             self.request_palette();
         } else {
             self.generation.fetch_add(1, Ordering::AcqRel);
+            self.palette_animation_generation
+                .set(self.palette_animation_generation.get().wrapping_add(1));
         }
     }
 
@@ -114,6 +125,51 @@ impl VisualThemeManager {
             let palette =
                 MaterialPalette::from_cover(&path).unwrap_or_else(MaterialPalette::fallback);
             let _ = sender.send((generation, palette));
+        });
+    }
+
+    // material_palette_transition_animation_v1
+    fn transition_to_palette(self: &Rc<Self>, target: MaterialPalette) {
+        let start = self.current_palette.get();
+        let token = self.palette_animation_generation.get().wrapping_add(1);
+        self.palette_animation_generation.set(token);
+
+        if !self.animations_enabled.get() || start == target {
+            self.current_palette.set(target);
+            self.apply_palette(target);
+            return;
+        }
+
+        let weak = Rc::downgrade(self);
+        let started = Instant::now();
+        let duration = Duration::from_millis(420);
+
+        glib::timeout_add_local(Duration::from_millis(32), move || {
+            let Some(manager) = weak.upgrade() else {
+                return glib::ControlFlow::Break;
+            };
+
+            if manager.palette_animation_generation.get() != token
+                || manager.current.get() != VisualTheme::MaterialExpressive
+            {
+                return glib::ControlFlow::Break;
+            }
+
+            let progress =
+                (started.elapsed().as_secs_f64() / duration.as_secs_f64()).clamp(0.0, 1.0);
+            let eased = progress * progress * (3.0 - 2.0 * progress);
+            let palette = start.interpolate(target, eased);
+
+            manager.current_palette.set(palette);
+            manager.apply_palette(palette);
+
+            if progress >= 1.0 {
+                manager.current_palette.set(target);
+                manager.apply_palette(target);
+                glib::ControlFlow::Break
+            } else {
+                glib::ControlFlow::Continue
+            }
         });
     }
 
