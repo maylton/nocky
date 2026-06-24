@@ -17,3 +17,5 @@ youtube-session.json
 stream-cache.json
 
 .nocky-runtime/
+
+.patch-backups/

@@ -28,6 +28,7 @@ mod onboarding;
 mod playback;
 mod player_view;
 pub mod queue_model;
+mod queue_store;
 mod reveal_bounce;
 mod settings_page;
 mod theme;
@@ -61,7 +62,7 @@ use lyrics_view::LyricsPresenter;
 use model::{Track, TrackData};
 use playback::{PlaybackEngine, PlaybackEvent};
 use player_view::{PlayerView, PlayerViewHandle};
-use queue_model::{PlaybackQueue, QueueEntryId, QueueMedia, QueueSource};
+use queue_model::{PlaybackQueue, QueueEntryId, QueueMedia, QueueSnapshot, QueueSource};
 use reveal_bounce::RevealBounce;
 use settings_page::SettingsPage;
 use std::{
@@ -135,7 +136,9 @@ struct AppController {
     state: RefCell<AppState>,
     // queue2_playback_bridge_v1
     // queue2_browser_actions_dnd_v1
+    // queue2_persistence_v1
     playback_queue_v2: RefCell<PlaybackQueue>,
+    queue_last_saved_snapshot: RefCell<QueueSnapshot>,
     queue_dragged_entry: Cell<Option<QueueEntryId>>,
     queue_v2_pending_entry: Cell<Option<QueueEntryId>>,
     config: RefCell<config::AppConfig>,
@@ -339,6 +342,7 @@ fn build_application(app: &adw::Application) {
         // The regular checkpoints are asynchronous; shutdown performs one
         // serialized final snapshot so the latest playback session is kept.
         keep_alive.listening_history.borrow().flush();
+        keep_alive.persist_queue_now();
         keep_alive.player.shutdown();
         keep_alive.mpris.send(mpris::MprisUpdate::Shutdown);
     });
@@ -661,6 +665,21 @@ impl AppController {
             .map(|duration| duration.as_nanos() as u64)
             .unwrap_or(0x9e37_79b9_7f4a_7c15);
 
+        let queue_load = queue_store::load();
+        if queue_load.discarded_entries > 0 {
+            eprintln!(
+                "Queue 2.0 recovery discarded {} unavailable entr{}",
+                queue_load.discarded_entries,
+                if queue_load.discarded_entries == 1 {
+                    "y"
+                } else {
+                    "ies"
+                }
+            );
+        }
+        let restored_queue = queue_load.queue;
+        let restored_queue_snapshot = restored_queue.snapshot();
+
         let initial_volume = config.volume.clamp(0.15, 1.0);
         let sidebar_bounce = RevealBounce::new(false);
         let player_bounce = RevealBounce::new(!config.home_player_collapsed);
@@ -669,7 +688,8 @@ impl AppController {
             toast_overlay,
             player,
             state: RefCell::new(AppState::default()),
-            playback_queue_v2: RefCell::new(PlaybackQueue::new()),
+            playback_queue_v2: RefCell::new(restored_queue),
+            queue_last_saved_snapshot: RefCell::new(restored_queue_snapshot),
             queue_dragged_entry: Cell::new(None),
             queue_v2_pending_entry: Cell::new(None),
             config: RefCell::new(config),
@@ -826,6 +846,17 @@ impl AppController {
                     };
                     page_switcher.set_active_page(page, true);
                 });
+        }
+
+        {
+            let weak = Rc::downgrade(&controller);
+            glib::timeout_add_local(Duration::from_secs(1), move || {
+                let Some(controller) = weak.upgrade() else {
+                    return glib::ControlFlow::Break;
+                };
+                controller.persist_queue_if_changed();
+                glib::ControlFlow::Continue
+            });
         }
 
         controller.apply_translations();
@@ -1401,7 +1432,7 @@ impl AppController {
     // queue2_interface_v1
     fn rebuild_queue_popover(
         self: &Rc<Self>,
-        list: &gtk::ListBox,
+        list: &gtk::Box,
         summary: &gtk::Label,
         clear_upcoming: &gtk::Button,
         popover: &gtk::Popover,
@@ -1475,63 +1506,232 @@ impl AppController {
                 row.add_css_class("active");
             }
 
-            let drag_handle = gtk::Image::from_icon_name("list-drag-handle-symbolic");
-            drag_handle.set_pixel_size(18);
+            // queue2_drag_indicator_v1
+            // Keep the widget that owns GestureDrag parented and intact.
+            // A compact accent marker moves through the list to show the
+            // destination without duplicating the whole track row.
+            let drag_icon = gtk::Image::from_icon_name("list-drag-handle-symbolic");
+            drag_icon.set_pixel_size(18);
+            drag_icon.set_can_target(false);
+            drag_icon.add_css_class("dim-label");
+
+            let drag_handle = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+            drag_handle.set_size_request(34, 34);
+            drag_handle.set_halign(gtk::Align::Center);
+            drag_handle.set_valign(gtk::Align::Center);
+            drag_handle.set_can_target(true);
+            drag_handle.set_cursor_from_name(Some("grab"));
             drag_handle.set_tooltip_text(Some(match language {
                 AppLanguage::Portuguese => "Arraste para reordenar",
                 AppLanguage::English => "Drag to reorder",
                 AppLanguage::Spanish => "Arrastra para reordenar",
             }));
-            drag_handle.add_css_class("dim-label");
             drag_handle.add_css_class("queue2-drag-handle");
+            drag_handle.append(&drag_icon);
 
-            let drag_source = gtk::DragSource::new();
-            drag_source.set_actions(gdk::DragAction::MOVE);
+            let drag_origin = Rc::new(Cell::new(position));
+            let drag_target = Rc::new(Cell::new(position));
+            let drag_indicator: Rc<RefCell<Option<gtk::Box>>> = Rc::new(RefCell::new(None));
+
+            let drag_gesture = gtk::GestureDrag::new();
+            drag_gesture.set_button(gdk::BUTTON_PRIMARY);
+            drag_gesture.set_propagation_phase(gtk::PropagationPhase::Capture);
+
             {
                 let weak = Rc::downgrade(self);
+                let handle = drag_handle.clone();
+                let row = row.clone();
+                let list = list.clone();
+                let drag_origin = drag_origin.clone();
+                let drag_target = drag_target.clone();
+                let drag_indicator = drag_indicator.clone();
                 let id = entry.id;
-                let title = entry.media.title.clone();
-                drag_source.connect_prepare(move |_, _, _| {
-                    let controller = weak.upgrade()?;
+
+                drag_gesture.connect_drag_begin(move |_, _, _| {
+                    let Some(controller) = weak.upgrade() else {
+                        return;
+                    };
+
+                    drag_origin.set(position);
+                    drag_target.set(position);
                     controller.queue_dragged_entry.set(Some(id));
-                    Some(gdk::ContentProvider::for_value(&title.to_value()))
+                    handle.set_cursor_from_name(Some("grabbing"));
+                    row.set_opacity(0.48);
+                    row.add_css_class("queue2-live-dragging");
+
+                    let indicator = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+                    indicator.set_height_request(9);
+                    indicator.set_margin_start(38);
+                    indicator.set_margin_end(16);
+                    indicator.set_can_target(false);
+                    indicator.add_css_class("queue2-drop-indicator");
+
+                    let accent_line = gtk::ProgressBar::new();
+                    accent_line.set_fraction(1.0);
+                    accent_line.set_height_request(3);
+                    accent_line.set_hexpand(true);
+                    accent_line.set_valign(gtk::Align::Center);
+                    accent_line.set_can_target(false);
+                    accent_line.add_css_class("queue2-drop-indicator-line");
+
+                    indicator.append(&accent_line);
+                    list.insert_child_after(&indicator, Some(&row));
+                    drag_indicator.replace(Some(indicator));
                 });
             }
-            drag_handle.add_controller(drag_source);
-            row.append(&drag_handle);
 
-            let drop_target = gtk::DropTarget::new(String::static_type(), gdk::DragAction::MOVE);
+            {
+                let list = list.clone();
+                let row = row.clone();
+                let drag_origin = drag_origin.clone();
+                let drag_target = drag_target.clone();
+                let drag_indicator = drag_indicator.clone();
+
+                drag_gesture.connect_drag_update(move |_, _, offset_y| {
+                    let indicator = {
+                        let stored = drag_indicator.borrow();
+                        stored.as_ref().cloned()
+                    };
+                    let Some(indicator) = indicator else {
+                        return;
+                    };
+
+                    let row_height = row.height().max(1) as f64;
+                    let delta = (offset_y / row_height).round() as isize;
+                    let last_index = count.saturating_sub(1) as isize;
+                    let target = (drag_origin.get() as isize + delta).clamp(0, last_index) as usize;
+
+                    if target == drag_target.get() {
+                        return;
+                    }
+
+                    let row_widget: gtk::Widget = row.clone().upcast();
+                    let indicator_widget: gtk::Widget = indicator.clone().upcast();
+                    let mut stable_rows = Vec::with_capacity(count.saturating_sub(1));
+                    let mut child = list.first_child();
+                    while let Some(widget) = child {
+                        let next = widget.next_sibling();
+                        if widget != row_widget && widget != indicator_widget {
+                            stable_rows.push(widget);
+                        }
+                        child = next;
+                    }
+
+                    let previous_sibling = if target == 0 {
+                        None
+                    } else {
+                        stable_rows.get(target - 1)
+                    };
+                    list.reorder_child_after(&indicator, previous_sibling);
+                    drag_target.set(target);
+                });
+            }
+
             {
                 let weak = Rc::downgrade(self);
+                let handle = drag_handle.clone();
+                let row = row.clone();
                 let list = list.clone();
                 let summary = summary.clone();
                 let clear_upcoming = clear_upcoming.clone();
                 let queue_popover = popover.clone();
-                drop_target.connect_drop(move |_, _, _, _| {
+                let drag_origin = drag_origin.clone();
+                let drag_target = drag_target.clone();
+                let drag_indicator = drag_indicator.clone();
+                let fallback_id = entry.id;
+
+                drag_gesture.connect_drag_end(move |_, _, _| {
+                    handle.set_cursor_from_name(Some("grab"));
+                    row.set_opacity(1.0);
+                    row.remove_css_class("queue2-live-dragging");
+
                     let Some(controller) = weak.upgrade() else {
-                        return false;
+                        return;
                     };
-                    let Some(id) = controller.queue_dragged_entry.replace(None) else {
-                        return false;
-                    };
-                    if controller
-                        .playback_queue_v2
-                        .borrow_mut()
-                        .move_entry(id, position)
-                        .is_err()
-                    {
-                        return false;
-                    }
-                    controller.rebuild_queue_popover(
-                        &list,
-                        &summary,
-                        &clear_upcoming,
-                        &queue_popover,
-                    );
-                    true
+                    let id = controller
+                        .queue_dragged_entry
+                        .replace(None)
+                        .unwrap_or(fallback_id);
+                    let origin = drag_origin.get();
+                    let target = drag_target.get();
+                    let indicator = drag_indicator.borrow_mut().take();
+
+                    let idle_list = list.clone();
+                    let idle_summary = summary.clone();
+                    let idle_clear_upcoming = clear_upcoming.clone();
+                    let idle_queue_popover = queue_popover.clone();
+
+                    glib::idle_add_local_once(move || {
+                        if let Some(indicator) = indicator {
+                            if indicator.parent().is_some() {
+                                idle_list.remove(&indicator);
+                            }
+                        }
+
+                        if target != origin {
+                            if let Err(error) = controller
+                                .playback_queue_v2
+                                .borrow_mut()
+                                .move_entry(id, target)
+                            {
+                                controller.show_toast(&error.to_string());
+                            }
+                        }
+
+                        controller.rebuild_queue_popover(
+                            &idle_list,
+                            &idle_summary,
+                            &idle_clear_upcoming,
+                            &idle_queue_popover,
+                        );
+                    });
                 });
             }
-            row.add_controller(drop_target);
+
+            {
+                let weak = Rc::downgrade(self);
+                let handle = drag_handle.clone();
+                let row = row.clone();
+                let list = list.clone();
+                let summary = summary.clone();
+                let clear_upcoming = clear_upcoming.clone();
+                let queue_popover = popover.clone();
+                let drag_indicator = drag_indicator.clone();
+
+                drag_gesture.connect_cancel(move |_, _| {
+                    handle.set_cursor_from_name(Some("grab"));
+                    row.set_opacity(1.0);
+                    row.remove_css_class("queue2-live-dragging");
+
+                    let Some(controller) = weak.upgrade() else {
+                        return;
+                    };
+                    controller.queue_dragged_entry.set(None);
+                    let indicator = drag_indicator.borrow_mut().take();
+
+                    let idle_list = list.clone();
+                    let idle_summary = summary.clone();
+                    let idle_clear_upcoming = clear_upcoming.clone();
+                    let idle_queue_popover = queue_popover.clone();
+
+                    glib::idle_add_local_once(move || {
+                        if let Some(indicator) = indicator {
+                            if indicator.parent().is_some() {
+                                idle_list.remove(&indicator);
+                            }
+                        }
+                        controller.rebuild_queue_popover(
+                            &idle_list,
+                            &idle_summary,
+                            &idle_clear_upcoming,
+                            &idle_queue_popover,
+                        );
+                    });
+                });
+            }
+
+            drag_handle.add_controller(drag_gesture);
+            row.append(&drag_handle);
 
             let play_area = gtk::Button::new();
             play_area.set_hexpand(true);
@@ -1795,8 +1995,7 @@ impl AppController {
         header.append(&clear_upcoming);
         content.append(&header);
 
-        let list = gtk::ListBox::new();
-        list.set_selection_mode(gtk::SelectionMode::None);
+        let list = gtk::Box::new(gtk::Orientation::Vertical, 0);
         list.add_css_class("queue-popover-list");
         list.add_css_class("queue2-list");
 
@@ -2704,6 +2903,9 @@ impl AppController {
             transition.fade(token, &title_label, 0.0, 1.0, 0, 180);
             transition.fade(token, &artist_label, 0.0, 1.0, 44, 180);
         });
+
+        // nocky_compact_footer_reassert_after_metadata_v2: set_footer_metadata (fields=2, setters=4)
+        self.apply_footer_mode();
     }
 
     fn update_footer_source(&self) {
@@ -3102,6 +3304,9 @@ impl AppController {
 
             glib::ControlFlow::Continue
         });
+
+        // nocky_compact_footer_reassert_after_metadata_v2: install_footer_adaptive (fields=4, setters=7)
+        self.apply_footer_mode();
     }
 
     fn apply_home_player_visibility(&self) {
@@ -3861,6 +4066,9 @@ impl AppController {
         if track.lyrics.is_empty() && self.config.borrow().auto_download_lyrics {
             self.request_lyrics(index, false, false);
         }
+
+        // nocky_compact_footer_reassert_after_metadata_v2: select_track (fields=0, setters=0)
+        self.apply_footer_mode();
     }
 
     fn request_lyrics(&self, index: usize, notify: bool, force: bool) {
@@ -4316,12 +4524,7 @@ impl AppController {
         }
 
         if self.state.borrow().current.is_none() {
-            let queued = self
-                .playback_queue_v2
-                .borrow()
-                .entries()
-                .first()
-                .map(|entry| entry.id);
+            let queued = self.initial_queue_entry_id();
             if let Some(id) = queued {
                 self.play_queue_entry(id, true);
                 return;
@@ -4491,12 +4694,7 @@ impl AppController {
                     {
                         self.play_current();
                     } else if self.state.borrow().current.is_none() {
-                        let queued = self
-                            .playback_queue_v2
-                            .borrow()
-                            .entries()
-                            .first()
-                            .map(|entry| entry.id);
+                        let queued = self.initial_queue_entry_id();
                         if let Some(id) = queued {
                             self.play_queue_entry(id, true);
                             continue;
@@ -4830,6 +5028,41 @@ impl AppController {
             .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Stopped));
         self.mpris.send(mpris::MprisUpdate::Position(0));
         self.publish_mpris_capabilities();
+    }
+
+    fn initial_queue_entry_id(&self) -> Option<QueueEntryId> {
+        let queue = self.playback_queue_v2.borrow();
+        queue
+            .current_id()
+            .or_else(|| queue.entries().first().map(|entry| entry.id))
+    }
+
+    fn persist_queue_if_changed(&self) {
+        let snapshot = self.playback_queue_v2.borrow().snapshot();
+        if *self.queue_last_saved_snapshot.borrow() == snapshot {
+            return;
+        }
+
+        match queue_store::save(&snapshot) {
+            Ok(()) => {
+                self.queue_last_saved_snapshot.replace(snapshot);
+            }
+            Err(error) => {
+                eprintln!("Could not save Queue 2.0 state: {error}");
+            }
+        }
+    }
+
+    fn persist_queue_now(&self) {
+        let snapshot = self.playback_queue_v2.borrow().snapshot();
+        match queue_store::save(&snapshot) {
+            Ok(()) => {
+                self.queue_last_saved_snapshot.replace(snapshot);
+            }
+            Err(error) => {
+                eprintln!("Could not save final Queue 2.0 state: {error}");
+            }
+        }
     }
 
     fn save_config(&self) {
