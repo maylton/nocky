@@ -1,6 +1,7 @@
 use crate::{
     build_cover,
     config::AppLanguage,
+    expressive_transport::{ExpressiveTransport, TransportVariant},
     i18n::{self, Message},
     lyrics_view::LyricsPresenter,
     visualizer::SpectrumVisualizer,
@@ -8,6 +9,7 @@ use crate::{
     CoverView,
 };
 use gtk::prelude::*;
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub(crate) struct PlayerViewHandle {
@@ -65,6 +67,7 @@ pub(crate) struct PlayerView {
     pub(crate) previous_button: gtk::Button,
     pub(crate) hero_play_button: gtk::Button,
     pub(crate) next_button: gtk::Button,
+    pub(crate) transport_motion: Rc<ExpressiveTransport>,
     pub(crate) inline_lyrics_button: gtk::ToggleButton,
     pub(crate) refresh_lyrics_button: gtk::Button,
     pub(crate) hero_cover: CoverView,
@@ -88,7 +91,7 @@ const PLAYER_CARD_WIDTH: i32 = 454;
 
 // material_expressive_player_v1
 impl PlayerView {
-    pub(crate) fn new(language: AppLanguage) -> Self {
+    pub(crate) fn new(language: AppLanguage, expressive_transport_effects: bool) -> Self {
         let tr = |message: Message| i18n::text(language, message);
 
         let title = gtk::Label::new(Some(tr(Message::IntegratedMusic)));
@@ -285,13 +288,20 @@ impl PlayerView {
         shuffle.add_css_class("media-control");
         shuffle.add_css_class("player-mode-control");
 
+        let transport_motion = ExpressiveTransport::new(
+            TransportVariant::Main,
+            &previous,
+            &hero_play_button,
+            &next,
+            &hero_play_icon,
+            expressive_transport_effects,
+        );
+
         let controls = gtk::Box::new(gtk::Orientation::Horizontal, 18);
         controls.set_halign(gtk::Align::Center);
         controls.add_css_class("player-transport-controls");
         controls.append(&repeat);
-        controls.append(&previous);
-        controls.append(&hero_play_button);
-        controls.append(&next);
+        controls.append(transport_motion.root());
         controls.append(&shuffle);
 
         let visualizer = SpectrumVisualizer::new();
@@ -428,6 +438,7 @@ impl PlayerView {
             previous_button: previous,
             hero_play_button,
             next_button: next,
+            transport_motion,
             inline_lyrics_button,
             refresh_lyrics_button,
             hero_cover,

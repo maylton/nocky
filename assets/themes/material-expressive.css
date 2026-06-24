@@ -2989,3 +2989,515 @@ window.theme-noctalia .settings-about-action:hover {
 window.theme-noctalia .settings-about-action:active {
   background-color: shade(@accent_bg_color, 0.94);
 }
+
+/* home_carousel_queue_thumb_match_v2 */
+
+/*
+ * Use the exact Material queue thumb geometry on Home carousels,
+ * rotated for the horizontal axis: 34 px long × 6 px thick.
+ */
+window.theme-material-expressive
+  .home-carousel-scroll
+  scrollbar.horizontal,
+window.theme-material-expressive
+  .home-carousel-scroll.material-carousel-scroll
+  scrollbar.horizontal {
+  min-height: 6px;
+  opacity: 1;
+  background-color: transparent;
+}
+
+window.theme-material-expressive
+  .home-carousel-scroll
+  scrollbar.horizontal
+  trough,
+window.theme-material-expressive
+  .home-carousel-scroll.material-carousel-scroll
+  scrollbar.horizontal
+  trough {
+  min-height: 6px;
+  background-color: transparent;
+  border: none;
+}
+
+window.theme-material-expressive
+  .home-carousel-scroll
+  scrollbar.horizontal
+  slider,
+window.theme-material-expressive
+  .home-carousel-scroll.material-carousel-scroll
+  scrollbar.horizontal
+  slider {
+  min-width: 34px;
+  min-height: 6px;
+  margin: 0;
+  border-radius: 999px;
+  background-color: alpha(@m3_on_surface_variant, 0.32);
+  border: none;
+  box-shadow: none;
+}
+
+window.theme-material-expressive
+  .home-carousel-scroll
+  scrollbar.horizontal
+  slider:hover,
+window.theme-material-expressive
+  .home-carousel-scroll.material-carousel-scroll
+  scrollbar.horizontal
+  slider:hover {
+  min-height: 6px;
+  margin: 0;
+  background-color: alpha(@m3_primary, 0.62);
+}
+
+/* home_carousel_material_queue_thumb_outline_v1 */
+
+/*
+ * Match the playback queue's M3 thumb construction:
+ * a tonal outer capsule surrounding a darker inner core.
+ * Overall geometry remains 34 px × 6 px.
+ */
+window.theme-material-expressive
+  .home-carousel-scroll
+  scrollbar.horizontal,
+window.theme-material-expressive
+  .home-carousel-scroll.material-carousel-scroll
+  scrollbar.horizontal {
+  min-height: 6px;
+  opacity: 1;
+  background-color: transparent;
+}
+
+window.theme-material-expressive
+  .home-carousel-scroll
+  scrollbar.horizontal
+  trough,
+window.theme-material-expressive
+  .home-carousel-scroll.material-carousel-scroll
+  scrollbar.horizontal
+  trough {
+  min-height: 6px;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+window.theme-material-expressive
+  .home-carousel-scroll
+  scrollbar.horizontal
+  slider,
+window.theme-material-expressive
+  .home-carousel-scroll.material-carousel-scroll
+  scrollbar.horizontal
+  slider {
+  min-width: 34px;
+  min-height: 6px;
+  margin: 0;
+  border-radius: 999px;
+  background-color: alpha(@m3_surface_container_high, 0.96);
+  border: none;
+  box-shadow:
+    inset 0 0 0 2px alpha(@m3_on_surface_variant, 0.44),
+    0 1px 2px alpha(black, 0.18);
+}
+
+window.theme-material-expressive
+  .home-carousel-scroll
+  scrollbar.horizontal
+  slider:hover,
+window.theme-material-expressive
+  .home-carousel-scroll.material-carousel-scroll
+  scrollbar.horizontal
+  slider:hover {
+  min-height: 6px;
+  margin: 0;
+  background-color: alpha(@m3_primary_container, 0.96);
+  box-shadow:
+    inset 0 0 0 2px alpha(@m3_primary, 0.74),
+    0 0 8px alpha(@m3_primary, 0.18);
+}
+
+/* pixel_player_expressive_transport_v1 */
+
+/*
+ * Fixed-slot expressive transport controls.
+ *
+ * All geometry animation happens inside GtkFixed containers whose outer size
+ * never changes. This prevents hover/click motion from resizing the Home card,
+ * footer, or surrounding controls.
+ */
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-secondary {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  background-image: none;
+  transform: none;
+  transition:
+    background-color 150ms ease-out,
+    border-color 150ms ease-out,
+    box-shadow 170ms ease-out,
+    color 150ms ease-out;
+}
+
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  box-shadow: 0 7px 20px alpha(@m3_primary, 0.25);
+}
+
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary.is-resting,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary.is-resting:hover,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary.is-resting:active,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary.is-resting:focus,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary.is-resting:focus-visible {
+  border-radius: 999px;
+}
+
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary.is-playing,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary.is-playing:hover,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary.is-playing:active,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary.is-playing:focus,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary.is-playing:focus-visible {
+  border-radius: 24px;
+}
+
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-footer
+  button.expressive-transport-primary.is-playing,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-footer
+  button.expressive-transport-primary.is-playing:hover,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-footer
+  button.expressive-transport-primary.is-playing:active,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-footer
+  button.expressive-transport-primary.is-playing:focus,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-footer
+  button.expressive-transport-primary.is-playing:focus-visible {
+  border-radius: 19px;
+}
+
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary:hover {
+  box-shadow:
+    0 10px 25px alpha(@m3_primary, 0.31),
+    0 0 0 3px alpha(@m3_primary, 0.07);
+}
+
+/* pixel_player_transport_no_primary_click_glow_v4 */
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary:active {
+  box-shadow: 0 3px 8px alpha(black, 0.16);
+}
+
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-secondary {
+  color: @m3_on_secondary_container;
+  background-color: alpha(@m3_secondary_container, 0.72);
+  border: none;
+  outline: none;
+  border-radius: 18px;
+  box-shadow: 0 3px 10px alpha(black, 0.12);
+}
+
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-footer
+  button.expressive-transport-secondary {
+  border-radius: 16px;
+}
+
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-secondary:hover {
+  background-color: @m3_secondary_container;
+  border: none;
+  outline: none;
+  box-shadow:
+    0 6px 16px alpha(black, 0.16),
+    0 0 0 2px alpha(@m3_primary, 0.05);
+}
+
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-secondary:active {
+  background-color: shade(@m3_secondary_container, 0.94);
+  box-shadow: 0 3px 9px alpha(black, 0.13);
+}
+
+/* pixel_player_transport_one_second_v3 */
+
+/*
+ * Tonal previous/next controls without the generic light GTK outline.
+ * Keyboard focus uses a restrained primary-colored halo instead.
+ */
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-secondary,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-secondary:hover,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-secondary:active,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-secondary:focus {
+  border: none;
+  outline: none;
+}
+
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-secondary:focus-visible {
+  border: none;
+  outline: none;
+  box-shadow:
+    0 5px 14px alpha(black, 0.15),
+    0 0 0 2px alpha(@m3_primary, 0.30);
+}
+
+/* pixel_player_transport_remove_cross_glow_v5 */
+
+/*
+ * Remove every colored ring from the expressive primary transport action.
+ * The pointer remains over the button after a click, so :hover, :focus and
+ * :active all need an explicit neutral treatment.
+ */
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary:hover,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary:active,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary:focus,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary:focus-visible {
+  outline: none;
+  border-color: transparent;
+  background-image: none;
+  text-shadow: none;
+  -gtk-icon-shadow: none;
+  filter: none;
+}
+
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary {
+  box-shadow: 0 6px 16px alpha(black, 0.14);
+}
+
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary:hover {
+  box-shadow: 0 8px 18px alpha(black, 0.17);
+}
+
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary:active {
+  box-shadow: 0 3px 8px alpha(black, 0.15);
+}
+
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary:focus,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-primary:focus-visible {
+  box-shadow: 0 6px 16px alpha(black, 0.14);
+}
+
+/* pixel_player_transport_click_only_v6 */
+
+/*
+ * Click-only interaction model.
+ *
+ * Hover and keyboard focus keep the exact resting appearance. Geometry and
+ * emphasis change only through ExpressiveTransport's coordinated click
+ * animation, matching the PixelPlayer reference more closely.
+ */
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.shell-play-button.player-primary-control.expressive-transport-primary,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.shell-play-button.player-primary-control.expressive-transport-primary:hover,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.shell-play-button.player-primary-control.expressive-transport-primary:active,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.shell-play-button.player-primary-control.expressive-transport-primary:focus,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.shell-play-button.player-primary-control.expressive-transport-primary:focus-visible,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-footer
+  button.mini-play-button.footer-primary-control.expressive-transport-primary,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-footer
+  button.mini-play-button.footer-primary-control.expressive-transport-primary:hover,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-footer
+  button.mini-play-button.footer-primary-control.expressive-transport-primary:active,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-footer
+  button.mini-play-button.footer-primary-control.expressive-transport-primary:focus,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-footer
+  button.mini-play-button.footer-primary-control.expressive-transport-primary:focus-visible {
+  outline: none;
+  border-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  text-shadow: none;
+  -gtk-icon-shadow: none;
+  filter: none;
+  transform: none;
+  transition:
+    background-color 150ms ease-out,
+    color 150ms ease-out;
+}
+
+/* Prevent the icon itself from producing a cross-shaped focus/click glow. */
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.shell-play-button.player-primary-control.expressive-transport-primary
+  image,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-footer
+  button.mini-play-button.footer-primary-control.expressive-transport-primary
+  image {
+  background-image: none;
+  box-shadow: none;
+  text-shadow: none;
+  -gtk-icon-shadow: none;
+  filter: none;
+}
+
+/* Secondary controls also keep fixed geometry on hover. */
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-secondary:hover,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-secondary:focus,
+window.theme-material-expressive
+  .expressive-transport-enabled
+  button.expressive-transport-secondary:focus-visible {
+  outline: none;
+  transform: none;
+}
+
+/* pixel_player_transport_detach_legacy_main_glow_v7 */
+
+/*
+ * The Expressive component fully owns the main Play/Pause surface.
+ * No shadow, ring, outline or icon shadow from the legacy shell button may
+ * remain during normal, hover, focus or click states.
+ */
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:hover,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:active,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:focus,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:focus-visible,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:checked,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:backdrop {
+  outline: none;
+  outline-width: 0;
+  outline-offset: 0;
+  border-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  text-shadow: none;
+  -gtk-icon-shadow: none;
+  filter: none;
+  transform: none;
+  transition:
+    background-color 150ms ease-out,
+    color 150ms ease-out;
+}
+
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary
+  image,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:hover
+  image,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:active
+  image,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:focus
+  image,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:focus-visible
+  image {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  text-shadow: none;
+  -gtk-icon-shadow: none;
+  filter: none;
+}

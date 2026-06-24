@@ -28,6 +28,7 @@ pub(crate) enum SettingsEvent {
     ShowHomeLyrics(bool),
     VisualTheme(VisualTheme),
     FooterMode(FooterMode),
+    ExpressiveTransportEffects(bool),
     AutoDownloadLyrics(bool),
     YouTubeAutoSync(bool),
     NoctaliaThemeSync(bool),

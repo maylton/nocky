@@ -314,6 +314,22 @@ fn build_content(
         &footer_mode,
     ));
 
+    // pixel_player_expressive_transport_v1
+    let expressive_transport = settings_switch(initial.expressive_transport_effects);
+    playback_rows.append(&switch_row(
+        group_text(
+            "Animações expressivas de reprodução",
+            "Expressive playback animations",
+            "Animaciones expresivas de reproducción",
+        ),
+        group_text(
+            "Expande e reorganiza os controles com efeito de mola no modo Material 3. Desative para usar o comportamento clássico.",
+            "Expands and rearranges the controls with spring motion in Material 3 mode. Disable it to use the classic behavior.",
+            "Expande y reorganiza los controles con movimiento de resorte en el modo Material 3. Desactívalo para usar el comportamiento clásico.",
+        ),
+        &expressive_transport,
+    ));
+
     let auto_lyrics = settings_switch(initial.auto_download_lyrics);
     lyrics_rows.append(&switch_row(
         tr(Message::AutoLyrics),
@@ -469,6 +485,7 @@ fn build_content(
         (&lyrics, ToggleSetting::Lyrics),
         (&auto_lyrics, ToggleSetting::AutoLyrics),
         (&youtube_sync, ToggleSetting::YouTubeSync),
+        (&expressive_transport, ToggleSetting::ExpressiveTransport),
         (&noctalia, ToggleSetting::Noctalia),
     ] {
         let emit = emit.clone();
@@ -479,6 +496,9 @@ fn build_content(
                 ToggleSetting::Lyrics => SettingsEvent::ShowHomeLyrics(active),
                 ToggleSetting::AutoLyrics => SettingsEvent::AutoDownloadLyrics(active),
                 ToggleSetting::YouTubeSync => SettingsEvent::YouTubeAutoSync(active),
+                ToggleSetting::ExpressiveTransport => {
+                    SettingsEvent::ExpressiveTransportEffects(active)
+                }
                 ToggleSetting::Noctalia => SettingsEvent::NoctaliaThemeSync(active),
             };
             emit(event);
@@ -494,6 +514,7 @@ enum ToggleSetting {
     Lyrics,
     AutoLyrics,
     YouTubeSync,
+    ExpressiveTransport,
     Noctalia,
 }
 

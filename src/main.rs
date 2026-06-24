@@ -4,6 +4,7 @@ mod background_handler;
 mod browser;
 mod config;
 mod dialogs;
+mod expressive_transport;
 mod i18n;
 mod library;
 mod listening_history;
@@ -32,6 +33,7 @@ use background::{BackgroundChannel, BackgroundMessage};
 use browser::{BrowserEvent, BrowserRoute, LibraryBrowser};
 use config::{AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme};
 use dialogs::SettingsEvent;
+use expressive_transport::{ExpressiveTransport, TransportVariant};
 use gtk::prelude::FileExt;
 use gtk::{gdk, gio, glib};
 use i18n::Message;
@@ -184,6 +186,7 @@ struct AppController {
     favorite_button: gtk::Button,
     previous_button: gtk::Button,
     hero_play_button: gtk::Button,
+    main_transport_motion: Rc<ExpressiveTransport>,
     next_button: gtk::Button,
     mini_title: gtk::Label,
     mini_artist: gtk::Label,
@@ -221,6 +224,7 @@ struct AppController {
     lyrics_button: gtk::ToggleButton,
     footer_previous: gtk::Button,
     footer_play_button: gtk::Button,
+    footer_transport_motion: Rc<ExpressiveTransport>,
     footer_next: gtk::Button,
     footer_repeat_button: gtk::ToggleButton,
     footer_shuffle_button: gtk::ToggleButton,
@@ -444,6 +448,7 @@ impl AppController {
             previous_button: previous,
             hero_play_button,
             next_button: next,
+            transport_motion: main_transport_motion,
             inline_lyrics_button,
             refresh_lyrics_button,
             hero_cover,
@@ -458,7 +463,11 @@ impl AppController {
             shuffle_button: shuffle,
             visualizer,
             lyrics,
-        } = PlayerView::new(config.language);
+        } = PlayerView::new(
+            config.language,
+            config.expressive_transport_effects
+                && config.visual_theme == VisualTheme::MaterialExpressive,
+        );
 
         // A viewport is a hard width constraint; size-request alone is only
         // a minimum and long local metadata can otherwise widen the card.
@@ -673,15 +682,23 @@ impl AppController {
         footer_repeat.add_css_class("footer-control");
         footer_repeat.add_css_class("footer-mode-control");
 
+        let footer_transport_motion = ExpressiveTransport::new(
+            TransportVariant::Footer,
+            &footer_previous,
+            &play,
+            &footer_next,
+            &play_icon,
+            config.expressive_transport_effects
+                && config.visual_theme == VisualTheme::MaterialExpressive,
+        );
+
         let footer_transport = gtk::Box::new(gtk::Orientation::Horizontal, 7);
         footer_transport.set_margin_top(0);
         footer_transport.set_halign(gtk::Align::Center);
         footer_transport.set_valign(gtk::Align::Center);
         footer_transport.add_css_class("footer-transport-controls");
         footer_transport.append(&footer_shuffle);
-        footer_transport.append(&footer_previous);
-        footer_transport.append(&play);
-        footer_transport.append(&footer_next);
+        footer_transport.append(footer_transport_motion.root());
         footer_transport.append(&footer_repeat);
 
         let footer_progress = WaveProgress::new();
@@ -855,6 +872,7 @@ impl AppController {
             favorite_button: favorite.clone(),
             previous_button: previous.clone(),
             hero_play_button: hero_play_button.clone(),
+            main_transport_motion: main_transport_motion.clone(),
             next_button: next.clone(),
             mini_title,
             mini_artist,
@@ -891,6 +909,7 @@ impl AppController {
             lyrics_button,
             footer_previous: footer_previous.clone(),
             footer_play_button: play.clone(),
+            footer_transport_motion: footer_transport_motion.clone(),
             footer_next: footer_next.clone(),
             footer_repeat_button: footer_repeat.clone(),
             footer_shuffle_button: footer_shuffle.clone(),
@@ -2547,6 +2566,17 @@ impl AppController {
         }));
     }
 
+    fn apply_expressive_transport_effects(&self) {
+        let enabled = {
+            let config = self.config.borrow();
+            config.expressive_transport_effects
+                && config.visual_theme == VisualTheme::MaterialExpressive
+        };
+
+        self.main_transport_motion.set_effects_enabled(enabled);
+        self.footer_transport_motion.set_effects_enabled(enabled);
+    }
+
     fn apply_progress_style(&self) {
         let use_m3 = self.config.borrow().visual_theme == VisualTheme::MaterialExpressive;
         let child = if use_m3 { "m3" } else { "classic" };
@@ -2669,6 +2699,7 @@ impl AppController {
         );
 
         self.apply_progress_style();
+        self.apply_expressive_transport_effects();
     }
 
     fn apply_footer_mode(&self) {
@@ -2946,6 +2977,11 @@ impl AppController {
                 self.config.borrow_mut().footer_mode = mode;
                 self.save_config();
                 self.apply_footer_mode();
+            }
+            SettingsEvent::ExpressiveTransportEffects(active) => {
+                self.config.borrow_mut().expressive_transport_effects = active;
+                self.save_config();
+                self.apply_expressive_transport_effects();
             }
             SettingsEvent::AutoDownloadLyrics(active) => {
                 self.config.borrow_mut().auto_download_lyrics = active;
