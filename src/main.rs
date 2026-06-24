@@ -27,6 +27,7 @@ mod mpris;
 mod onboarding;
 mod playback;
 mod player_view;
+pub mod queue_model;
 mod reveal_bounce;
 mod settings_page;
 mod theme;
