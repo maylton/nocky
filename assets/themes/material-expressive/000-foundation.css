@@ -174,13 +174,10 @@ window.theme-material-expressive .player-metadata-surface {
   min-height: 92px;
   padding: 13px 15px;
   border-radius: 26px;
-  color: @m3_on_primary_container;
-  background-color: @m3_primary_container;
   border: 1px solid alpha(@m3_primary, 0.24);
 }
 
 window.theme-material-expressive .player-track-title {
-  color: @m3_on_primary_container;
   font-size: 1.32rem;
   font-weight: 850;
   letter-spacing: -0.35px;
@@ -201,13 +198,8 @@ window.theme-material-expressive .player-favorite-action {
   min-width: 38px;
   min-height: 38px;
   border-radius: 19px;
-  color: @m3_on_primary_container;
-  background-color: alpha(@m3_on_primary_container, 0.08);
 }
 
-window.theme-material-expressive .player-favorite-action:hover {
-  background-color: alpha(@m3_on_primary_container, 0.16);
-}
 
 /* Transport surface and action hierarchy */
 window.theme-material-expressive .player-transport-surface {
@@ -306,8 +298,6 @@ window.theme-material-expressive .footer-info-card {
   padding: 4px 12px 4px 5px;
   border-radius: 24px;
   border: 1px solid alpha(@m3_primary, 0.22);
-  color: @m3_on_primary_container;
-  background-color: @m3_primary_container;
   box-shadow: none;
 }
 
@@ -331,7 +321,6 @@ window.theme-material-expressive .footer-metadata {
 }
 
 window.theme-material-expressive .footer-track-title {
-  color: @m3_on_primary_container;
   font-size: 0.96rem;
   font-weight: 820;
   letter-spacing: -0.16px;
@@ -347,13 +336,8 @@ window.theme-material-expressive .footer-favorite-action {
   min-width: 30px;
   min-height: 30px;
   border-radius: 15px;
-  color: @m3_on_primary_container;
-  background-color: alpha(@m3_on_primary_container, 0.08);
 }
 
-window.theme-material-expressive .footer-favorite-action:hover {
-  background-color: alpha(@m3_on_primary_container, 0.16);
-}
 
 window.theme-material-expressive .footer-source-pill {
   min-height: 24px;

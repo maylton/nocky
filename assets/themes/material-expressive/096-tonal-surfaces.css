@@ -1,0 +1,37 @@
+/* nocky_css_tonal_surfaces_phase2c_v1 */
+
+/*
+ * Shared tonal metadata surfaces
+ * ------------------------------
+ *
+ * Geometry remains in each component's original module. Only identical
+ * Material color roles are centralized here.
+ */
+
+window.theme-material-expressive .player-metadata-surface,
+window.theme-material-expressive .footer-info-card {
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+}
+
+window.theme-material-expressive .player-track-title,
+window.theme-material-expressive .footer-track-title {
+  color: @m3_on_primary_container;
+}
+
+window.theme-material-expressive .player-favorite-action,
+window.theme-material-expressive .footer-favorite-action {
+  color: @m3_on_primary_container;
+  background-color: alpha(
+    @m3_on_primary_container,
+    0.08
+  );
+}
+
+window.theme-material-expressive .player-favorite-action:hover,
+window.theme-material-expressive .footer-favorite-action:hover {
+  background-color: alpha(
+    @m3_on_primary_container,
+    0.16
+  );
+}

@@ -78,3 +78,11 @@ The Rust factory remains the single source for widget construction. CSS shares
 all visual states and retains player/footer classes only where the approved
 geometry differs. The toggle system is no longer coupled to compact-volume
 overrides or early foundation rules.
+
+## Phase 2C — Shared tonal metadata surfaces
+
+Identical Material color roles for player metadata, footer now-playing
+information and favorite actions now live in `096-tonal-surfaces.css`.
+
+Component geometry remains in `000-foundation.css`; only shared palette
+properties were moved.
