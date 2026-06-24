@@ -1,84 +1,3 @@
-
-window.theme-material-expressive
-  .home-carousel-scroll
-  scrollbar.horizontal
-  slider:hover,
-window.theme-material-expressive
-  .home-carousel-scroll.material-carousel-scroll
-  scrollbar.horizontal
-  slider:hover {
-  min-height: 6px;
-  margin: 0;
-  background-color: alpha(@m3_primary, 0.62);
-}
-
-/* home_carousel_material_queue_thumb_outline_v1 */
-
-/*
- * Match the playback queue's M3 thumb construction:
- * a tonal outer capsule surrounding a darker inner core.
- * Overall geometry remains 34 px × 6 px.
- */
-window.theme-material-expressive
-  .home-carousel-scroll
-  scrollbar.horizontal,
-window.theme-material-expressive
-  .home-carousel-scroll.material-carousel-scroll
-  scrollbar.horizontal {
-  min-height: 6px;
-  opacity: 1;
-  background-color: transparent;
-}
-
-window.theme-material-expressive
-  .home-carousel-scroll
-  scrollbar.horizontal
-  trough,
-window.theme-material-expressive
-  .home-carousel-scroll.material-carousel-scroll
-  scrollbar.horizontal
-  trough {
-  min-height: 6px;
-  background-color: transparent;
-  border: none;
-  box-shadow: none;
-}
-
-window.theme-material-expressive
-  .home-carousel-scroll
-  scrollbar.horizontal
-  slider,
-window.theme-material-expressive
-  .home-carousel-scroll.material-carousel-scroll
-  scrollbar.horizontal
-  slider {
-  min-width: 34px;
-  min-height: 6px;
-  margin: 0;
-  border-radius: 999px;
-  background-color: alpha(@m3_surface_container_high, 0.96);
-  border: none;
-  box-shadow:
-    inset 0 0 0 2px alpha(@m3_on_surface_variant, 0.44),
-    0 1px 2px alpha(black, 0.18);
-}
-
-window.theme-material-expressive
-  .home-carousel-scroll
-  scrollbar.horizontal
-  slider:hover,
-window.theme-material-expressive
-  .home-carousel-scroll.material-carousel-scroll
-  scrollbar.horizontal
-  slider:hover {
-  min-height: 6px;
-  margin: 0;
-  background-color: alpha(@m3_primary_container, 0.96);
-  box-shadow:
-    inset 0 0 0 2px alpha(@m3_primary, 0.74),
-    0 0 8px alpha(@m3_primary, 0.18);
-}
-
 /* nocky_css_transport_consolidation_phase2a_v1 */
 
 /*
@@ -283,4 +202,36 @@ window.theme-material-expressive
   box-shadow:
     0 5px 14px alpha(black, 0.15),
     0 0 0 2px alpha(@m3_primary, 0.30);
+}
+
+/* nocky_player_transport_icon_compatibility_phase2e_v1 */
+
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary
+  image,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:hover
+  image,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:active
+  image,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:focus
+  image,
+window.theme-material-expressive
+  .expressive-transport-enabled.expressive-transport-main
+  button.expressive-transport-primary:focus-visible
+  image {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  text-shadow: none;
+  -gtk-icon-shadow: none;
+  filter: none;
 }

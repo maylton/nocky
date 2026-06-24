@@ -95,3 +95,12 @@ Superseded footer geometry declarations were removed from
 The cleanup compares the final exact-selector cascade before and after every
 mutation. Colors, borders, surfaces and shadows that still contribute to the
 approved result remain in place.
+
+## Phase 2E — Player and Home module boundaries
+
+Home-carousel scrollbar styling was moved from `070-player.css` to
+`080-home-browser.css`. The main-player transport icon compatibility rule was
+moved in the opposite direction.
+
+An obsolete scrollbar hover rule was removed. Final declarations for every
+moved selector were compared before and after the refactor.
