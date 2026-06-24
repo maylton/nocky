@@ -314,9 +314,11 @@ fn build_content(
         &footer_mode,
     ));
 
-    // pixel_player_expressive_transport_v1
+    // nocky_theme_scoped_expressive_effects_v1: Expressive controls are Material-only
+    let material_expressive = initial.visual_theme == VisualTheme::MaterialExpressive;
+
     let expressive_transport = settings_switch(initial.expressive_transport_effects);
-    playback_rows.append(&switch_row(
+    let expressive_transport_row = switch_row(
         group_text(
             "Animações expressivas de reprodução",
             "Expressive playback animations",
@@ -328,22 +330,26 @@ fn build_content(
             "Expande y reorganiza los controles con movimiento de resorte en el modo Material 3. Desactívalo para usar el comportamiento clásico.",
         ),
         &expressive_transport,
-    ));
-    // expressive_home_card_motion_v1
+    );
+    expressive_transport_row.set_visible(material_expressive);
+    playback_rows.append(&expressive_transport_row);
+
     let expressive_home_cards = settings_switch(initial.expressive_home_card_effects);
-    playback_rows.append(&switch_row(
+    let expressive_home_cards_row = switch_row(
         group_text(
-            "Animações expressivas dos cards",
-            "Expressive card animations",
-            "Animaciones expresivas de las tarjetas",
+            "Resposta expressiva dos carrosséis",
+            "Expressive carousel response",
+            "Respuesta expresiva de los carruseles",
         ),
         group_text(
-            "Adiciona levitação, zoom interno e resposta com efeito de mola aos cards da Home.",
-            "Adds lift, internal zoom and spring feedback to Home cards.",
-            "Añade elevación, zoom interno y respuesta con resorte a las tarjetas de inicio.",
+            "Ativa a resposta elástica nas extremidades dos carrosséis da Home no tema Material 3.",
+            "Enables elastic edge feedback for Home carousels in the Material 3 theme.",
+            "Activa la respuesta elástica en los extremos de los carruseles de inicio con el tema Material 3.",
         ),
         &expressive_home_cards,
-    ));
+    );
+    expressive_home_cards_row.set_visible(material_expressive);
+    playback_rows.append(&expressive_home_cards_row);
 
     let auto_lyrics = settings_switch(initial.auto_download_lyrics);
     lyrics_rows.append(&switch_row(
@@ -468,8 +474,15 @@ fn build_content(
 
     {
         let emit = emit.clone();
+        let expressive_transport_row = expressive_transport_row.clone();
+        let expressive_home_cards_row = expressive_home_cards_row.clone();
+
         visual_theme.connect_selected_notify(move |dropdown| {
-            emit(SettingsEvent::VisualTheme(if dropdown.selected() == 1 {
+            let material_expressive = dropdown.selected() == 1;
+            expressive_transport_row.set_visible(material_expressive);
+            expressive_home_cards_row.set_visible(material_expressive);
+
+            emit(SettingsEvent::VisualTheme(if material_expressive {
                 VisualTheme::MaterialExpressive
             } else {
                 VisualTheme::Noctalia

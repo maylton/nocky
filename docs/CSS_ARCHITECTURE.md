@@ -170,3 +170,18 @@ adds Rust tests for module identity/order/naming and records the final module
 inventory.
 
 Marker: `nocky_css_architecture_closure_phase2i_v1`.
+
+## Theme-scoped Expressive effects
+
+Expressive runtime effects are active only while Material 3 Expressive is the
+selected visual theme. Compact-volume overshoot is now gated alongside the
+existing transport, Home-carousel and wave-progress gates.
+
+Noctalia keeps the native `GtkRevealer` volume slide without Material
+overshoot/rebound classes. Expressive settings rows are hidden in Noctalia,
+while their stored preferences remain unchanged.
+
+The Home carousel edge spring retains neutral elevation but no longer adds a
+colored glow halo.
+
+Marker: `nocky_theme_scoped_expressive_effects_v1`.

@@ -65,6 +65,8 @@ window.theme-material-expressive
     0 0 8px alpha(@m3_primary, 0.18);
 }
 
+/* nocky_theme_scoped_expressive_effects_v1: carousel spring without colored glow */
+
 /* nocky_css_remove_disabled_home_motion_phase2g_v5 */
 
 /*
@@ -110,9 +112,7 @@ window.theme-material-expressive
   .home-card-edge-spring
   .collection-card {
   border-color: alpha(@m3_primary, 0.52);
-  box-shadow:
-    0 11px 28px alpha(black, 0.25),
-    0 0 0 3px alpha(@m3_primary, 0.10);
+  box-shadow: 0 11px 28px alpha(black, 0.25);
 }
 
 
@@ -129,7 +129,5 @@ window.theme-material-expressive
 window.theme-material-expressive
   .collection-card.home-card-edge-spring-surface {
   border-color: alpha(@m3_primary, 0.58);
-  box-shadow:
-    0 12px 30px alpha(black, 0.27),
-    0 0 0 3px alpha(@m3_primary, 0.12);
+  box-shadow: 0 12px 30px alpha(black, 0.27);
 }

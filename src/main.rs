@@ -2761,16 +2761,20 @@ impl AppController {
         self.mute_button.set_tooltip_text(Some(tooltip));
     }
 
-    // nocky_compact_volume_expand_and_flat_modes_v1
+    // nocky_theme_scoped_expressive_effects_v1: Material-only compact volume spring
     fn apply_compact_volume_expansion(&self) {
         let compact = self.player_bar.has_css_class("footer-mode-compact");
         let expanded = compact && self.compact_volume_expanded.get();
+        let material_expressive =
+            self.config.borrow().visual_theme == VisualTheme::MaterialExpressive;
 
         self.footer_right_controls
             .remove_css_class("volume-expanded");
+        self.footer_right_controls
+            .remove_css_class("volume-spring-active");
         self.mute_button.remove_css_class("volume-panel-open");
 
-        if expanded {
+        if expanded && material_expressive {
             self.footer_right_controls.add_css_class("volume-expanded");
             self.mute_button.add_css_class("volume-panel-open");
         }
@@ -2793,11 +2797,6 @@ impl AppController {
             .max(100);
         let target_width = if expanded { 234 } else { 100 };
 
-        // nocky_compact_volume_no_reserved_space_v1
-        // A closed GtkRevealer still counts as a visible child of GtkBox,
-        // which preserves one spacing slot after the volume button. Hide the
-        // revealer after the closing animation so the compact card contains
-        // only the two icon buttons and no invisible reserved column.
         if expanded {
             self.volume_revealer.set_visible(true);
             self.volume_revealer.set_reveal_child(false);
@@ -2821,15 +2820,26 @@ impl AppController {
             });
         }
 
-        run_compact_volume_spring(CompactVolumeSpring {
-            group: self.footer_right_controls.clone(),
-            generation: self.compact_volume_spring_generation.clone(),
-            token,
-            from_width: current_width,
-            target_width,
-            expanding: expanded,
-            delay_ms: if expanded { 18 } else { 0 },
-        });
+        let animate_material_spring =
+            material_expressive && adw::is_animations_enabled(&self.footer_right_controls);
+
+        if animate_material_spring {
+            run_compact_volume_spring(CompactVolumeSpring {
+                group: self.footer_right_controls.clone(),
+                generation: self.compact_volume_spring_generation.clone(),
+                token,
+                from_width: current_width,
+                target_width,
+                expanding: expanded,
+                delay_ms: if expanded { 18 } else { 0 },
+            });
+        } else {
+            // Noctalia keeps the native GtkRevealer slide without the custom
+            // Material overshoot/rebound geometry.
+            self.footer_right_controls
+                .set_size_request(target_width, 52);
+            self.footer_right_controls.queue_allocate();
+        }
 
         self.apply_volume_icon();
     }
@@ -2968,6 +2978,10 @@ impl AppController {
 
         self.apply_progress_style();
         self.apply_expressive_transport_effects();
+
+        if self.player_bar.has_css_class("footer-mode-compact") {
+            self.apply_compact_volume_expansion();
+        }
     }
 
     fn apply_footer_mode(&self) {
