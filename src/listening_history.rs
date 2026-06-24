@@ -3,10 +3,17 @@ use std::{
     collections::HashMap,
     fs,
     path::PathBuf,
+    sync::{mpsc, Mutex, OnceLock},
+    thread,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 const MAX_EVENTS: usize = 20_000;
+
+// expressive_home_card_motion_stability_v1
+// Disk serialization and atomic writes are kept away from GTK's main loop.
+static HISTORY_WRITER: OnceLock<mpsc::Sender<StoredHistory>> = OnceLock::new();
+static HISTORY_WRITE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
@@ -156,19 +163,69 @@ impl ListeningHistory {
     }
 
     fn save(&self) {
-        let path = history_path();
-        if let Some(parent) = path.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
         let stored = StoredHistory {
             events: self.events.clone(),
         };
-        if let Ok(json) = serde_json::to_string_pretty(&stored) {
-            let temporary = path.with_extension("json.tmp");
-            if fs::write(&temporary, json).is_ok() {
-                let _ = fs::rename(temporary, path);
-            }
+
+        // Sending a snapshot is cheap. JSON serialization and filesystem I/O
+        // happen in the dedicated writer thread.
+        if let Err(error) = history_writer().send(stored) {
+            // Thread creation can fail on a severely constrained system.
+            // Preserve correctness with a synchronous fallback.
+            write_history_snapshot(&error.0);
         }
+    }
+
+    pub fn flush(&self) {
+        write_history_snapshot(&StoredHistory {
+            events: self.events.clone(),
+        });
+    }
+}
+
+fn history_writer() -> &'static mpsc::Sender<StoredHistory> {
+    HISTORY_WRITER.get_or_init(|| {
+        let (sender, receiver) = mpsc::channel::<StoredHistory>();
+
+        if let Err(error) = thread::Builder::new()
+            .name("nocky-history-writer".to_string())
+            .spawn(move || {
+                while let Ok(mut snapshot) = receiver.recv() {
+                    // Coalesce checkpoints that accumulated while the previous
+                    // snapshot was being written. The newest snapshot already
+                    // contains every earlier event.
+                    while let Ok(newer) = receiver.try_recv() {
+                        snapshot = newer;
+                    }
+                    write_history_snapshot(&snapshot);
+                }
+            })
+        {
+            eprintln!("Could not start Nocky history writer: {error}");
+        }
+
+        sender
+    })
+}
+
+fn write_history_snapshot(stored: &StoredHistory) {
+    let lock = HISTORY_WRITE_LOCK.get_or_init(|| Mutex::new(()));
+    let Ok(_guard) = lock.lock() else {
+        return;
+    };
+
+    let path = history_path();
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+
+    let Ok(json) = serde_json::to_string_pretty(stored) else {
+        return;
+    };
+
+    let temporary = path.with_extension("json.tmp");
+    if fs::write(&temporary, json).is_ok() {
+        let _ = fs::rename(temporary, path);
     }
 }
 

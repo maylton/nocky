@@ -93,6 +93,8 @@ pub struct AppConfig {
     pub footer_mode: FooterMode,
     // pixel_player_expressive_transport_v1
     pub expressive_transport_effects: bool,
+    // expressive_home_card_motion_v1
+    pub expressive_home_card_effects: bool,
     pub noctalia_theme_sync: bool,
     pub youtube_auto_sync: bool,
     pub language: AppLanguage,
@@ -116,6 +118,7 @@ impl Default for AppConfig {
             visual_theme: VisualTheme::Noctalia,
             footer_mode: FooterMode::Automatic,
             expressive_transport_effects: true,
+            expressive_home_card_effects: true,
             noctalia_theme_sync: true,
             youtube_auto_sync: true,
             language: AppLanguage::detect_system(),

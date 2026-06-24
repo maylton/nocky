@@ -1,5 +1,6 @@
 use crate::{
-    config::{AppConfig, AppLanguage, StartupSource},
+    config::{AppConfig, AppLanguage, StartupSource, VisualTheme},
+    home_card_motion::{self, HomeCardKind},
     listening_history::{ListeningHistory, ListeningSource, ListeningStats},
     model::Track,
     youtube::{youtube_collection_key, YouTubeCollectionEntry, YouTubeItem, YouTubeLibraryCache},
@@ -13,7 +14,7 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
     sync::mpsc::{self, Receiver, Sender},
-    time::UNIX_EPOCH,
+    time::{Duration, UNIX_EPOCH},
 };
 
 const ARTWORK_TEXTURE_CACHE_LIMIT: usize = 160;
@@ -1289,6 +1290,8 @@ impl LibraryBrowser {
     ) {
         let language = config.language;
         let copy = home_copy(language);
+        let card_effects = config.visual_theme == VisualTheme::MaterialExpressive
+            && config.expressive_home_card_effects;
 
         while let Some(child) = self.home_content.first_child() {
             self.home_content.remove(&child);
@@ -1315,6 +1318,7 @@ impl LibraryBrowser {
             mixes,
             &self.event_tx,
             language,
+            card_effects,
         ));
 
         let active_source = match config.startup_source {
@@ -1328,6 +1332,7 @@ impl LibraryBrowser {
             ranked_home_album_cards(tracks, youtube, history, active_source, language),
             &self.event_tx,
             language,
+            card_effects,
         ));
 
         self.home_content.append(&home_section(
@@ -1336,6 +1341,7 @@ impl LibraryBrowser {
             ranked_home_artist_cards(tracks, youtube, history, active_source, language),
             &self.event_tx,
             language,
+            card_effects,
         ));
 
         let mut playlist_cards = config
@@ -1362,6 +1368,7 @@ impl LibraryBrowser {
             playlist_cards,
             &self.event_tx,
             language,
+            card_effects,
         ));
 
         if youtube.syncing {
@@ -2497,6 +2504,7 @@ fn home_section(
     cards: Vec<HomeCard>,
     event_tx: &Sender<BrowserEvent>,
     language: AppLanguage,
+    card_effects: bool,
 ) -> gtk::Box {
     let title_label = gtk::Label::new(Some(title));
     title_label.set_xalign(0.0);
@@ -2517,7 +2525,7 @@ fn home_section(
         rail.append(&home_empty_card(language));
     } else {
         for card in cards {
-            rail.append(&home_card_button(card, event_tx, language));
+            rail.append(&home_card_button(card, event_tx, language, card_effects));
         }
     }
 
@@ -2532,6 +2540,9 @@ fn home_section(
     scroll.add_css_class("material-carousel-scroll");
     scroll.set_overlay_scrolling(false);
 
+    // nocky_home_cards_edge_spring_v4
+    install_home_carousel_edge_spring(&scroll, &rail);
+
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
     section.add_css_class("home-section");
     section.append(&heading);
@@ -2539,11 +2550,207 @@ fn home_section(
     section
 }
 
+// nocky_home_cards_edge_spring_v4: bounded carousel edge spring
+
+#[derive(Clone)]
+struct HomeCarouselEdgeCard {
+    widget: gtk::Widget,
+    original_width_request: i32,
+    base_width: i32,
+}
+
+type HomeCarouselEdgeCards = Rc<RefCell<Vec<HomeCarouselEdgeCard>>>;
+
+fn install_home_carousel_edge_spring(scroll: &gtk::ScrolledWindow, rail: &gtk::Box) {
+    let active = Rc::new(Cell::new(false));
+    let generation = Rc::new(Cell::new(0_u64));
+    let active_cards: HomeCarouselEdgeCards = Rc::new(RefCell::new(Vec::new()));
+
+    {
+        let rail = rail.clone();
+        let active = active.clone();
+        let generation = generation.clone();
+        let active_cards = active_cards.clone();
+
+        scroll.connect_edge_overshot(move |scroll, position| {
+            let from_start = match position {
+                gtk::PositionType::Left => true,
+                gtk::PositionType::Right => false,
+                _ => return,
+            };
+
+            if active.replace(true) {
+                return;
+            }
+
+            let cards = home_carousel_edge_cards(&rail, from_start, 3);
+            if cards.is_empty() {
+                active.set(false);
+                return;
+            }
+
+            let token = generation.get().wrapping_add(1);
+            generation.set(token);
+
+            {
+                let mut stored = active_cards.borrow_mut();
+                stored.clear();
+
+                for card in cards {
+                    let base_width = card.width().max(COLLECTION_CARD_MAX_WIDTH);
+                    stored.push(HomeCarouselEdgeCard {
+                        widget: card.clone(),
+                        original_width_request: card.width_request(),
+                        base_width,
+                    });
+                    card.add_css_class("home-card-edge-spring");
+                }
+            }
+
+            let started_at = Rc::new(Cell::new(0_i64));
+            let active = active.clone();
+            let generation = generation.clone();
+            let active_cards = active_cards.clone();
+
+            scroll.add_tick_callback(move |_, frame_clock| {
+                if generation.get() != token {
+                    restore_home_carousel_edge_cards(&active_cards);
+                    active.set(false);
+                    return glib::ControlFlow::Break;
+                }
+
+                let now = frame_clock.frame_time();
+                let start = started_at.get();
+
+                if start == 0 {
+                    started_at.set(now);
+                    return glib::ControlFlow::Continue;
+                }
+
+                let progress = ((now - start) as f64 / 440_000.0).clamp(0.0, 1.0);
+                let displacement = home_carousel_spring_displacement(progress);
+                let strengths: [f64; 3] = [1.0, 0.58, 0.30];
+
+                {
+                    let stored = active_cards.borrow();
+                    for (index, card) in stored.iter().enumerate() {
+                        let stretch = (displacement * strengths[index.min(2)]).round() as i32;
+
+                        card.widget.set_width_request(
+                            (card.base_width + stretch).max(COLLECTION_CARD_MIN_WIDTH),
+                        );
+                    }
+                }
+
+                if progress >= 1.0 {
+                    restore_home_carousel_edge_cards(&active_cards);
+                    active.set(false);
+                    glib::ControlFlow::Break
+                } else {
+                    glib::ControlFlow::Continue
+                }
+            });
+        });
+    }
+
+    {
+        let active = active.clone();
+        let generation = generation.clone();
+        let active_cards = active_cards.clone();
+
+        scroll.connect_unmap(move |_| {
+            generation.set(generation.get().wrapping_add(1));
+            restore_home_carousel_edge_cards(&active_cards);
+            active.set(false);
+        });
+    }
+}
+
+fn home_carousel_edge_cards(rail: &gtk::Box, from_start: bool, limit: usize) -> Vec<gtk::Widget> {
+    let mut cards = Vec::new();
+    let mut current = if from_start {
+        rail.first_child()
+    } else {
+        rail.last_child()
+    };
+
+    while let Some(card) = current {
+        let next = if from_start {
+            card.next_sibling()
+        } else {
+            card.prev_sibling()
+        };
+
+        cards.push(card);
+
+        if cards.len() == limit {
+            break;
+        }
+
+        current = next;
+    }
+
+    cards
+}
+
+fn restore_home_carousel_edge_cards(cards: &HomeCarouselEdgeCards) {
+    for card in cards.borrow_mut().drain(..) {
+        card.widget.set_width_request(card.original_width_request);
+        card.widget.remove_css_class("home-card-edge-spring");
+    }
+}
+
+fn home_carousel_spring_displacement(progress: f64) -> f64 {
+    if progress < 0.22 {
+        16.0 * home_edge_ease_out_cubic(progress / 0.22)
+    } else if progress < 0.50 {
+        home_edge_lerp(
+            16.0,
+            -4.5,
+            home_edge_ease_in_out_cubic((progress - 0.22) / 0.28),
+        )
+    } else if progress < 0.74 {
+        home_edge_lerp(
+            -4.5,
+            2.5,
+            home_edge_ease_in_out_cubic((progress - 0.50) / 0.24),
+        )
+    } else {
+        home_edge_lerp(2.5, 0.0, home_edge_ease_out_cubic((progress - 0.74) / 0.26))
+    }
+}
+
+fn home_edge_ease_out_cubic(value: f64) -> f64 {
+    1.0 - (1.0 - value.clamp(0.0, 1.0)).powi(3)
+}
+
+fn home_edge_ease_in_out_cubic(value: f64) -> f64 {
+    let value = value.clamp(0.0, 1.0);
+
+    if value < 0.5 {
+        4.0 * value.powi(3)
+    } else {
+        1.0 - (-2.0 * value + 2.0).powi(3) / 2.0
+    }
+}
+
+fn home_edge_lerp(start: f64, end: f64, progress: f64) -> f64 {
+    start + (end - start) * progress
+}
+
 fn home_card_button(
     card: HomeCard,
     event_tx: &Sender<BrowserEvent>,
     language: AppLanguage,
+    card_effects: bool,
 ) -> gtk::Button {
+    let card_kind = match &card {
+        HomeCard::LocalArtist { .. } | HomeCard::YouTubeArtist { .. } => HomeCardKind::Artist,
+        HomeCard::LocalAlbum { .. } | HomeCard::YouTubeAlbum { .. } => HomeCardKind::Album,
+        HomeCard::YouTubePlaylist(item) if is_mix_playlist(item) => HomeCardKind::Mix,
+        HomeCard::LocalPlaylist { .. } | HomeCard::YouTubePlaylist(_) => HomeCardKind::Playlist,
+    };
+
     let (cover_path, title, subtitle, detail, online) = match &card {
         HomeCard::LocalAlbum {
             title,
@@ -2596,10 +2803,28 @@ fn home_card_button(
     card_widget.add_css_class("expressive-collection-card");
 
     let button = gtk::Button::new();
-    button.set_child(Some(&card_widget));
     button.add_css_class("flat");
     button.add_css_class("home-card-button");
     button.add_css_class("expressive-collection-button");
+
+    // nocky_home_cards_edge_spring_v4: visual hover only; the old scale/bounce engine receives false.
+    if card_effects {
+        button.add_css_class("home-card-motion-requested");
+    }
+    button.add_css_class("home-card-no-hover-scale");
+
+    if false {
+        if let Some(artwork) = card_widget
+            .first_child()
+            .and_then(|child| child.downcast::<gtk::Stack>().ok())
+        {
+            home_card_motion::install(&button, &card_widget, &artwork, card_kind);
+        } else {
+            button.set_child(Some(&card_widget));
+        }
+    } else {
+        button.set_child(Some(&card_widget));
+    }
 
     let sender = event_tx.clone();
     button.connect_clicked(move |_| {
@@ -2617,7 +2842,14 @@ fn home_card_button(
             }
             HomeCard::YouTubePlaylist(item) => BrowserEvent::OpenYouTubePlaylist(item),
         };
-        let _ = sender.send(event);
+        if card_effects {
+            let sender = sender.clone();
+            glib::timeout_add_local_once(Duration::from_millis(120), move || {
+                let _ = sender.send(event);
+            });
+        } else {
+            let _ = sender.send(event);
+        }
     });
 
     button
@@ -2975,40 +3207,108 @@ fn bind_responsive_collection_artwork(
     artwork: &gtk::Stack,
     cover_path: Option<PathBuf>,
 ) {
-    let card = card.clone();
-    let artwork = artwork.clone();
-    let current_size = Rc::new(Cell::new(COLLECTION_ARTWORK_MIN_SIZE));
-    let observed_card = card.clone();
-    card.add_tick_callback(move |_, _| {
-        let width = observed_card.width().max(COLLECTION_CARD_MIN_WIDTH);
-        let target = responsive_collection_artwork_size(width);
-        if target == current_size.get() {
-            return glib::ControlFlow::Continue;
-        }
+    // expressive_home_card_motion_stability_v1: bounded artwork settling
+    //
+    // The old implementation kept one tick callback alive for every card for
+    // the entire lifetime of the widget. Card hover/click motion could then
+    // overlap with responsive artwork resizing and texture replacement.
+    //
+    // This callback exists only while the initial allocation settles. It is
+    // invalidated on unmap, uses weak widget references and stops after three
+    // stable frames.
+    let current_size = Rc::new(Cell::new(0_i32));
+    let generation = Rc::new(Cell::new(0_u64));
 
-        current_size.set(target);
-        artwork.set_size_request(target, target);
-        if let Some(placeholder) = artwork
-            .first_child()
-            .and_then(|child| child.downcast::<gtk::Image>().ok())
-        {
-            placeholder.set_pixel_size(target / 3);
-        }
-        if let Some(path) = cover_path.as_deref().filter(|path| path.is_file()) {
-            if let Some(picture) = artwork
-                .last_child()
-                .and_then(|child| child.downcast::<gtk::Picture>().ok())
-            {
-                picture.set_size_request(target, target);
-                if let Some(texture) = cached_square_texture(path, target) {
-                    picture.set_paintable(Some(&texture));
-                    artwork.set_visible_child_name("picture");
+    let schedule: Rc<dyn Fn()> = {
+        let card_weak = card.downgrade();
+        let artwork_weak = artwork.downgrade();
+        let cover_path = cover_path.clone();
+        let current_size = current_size.clone();
+        let generation = generation.clone();
+
+        Rc::new(move || {
+            let Some(card) = card_weak.upgrade() else {
+                return;
+            };
+
+            let token = generation.get().wrapping_add(1);
+            generation.set(token);
+
+            let card_weak = card.downgrade();
+            let artwork_weak = artwork_weak.clone();
+            let cover_path = cover_path.clone();
+            let current_size = current_size.clone();
+            let generation = generation.clone();
+            let stable_frames = Rc::new(Cell::new(0_u8));
+
+            card.add_tick_callback(move |_, _| {
+                if generation.get() != token {
+                    return glib::ControlFlow::Break;
                 }
-            }
-        }
 
-        glib::ControlFlow::Continue
-    });
+                let Some(card) = card_weak.upgrade() else {
+                    return glib::ControlFlow::Break;
+                };
+                let Some(artwork) = artwork_weak.upgrade() else {
+                    return glib::ControlFlow::Break;
+                };
+
+                let width = card.width().max(COLLECTION_CARD_MIN_WIDTH);
+                let target = responsive_collection_artwork_size(width);
+
+                if target == current_size.get() {
+                    let next = stable_frames.get().saturating_add(1);
+                    stable_frames.set(next);
+                    return if next >= 3 {
+                        glib::ControlFlow::Break
+                    } else {
+                        glib::ControlFlow::Continue
+                    };
+                }
+
+                stable_frames.set(0);
+                current_size.set(target);
+                artwork.set_size_request(target, target);
+
+                if let Some(placeholder) = artwork
+                    .first_child()
+                    .and_then(|child| child.downcast::<gtk::Image>().ok())
+                {
+                    placeholder.set_pixel_size(target / 3);
+                }
+
+                if let Some(picture) = artwork
+                    .last_child()
+                    .and_then(|child| child.downcast::<gtk::Picture>().ok())
+                {
+                    picture.set_size_request(target, target);
+
+                    if let Some(path) = cover_path.as_deref().filter(|path| path.is_file()) {
+                        if let Some(texture) = cached_square_texture(path, target) {
+                            picture.set_paintable(Some(&texture));
+                            artwork.set_visible_child_name("picture");
+                        }
+                    }
+                }
+
+                glib::ControlFlow::Continue
+            });
+        })
+    };
+
+    {
+        let schedule = schedule.clone();
+        card.connect_map(move |_| schedule());
+    }
+
+    {
+        let generation = generation.clone();
+        card.connect_unmap(move |_| {
+            generation.set(generation.get().wrapping_add(1));
+        });
+    }
+
+    schedule();
 }
 
 fn responsive_collection_artwork_size(card_width: i32) -> i32 {

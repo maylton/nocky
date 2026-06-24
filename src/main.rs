@@ -5,6 +5,7 @@ mod browser;
 mod config;
 mod dialogs;
 mod expressive_transport;
+mod home_card_motion;
 mod i18n;
 mod library;
 mod listening_history;
@@ -306,6 +307,10 @@ fn build_application(app: &adw::Application) {
     // Keep the controller alive for as long as the application is running.
     let keep_alive = controller.clone();
     app.connect_shutdown(move |_| {
+        // expressive_home_card_motion_stability_v1: flush
+        // The regular checkpoints are asynchronous; shutdown performs one
+        // serialized final snapshot so the latest playback session is kept.
+        keep_alive.listening_history.borrow().flush();
         keep_alive.player.shutdown();
         keep_alive.mpris.send(mpris::MprisUpdate::Shutdown);
     });
@@ -2972,6 +2977,7 @@ impl AppController {
                 self.config.borrow_mut().visual_theme = theme;
                 self.save_config();
                 self.apply_visual_theme();
+                self.refresh_browser();
             }
             SettingsEvent::FooterMode(mode) => {
                 self.config.borrow_mut().footer_mode = mode;
@@ -2982,6 +2988,11 @@ impl AppController {
                 self.config.borrow_mut().expressive_transport_effects = active;
                 self.save_config();
                 self.apply_expressive_transport_effects();
+            }
+            SettingsEvent::ExpressiveHomeCardEffects(active) => {
+                self.config.borrow_mut().expressive_home_card_effects = active;
+                self.save_config();
+                self.refresh_browser();
             }
             SettingsEvent::AutoDownloadLyrics(active) => {
                 self.config.borrow_mut().auto_download_lyrics = active;

@@ -329,6 +329,21 @@ fn build_content(
         ),
         &expressive_transport,
     ));
+    // expressive_home_card_motion_v1
+    let expressive_home_cards = settings_switch(initial.expressive_home_card_effects);
+    playback_rows.append(&switch_row(
+        group_text(
+            "Animações expressivas dos cards",
+            "Expressive card animations",
+            "Animaciones expresivas de las tarjetas",
+        ),
+        group_text(
+            "Adiciona levitação, zoom interno e resposta com efeito de mola aos cards da Home.",
+            "Adds lift, internal zoom and spring feedback to Home cards.",
+            "Añade elevación, zoom interno y respuesta con resorte a las tarjetas de inicio.",
+        ),
+        &expressive_home_cards,
+    ));
 
     let auto_lyrics = settings_switch(initial.auto_download_lyrics);
     lyrics_rows.append(&switch_row(
@@ -485,6 +500,7 @@ fn build_content(
         (&lyrics, ToggleSetting::Lyrics),
         (&auto_lyrics, ToggleSetting::AutoLyrics),
         (&youtube_sync, ToggleSetting::YouTubeSync),
+        (&expressive_home_cards, ToggleSetting::ExpressiveHomeCards),
         (&expressive_transport, ToggleSetting::ExpressiveTransport),
         (&noctalia, ToggleSetting::Noctalia),
     ] {
@@ -498,6 +514,9 @@ fn build_content(
                 ToggleSetting::YouTubeSync => SettingsEvent::YouTubeAutoSync(active),
                 ToggleSetting::ExpressiveTransport => {
                     SettingsEvent::ExpressiveTransportEffects(active)
+                }
+                ToggleSetting::ExpressiveHomeCards => {
+                    SettingsEvent::ExpressiveHomeCardEffects(active)
                 }
                 ToggleSetting::Noctalia => SettingsEvent::NoctaliaThemeSync(active),
             };
@@ -515,6 +534,7 @@ enum ToggleSetting {
     AutoLyrics,
     YouTubeSync,
     ExpressiveTransport,
+    ExpressiveHomeCards,
     Noctalia,
 }
 
