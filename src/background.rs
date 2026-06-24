@@ -1,3 +1,5 @@
+// youtube_collection_queue_background_load_v1
+// youtube_playlist_background_autoplay_v1
 use crate::{
     lyrics::LyricLine,
     model::TrackData,
@@ -33,6 +35,18 @@ pub(crate) enum BackgroundMessage {
     YouTubeLibrarySynced {
         notify: bool,
         result: Result<YouTubeLibrarySnapshot, String>,
+    },
+    YouTubeCollectionQueueLoaded {
+        request_id: u64,
+        item: YouTubeItem,
+        playlist: bool,
+        play_next: bool,
+        result: Result<Vec<YouTubeItem>, String>,
+    },
+    YouTubePlaylistPlaybackLoaded {
+        request_id: u64,
+        playlist: YouTubeItem,
+        result: Result<Vec<YouTubeItem>, String>,
     },
     YouTubeBrowserPlaylist {
         request_id: u64,

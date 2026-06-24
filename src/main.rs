@@ -1,3 +1,7 @@
+// collection_card_loading_spinner_v3\n// youtube_collection_queue_background_load_v1
+// collection_card_overflow_and_play_state_v2
+// youtube_playlist_background_autoplay_v1
+// contextual_collection_controls_v5
 // recent_activity_exact_fix_v1
 // personalized_home_resume_v2
 mod animated_page_switcher;
@@ -45,7 +49,9 @@ mod youtube_playback;
 use adw::prelude::*;
 use animated_page_switcher::{AnimatedPageSwitcher, TopPage};
 use background::{BackgroundChannel, BackgroundMessage};
-use browser::{BrowserEvent, BrowserRoute, LibraryBrowser};
+use browser::{
+    BrowserEvent, BrowserPlaybackState, BrowserRenderContext, BrowserRoute, LibraryBrowser,
+};
 use compact_volume_motion::{run_compact_volume_spring, CompactVolumeSpring};
 use config::{AppLanguage, BlurMode, StartupSource, VisualTheme};
 use dialogs::SettingsEvent;
@@ -170,6 +176,8 @@ struct AppController {
     youtube_recovery_attempted: Cell<bool>,
     youtube_recovery_resume_us: Cell<i64>,
     youtube_playlist_request_id: Cell<u64>,
+    youtube_playlist_play_request_id: Cell<u64>,
+    youtube_collection_queue_request_id: Cell<u64>,
     youtube_collection_prefetching: Cell<bool>,
     youtube_playlist_loading: Cell<bool>,
     youtube_playlist_prefetching: Cell<bool>,
@@ -726,6 +734,8 @@ impl AppController {
             youtube_recovery_attempted: Cell::new(false),
             youtube_recovery_resume_us: Cell::new(0),
             youtube_playlist_request_id: Cell::new(0),
+            youtube_playlist_play_request_id: Cell::new(0),
+            youtube_collection_queue_request_id: Cell::new(0),
             youtube_collection_prefetching: Cell::new(false),
             youtube_playlist_loading: Cell::new(false),
             youtube_playlist_prefetching: Cell::new(false),
@@ -3964,7 +3974,27 @@ impl AppController {
         }
     }
 
+    fn browser_playback_state(&self) -> BrowserPlaybackState {
+        let context = self.listening_history_context.borrow();
+        let youtube = self.youtube_library.borrow();
+        let loading_collections = youtube
+            .playlist_loading
+            .iter()
+            .chain(youtube.collection_loading.iter())
+            .map(|key| key.trim().to_lowercase())
+            .collect::<HashSet<_>>();
+
+        BrowserPlaybackState {
+            playing: self.play_icon.icon_name().as_deref() == Some("media-playback-pause-symbolic"),
+            collection_kind: context.kind.clone(),
+            collection_id: context.id.clone(),
+            collection_title: context.title.clone(),
+            loading_collections,
+        }
+    }
+
     fn refresh_browser(&self) {
+        let playback = self.browser_playback_state();
         let state = self.state.borrow();
         let config = self.config.borrow();
         let youtube = self.youtube_library.borrow();
@@ -3989,7 +4019,10 @@ impl AppController {
             effective_tracks,
             &effective_config,
             &youtube,
-            &self.listening_history.borrow(),
+            &BrowserRenderContext {
+                history: &self.listening_history.borrow(),
+                playback: &playback,
+            },
             &query,
         );
         if !youtube_only {
@@ -4000,6 +4033,7 @@ impl AppController {
     }
 
     fn navigate_browser(&self, route: BrowserRoute) {
+        let playback = self.browser_playback_state();
         let state = self.state.borrow();
         let config = self.config.borrow();
         let youtube = self.youtube_library.borrow();
@@ -4019,7 +4053,10 @@ impl AppController {
             effective_tracks,
             &effective_config,
             &youtube,
-            &self.listening_history.borrow(),
+            &BrowserRenderContext {
+                history: &self.listening_history.borrow(),
+                playback: &playback,
+            },
             &query,
         );
         drop(query);
@@ -4140,6 +4177,35 @@ impl AppController {
                 BrowserEvent::QueueYouTubeAppend(item) => {
                     self.enqueue_youtube_track(&item, false);
                 }
+                BrowserEvent::QueueLocalCollection {
+                    kind,
+                    title,
+                    play_next,
+                } => {
+                    self.enqueue_local_collection(&kind, &title, play_next);
+                }
+                BrowserEvent::QueueYouTubeCollection {
+                    item,
+                    playlist,
+                    play_next,
+                } => {
+                    self.enqueue_youtube_collection(&item, playlist, play_next);
+                }
+                BrowserEvent::TogglePlayback => {
+                    self.toggle_playback();
+                }
+                BrowserEvent::PlayLocalAlbum(title) => {
+                    self.play_local_collection("album", &title);
+                }
+                BrowserEvent::PlayLocalPlaylist(title) => {
+                    self.play_local_collection("playlist", &title);
+                }
+                BrowserEvent::PlayYouTubeAlbum(item) => {
+                    self.play_youtube_collection(item, false);
+                }
+                BrowserEvent::PlayYouTubePlaylist(item) => {
+                    self.play_youtube_collection(item, true);
+                }
                 BrowserEvent::OpenYouTubePlaylist(item) => {
                     self.load_youtube_playlist_for_browser(item);
                 }
@@ -4202,6 +4268,151 @@ impl AppController {
                 }
             }
         }
+    }
+
+    fn play_local_collection(&self, kind: &str, title: &str) {
+        let mut indices = if kind == "playlist" {
+            let paths = self
+                .config
+                .borrow()
+                .playlist(title)
+                .map(|playlist| playlist.tracks.clone())
+                .unwrap_or_default();
+            let state = self.state.borrow();
+            paths
+                .iter()
+                .filter_map(|path| state.tracks.iter().position(|track| &track.path == path))
+                .collect::<Vec<_>>()
+        } else {
+            let state = self.state.borrow();
+            state
+                .tracks
+                .iter()
+                .enumerate()
+                .filter_map(|(index, track)| {
+                    track.album.eq_ignore_ascii_case(title).then_some(index)
+                })
+                .collect::<Vec<_>>()
+        };
+
+        if kind == "album" {
+            let state = self.state.borrow();
+            indices.sort_by(|left, right| {
+                let left = &state.tracks[*left];
+                let right = &state.tracks[*right];
+                left.disc_number
+                    .unwrap_or(u32::MAX)
+                    .cmp(&right.disc_number.unwrap_or(u32::MAX))
+                    .then_with(|| {
+                        left.track_number
+                            .unwrap_or(u32::MAX)
+                            .cmp(&right.track_number.unwrap_or(u32::MAX))
+                    })
+                    .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
+            });
+        }
+
+        let Some(first) = indices.first().copied() else {
+            self.show_toast(if kind == "playlist" {
+                "Esta playlist local ainda está vazia"
+            } else {
+                "Nenhuma faixa local foi encontrada para este álbum"
+            });
+            return;
+        };
+
+        self.listening_history_context
+            .replace(listening_history::PlaybackHistoryContext {
+                kind: kind.to_string(),
+                id: title.to_lowercase(),
+                title: title.to_string(),
+            });
+        self.pending_resume_position_us.set(None);
+        self.state.borrow_mut().playback_queue = indices.clone();
+        self.sync_local_queue_v2(&indices, first);
+        self.select_track(first, true);
+    }
+
+    fn load_youtube_playlist_for_playback(&self, playlist: YouTubeItem) {
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            self.show_toast("As dependências do YouTube Music não estão instaladas");
+            return;
+        };
+
+        let request_id = self.youtube_playlist_play_request_id.get().wrapping_add(1);
+        self.youtube_playlist_play_request_id.set(request_id);
+
+        let browse_id = playlist.browse_id.clone();
+        if !browse_id.is_empty() {
+            self.youtube_library
+                .borrow_mut()
+                .playlist_loading
+                .insert(browse_id);
+        }
+
+        self.show_toast("Carregando playlist do YouTube Music…");
+        self.refresh_browser();
+
+        let sender = self.background.sender();
+        thread::spawn(move || {
+            let result = bridge.playlist(&playlist).map(|mut items| {
+                cache_items_for_browser(&mut items);
+                items
+            });
+            let _ = sender.send(BackgroundMessage::YouTubePlaylistPlaybackLoaded {
+                request_id,
+                playlist,
+                result,
+            });
+        });
+    }
+
+    pub(crate) fn play_youtube_collection(&self, item: YouTubeItem, playlist: bool) {
+        let kind = if playlist { "playlist" } else { "album" };
+        let id = if item.browse_id.trim().is_empty() {
+            item.title.to_lowercase()
+        } else {
+            item.browse_id.clone()
+        };
+
+        let items = {
+            let library = self.youtube_library.borrow();
+            if playlist {
+                library
+                    .playlist_tracks
+                    .get(&item.browse_id)
+                    .cloned()
+                    .unwrap_or_default()
+            } else {
+                let key = youtube_collection_key("album", &item.title);
+                library
+                    .collection_tracks
+                    .get(&key)
+                    .cloned()
+                    .unwrap_or_default()
+            }
+        };
+
+        if items.is_empty() {
+            if playlist {
+                self.load_youtube_playlist_for_playback(item);
+            } else {
+                self.load_youtube_collection_for_browser(item);
+                self.show_toast(
+                    "Carregando o álbum; toque em reproduzir novamente quando ele abrir",
+                );
+            }
+            return;
+        }
+
+        self.listening_history_context
+            .replace(listening_history::PlaybackHistoryContext {
+                kind: kind.to_string(),
+                id,
+                title: item.title.clone(),
+            });
+        self.pending_resume_position_us.set(None);
+        self.resolve_youtube_track(items[0].clone(), items, 0, false);
     }
 
     fn current_track_path(&self) -> Option<PathBuf> {
@@ -4416,6 +4627,206 @@ impl AppController {
         if item.playable() {
             self.enqueue_browser_media(Self::youtube_queue_media(item), play_next);
         }
+    }
+
+    fn enqueue_media_collection(&self, media: Vec<QueueMedia>, play_next: bool, title: &str) {
+        if media.is_empty() {
+            return;
+        }
+
+        self.ensure_active_queue_v2();
+        let count = media.len();
+
+        if play_next {
+            let mut queue = self.playback_queue_v2.borrow_mut();
+            for item in media.into_iter().rev() {
+                queue.insert_next(item);
+            }
+        } else {
+            let mut queue = self.playback_queue_v2.borrow_mut();
+            for item in media {
+                queue.append(item);
+            }
+        }
+
+        let message = match (self.config.borrow().language, play_next) {
+            (AppLanguage::Portuguese, true) => {
+                format!("‘{title}’ ({count} faixas) será reproduzido em seguida")
+            }
+            (AppLanguage::Portuguese, false) => {
+                format!("‘{title}’ ({count} faixas) foi adicionado ao fim da fila")
+            }
+            (AppLanguage::English, true) => {
+                format!("‘{title}’ ({count} tracks) will play next")
+            }
+            (AppLanguage::English, false) => {
+                format!("‘{title}’ ({count} tracks) was added to the queue")
+            }
+            (AppLanguage::Spanish, true) => {
+                format!("‘{title}’ ({count} pistas) se reproducirá a continuación")
+            }
+            (AppLanguage::Spanish, false) => {
+                format!("‘{title}’ ({count} pistas) se añadió al final de la cola")
+            }
+        };
+        self.show_toast(&message);
+    }
+
+    fn enqueue_local_collection(&self, kind: &str, title: &str, play_next: bool) {
+        let indices = if kind == "playlist" {
+            let paths = self
+                .config
+                .borrow()
+                .playlist(title)
+                .map(|playlist| playlist.tracks.clone())
+                .unwrap_or_default();
+            let state = self.state.borrow();
+            paths
+                .iter()
+                .filter_map(|path| state.tracks.iter().position(|track| &track.path == path))
+                .collect::<Vec<_>>()
+        } else {
+            let state = self.state.borrow();
+            let mut indices = state
+                .tracks
+                .iter()
+                .enumerate()
+                .filter_map(|(index, track)| {
+                    track.album.eq_ignore_ascii_case(title).then_some(index)
+                })
+                .collect::<Vec<_>>();
+            indices.sort_by(|left, right| {
+                let left = &state.tracks[*left];
+                let right = &state.tracks[*right];
+                left.disc_number
+                    .unwrap_or(u32::MAX)
+                    .cmp(&right.disc_number.unwrap_or(u32::MAX))
+                    .then_with(|| {
+                        left.track_number
+                            .unwrap_or(u32::MAX)
+                            .cmp(&right.track_number.unwrap_or(u32::MAX))
+                    })
+                    .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
+            });
+            indices
+        };
+
+        let media = {
+            let state = self.state.borrow();
+            indices
+                .iter()
+                .filter_map(|index| state.tracks.get(*index))
+                .map(Self::local_queue_media)
+                .collect::<Vec<_>>()
+        };
+
+        if media.is_empty() {
+            self.show_toast(if kind == "playlist" {
+                "Esta playlist local ainda está vazia"
+            } else {
+                "Nenhuma faixa local foi encontrada para este álbum"
+            });
+            return;
+        }
+
+        self.enqueue_media_collection(media, play_next, title);
+    }
+
+    fn enqueue_youtube_collection(&self, item: &YouTubeItem, playlist: bool, play_next: bool) {
+        let items = {
+            let library = self.youtube_library.borrow();
+            if playlist {
+                library
+                    .playlist_tracks
+                    .get(&item.browse_id)
+                    .cloned()
+                    .unwrap_or_default()
+            } else {
+                let key = youtube_collection_key("album", &item.title);
+                library
+                    .collection_tracks
+                    .get(&key)
+                    .cloned()
+                    .unwrap_or_default()
+            }
+        };
+
+        let media = items
+            .iter()
+            .filter(|item| item.playable())
+            .map(Self::youtube_queue_media)
+            .collect::<Vec<_>>();
+
+        if media.is_empty() {
+            self.load_youtube_collection_for_queue(item.clone(), playlist, play_next);
+            return;
+        }
+
+        self.enqueue_media_collection(media, play_next, &item.title);
+    }
+
+    fn load_youtube_collection_for_queue(
+        &self,
+        item: YouTubeItem,
+        playlist: bool,
+        play_next: bool,
+    ) {
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            self.show_toast("As dependências do YouTube Music não estão instaladas");
+            return;
+        };
+
+        let request_id = self
+            .youtube_collection_queue_request_id
+            .get()
+            .wrapping_add(1);
+        self.youtube_collection_queue_request_id.set(request_id);
+
+        if playlist {
+            if !item.browse_id.trim().is_empty() {
+                self.youtube_library
+                    .borrow_mut()
+                    .playlist_loading
+                    .insert(item.browse_id.clone());
+            }
+        } else {
+            self.youtube_library
+                .borrow_mut()
+                .collection_loading
+                .insert(youtube_collection_key("album", &item.title));
+        }
+
+        let message = match (self.config.borrow().language, play_next) {
+            (AppLanguage::Portuguese, true) => "Carregando coleção para reproduzir em seguida…",
+            (AppLanguage::Portuguese, false) => "Carregando coleção para adicionar à fila…",
+            (AppLanguage::English, true) => "Loading collection to play next…",
+            (AppLanguage::English, false) => "Loading collection to add to queue…",
+            (AppLanguage::Spanish, true) => "Cargando colección para reproducir a continuación…",
+            (AppLanguage::Spanish, false) => "Cargando colección para añadirla a la cola…",
+        };
+        self.show_toast(message);
+        self.refresh_browser();
+
+        let sender = self.background.sender();
+        thread::spawn(move || {
+            let result = if playlist {
+                bridge.playlist(&item)
+            } else {
+                bridge.collection(&item)
+            }
+            .map(|mut items| {
+                cache_items_for_browser(&mut items);
+                items
+            });
+
+            let _ = sender.send(BackgroundMessage::YouTubeCollectionQueueLoaded {
+                request_id,
+                item,
+                playlist,
+                play_next,
+                result,
+            });
+        });
     }
 
     fn local_queue_media(track: &Track) -> QueueMedia {
@@ -5058,6 +5469,10 @@ impl AppController {
             playing && self.config.borrow().visual_theme == VisualTheme::MaterialExpressive;
         self.home_wave_progress.set_playing(animate_m3);
         self.footer_progress.set_playing(animate_m3);
+
+        if matches!(self.browser.route(), BrowserRoute::All) {
+            self.refresh_browser();
+        }
     }
 
     fn begin_listening_session(&self, id: String) {

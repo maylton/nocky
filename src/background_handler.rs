@@ -1,8 +1,11 @@
+// collection_card_loading_spinner_v3\n// youtube_collection_queue_background_load_v1
+// youtube_playlist_background_autoplay_v1
 use crate::{
     background::BackgroundMessage,
     config::StartupSource,
     youtube::{
-        cacheable_youtube_playlist, clear_library_cache, save_library_cache, YouTubeSearchResults,
+        cacheable_youtube_playlist, clear_library_cache, save_library_cache,
+        youtube_collection_key, YouTubeSearchResults,
     },
     AppController,
 };
@@ -194,6 +197,129 @@ impl AppController {
                         ));
                     }
                 },
+                BackgroundMessage::YouTubeCollectionQueueLoaded {
+                    request_id,
+                    item,
+                    playlist,
+                    play_next,
+                    result,
+                } => {
+                    if playlist {
+                        if !item.browse_id.trim().is_empty() {
+                            self.youtube_library
+                                .borrow_mut()
+                                .playlist_loading
+                                .remove(&item.browse_id);
+                        }
+                    } else {
+                        self.youtube_library
+                            .borrow_mut()
+                            .collection_loading
+                            .remove(&youtube_collection_key("album", &item.title));
+                    }
+
+                    self.refresh_browser();
+
+                    if request_id != self.youtube_collection_queue_request_id.get() {
+                        continue;
+                    }
+
+                    match result {
+                        Ok(items) if !items.is_empty() => {
+                            if playlist {
+                                self.youtube_library
+                                    .borrow_mut()
+                                    .playlist_tracks
+                                    .insert(item.browse_id.clone(), items);
+                            } else {
+                                self.youtube_library
+                                    .borrow_mut()
+                                    .collection_tracks
+                                    .insert(youtube_collection_key("album", &item.title), items);
+                            }
+
+                            if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
+                                eprintln!("Could not save the YouTube collection cache: {error}");
+                            }
+
+                            self.enqueue_youtube_collection(&item, playlist, play_next);
+                        }
+                        Ok(_) => {
+                            self.show_toast(if playlist {
+                                "Esta playlist não retornou faixas reproduzíveis agora"
+                            } else {
+                                "Este álbum não retornou faixas reproduzíveis agora"
+                            });
+                        }
+                        Err(error) => {
+                            self.show_toast(&format!(
+                                "Não foi possível carregar {}: {error}",
+                                if playlist { "a playlist" } else { "o álbum" }
+                            ));
+                        }
+                    }
+
+                    self.refresh_browser();
+                }
+                BackgroundMessage::YouTubePlaylistPlaybackLoaded {
+                    request_id,
+                    playlist,
+                    result,
+                } => {
+                    let browse_id = playlist.browse_id.clone();
+                    if !browse_id.is_empty() {
+                        self.youtube_library
+                            .borrow_mut()
+                            .playlist_loading
+                            .remove(&browse_id);
+                    }
+
+                    self.refresh_browser();
+
+                    if request_id != self.youtube_playlist_play_request_id.get() {
+                        continue;
+                    }
+
+                    match result {
+                        Ok(items) if !items.is_empty() => {
+                            self.youtube_library
+                                .borrow_mut()
+                                .playlist_tracks
+                                .insert(browse_id.clone(), items);
+
+                            if cacheable_youtube_playlist(&playlist) {
+                                if let Err(error) =
+                                    save_library_cache(&self.youtube_library.borrow())
+                                {
+                                    eprintln!("Could not save the YouTube playlist cache: {error}");
+                                }
+                            }
+
+                            self.show_toast("Playlist carregada. Iniciando reprodução…");
+                            self.play_youtube_collection(playlist, true);
+                        }
+                        Ok(_) => {
+                            self.youtube_library
+                                .borrow_mut()
+                                .playlist_tracks
+                                .remove(&browse_id);
+                            self.show_toast(
+                                "Esta playlist não retornou faixas reproduzíveis agora",
+                            );
+                            self.refresh_browser();
+                        }
+                        Err(error) => {
+                            self.youtube_library
+                                .borrow_mut()
+                                .playlist_tracks
+                                .remove(&browse_id);
+                            self.show_toast(&format!(
+                                "Não foi possível carregar a playlist: {error}"
+                            ));
+                            self.refresh_browser();
+                        }
+                    }
+                }
                 BackgroundMessage::YouTubeBrowserPlaylist {
                     request_id,
                     playlist,

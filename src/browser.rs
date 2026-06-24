@@ -1,3 +1,6 @@
+// collection_card_loading_spinner_v3\n// collection_overflow_icon_label_fix_v2
+// collection_card_overflow_and_play_state_v2
+// contextual_collection_controls_v5
 // smooth_home_crossfade_v1
 // recent_album_cover_resolution_v1
 // recent_activity_exact_fix_v1
@@ -79,6 +82,21 @@ pub enum BrowserEvent {
     QueueLocalAppend(usize),
     QueueYouTubePlayNext(YouTubeItem),
     QueueYouTubeAppend(YouTubeItem),
+    QueueLocalCollection {
+        kind: String,
+        title: String,
+        play_next: bool,
+    },
+    QueueYouTubeCollection {
+        item: YouTubeItem,
+        playlist: bool,
+        play_next: bool,
+    },
+    TogglePlayback,
+    PlayLocalAlbum(String),
+    PlayLocalPlaylist(String),
+    PlayYouTubeAlbum(YouTubeItem),
+    PlayYouTubePlaylist(YouTubeItem),
     OpenYouTubePlaylist(YouTubeItem),
     OpenYouTubeCollection(YouTubeItem),
     LoadMoreAlbums,
@@ -89,6 +107,47 @@ pub enum BrowserEvent {
     AddCurrentToPlaylist(String),
     RemoveCurrentFromPlaylist(String),
     DeletePlaylist(String),
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct BrowserPlaybackState {
+    pub playing: bool,
+    pub collection_kind: String,
+    pub collection_id: String,
+    pub collection_title: String,
+    pub loading_collections: HashSet<String>,
+}
+
+impl BrowserPlaybackState {
+    fn matches_collection(&self, kind: &str, id: &str, title: &str) -> bool {
+        if !self.collection_kind.eq_ignore_ascii_case(kind) {
+            return false;
+        }
+
+        let stored_id = self.collection_id.trim();
+        let stored_title = self.collection_title.trim();
+        let normalized_title = title.trim().to_lowercase();
+
+        (!id.trim().is_empty() && stored_id.eq_ignore_ascii_case(id.trim()))
+            || (!normalized_title.is_empty() && stored_id.eq_ignore_ascii_case(&normalized_title))
+            || (!title.trim().is_empty() && stored_title.eq_ignore_ascii_case(title.trim()))
+    }
+
+    fn collection_is_loading(&self, kind: &str, id: &str, title: &str) -> bool {
+        let normalized_id = id.trim().to_lowercase();
+        let normalized_title = title.trim().to_lowercase();
+        let typed_title = format!("{}:{normalized_title}", kind.trim().to_lowercase());
+
+        (!normalized_id.is_empty() && self.loading_collections.contains(&normalized_id))
+            || (!normalized_title.is_empty()
+                && self.loading_collections.contains(&normalized_title))
+            || (!normalized_title.is_empty() && self.loading_collections.contains(&typed_title))
+    }
+}
+
+pub struct BrowserRenderContext<'a> {
+    pub history: &'a ListeningHistory,
+    pub playback: &'a BrowserPlaybackState,
 }
 
 #[derive(Clone, Debug)]
@@ -697,14 +756,14 @@ impl LibraryBrowser {
         tracks: &[Track],
         config: &AppConfig,
         youtube: &YouTubeLibraryCache,
-        history: &ListeningHistory,
+        context: &BrowserRenderContext<'_>,
         query: &str,
     ) {
         let previous = self.route();
         self.root
             .set_transition_type(route_transition(&previous, &route));
         self.route.replace(route);
-        self.refresh(tracks, config, youtube, history, query);
+        self.refresh(tracks, config, youtube, context, query);
     }
 
     pub fn refresh(
@@ -712,7 +771,7 @@ impl LibraryBrowser {
         tracks: &[Track],
         config: &AppConfig,
         youtube: &YouTubeLibraryCache,
-        history: &ListeningHistory,
+        context: &BrowserRenderContext<'_>,
         query: &str,
     ) {
         if matches!(self.route(), BrowserRoute::All) && !query.trim().is_empty() {
@@ -739,7 +798,7 @@ impl LibraryBrowser {
                 self.root.set_visible_child_name("playlists");
             }
             BrowserRoute::All if query.trim().is_empty() => {
-                self.rebuild_home(tracks, config, youtube, history);
+                self.rebuild_home(tracks, config, youtube, context.history, context.playback);
                 self.root.set_visible_child_name("home");
             }
             route => {
@@ -1396,6 +1455,7 @@ impl LibraryBrowser {
         config: &AppConfig,
         youtube: &YouTubeLibraryCache,
         history: &ListeningHistory,
+        playback: &BrowserPlaybackState,
     ) {
         let language = config.language;
         let copy = home_copy(language);
@@ -1427,6 +1487,7 @@ impl LibraryBrowser {
             copy.mixtapes_title,
             copy.mixtapes_subtitle,
             mixes,
+            playback,
             &self.event_tx,
             language,
             card_effects,
@@ -1464,6 +1525,7 @@ impl LibraryBrowser {
             copy.albums_title,
             copy.albums_subtitle,
             ranked_home_album_cards(tracks, youtube, history, active_source, language),
+            playback,
             &self.event_tx,
             language,
             card_effects,
@@ -1473,6 +1535,7 @@ impl LibraryBrowser {
             copy.artists_title,
             copy.artists_subtitle,
             ranked_home_artist_cards(tracks, youtube, history, active_source, language),
+            playback,
             &self.event_tx,
             language,
             card_effects,
@@ -1500,6 +1563,7 @@ impl LibraryBrowser {
             copy.playlists_title,
             copy.playlists_subtitle,
             playlist_cards,
+            playback,
             &self.event_tx,
             language,
             card_effects,
@@ -2983,6 +3047,7 @@ fn home_section(
     title: &str,
     subtitle: &str,
     cards: Vec<HomeCard>,
+    playback: &BrowserPlaybackState,
     event_tx: &Sender<BrowserEvent>,
     language: AppLanguage,
     card_effects: bool,
@@ -3006,7 +3071,13 @@ fn home_section(
         rail.append(&home_empty_card(language));
     } else {
         for card in cards {
-            rail.append(&home_card_button(card, event_tx, language, card_effects));
+            rail.append(&home_card_button(
+                card,
+                playback,
+                event_tx,
+                language,
+                card_effects,
+            ));
         }
     }
 
@@ -3045,6 +3116,21 @@ struct HomeCarouselEdgeCard {
 }
 
 type HomeCarouselEdgeCards = Rc<RefCell<Vec<HomeCarouselEdgeCard>>>;
+
+fn home_card_surface(widget: &gtk::Widget) -> Option<gtk::Widget> {
+    let first = widget.first_child()?;
+    if first.has_css_class("collection-card") {
+        return Some(first);
+    }
+
+    let second = first.first_child()?;
+    if second.has_css_class("collection-card") {
+        return Some(second);
+    }
+
+    let third = second.first_child()?;
+    third.has_css_class("collection-card").then_some(third)
+}
 
 fn install_home_carousel_edge_spring(scroll: &gtk::ScrolledWindow, rail: &gtk::Box, enabled: bool) {
     if !enabled {
@@ -3103,9 +3189,7 @@ fn install_home_carousel_edge_spring(scroll: &gtk::ScrolledWindow, rail: &gtk::B
                 stored.clear();
 
                 for button in cards {
-                    let surface = button
-                        .first_child()
-                        .filter(|child| child.has_css_class("collection-card"));
+                    let surface = home_card_surface(&button);
 
                     let base_button_width = button.width().max(COLLECTION_CARD_MAX_WIDTH);
                     let base_surface_width = surface
@@ -3340,10 +3424,11 @@ fn home_edge_lerp(start: f64, end: f64, progress: f64) -> f64 {
 
 fn home_card_button(
     card: HomeCard,
+    playback: &BrowserPlaybackState,
     event_tx: &Sender<BrowserEvent>,
     language: AppLanguage,
     card_effects: bool,
-) -> gtk::Button {
+) -> gtk::Widget {
     let (cover_path, title, subtitle, detail, online) = match &card {
         HomeCard::LocalAlbum {
             title,
@@ -3391,53 +3476,293 @@ fn home_card_button(
         ),
     };
 
+    let open_event = match &card {
+        HomeCard::LocalAlbum { title, .. } => {
+            BrowserEvent::Navigate(BrowserRoute::Album(title.clone()))
+        }
+        HomeCard::YouTubeAlbum { item, .. } => BrowserEvent::OpenYouTubeCollection(item.clone()),
+        HomeCard::LocalArtist { title, .. } => {
+            BrowserEvent::Navigate(BrowserRoute::Artist(title.clone()))
+        }
+        HomeCard::YouTubeArtist { item, .. } => BrowserEvent::OpenYouTubeCollection(item.clone()),
+        HomeCard::LocalPlaylist { title, .. } => {
+            BrowserEvent::Navigate(BrowserRoute::Playlist(title.clone()))
+        }
+        HomeCard::YouTubePlaylist(item) => BrowserEvent::OpenYouTubePlaylist(item.clone()),
+    };
+
+    let (play_event, queue_events, collection_kind, collection_id, collection_title) = match &card {
+        HomeCard::LocalAlbum { title, .. } => (
+            Some(BrowserEvent::PlayLocalAlbum(title.clone())),
+            Some((
+                BrowserEvent::QueueLocalCollection {
+                    kind: "album".to_string(),
+                    title: title.clone(),
+                    play_next: true,
+                },
+                BrowserEvent::QueueLocalCollection {
+                    kind: "album".to_string(),
+                    title: title.clone(),
+                    play_next: false,
+                },
+            )),
+            "album",
+            title.to_lowercase(),
+            title.clone(),
+        ),
+        HomeCard::LocalPlaylist { title, .. } => (
+            Some(BrowserEvent::PlayLocalPlaylist(title.clone())),
+            Some((
+                BrowserEvent::QueueLocalCollection {
+                    kind: "playlist".to_string(),
+                    title: title.clone(),
+                    play_next: true,
+                },
+                BrowserEvent::QueueLocalCollection {
+                    kind: "playlist".to_string(),
+                    title: title.clone(),
+                    play_next: false,
+                },
+            )),
+            "playlist",
+            title.to_lowercase(),
+            title.clone(),
+        ),
+        HomeCard::YouTubeAlbum { item, .. } => (
+            Some(BrowserEvent::PlayYouTubeAlbum(item.clone())),
+            Some((
+                BrowserEvent::QueueYouTubeCollection {
+                    item: item.clone(),
+                    playlist: false,
+                    play_next: true,
+                },
+                BrowserEvent::QueueYouTubeCollection {
+                    item: item.clone(),
+                    playlist: false,
+                    play_next: false,
+                },
+            )),
+            "album",
+            if item.browse_id.trim().is_empty() {
+                item.title.to_lowercase()
+            } else {
+                item.browse_id.clone()
+            },
+            item.title.clone(),
+        ),
+        HomeCard::YouTubePlaylist(item) => (
+            Some(BrowserEvent::PlayYouTubePlaylist(item.clone())),
+            Some((
+                BrowserEvent::QueueYouTubeCollection {
+                    item: item.clone(),
+                    playlist: true,
+                    play_next: true,
+                },
+                BrowserEvent::QueueYouTubeCollection {
+                    item: item.clone(),
+                    playlist: true,
+                    play_next: false,
+                },
+            )),
+            "playlist",
+            if item.browse_id.trim().is_empty() {
+                item.title.to_lowercase()
+            } else {
+                item.browse_id.clone()
+            },
+            item.title.clone(),
+        ),
+        HomeCard::LocalArtist { .. } | HomeCard::YouTubeArtist { .. } => {
+            (None, None, "", String::new(), String::new())
+        }
+    };
+
+    let is_active = play_event.is_some()
+        && playback.matches_collection(collection_kind, &collection_id, &collection_title);
+    let is_loading = play_event.is_some()
+        && playback.collection_is_loading(collection_kind, &collection_id, &collection_title);
+
     let card_widget = collection_card(cover_path, title, subtitle, detail, online);
     card_widget.add_css_class("home-card");
     card_widget.add_css_class("expressive-collection-card");
-
-    let button = gtk::Button::new();
-    button.add_css_class("flat");
-    button.add_css_class("home-card-button");
-    button.add_css_class("expressive-collection-button");
-
-    // nocky_home_cards_edge_spring_v4: visual hover only; the old scale/bounce engine receives false.
-    if card_effects {
-        button.add_css_class("home-card-motion-requested");
+    if is_active {
+        card_widget.add_css_class("collection-card-playing");
     }
-    button.add_css_class("home-card-no-hover-scale");
+    if is_loading {
+        card_widget.add_css_class("collection-card-loading");
+    }
 
-    // The approved Home card path uses the fixed collection-card surface
-    // plus the carousel edge spring. The retired alternate motion engine was
-    // permanently disabled and has been removed.
-    button.set_child(Some(&card_widget));
+    let main_button = gtk::Button::new();
+    main_button.add_css_class("flat");
+    main_button.add_css_class("home-card-button");
+    main_button.add_css_class("expressive-collection-button");
+    if card_effects {
+        main_button.add_css_class("home-card-motion-requested");
+    }
+    main_button.add_css_class("home-card-no-hover-scale");
+    main_button.set_child(Some(&card_widget));
 
-    let sender = event_tx.clone();
-    button.connect_clicked(move |_| {
-        let event = match card.clone() {
-            HomeCard::LocalAlbum { title, .. } => {
-                BrowserEvent::Navigate(BrowserRoute::Album(title))
+    {
+        let sender = event_tx.clone();
+        let event = open_event.clone();
+        main_button.connect_clicked(move |_| {
+            if card_effects {
+                let sender = sender.clone();
+                let event = event.clone();
+                glib::timeout_add_local_once(Duration::from_millis(120), move || {
+                    let _ = sender.send(event);
+                });
+            } else {
+                let _ = sender.send(event.clone());
             }
-            HomeCard::YouTubeAlbum { item, .. } => BrowserEvent::OpenYouTubeCollection(item),
-            HomeCard::LocalArtist { title, .. } => {
-                BrowserEvent::Navigate(BrowserRoute::Artist(title))
-            }
-            HomeCard::YouTubeArtist { item, .. } => BrowserEvent::OpenYouTubeCollection(item),
-            HomeCard::LocalPlaylist { title, .. } => {
-                BrowserEvent::Navigate(BrowserRoute::Playlist(title))
-            }
-            HomeCard::YouTubePlaylist(item) => BrowserEvent::OpenYouTubePlaylist(item),
-        };
-        if card_effects {
-            let sender = sender.clone();
-            glib::timeout_add_local_once(Duration::from_millis(120), move || {
-                let _ = sender.send(event);
-            });
+        });
+    }
+
+    let overlay = gtk::Overlay::new();
+    overlay.set_child(Some(&main_button));
+    overlay.add_css_class("home-card-context-overlay");
+
+    if let Some(play_event) = play_event {
+        let control = gtk::Button::new();
+        control.set_halign(gtk::Align::End);
+        control.set_valign(gtk::Align::Start);
+        control.set_margin_top(12);
+        control.set_margin_end(12);
+        control.add_css_class("circular");
+        control.add_css_class("collection-card-context-action");
+
+        if is_loading {
+            let spinner = gtk::Spinner::new();
+            spinner.set_spinning(true);
+            spinner.set_size_request(18, 18);
+            control.set_child(Some(&spinner));
+            control.set_sensitive(false);
+            control.add_css_class("loading");
+            control.set_tooltip_text(Some(match language {
+                AppLanguage::Portuguese => "Carregando coleção…",
+                AppLanguage::English => "Loading collection…",
+                AppLanguage::Spanish => "Cargando colección…",
+            }));
         } else {
-            let _ = sender.send(event);
-        }
-    });
+            let control_event = if is_active {
+                BrowserEvent::TogglePlayback
+            } else {
+                play_event
+            };
+            let icon_name = if is_active && playback.playing {
+                "media-playback-pause-symbolic"
+            } else {
+                "media-playback-start-symbolic"
+            };
+            let tooltip = match (language, is_active, playback.playing) {
+                (AppLanguage::Portuguese, true, true) => "Pausar coleção",
+                (AppLanguage::Portuguese, true, false) => "Continuar coleção",
+                (AppLanguage::Portuguese, false, _) => "Reproduzir coleção",
+                (AppLanguage::English, true, true) => "Pause collection",
+                (AppLanguage::English, true, false) => "Resume collection",
+                (AppLanguage::English, false, _) => "Play collection",
+                (AppLanguage::Spanish, true, true) => "Pausar colección",
+                (AppLanguage::Spanish, true, false) => "Continuar colección",
+                (AppLanguage::Spanish, false, _) => "Reproducir colección",
+            };
 
-    button
+            control.set_icon_name(icon_name);
+            control.set_tooltip_text(Some(tooltip));
+            if is_active {
+                control.add_css_class("active");
+            }
+
+            let sender = event_tx.clone();
+            control.connect_clicked(move |_| {
+                let _ = sender.send(control_event.clone());
+            });
+        }
+
+        overlay.add_overlay(&control);
+    }
+
+    if let Some((play_next_event, append_event)) = queue_events {
+        let menu_button = gtk::MenuButton::builder()
+            .icon_name("view-more-symbolic")
+            .tooltip_text(match language {
+                AppLanguage::Portuguese => "Mais opções",
+                AppLanguage::English => "More options",
+                AppLanguage::Spanish => "Más opciones",
+            })
+            .build();
+        menu_button.set_halign(gtk::Align::Start);
+        menu_button.set_valign(gtk::Align::Start);
+        menu_button.set_margin_top(12);
+        menu_button.set_margin_start(12);
+        menu_button.add_css_class("circular");
+        menu_button.add_css_class("collection-card-overflow-button");
+        menu_button.set_sensitive(!is_loading);
+
+        let popover = gtk::Popover::new();
+        popover.add_css_class("collection-card-overflow-popover");
+
+        let actions = gtk::Box::new(gtk::Orientation::Vertical, 4);
+        actions.set_margin_top(8);
+        actions.set_margin_bottom(8);
+        actions.set_margin_start(8);
+        actions.set_margin_end(8);
+
+        let labels = match language {
+            AppLanguage::Portuguese => (
+                "Reproduzir em seguida",
+                "Adicionar ao fim da fila",
+                "Abrir coleção",
+            ),
+            AppLanguage::English => ("Play next", "Add to queue", "Open collection"),
+            AppLanguage::Spanish => (
+                "Reproducir a continuación",
+                "Añadir al final de la cola",
+                "Abrir colección",
+            ),
+        };
+
+        for (label, event, icon_name) in [
+            (labels.0, play_next_event, "media-skip-forward-symbolic"),
+            (labels.1, append_event, "list-add-symbolic"),
+            (labels.2, open_event, "go-next-symbolic"),
+        ] {
+            let icon = gtk::Image::from_icon_name(icon_name);
+            icon.set_pixel_size(18);
+            icon.add_css_class("collection-card-overflow-action-icon");
+
+            let text = gtk::Label::new(Some(label));
+            text.set_xalign(0.0);
+            text.set_hexpand(true);
+            text.add_css_class("collection-card-overflow-action-label");
+
+            let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+            content.set_hexpand(true);
+            content.set_halign(gtk::Align::Fill);
+            content.append(&icon);
+            content.append(&text);
+
+            let button = gtk::Button::new();
+            button.set_child(Some(&content));
+            button.set_halign(gtk::Align::Fill);
+            button.set_hexpand(true);
+            button.add_css_class("flat");
+            button.add_css_class("collection-card-overflow-action");
+
+            let sender = event_tx.clone();
+            let popover = popover.clone();
+            button.connect_clicked(move |_| {
+                popover.popdown();
+                let _ = sender.send(event.clone());
+            });
+            actions.append(&button);
+        }
+
+        popover.set_child(Some(&actions));
+        menu_button.set_popover(Some(&popover));
+        overlay.add_overlay(&menu_button);
+    }
+
+    overlay.upcast()
 }
 
 fn home_empty_card(language: AppLanguage) -> gtk::Box {
