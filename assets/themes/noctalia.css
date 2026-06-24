@@ -110,3 +110,13 @@ window.theme-noctalia
   .footer-artist-row {
   margin-bottom: 3px;
 }
+
+/* restore_circular_artist_covers_v2 */
+.collection-card.artist-collection-card .collection-artwork {
+  border-radius: 999px;
+}
+
+.collection-card.artist-collection-card .collection-artwork picture,
+.collection-card.artist-collection-card .collection-artwork image {
+  border-radius: 999px;
+}

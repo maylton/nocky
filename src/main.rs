@@ -1,3 +1,6 @@
+// preserve_home_carousel_scroll_v1
+// collection_card_inline_loading_fix_v2
+// youtube_collection_background_playback_v1
 // collection_card_loading_spinner_v3\n// youtube_collection_queue_background_load_v1
 // collection_card_overflow_and_play_state_v2
 // youtube_playlist_background_autoplay_v1
@@ -176,7 +179,7 @@ struct AppController {
     youtube_recovery_attempted: Cell<bool>,
     youtube_recovery_resume_us: Cell<i64>,
     youtube_playlist_request_id: Cell<u64>,
-    youtube_playlist_play_request_id: Cell<u64>,
+    youtube_collection_play_request_id: Cell<u64>,
     youtube_collection_queue_request_id: Cell<u64>,
     youtube_collection_prefetching: Cell<bool>,
     youtube_playlist_loading: Cell<bool>,
@@ -734,7 +737,7 @@ impl AppController {
             youtube_recovery_attempted: Cell::new(false),
             youtube_recovery_resume_us: Cell::new(0),
             youtube_playlist_request_id: Cell::new(0),
-            youtube_playlist_play_request_id: Cell::new(0),
+            youtube_collection_play_request_id: Cell::new(0),
             youtube_collection_queue_request_id: Cell::new(0),
             youtube_collection_prefetching: Cell::new(false),
             youtube_playlist_loading: Cell::new(false),
@@ -3994,6 +3997,7 @@ impl AppController {
     }
 
     fn refresh_browser(&self) {
+        let home_scroll_positions = self.browser.home_scroll_positions();
         let playback = self.browser_playback_state();
         let state = self.state.borrow();
         let config = self.config.borrow();
@@ -4025,6 +4029,8 @@ impl AppController {
             },
             &query,
         );
+        self.browser
+            .restore_home_scroll_positions(home_scroll_positions);
         if !youtube_only {
             if let Some(current) = state.current {
                 self.browser.select_track(current);
@@ -4333,34 +4339,53 @@ impl AppController {
         self.select_track(first, true);
     }
 
-    fn load_youtube_playlist_for_playback(&self, playlist: YouTubeItem) {
+    fn load_youtube_collection_for_playback(&self, item: YouTubeItem, playlist: bool) {
         let Some(bridge) = self.youtube_bridge.clone() else {
             self.show_toast("As dependências do YouTube Music não estão instaladas");
             return;
         };
 
-        let request_id = self.youtube_playlist_play_request_id.get().wrapping_add(1);
-        self.youtube_playlist_play_request_id.set(request_id);
+        let request_id = self
+            .youtube_collection_play_request_id
+            .get()
+            .wrapping_add(1);
+        self.youtube_collection_play_request_id.set(request_id);
 
-        let browse_id = playlist.browse_id.clone();
-        if !browse_id.is_empty() {
+        if playlist {
+            if !item.browse_id.trim().is_empty() {
+                self.youtube_library
+                    .borrow_mut()
+                    .playlist_loading
+                    .insert(item.browse_id.clone());
+            }
+        } else {
             self.youtube_library
                 .borrow_mut()
-                .playlist_loading
-                .insert(browse_id);
+                .collection_loading
+                .insert(youtube_collection_key("album", &item.title));
         }
 
-        self.show_toast("Carregando playlist do YouTube Music…");
-        self.refresh_browser();
+        self.show_toast(if playlist {
+            "Carregando playlist do YouTube Music…"
+        } else {
+            "Carregando álbum do YouTube Music…"
+        });
 
         let sender = self.background.sender();
         thread::spawn(move || {
-            let result = bridge.playlist(&playlist).map(|mut items| {
+            let result = if playlist {
+                bridge.playlist(&item)
+            } else {
+                bridge.collection(&item)
+            }
+            .map(|mut items| {
                 cache_items_for_browser(&mut items);
                 items
             });
-            let _ = sender.send(BackgroundMessage::YouTubePlaylistPlaybackLoaded {
+
+            let _ = sender.send(BackgroundMessage::YouTubeCollectionPlaybackLoaded {
                 request_id,
+                item,
                 playlist,
                 result,
             });
@@ -4394,14 +4419,7 @@ impl AppController {
         };
 
         if items.is_empty() {
-            if playlist {
-                self.load_youtube_playlist_for_playback(item);
-            } else {
-                self.load_youtube_collection_for_browser(item);
-                self.show_toast(
-                    "Carregando o álbum; toque em reproduzir novamente quando ele abrir",
-                );
-            }
+            self.load_youtube_collection_for_playback(item, playlist);
             return;
         }
 
