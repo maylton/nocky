@@ -1,3 +1,4 @@
+// queue_collection_cover_fallback_v1
 // preserve_home_carousel_scroll_v1
 // collection_card_inline_loading_fix_v2
 // youtube_collection_background_playback_v1
@@ -4751,9 +4752,9 @@ impl AppController {
     }
 
     fn enqueue_youtube_collection(&self, item: &YouTubeItem, playlist: bool, play_next: bool) {
-        let items = {
+        let (items, collection_cover) = {
             let library = self.youtube_library.borrow();
-            if playlist {
+            let items = if playlist {
                 library
                     .playlist_tracks
                     .get(&item.browse_id)
@@ -4766,13 +4767,33 @@ impl AppController {
                     .get(&key)
                     .cloned()
                     .unwrap_or_default()
-            }
+            };
+
+            let collection_cover = item.cached_cover().map(Path::to_path_buf).or_else(|| {
+                (!playlist)
+                    .then(|| {
+                        library
+                            .albums
+                            .iter()
+                            .find(|entry| {
+                                (!item.browse_id.trim().is_empty()
+                                    && entry.source.browse_id == item.browse_id)
+                                    || entry.title.eq_ignore_ascii_case(&item.title)
+                            })
+                            .and_then(|entry| entry.cached_cover().map(Path::to_path_buf))
+                    })
+                    .flatten()
+            });
+
+            (items, collection_cover)
         };
 
         let media = items
             .iter()
-            .filter(|item| item.playable())
-            .map(Self::youtube_queue_media)
+            .filter(|track| track.playable())
+            .map(|track| {
+                Self::youtube_queue_media_with_fallback(track, collection_cover.as_deref())
+            })
             .collect::<Vec<_>>();
 
         if media.is_empty() {
@@ -4859,13 +4880,25 @@ impl AppController {
     }
 
     fn youtube_queue_media(item: &YouTubeItem) -> QueueMedia {
+        Self::youtube_queue_media_with_fallback(item, None)
+    }
+
+    fn youtube_queue_media_with_fallback(
+        item: &YouTubeItem,
+        fallback_cover: Option<&Path>,
+    ) -> QueueMedia {
+        let cover_path = item
+            .cached_cover()
+            .map(Path::to_path_buf)
+            .or_else(|| fallback_cover.map(Path::to_path_buf));
+
         QueueMedia::youtube(
             item.video_id.clone(),
             item.title.clone(),
             item.artist.clone(),
             item.album.clone(),
             item.duration_seconds,
-            item.cached_cover().map(Path::to_path_buf),
+            cover_path,
         )
     }
 
