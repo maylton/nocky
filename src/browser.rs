@@ -62,6 +62,10 @@ pub enum BrowserEvent {
         queue: Vec<YouTubeItem>,
         index: usize,
     },
+    QueueLocalPlayNext(usize),
+    QueueLocalAppend(usize),
+    QueueYouTubePlayNext(YouTubeItem),
+    QueueYouTubeAppend(YouTubeItem),
     OpenYouTubePlaylist(YouTubeItem),
     OpenYouTubeCollection(YouTubeItem),
     LoadMoreAlbums,
@@ -838,6 +842,9 @@ impl LibraryBrowser {
                         position + 1,
                         track,
                         config.is_liked(&track.path),
+                        *index,
+                        &self.event_tx,
+                        config.language,
                     ));
                 }
                 VisibleTrack::YouTube(item) => {
@@ -845,7 +852,13 @@ impl LibraryBrowser {
                         .liked
                         .iter()
                         .any(|candidate| candidate.video_id == item.video_id);
-                    search_list.append(&youtube_track_row(position + 1, item, liked));
+                    search_list.append(&youtube_track_row(
+                        position + 1,
+                        item,
+                        liked,
+                        &self.event_tx,
+                        config.language,
+                    ));
                 }
             }
             visible_entries.borrow_mut().push(entry);
@@ -937,6 +950,7 @@ impl LibraryBrowser {
                 route,
                 browse_id,
                 render_token,
+                config.language,
             );
             return;
         }
@@ -945,7 +959,13 @@ impl LibraryBrowser {
             route,
             BrowserRoute::YouTubeAlbum(_) | BrowserRoute::YouTubeArtist(_)
         ) {
-            self.rebuild_youtube_collection_queue(youtube, effective_query, route, render_token);
+            self.rebuild_youtube_collection_queue(
+                youtube,
+                effective_query,
+                route,
+                render_token,
+                config.language,
+            );
             return;
         }
 
@@ -1000,8 +1020,14 @@ impl LibraryBrowser {
                 continue;
             }
             let number = entries.len() + 1;
-            self.queue
-                .append(&track_row(number, track, config.is_liked(&track.path)));
+            self.queue.append(&track_row(
+                number,
+                track,
+                config.is_liked(&track.path),
+                index,
+                &self.event_tx,
+                config.language,
+            ));
             entries.push(VisibleTrack::Local(index));
         }
 
@@ -1044,7 +1070,13 @@ impl LibraryBrowser {
                     .liked
                     .iter()
                     .any(|candidate| candidate.video_id == item.video_id);
-            self.queue.append(&youtube_track_row(number, &item, liked));
+            self.queue.append(&youtube_track_row(
+                number,
+                &item,
+                liked,
+                &self.event_tx,
+                config.language,
+            ));
             entries.push(VisibleTrack::YouTube(Box::new(item)));
         }
 
@@ -1080,6 +1112,7 @@ impl LibraryBrowser {
         route: &BrowserRoute,
         browse_id: &str,
         render_token: u64,
+        language: AppLanguage,
     ) {
         self.queue_title.set_text(&route_title(route));
         self.visible_tracks.borrow_mut().clear();
@@ -1120,7 +1153,13 @@ impl LibraryBrowser {
         for item in items.drain(..first_batch) {
             let number = self.visible_tracks.borrow().len() + 1;
             let liked = liked_ids.contains(&item.video_id);
-            self.queue.append(&youtube_track_row(number, &item, liked));
+            self.queue.append(&youtube_track_row(
+                number,
+                &item,
+                liked,
+                &self.event_tx,
+                language,
+            ));
             self.visible_tracks
                 .borrow_mut()
                 .push(VisibleTrack::YouTube(Box::new(item)));
@@ -1134,6 +1173,7 @@ impl LibraryBrowser {
         let queue = self.queue.clone();
         let visible_tracks = self.visible_tracks.clone();
         let generation = self.queue_render_generation.clone();
+        let event_tx = self.event_tx.clone();
 
         glib::idle_add_local(move || {
             if generation.get() != render_token {
@@ -1147,7 +1187,9 @@ impl LibraryBrowser {
                 };
                 let number = visible_tracks.borrow().len() + 1;
                 let liked = liked_ids.contains(&item.video_id);
-                queue.append(&youtube_track_row(number, &item, liked));
+                queue.append(&youtube_track_row(
+                    number, &item, liked, &event_tx, language,
+                ));
                 visible_tracks
                     .borrow_mut()
                     .push(VisibleTrack::YouTube(Box::new(item)));
@@ -1167,6 +1209,7 @@ impl LibraryBrowser {
         query: &str,
         route: &BrowserRoute,
         render_token: u64,
+        language: AppLanguage,
     ) {
         self.queue_title.set_text(&route_title(route));
         self.visible_tracks.borrow_mut().clear();
@@ -1220,7 +1263,7 @@ impl LibraryBrowser {
             return;
         }
 
-        self.append_youtube_rows_progressively(youtube, items, render_token);
+        self.append_youtube_rows_progressively(youtube, items, render_token, language);
     }
 
     fn append_youtube_rows_progressively(
@@ -1228,6 +1271,7 @@ impl LibraryBrowser {
         youtube: &YouTubeLibraryCache,
         mut items: Vec<YouTubeItem>,
         render_token: u64,
+        language: AppLanguage,
     ) {
         let liked_ids = youtube
             .liked
@@ -1239,7 +1283,13 @@ impl LibraryBrowser {
         for item in items.drain(..first_batch) {
             let number = self.visible_tracks.borrow().len() + 1;
             let liked = liked_ids.contains(&item.video_id);
-            self.queue.append(&youtube_track_row(number, &item, liked));
+            self.queue.append(&youtube_track_row(
+                number,
+                &item,
+                liked,
+                &self.event_tx,
+                language,
+            ));
             self.visible_tracks
                 .borrow_mut()
                 .push(VisibleTrack::YouTube(Box::new(item)));
@@ -1253,6 +1303,7 @@ impl LibraryBrowser {
         let queue = self.queue.clone();
         let visible_tracks = self.visible_tracks.clone();
         let generation = self.queue_render_generation.clone();
+        let event_tx = self.event_tx.clone();
 
         glib::idle_add_local(move || {
             if generation.get() != render_token {
@@ -1266,7 +1317,9 @@ impl LibraryBrowser {
                 };
                 let number = visible_tracks.borrow().len() + 1;
                 let liked = liked_ids.contains(&item.video_id);
-                queue.append(&youtube_track_row(number, &item, liked));
+                queue.append(&youtube_track_row(
+                    number, &item, liked, &event_tx, language,
+                ));
                 visible_tracks
                     .borrow_mut()
                     .push(VisibleTrack::YouTube(Box::new(item)));
@@ -3483,7 +3536,93 @@ fn square_pixbuf(path: &Path, size: i32) -> Option<gdk_pixbuf::Pixbuf> {
     cropped.scale_simple(size, size, gdk_pixbuf::InterpType::Bilinear)
 }
 
-fn track_row(number: usize, track: &Track, liked: bool) -> gtk::ListBoxRow {
+fn queue_action_menu(
+    entry: VisibleTrack,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> gtk::MenuButton {
+    let labels = match language {
+        AppLanguage::Portuguese => (
+            "Mais ações",
+            "Reproduzir em seguida",
+            "Adicionar ao fim da fila",
+        ),
+        AppLanguage::English => ("More actions", "Play next", "Add to end of queue"),
+        AppLanguage::Spanish => (
+            "Más acciones",
+            "Reproducir a continuación",
+            "Añadir al final de la cola",
+        ),
+    };
+
+    let popover = gtk::Popover::new();
+    popover.set_autohide(true);
+
+    let actions = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    actions.set_margin_top(6);
+    actions.set_margin_bottom(6);
+    actions.set_margin_start(6);
+    actions.set_margin_end(6);
+    actions.add_css_class("queue2-browser-actions");
+
+    let play_next = gtk::Button::with_label(labels.1);
+    play_next.set_halign(gtk::Align::Fill);
+    play_next.add_css_class("flat");
+
+    let append = gtk::Button::with_label(labels.2);
+    append.set_halign(gtk::Align::Fill);
+    append.add_css_class("flat");
+
+    {
+        let tx = event_tx.clone();
+        let entry = entry.clone();
+        let action_popover = popover.clone();
+        play_next.connect_clicked(move |_| {
+            let event = match entry.clone() {
+                VisibleTrack::Local(index) => BrowserEvent::QueueLocalPlayNext(index),
+                VisibleTrack::YouTube(item) => BrowserEvent::QueueYouTubePlayNext(*item),
+            };
+            let _ = tx.send(event);
+            action_popover.popdown();
+        });
+    }
+
+    {
+        let tx = event_tx.clone();
+        let action_popover = popover.clone();
+        append.connect_clicked(move |_| {
+            let event = match entry.clone() {
+                VisibleTrack::Local(index) => BrowserEvent::QueueLocalAppend(index),
+                VisibleTrack::YouTube(item) => BrowserEvent::QueueYouTubeAppend(*item),
+            };
+            let _ = tx.send(event);
+            action_popover.popdown();
+        });
+    }
+
+    actions.append(&play_next);
+    actions.append(&append);
+    popover.set_child(Some(&actions));
+
+    let menu = gtk::MenuButton::builder()
+        .icon_name("view-more-symbolic")
+        .tooltip_text(labels.0)
+        .build();
+    menu.add_css_class("flat");
+    menu.add_css_class("circular");
+    menu.add_css_class("queue2-browser-menu");
+    menu.set_popover(Some(&popover));
+    menu
+}
+
+fn track_row(
+    number: usize,
+    track: &Track,
+    liked: bool,
+    index: usize,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> gtk::ListBoxRow {
     let number_label = gtk::Label::new(Some(&number.to_string()));
     number_label.set_width_chars(3);
     number_label.add_css_class("track-number");
@@ -3516,17 +3655,20 @@ fn track_row(number: usize, track: &Track, liked: bool) -> gtk::ListBoxRow {
     let duration = gtk::Label::new(Some(&format_duration(track.duration_seconds)));
     duration.add_css_class("time-label");
 
+    let menu = queue_action_menu(VisibleTrack::Local(index), event_tx, language);
+
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     content.set_margin_top(10);
     content.set_margin_bottom(10);
     content.set_margin_start(12);
-    content.set_margin_end(12);
+    content.set_margin_end(8);
     content.append(&number_label);
     content.append(&text);
     content.append(&source);
     content.append(&favorite);
     content.append(&lyric_status);
     content.append(&duration);
+    content.append(&menu);
 
     let row = gtk::ListBoxRow::new();
     row.add_css_class("media-list-row");
@@ -3534,7 +3676,13 @@ fn track_row(number: usize, track: &Track, liked: bool) -> gtk::ListBoxRow {
     row
 }
 
-fn youtube_track_row(number: usize, item: &YouTubeItem, liked: bool) -> gtk::ListBoxRow {
+fn youtube_track_row(
+    number: usize,
+    item: &YouTubeItem,
+    liked: bool,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> gtk::ListBoxRow {
     let number_label = gtk::Label::new(Some(&number.to_string()));
     number_label.set_width_chars(3);
     number_label.add_css_class("track-number");
@@ -3564,16 +3712,23 @@ fn youtube_track_row(number: usize, item: &YouTubeItem, liked: bool) -> gtk::Lis
     let duration = gtk::Label::new(Some(&format_duration(item.duration_seconds)));
     duration.add_css_class("time-label");
 
+    let menu = queue_action_menu(
+        VisibleTrack::YouTube(Box::new(item.clone())),
+        event_tx,
+        language,
+    );
+
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     content.set_margin_top(10);
     content.set_margin_bottom(10);
     content.set_margin_start(12);
-    content.set_margin_end(12);
+    content.set_margin_end(8);
     content.append(&number_label);
     content.append(&text);
     content.append(&source);
     content.append(&favorite);
     content.append(&duration);
+    content.append(&menu);
 
     let row = gtk::ListBoxRow::new();
     row.add_css_class("media-list-row");

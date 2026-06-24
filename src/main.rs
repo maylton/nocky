@@ -134,7 +134,9 @@ struct AppController {
     player: PlaybackEngine,
     state: RefCell<AppState>,
     // queue2_playback_bridge_v1
+    // queue2_browser_actions_dnd_v1
     playback_queue_v2: RefCell<PlaybackQueue>,
+    queue_dragged_entry: Cell<Option<QueueEntryId>>,
     queue_v2_pending_entry: Cell<Option<QueueEntryId>>,
     config: RefCell<config::AppConfig>,
     listening_history: RefCell<ListeningHistory>,
@@ -668,6 +670,7 @@ impl AppController {
             player,
             state: RefCell::new(AppState::default()),
             playback_queue_v2: RefCell::new(PlaybackQueue::new()),
+            queue_dragged_entry: Cell::new(None),
             queue_v2_pending_entry: Cell::new(None),
             config: RefCell::new(config),
             listening_history: RefCell::new(ListeningHistory::load()),
@@ -1471,6 +1474,64 @@ impl AppController {
             if is_current {
                 row.add_css_class("active");
             }
+
+            let drag_handle = gtk::Image::from_icon_name("list-drag-handle-symbolic");
+            drag_handle.set_pixel_size(18);
+            drag_handle.set_tooltip_text(Some(match language {
+                AppLanguage::Portuguese => "Arraste para reordenar",
+                AppLanguage::English => "Drag to reorder",
+                AppLanguage::Spanish => "Arrastra para reordenar",
+            }));
+            drag_handle.add_css_class("dim-label");
+            drag_handle.add_css_class("queue2-drag-handle");
+
+            let drag_source = gtk::DragSource::new();
+            drag_source.set_actions(gdk::DragAction::MOVE);
+            {
+                let weak = Rc::downgrade(self);
+                let id = entry.id;
+                let title = entry.media.title.clone();
+                drag_source.connect_prepare(move |_, _, _| {
+                    let controller = weak.upgrade()?;
+                    controller.queue_dragged_entry.set(Some(id));
+                    Some(gdk::ContentProvider::for_value(&title.to_value()))
+                });
+            }
+            drag_handle.add_controller(drag_source);
+            row.append(&drag_handle);
+
+            let drop_target = gtk::DropTarget::new(String::static_type(), gdk::DragAction::MOVE);
+            {
+                let weak = Rc::downgrade(self);
+                let list = list.clone();
+                let summary = summary.clone();
+                let clear_upcoming = clear_upcoming.clone();
+                let queue_popover = popover.clone();
+                drop_target.connect_drop(move |_, _, _, _| {
+                    let Some(controller) = weak.upgrade() else {
+                        return false;
+                    };
+                    let Some(id) = controller.queue_dragged_entry.replace(None) else {
+                        return false;
+                    };
+                    if controller
+                        .playback_queue_v2
+                        .borrow_mut()
+                        .move_entry(id, position)
+                        .is_err()
+                    {
+                        return false;
+                    }
+                    controller.rebuild_queue_popover(
+                        &list,
+                        &summary,
+                        &clear_upcoming,
+                        &queue_popover,
+                    );
+                    true
+                });
+            }
+            row.add_controller(drop_target);
 
             let play_area = gtk::Button::new();
             play_area.set_hexpand(true);
@@ -3663,6 +3724,18 @@ impl AppController {
                 BrowserEvent::YouTubeTrackActivated { item, queue, index } => {
                     self.resolve_youtube_track(item, queue, index, false);
                 }
+                BrowserEvent::QueueLocalPlayNext(index) => {
+                    self.enqueue_local_track(index, true);
+                }
+                BrowserEvent::QueueLocalAppend(index) => {
+                    self.enqueue_local_track(index, false);
+                }
+                BrowserEvent::QueueYouTubePlayNext(item) => {
+                    self.enqueue_youtube_track(&item, true);
+                }
+                BrowserEvent::QueueYouTubeAppend(item) => {
+                    self.enqueue_youtube_track(&item, false);
+                }
                 BrowserEvent::OpenYouTubePlaylist(item) => {
                     self.load_youtube_playlist_for_browser(item);
                 }
@@ -3900,6 +3973,47 @@ impl AppController {
     }
 
     // queue2_playback_bridge_v1
+    fn enqueue_browser_media(&self, media: QueueMedia, play_next: bool) {
+        self.ensure_active_queue_v2();
+        let title = media.title.clone();
+
+        if play_next {
+            self.playback_queue_v2.borrow_mut().insert_next(media);
+        } else {
+            self.playback_queue_v2.borrow_mut().append(media);
+        }
+
+        let message = match (self.config.borrow().language, play_next) {
+            (AppLanguage::Portuguese, true) => format!("‘{title}’ será reproduzida em seguida"),
+            (AppLanguage::Portuguese, false) => format!("‘{title}’ foi adicionada ao fim da fila"),
+            (AppLanguage::English, true) => format!("‘{title}’ will play next"),
+            (AppLanguage::English, false) => format!("‘{title}’ was added to the queue"),
+            (AppLanguage::Spanish, true) => format!("‘{title}’ se reproducirá a continuación"),
+            (AppLanguage::Spanish, false) => {
+                format!("‘{title}’ se añadió al final de la cola")
+            }
+        };
+        self.show_toast(&message);
+    }
+
+    fn enqueue_local_track(&self, index: usize, play_next: bool) {
+        let media = self
+            .state
+            .borrow()
+            .tracks
+            .get(index)
+            .map(Self::local_queue_media);
+        if let Some(media) = media {
+            self.enqueue_browser_media(media, play_next);
+        }
+    }
+
+    fn enqueue_youtube_track(&self, item: &YouTubeItem, play_next: bool) {
+        if item.playable() {
+            self.enqueue_browser_media(Self::youtube_queue_media(item), play_next);
+        }
+    }
+
     fn local_queue_media(track: &Track) -> QueueMedia {
         QueueMedia::local(
             track.path.clone(),
@@ -4095,42 +4209,57 @@ impl AppController {
     }
 
     fn play_queue_entry(&self, id: QueueEntryId, autoplay: bool) {
-        let source = self
+        let media = self
             .playback_queue_v2
             .borrow()
             .entry(id)
-            .map(|entry| entry.media.source.clone());
-        let Some(source) = source else {
+            .map(|entry| entry.media.clone());
+        let Some(media) = media else {
             return;
         };
 
-        match source {
+        match &media.source {
             QueueSource::Local { path } => {
                 let index = self
                     .state
                     .borrow()
                     .tracks
                     .iter()
-                    .position(|track| track.path == path);
+                    .position(|track| &track.path == path);
                 if let Some(index) = index {
                     self.select_track(index, autoplay);
                 }
             }
             QueueSource::YouTube { video_id } => {
-                let resolved = {
+                let existing = {
                     let state = self.youtube_state.borrow();
-                    let Some(state) = state.as_ref() else {
-                        return;
-                    };
-                    let queue = state.queue.clone();
-                    let Some(position) = queue.iter().position(|item| item.video_id == video_id)
-                    else {
-                        return;
-                    };
-                    let item = queue[position].clone();
-                    (item, queue, position)
+                    state.as_ref().and_then(|state| {
+                        let queue = state.queue.clone();
+                        queue
+                            .iter()
+                            .position(|item| &item.video_id == video_id)
+                            .map(|position| (queue[position].clone(), queue, position))
+                    })
                 };
-                let (item, queue, position) = resolved;
+
+                let (item, queue, position) = existing.unwrap_or_else(|| {
+                    let item = YouTubeItem {
+                        result_type: "song".to_string(),
+                        title: media.title.clone(),
+                        artist: media.artist.clone(),
+                        album: media.album.clone(),
+                        video_id: video_id.clone(),
+                        duration_seconds: media.duration_seconds,
+                        cover_path: media
+                            .cover_path
+                            .as_ref()
+                            .map(|path| path.to_string_lossy().into_owned())
+                            .unwrap_or_default(),
+                        ..YouTubeItem::default()
+                    };
+                    (item.clone(), vec![item], 0)
+                });
+
                 self.queue_v2_pending_entry.set(Some(id));
                 self.resolve_youtube_track(item, queue, position, false);
             }
@@ -4187,6 +4316,17 @@ impl AppController {
         }
 
         if self.state.borrow().current.is_none() {
+            let queued = self
+                .playback_queue_v2
+                .borrow()
+                .entries()
+                .first()
+                .map(|entry| entry.id);
+            if let Some(id) = queued {
+                self.play_queue_entry(id, true);
+                return;
+            }
+
             let sequence = self.playback_sequence();
             if let Some(index) = sequence.first().copied() {
                 self.state.borrow_mut().playback_queue = sequence;
@@ -4351,6 +4491,17 @@ impl AppController {
                     {
                         self.play_current();
                     } else if self.state.borrow().current.is_none() {
+                        let queued = self
+                            .playback_queue_v2
+                            .borrow()
+                            .entries()
+                            .first()
+                            .map(|entry| entry.id);
+                        if let Some(id) = queued {
+                            self.play_queue_entry(id, true);
+                            continue;
+                        }
+
                         let sequence = self.playback_sequence();
                         if let Some(index) = sequence.first().copied() {
                             self.state.borrow_mut().playback_queue = sequence;
