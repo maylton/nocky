@@ -281,22 +281,14 @@ window.theme-material-expressive .player-visualizer-surface {
 /* material_expressive_footer_v1 */
 
 window.theme-material-expressive .expressive-footer {
-  min-height: 92px;
-  margin: 0 12px 12px 12px;
-  padding: 10px 12px;
   border: 1px solid alpha(@m3_outline, 0.24);
-  border-radius: 30px;
   background-color: @m3_surface_container_low;
-  background-image:
-    radial-gradient(circle at 4% 50%, alpha(@m3_primary, 0.14), transparent 32%),
+  background-image: radial-gradient(circle at 4% 50%, alpha(@m3_primary, 0.14), transparent 32%),
     linear-gradient(110deg, transparent 48%, alpha(@m3_tertiary, 0.055));
   box-shadow: 0 10px 28px alpha(black, 0.24);
 }
 
 window.theme-material-expressive .footer-info-card {
-  min-height: 60px;
-  padding: 4px 12px 4px 5px;
-  border-radius: 24px;
   border: 1px solid alpha(@m3_primary, 0.22);
   box-shadow: none;
 }
@@ -305,11 +297,6 @@ window.theme-material-expressive .footer-info-card:hover {
   background-color: shade(@m3_primary_container, 1.06);
 }
 
-window.theme-material-expressive .footer-artwork,
-window.theme-material-expressive .footer-artwork .mini-cover,
-window.theme-material-expressive .footer-artwork .cover-picture {
-  border-radius: 18px;
-}
 
 window.theme-material-expressive .footer-artwork {
   border: 1px solid alpha(@m3_primary, 0.34);
@@ -321,14 +308,12 @@ window.theme-material-expressive .footer-metadata {
 }
 
 window.theme-material-expressive .footer-track-title {
-  font-size: 0.96rem;
   font-weight: 820;
   letter-spacing: -0.16px;
 }
 
 window.theme-material-expressive .footer-track-artist {
   color: alpha(@m3_on_primary_container, 0.76);
-  font-size: 0.79rem;
   font-weight: 560;
 }
 
@@ -340,39 +325,25 @@ window.theme-material-expressive .footer-favorite-action {
 
 
 window.theme-material-expressive .footer-source-pill {
-  min-height: 24px;
-  padding: 0 9px;
-  border-radius: 12px;
   color: @m3_on_tertiary_container;
   background-color: @m3_tertiary_container;
   border: 1px solid alpha(@m3_tertiary, 0.20);
-  font-size: 0.68rem;
   font-weight: 720;
 }
 
-window.theme-material-expressive .footer-center-surface {
-  padding: 3px 10px 5px 10px;
-}
 
 window.theme-material-expressive .footer-transport-controls {
-  min-height: 58px;
-  padding: 4px 9px;
-  border-radius: 29px;
   background-color: alpha(@m3_surface_container_high, 0.90);
   border: 1px solid alpha(@m3_outline, 0.17);
 }
 
 window.theme-material-expressive .footer-primary-control {
-  min-width: 54px;
-  min-height: 54px;
-  border-radius: 18px;
   color: @m3_on_primary;
   background-color: @m3_primary;
   box-shadow: 0 6px 18px alpha(@m3_primary, 0.28);
 }
 
 window.theme-material-expressive .footer-primary-control:hover {
-  border-radius: 27px;
   background-color: shade(@m3_primary, 1.06);
 }
 
@@ -382,9 +353,8 @@ window.theme-material-expressive .footer-primary-control:active {
 }
 
 window.theme-material-expressive .footer-skip-control {
-  min-width: 42px;
-  min-height: 42px;
-  border-radius: 21px;
   color: @m3_on_secondary_container;
   background-color: @m3_secondary_container;
 }
+
+/* nocky_css_footer_cascade_cleanup_phase2d_v4: dead footer declarations pruned */

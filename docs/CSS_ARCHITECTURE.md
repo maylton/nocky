@@ -86,3 +86,12 @@ information and favorite actions now live in `096-tonal-surfaces.css`.
 
 Component geometry remains in `000-foundation.css`; only shared palette
 properties were moved.
+
+## Phase 2D — Footer cascade cleanup
+
+Superseded footer geometry declarations were removed from
+`000-foundation.css` and from the early sections of `010-footer.css`.
+
+The cleanup compares the final exact-selector cascade before and after every
+mutation. Colors, borders, surfaces and shadows that still contribute to the
+approved result remain in place.

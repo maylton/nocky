@@ -1,12 +1,7 @@
 
-window.theme-material-expressive .footer-progress-row {
-  min-height: 22px;
-  padding: 0 5px;
-}
 
 window.theme-material-expressive .footer-progress-stack,
 window.theme-material-expressive .footer-progress-wave {
-  min-height: 22px;
   color: @m3_primary;
 }
 
@@ -23,80 +18,28 @@ window.theme-material-expressive scale.footer-progress-track trough highlight {
 }
 
 window.theme-material-expressive .footer-utility-group {
-  min-height: 58px;
-  padding: 4px 8px;
-  border-radius: 24px;
   background-color: @m3_surface_container_high;
   border: 1px solid alpha(@m3_outline, 0.18);
 }
 
 window.theme-material-expressive .footer-utility-action {
-  min-width: 42px;
-  min-height: 42px;
-  border-radius: 15px;
   color: @m3_on_surface_variant;
   background-color: alpha(@m3_surface_container_highest, 0.64);
 }
 
 window.theme-material-expressive .footer-utility-action:checked {
-  border-radius: 21px;
   color: @m3_on_primary;
   background-color: @m3_primary;
 }
 
-window.theme-material-expressive scale.footer-volume-control trough {
-  min-height: 5px;
-  border-radius: 3px;
-  background-color: alpha(@m3_on_surface_variant, 0.20);
-}
 
-window.theme-material-expressive scale.footer-volume-control trough highlight {
-  min-height: 5px;
-  border-radius: 3px;
-  background-color: @m3_primary;
-}
 
-window.theme-material-expressive scale.footer-volume-control slider {
-  min-width: 16px;
-  min-height: 16px;
-  border-radius: 8px;
-  background-color: @m3_primary;
-  border: 2px solid @m3_surface_container_high;
-}
 
-window.theme-material-expressive .expressive-footer.footer-mode-compact {
-  min-height: 78px;
-  padding-top: 7px;
-  padding-bottom: 7px;
-  border-radius: 27px;
-}
 
-window.theme-material-expressive .footer-mode-compact .footer-transport-controls {
-  min-height: 52px;
-  padding: 3px 7px;
-}
 
-window.theme-material-expressive .footer-mode-compact .footer-primary-control {
-  min-width: 48px;
-  min-height: 48px;
-  border-radius: 16px;
-}
 
-window.theme-material-expressive .footer-mode-compact .footer-skip-control {
-  min-width: 38px;
-  min-height: 38px;
-  border-radius: 19px;
-}
 
-window.theme-material-expressive .footer-mode-compact .footer-utility-group {
-  min-height: 52px;
-  padding: 3px 5px;
-}
 
-window.theme-material-expressive .footer-mode-compact .footer-info-card {
-  min-height: 56px;
-  border-radius: 22px;
-}
 /* material_expressive_footer_refinement_v1 */
 
 window.theme-material-expressive .expressive-footer {
