@@ -7,6 +7,7 @@ mod config;
 mod dialogs;
 mod expressive_transport;
 mod footer_layout;
+mod footer_now_playing;
 mod i18n;
 mod library;
 mod listening_history;
@@ -41,6 +42,7 @@ use config::{AppLanguage, BlurMode, StartupSource, VisualTheme};
 use dialogs::SettingsEvent;
 use expressive_transport::{ExpressiveTransport, TransportVariant};
 use footer_layout::{footer_mode_plan, AdaptiveFooterTier};
+use footer_now_playing::{build_footer_now_playing, FooterNowPlayingParts};
 use gtk::prelude::FileExt;
 use gtk::{gdk, gio, glib};
 use i18n::Message;
@@ -581,84 +583,16 @@ impl AppController {
         content_stack.add_css_class("application-content-stack");
         body.append(&content_stack);
 
-        // material_expressive_footer_v1
-        // material_expressive_footer_refinement_v1
+        // nocky_rust_ui_phase3c_footer_now_playing_v1
         let mini_cover = build_cover(50);
-        mini_cover.stack.add_css_class("footer-artwork");
-        let mini_title = gtk::Label::new(Some(tr(Message::NothingPlaying)));
-        mini_title.set_xalign(0.0);
-        mini_title.set_ellipsize(gtk::pango::EllipsizeMode::End);
-        mini_title.add_css_class("now-title");
-        mini_title.add_css_class("footer-track-title");
-        mini_title.set_hexpand(true);
-
-        let footer_favorite_icon = gtk::Image::from_icon_name("emblem-favorite-symbolic");
-        footer_favorite_icon.set_opacity(0.28);
-        let footer_favorite = gtk::Button::new();
-        footer_favorite.set_child(Some(&footer_favorite_icon));
-        footer_favorite.add_css_class("flat");
-        footer_favorite.add_css_class("footer-control");
-        footer_favorite.add_css_class("footer-favorite-button");
-        footer_favorite.add_css_class("footer-favorite-action");
-        footer_favorite.set_tooltip_text(Some(tr(Message::FavoriteTooltip)));
-
-        let mini_artist = gtk::Label::new(Some("Nocky"));
-        mini_artist.set_xalign(0.0);
-        mini_artist.set_ellipsize(gtk::pango::EllipsizeMode::End);
-        mini_artist.add_css_class("dim-label");
-        mini_artist.add_css_class("footer-track-artist");
-        mini_artist.set_hexpand(false);
-        mini_artist.set_width_chars(-1);
-        mini_artist.set_max_width_chars(18);
-
-        let footer_source = gtk::Label::new(Some(tr(Message::SourceNone)));
-        footer_source.add_css_class("source-badge");
-        footer_source.add_css_class("footer-source-badge");
-        footer_source.add_css_class("footer-source-pill");
-        footer_source.set_valign(gtk::Align::Center);
-
-        let mini_title_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        mini_title_row.set_halign(gtk::Align::Start);
-        mini_title_row.add_css_class("footer-title-row");
-        mini_title_row.append(&mini_title);
-
-        let mini_artist_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        mini_artist_row.set_halign(gtk::Align::Start);
-        mini_artist_row.add_css_class("footer-artist-row");
-        mini_artist_row.append(&mini_artist);
-
-        let mini_action_row = gtk::Box::new(gtk::Orientation::Horizontal, 5);
-        mini_action_row.set_halign(gtk::Align::Start);
-        mini_action_row.set_valign(gtk::Align::Center);
-        mini_action_row.add_css_class("footer-action-row");
-        mini_action_row.append(&footer_favorite);
-        mini_action_row.append(&footer_source);
-
-        let mini_text = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        mini_text.set_hexpand(false);
-        mini_text.set_halign(gtk::Align::Start);
-        mini_text.set_valign(gtk::Align::Center);
-        mini_text.add_css_class("footer-meta");
-        mini_text.add_css_class("footer-metadata");
-        mini_text.append(&mini_title_row);
-        mini_text.append(&mini_artist_row);
-        mini_text.append(&mini_action_row);
-
-        let now_playing_content = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        now_playing_content.set_halign(gtk::Align::Start);
-        now_playing_content.set_valign(gtk::Align::Center);
-        now_playing_content.add_css_class("footer-track-content");
-        now_playing_content.append(&mini_cover.stack);
-        now_playing_content.append(&mini_text);
-
-        let footer_now_playing = gtk::Button::new();
-        footer_now_playing.set_child(Some(&now_playing_content));
-        footer_now_playing.set_size_request(350, 56);
-        footer_now_playing.add_css_class("flat");
-        footer_now_playing.add_css_class("footer-now-playing-button");
-        footer_now_playing.add_css_class("footer-info-card");
-        footer_now_playing.set_tooltip_text(Some("Abrir fila de reprodução"));
-        footer_now_playing.set_valign(gtk::Align::Center);
+        let FooterNowPlayingParts {
+            button: footer_now_playing,
+            title: mini_title,
+            artist: mini_artist,
+            source: footer_source,
+            favorite_button: footer_favorite,
+            favorite_icon: footer_favorite_icon,
+        } = build_footer_now_playing(config.language, &mini_cover.stack);
 
         let footer_shuffle = mode_toggle::new_mode_toggle(
             "media-playlist-shuffle-symbolic",
