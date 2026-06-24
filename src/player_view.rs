@@ -4,6 +4,7 @@ use crate::{
     expressive_transport::{ExpressiveTransport, TransportVariant},
     i18n::{self, Message},
     lyrics_view::LyricsPresenter,
+    track_transition::TransitionClock,
     visualizer::SpectrumVisualizer,
     wave_progress::WaveProgress,
     CoverView,
@@ -22,13 +23,55 @@ pub(crate) struct PlayerViewHandle {
     lyrics_slot: gtk::CenterBox,
     lyrics_toggle_button: gtk::ToggleButton,
     visualizer: SpectrumVisualizer,
+    metadata_transition: TransitionClock,
 }
 
 impl PlayerViewHandle {
     pub(crate) fn set_metadata(&self, title: &str, artist: &str, album: &str) {
-        self.title.set_text(title);
-        self.artist.set_text(artist);
-        self.album.set_text(album);
+        if !adw::is_animations_enabled(&self.title) {
+            self.title.set_text(title);
+            self.artist.set_text(artist);
+            self.album.set_text(album);
+            self.title.set_opacity(1.0);
+            self.artist.set_opacity(1.0);
+            self.album.set_opacity(1.0);
+            return;
+        }
+
+        if self.title.text().as_str() == title
+            && self.artist.text().as_str() == artist
+            && self.album.text().as_str() == album
+        {
+            return;
+        }
+
+        let token = self.metadata_transition.next();
+        self.metadata_transition
+            .fade(token, &self.title, self.title.opacity(), 0.0, 0, 90);
+        self.metadata_transition
+            .fade(token, &self.artist, self.artist.opacity(), 0.0, 12, 90);
+        self.metadata_transition
+            .fade(token, &self.album, self.album.opacity(), 0.0, 24, 90);
+
+        let handle = self.clone();
+        let title = title.to_owned();
+        let artist = artist.to_owned();
+        let album = album.to_owned();
+        self.metadata_transition.after(token, 112, move || {
+            handle.title.set_text(&title);
+            handle.artist.set_text(&artist);
+            handle.album.set_text(&album);
+
+            handle
+                .metadata_transition
+                .fade(token, &handle.title, 0.0, 1.0, 0, 190);
+            handle
+                .metadata_transition
+                .fade(token, &handle.artist, 0.0, 1.0, 42, 190);
+            handle
+                .metadata_transition
+                .fade(token, &handle.album, 0.0, 1.0, 78, 190);
+        });
     }
 
     pub(crate) fn set_favorite(&self, active: bool) {
@@ -429,6 +472,7 @@ impl PlayerView {
             lyrics_slot: lyrics_slot.clone(),
             lyrics_toggle_button: inline_lyrics_button.clone(),
             visualizer: visualizer.clone(),
+            metadata_transition: TransitionClock::new(),
         };
 
         Self {

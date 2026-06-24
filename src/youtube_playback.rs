@@ -1,6 +1,7 @@
 use crate::{
     background::BackgroundMessage,
     lyrics, lyrics_provider, mpris,
+    queue_model::{PlaybackQueue, QueueEntryId, QueueSource},
     youtube::{download_cover, save_library_cache, YouTubeItem, YouTubeStream},
 };
 use gtk::{
@@ -16,6 +17,39 @@ use super::{
     is_refreshable_stream_error, mpris_youtube_track_id, redact_stream_url, AppController,
     PlaybackSource, YouTubePlaybackState,
 };
+
+// queue2_completion_core_v1
+fn matching_youtube_queue_entry(
+    queue: &PlaybackQueue,
+    preferred: Option<QueueEntryId>,
+    video_id: &str,
+) -> Option<QueueEntryId> {
+    let matches_video = |id: QueueEntryId| {
+        queue.entry(id).is_some_and(|entry| {
+            matches!(
+                &entry.media.source,
+                QueueSource::YouTube {
+                    video_id: candidate
+                } if candidate == video_id
+            )
+        })
+    };
+
+    preferred
+        .filter(|id| matches_video(*id))
+        .or_else(|| queue.current_id().filter(|id| matches_video(*id)))
+        .or_else(|| {
+            queue.entries().iter().find_map(|entry| {
+                matches!(
+                    &entry.media.source,
+                    QueueSource::YouTube {
+                        video_id: candidate
+                    } if candidate == video_id
+                )
+                .then_some(entry.id)
+            })
+        })
+}
 
 impl AppController {
     pub(super) fn resolve_youtube_track(
@@ -78,6 +112,16 @@ impl AppController {
             return false;
         };
 
+        let recovery_entry = {
+            let playback_queue = self.playback_queue_v2.borrow();
+            matching_youtube_queue_entry(
+                &playback_queue,
+                playback_queue.current_id(),
+                &item.video_id,
+            )
+        };
+        self.queue_v2_pending_entry.set(recovery_entry);
+
         self.youtube_recovery_attempted.set(true);
         self.youtube_recovery_in_progress.set(true);
         self.youtube_recovery_resume_us
@@ -127,6 +171,33 @@ impl AppController {
         cover_path: Option<PathBuf>,
     ) {
         let recovering = self.youtube_recovery_in_progress.replace(false);
+        let pending = self.queue_v2_pending_entry.replace(None);
+        let preserved_id = if recovering {
+            let playback_queue = self.playback_queue_v2.borrow();
+            matching_youtube_queue_entry(&playback_queue, pending, &item.video_id)
+        } else {
+            pending.filter(|id| {
+                self.playback_queue_v2
+                    .borrow()
+                    .entry(*id)
+                    .is_some_and(|entry| {
+                        matches!(
+                            &entry.media.source,
+                            QueueSource::YouTube {
+                                video_id: candidate,
+                            } if candidate == &item.video_id
+                        )
+                    })
+            })
+        };
+
+        let selected_queue_id = if let Some(id) = preserved_id {
+            let _ = self.playback_queue_v2.borrow_mut().select(id);
+            Some(id)
+        } else {
+            self.sync_youtube_queue_v2(&queue, index);
+            self.playback_queue_v2.borrow().current_id()
+        };
         if !recovering {
             self.maybe_record_listening();
         }
@@ -172,6 +243,13 @@ impl AppController {
         }
         if let Some(path) = cover_path.as_ref() {
             item.cover_path = path.to_string_lossy().into_owned();
+        }
+
+        if let Some(id) = selected_queue_id {
+            let media = Self::youtube_queue_media(&item);
+            if let Err(error) = self.playback_queue_v2.borrow_mut().update_media(id, media) {
+                eprintln!("Could not refresh Queue 2.0 YouTube metadata: {error}");
+            }
         }
 
         {
@@ -260,60 +338,6 @@ impl AppController {
         thread::spawn(move || bridge.preload_streams(&queue, current, 4));
     }
 
-    pub(super) fn youtube_next_track(&self) {
-        let state = self.youtube_state.borrow();
-        let Some(current) = state.as_ref() else {
-            return;
-        };
-        if current.queue.is_empty() {
-            return;
-        }
-        let next = if self.shuffle_enabled.get() && current.queue.len() > 1 {
-            let mut value = self.rng_state.get();
-            value ^= value << 13;
-            value ^= value >> 7;
-            value ^= value << 17;
-            self.rng_state.set(value);
-            let mut position = value as usize % current.queue.len();
-            if position == current.current {
-                position = (position + 1) % current.queue.len();
-            }
-            Some(position)
-        } else {
-            current
-                .current
-                .checked_add(1)
-                .filter(|position| *position < current.queue.len())
-        };
-        let Some(next) = next else {
-            return;
-        };
-        let queue = current.queue.clone();
-        let item = queue[next].clone();
-        drop(state);
-        self.resolve_youtube_track(item, queue, next, false);
-    }
-
-    pub(super) fn youtube_previous_track(&self) {
-        if self.player.position_us() > 5_000_000 {
-            self.seek_to(0, true);
-            return;
-        }
-        let state = self.youtube_state.borrow();
-        let Some(current) = state.as_ref() else {
-            return;
-        };
-        let Some(previous) = current.current.checked_sub(1) else {
-            drop(state);
-            self.seek_to(0, true);
-            return;
-        };
-        let queue = current.queue.clone();
-        let item = queue[previous].clone();
-        drop(state);
-        self.resolve_youtube_track(item, queue, previous, false);
-    }
-
     fn publish_mpris_youtube(
         &self,
         item: &YouTubeItem,
@@ -367,5 +391,65 @@ impl AppController {
                 result,
             });
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::queue_model::QueueMedia;
+
+    #[test]
+    fn recovery_prefers_the_exact_entry_id_for_duplicate_videos() {
+        let mut queue = PlaybackQueue::new();
+        let first = queue.append(QueueMedia::youtube(
+            "duplicate-video",
+            "First occurrence",
+            "Artist",
+            "Album",
+            180,
+            None,
+        ));
+        let second = queue.append(QueueMedia::youtube(
+            "duplicate-video",
+            "Second occurrence",
+            "Artist",
+            "Album",
+            180,
+            None,
+        ));
+        queue.select(first).expect("select first occurrence");
+
+        assert_eq!(
+            matching_youtube_queue_entry(&queue, Some(second), "duplicate-video"),
+            Some(second)
+        );
+    }
+
+    #[test]
+    fn recovery_falls_back_to_the_current_matching_entry() {
+        let mut queue = PlaybackQueue::new();
+        let current = queue.append(QueueMedia::youtube(
+            "current-video",
+            "Current",
+            "Artist",
+            "Album",
+            180,
+            None,
+        ));
+        let unrelated = queue.append(QueueMedia::youtube(
+            "other-video",
+            "Other",
+            "Artist",
+            "Album",
+            180,
+            None,
+        ));
+        queue.select(current).expect("select current occurrence");
+
+        assert_eq!(
+            matching_youtube_queue_entry(&queue, Some(unrelated), "current-video"),
+            Some(current)
+        );
     }
 }

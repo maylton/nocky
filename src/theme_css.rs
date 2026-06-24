@@ -54,6 +54,10 @@ const MATERIAL_EXPRESSIVE_MODULES: &[(&str, &str)] = &[
         "096-tonal-surfaces.css",
         include_str!("../assets/themes/material-expressive/096-tonal-surfaces.css"),
     ),
+    (
+        "097-queue.css",
+        include_str!("../assets/themes/material-expressive/097-queue.css"),
+    ),
 ];
 
 pub(crate) fn combined_theme_css() -> String {
@@ -77,7 +81,7 @@ pub(crate) fn combined_theme_css() -> String {
 mod tests {
     use super::*;
 
-    const EXPECTED_MATERIAL_EXPRESSIVE_BYTES: usize = 109304;
+    const EXPECTED_MATERIAL_EXPRESSIVE_BYTES: usize = 113998;
 
     #[test]
     fn material_modules_keep_expected_size() {
