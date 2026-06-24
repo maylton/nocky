@@ -5,7 +5,6 @@ mod browser;
 mod config;
 mod dialogs;
 mod expressive_transport;
-mod home_card_motion;
 mod i18n;
 mod library;
 mod listening_history;

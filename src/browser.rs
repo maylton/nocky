@@ -1,6 +1,5 @@
 use crate::{
     config::{AppConfig, AppLanguage, StartupSource, VisualTheme},
-    home_card_motion::{self, HomeCardKind},
     listening_history::{ListeningHistory, ListeningSource, ListeningStats},
     model::Track,
     youtube::{youtube_collection_key, YouTubeCollectionEntry, YouTubeItem, YouTubeLibraryCache},
@@ -2863,13 +2862,6 @@ fn home_card_button(
     language: AppLanguage,
     card_effects: bool,
 ) -> gtk::Button {
-    let card_kind = match &card {
-        HomeCard::LocalArtist { .. } | HomeCard::YouTubeArtist { .. } => HomeCardKind::Artist,
-        HomeCard::LocalAlbum { .. } | HomeCard::YouTubeAlbum { .. } => HomeCardKind::Album,
-        HomeCard::YouTubePlaylist(item) if is_mix_playlist(item) => HomeCardKind::Mix,
-        HomeCard::LocalPlaylist { .. } | HomeCard::YouTubePlaylist(_) => HomeCardKind::Playlist,
-    };
-
     let (cover_path, title, subtitle, detail, online) = match &card {
         HomeCard::LocalAlbum {
             title,
@@ -2932,18 +2924,10 @@ fn home_card_button(
     }
     button.add_css_class("home-card-no-hover-scale");
 
-    if false {
-        if let Some(artwork) = card_widget
-            .first_child()
-            .and_then(|child| child.downcast::<gtk::Stack>().ok())
-        {
-            home_card_motion::install(&button, &card_widget, &artwork, card_kind);
-        } else {
-            button.set_child(Some(&card_widget));
-        }
-    } else {
-        button.set_child(Some(&card_widget));
-    }
+    // The approved Home card path uses the fixed collection-card surface
+    // plus the carousel edge spring. The retired alternate motion engine was
+    // permanently disabled and has been removed.
+    button.set_child(Some(&card_widget));
 
     let sender = event_tx.clone();
     button.connect_clicked(move |_| {

@@ -113,3 +113,12 @@ The compact-footer volume presentation now lives in
 The move preserves the original cascade order. Fully superseded duplicate
 rules for the revealer, legacy GtkScale payload and fixed slot were pruned only
 after exact-selector cascade comparison.
+
+## Phase 2G — Disabled Home motion removal
+
+The permanently disabled `home_card_motion` path and its `expressive-home-*`
+CSS were removed.
+
+The approved implementation remains the fixed `collection-card` surface with
+allocation-stable hover and the browser-owned carousel edge spring. Every
+active edge-spring selector retained the same final cascade.

@@ -65,122 +65,16 @@ window.theme-material-expressive
     0 0 8px alpha(@m3_primary, 0.18);
 }
 
-/* expressive_home_card_motion_v1 */
-window.theme-material-expressive
-  .expressive-library-home
-  button.expressive-home-card-button {
-  min-width: 228px;
-  min-height: 224px;
-  padding: 0;
-  border: none;
-  outline: none;
-  background-color: transparent;
-  background-image: none;
-  box-shadow: none;
-}
+/* nocky_css_remove_disabled_home_motion_phase2g_v5 */
 
-window.theme-material-expressive
-  .expressive-library-home
-  .expressive-home-card-slot {
-  min-width: 228px;
-  min-height: 224px;
-}
-
-window.theme-material-expressive
-  .expressive-library-home
-  .expressive-home-card-motion {
-  border: 1px solid alpha(@m3_outline, 0.16);
-  border-radius: 24px;
-  background-color: alpha(@m3_surface_container_high, 0.78);
-  box-shadow: 0 5px 15px alpha(black, 0.16);
-  transition:
-    border-radius 180ms ease-out,
-    border-color 180ms ease-out,
-    background-color 180ms ease-out,
-    box-shadow 180ms ease-out;
-}
-
-window.theme-material-expressive
-  .expressive-library-home
-  button.expressive-home-card-button.is-hovered
-  .expressive-home-card-motion {
-  border-radius: 30px;
-  border-color: alpha(@m3_primary, 0.26);
-  background-color: alpha(@m3_surface_container_highest, 0.88);
-  box-shadow: 0 11px 25px alpha(black, 0.24);
-}
-
-window.theme-material-expressive
-  .expressive-library-home
-  button.expressive-home-card-button.is-clicking
-  .expressive-home-card-motion {
-  border-color: alpha(@m3_primary, 0.34);
-  box-shadow: 0 8px 21px alpha(black, 0.22);
-}
-
-window.theme-material-expressive
-  .expressive-library-home
-  .expressive-home-media-artwork,
-window.theme-material-expressive
-  .expressive-library-home
-  .expressive-home-media-artwork picture {
-  border-radius: 22px;
-  transition:
-    border-radius 180ms ease-out,
-    box-shadow 180ms ease-out;
-}
-
-window.theme-material-expressive
-  .expressive-library-home
-  button.expressive-home-card-button.is-hovered
-  .expressive-home-media-artwork,
-window.theme-material-expressive
-  .expressive-library-home
-  button.expressive-home-card-button.is-hovered
-  .expressive-home-media-artwork picture {
-  border-radius: 28px;
-}
-
-window.theme-material-expressive
-  .expressive-library-home
-  .expressive-home-artist-artwork,
-window.theme-material-expressive
-  .expressive-library-home
-  .expressive-home-artist-artwork picture {
-  border-radius: 999px;
-}
-
-window.theme-material-expressive
-  .expressive-library-home
-  .expressive-home-artist-artwork {
-  border: 1px solid alpha(@m3_primary, 0.20);
-  box-shadow: 0 5px 15px alpha(black, 0.18);
-  transition:
-    border-color 180ms ease-out,
-    box-shadow 180ms ease-out;
-}
-
-window.theme-material-expressive
-  .expressive-library-home
-  button.expressive-home-card-button.is-hovered
-  .expressive-home-artist-artwork,
-window.theme-material-expressive
-  .expressive-library-home
-  button.expressive-home-card-button.is-clicking
-  .expressive-home-artist-artwork {
-  border-color: alpha(@m3_primary, 0.42);
-  box-shadow: 0 9px 22px alpha(black, 0.24);
-}
-
-window.theme-material-expressive
-  .expressive-library-home
-  .expressive-home-mix-card {
-  background-image:
-    linear-gradient(145deg, alpha(@m3_primary, 0.08), transparent 58%),
-    linear-gradient(30deg, alpha(@m3_tertiary, 0.055), transparent 62%);
-}
-
-/* nocky_home_cards_edge_spring_v4 */
+/*
+ * Active Home card and carousel edge-spring component
+ * ---------------------------------------------------
+ *
+ * Regular card hover remains allocation-stable. The carousel edge spring is
+ * driven frame-by-frame in browser.rs; CSS only owns the approved tonal and
+ * shadow states.
+ */
 
 /* Hover remains highlighted, but never changes card geometry. */
 window.theme-material-expressive
@@ -222,7 +116,7 @@ window.theme-material-expressive
 }
 
 
-/* nocky_home_cards_edge_spring_v6 */
+/* Stronger tonal state while the edge spring is active */
 
 /*
  * The spring width is driven frame-by-frame in Rust. These selectors only
