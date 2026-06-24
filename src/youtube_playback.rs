@@ -277,9 +277,6 @@ impl AppController {
         self.mpris
             .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Playing));
         self.prefetch_youtube_queue();
-
-        // nocky_compact_footer_reassert_after_metadata_v2: apply_youtube_track (fields=4, setters=2)
-        self.apply_footer_mode();
     }
 
     fn prefetch_youtube_queue(&self) {

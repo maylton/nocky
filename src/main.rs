@@ -2903,9 +2903,6 @@ impl AppController {
             transition.fade(token, &title_label, 0.0, 1.0, 0, 180);
             transition.fade(token, &artist_label, 0.0, 1.0, 44, 180);
         });
-
-        // nocky_compact_footer_reassert_after_metadata_v2: set_footer_metadata (fields=2, setters=4)
-        self.apply_footer_mode();
     }
 
     fn update_footer_source(&self) {
@@ -3304,9 +3301,6 @@ impl AppController {
 
             glib::ControlFlow::Continue
         });
-
-        // nocky_compact_footer_reassert_after_metadata_v2: install_footer_adaptive (fields=4, setters=7)
-        self.apply_footer_mode();
     }
 
     fn apply_home_player_visibility(&self) {
@@ -4066,9 +4060,6 @@ impl AppController {
         if track.lyrics.is_empty() && self.config.borrow().auto_download_lyrics {
             self.request_lyrics(index, false, false);
         }
-
-        // nocky_compact_footer_reassert_after_metadata_v2: select_track (fields=0, setters=0)
-        self.apply_footer_mode();
     }
 
     fn request_lyrics(&self, index: usize, notify: bool, force: bool) {
@@ -5281,25 +5272,33 @@ pub(crate) struct CoverView {
     picture: gtk::Picture,
     placeholder: gtk::Box,
     icon: gtk::Image,
-    size: i32,
+    // nocky_cover_texture_tracks_display_size_v1
+    display_size: Rc<Cell<i32>>,
+    current_path: Rc<RefCell<Option<PathBuf>>>,
     transition: TransitionClock,
 }
 
 impl CoverView {
     fn set_display_size(&self, size: i32) {
         let size = size.max(1);
-        if self.stack.width_request() == size && self.stack.height_request() == size {
-            return;
+        let previous_size = self.display_size.replace(size);
+
+        if self.stack.width_request() != size || self.stack.height_request() != size {
+            self.stack.set_size_request(size, size);
+            self.picture.set_size_request(size, size);
+            self.placeholder.set_size_request(size, size);
+            self.icon.set_pixel_size((f64::from(size) * 0.30) as i32);
         }
 
-        self.stack.set_size_request(size, size);
-        self.picture.set_size_request(size, size);
-        self.placeholder.set_size_request(size, size);
-        self.icon.set_pixel_size((f64::from(size) * 0.30) as i32);
+        if previous_size != size {
+            let current_path = self.current_path.borrow().clone();
+            self.set_path_immediate(current_path.as_deref());
+        }
     }
 
     fn set_path(&self, path: Option<&Path>) {
         let path = path.map(Path::to_path_buf);
+        self.current_path.replace(path.clone());
 
         if !adw::is_animations_enabled(&self.stack) {
             self.set_path_immediate(path.as_deref());
@@ -5325,7 +5324,7 @@ impl CoverView {
             return;
         };
 
-        match square_cover_pixbuf(path, self.size) {
+        match square_cover_pixbuf(path, self.display_size.get()) {
             Some(pixbuf) => {
                 let texture = gdk::Texture::for_pixbuf(&pixbuf);
                 self.picture.set_paintable(Some(&texture));
@@ -5375,7 +5374,7 @@ pub(crate) fn build_cover(size: i32) -> CoverView {
 
     let picture = gtk::Picture::new();
     picture.set_content_fit(gtk::ContentFit::Cover);
-    picture.set_can_shrink(false);
+    picture.set_can_shrink(true);
     picture.set_width_request(size);
     picture.set_height_request(size);
     picture.set_halign(gtk::Align::Center);
@@ -5405,7 +5404,8 @@ pub(crate) fn build_cover(size: i32) -> CoverView {
         picture,
         placeholder,
         icon,
-        size,
+        display_size: Rc::new(Cell::new(size)),
+        current_path: Rc::new(RefCell::new(None)),
         transition: TransitionClock::new(),
     }
 }
