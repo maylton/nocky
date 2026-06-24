@@ -264,6 +264,16 @@ impl PlaybackQueue {
         Ok(())
     }
 
+    pub fn update_media(&mut self, id: QueueEntryId, media: QueueMedia) -> Result<(), QueueError> {
+        let entry = self
+            .entries
+            .iter_mut()
+            .find(|entry| entry.id == id)
+            .ok_or(QueueError::EntryNotFound(id))?;
+        entry.media = media;
+        Ok(())
+    }
+
     pub fn select_index(&mut self, index: usize) -> Option<QueueEntryId> {
         let id = self.entries.get(index).map(|entry| entry.id)?;
         self.current_id = Some(id);
@@ -368,6 +378,147 @@ impl PlaybackQueue {
         self.next_id = id.get().saturating_add(1).max(1);
         QueueEntry { id, media }
     }
+}
+
+// queue2_completion_core_v1
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QueueEndAction {
+    RepeatCurrent,
+    Play(QueueEntryId),
+    Stop,
+}
+
+pub const fn queue_end_action(repeat_one: bool, next: Option<QueueEntryId>) -> QueueEndAction {
+    if repeat_one {
+        QueueEndAction::RepeatCurrent
+    } else if let Some(id) = next {
+        QueueEndAction::Play(id)
+    } else {
+        QueueEndAction::Stop
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ShuffleNavigator {
+    current: Option<QueueEntryId>,
+    history: Vec<QueueEntryId>,
+    upcoming: Vec<QueueEntryId>,
+}
+
+impl ShuffleNavigator {
+    pub fn clear(&mut self) {
+        self.current = None;
+        self.history.clear();
+        self.upcoming.clear();
+    }
+
+    pub fn reset(
+        &mut self,
+        entries: &[QueueEntry],
+        current: Option<QueueEntryId>,
+        rng_state: &mut u64,
+    ) {
+        let valid = entries.iter().map(|entry| entry.id).collect::<HashSet<_>>();
+        let current = current.filter(|id| valid.contains(id));
+
+        self.current = current;
+        self.history.clear();
+        self.upcoming = entries
+            .iter()
+            .map(|entry| entry.id)
+            .filter(|id| Some(*id) != current)
+            .collect();
+        shuffle_entry_ids(&mut self.upcoming, rng_state);
+    }
+
+    pub fn next(
+        &mut self,
+        entries: &[QueueEntry],
+        current: Option<QueueEntryId>,
+        rng_state: &mut u64,
+    ) -> Option<QueueEntryId> {
+        self.reconcile(entries, current, rng_state);
+
+        let next = self.upcoming.pop()?;
+        if let Some(current) = self.current {
+            self.history.push(current);
+        }
+        self.current = Some(next);
+        Some(next)
+    }
+
+    pub fn previous(
+        &mut self,
+        entries: &[QueueEntry],
+        current: Option<QueueEntryId>,
+        rng_state: &mut u64,
+    ) -> Option<QueueEntryId> {
+        self.reconcile(entries, current, rng_state);
+
+        let previous = self.history.pop()?;
+        if let Some(current) = self.current {
+            self.upcoming.push(current);
+        }
+        self.current = Some(previous);
+        Some(previous)
+    }
+
+    fn reconcile(
+        &mut self,
+        entries: &[QueueEntry],
+        current: Option<QueueEntryId>,
+        rng_state: &mut u64,
+    ) {
+        let valid = entries.iter().map(|entry| entry.id).collect::<HashSet<_>>();
+        let current = current.filter(|id| valid.contains(id));
+
+        if self.current != current {
+            self.reset(entries, current, rng_state);
+            return;
+        }
+
+        let mut reserved = HashSet::with_capacity(entries.len());
+        if let Some(current) = current {
+            reserved.insert(current);
+        }
+
+        self.history
+            .retain(|id| valid.contains(id) && reserved.insert(*id));
+        self.upcoming
+            .retain(|id| valid.contains(id) && reserved.insert(*id));
+
+        let mut added = entries
+            .iter()
+            .map(|entry| entry.id)
+            .filter(|id| !reserved.contains(id))
+            .collect::<Vec<_>>();
+        shuffle_entry_ids(&mut added, rng_state);
+
+        if !added.is_empty() {
+            added.append(&mut self.upcoming);
+            self.upcoming = added;
+        }
+    }
+}
+
+fn shuffle_entry_ids(ids: &mut [QueueEntryId], rng_state: &mut u64) {
+    for index in (1..ids.len()).rev() {
+        *rng_state = next_shuffle_value(*rng_state);
+        let target = (*rng_state as usize) % (index + 1);
+        ids.swap(index, target);
+    }
+}
+
+fn next_shuffle_value(value: u64) -> u64 {
+    let mut value = if value == 0 {
+        0x9e37_79b9_7f4a_7c15
+    } else {
+        value
+    };
+    value ^= value << 13;
+    value ^= value >> 7;
+    value ^= value << 17;
+    value
 }
 
 #[cfg(test)]
@@ -514,5 +665,123 @@ mod tests {
             queue.entries()[1].media.source,
             QueueSource::YouTube { .. }
         ));
+    }
+
+    #[test]
+    fn updating_media_preserves_entry_identity_order_and_current() {
+        let mut queue = queue_with_three();
+        let ids_before = queue
+            .entries()
+            .iter()
+            .map(|entry| entry.id)
+            .collect::<Vec<_>>();
+        let current_before = queue.current_id();
+        let target = ids_before[2];
+
+        queue
+            .update_media(
+                target,
+                QueueMedia::youtube(
+                    "updated-video",
+                    "Updated title",
+                    "Updated artist",
+                    "Updated album",
+                    222,
+                    Some(PathBuf::from("/covers/updated.jpg")),
+                ),
+            )
+            .expect("update media");
+
+        assert_eq!(
+            queue
+                .entries()
+                .iter()
+                .map(|entry| entry.id)
+                .collect::<Vec<_>>(),
+            ids_before
+        );
+        assert_eq!(queue.current_id(), current_before);
+        assert_eq!(
+            queue.entry(target).map(|entry| entry.media.title.as_str()),
+            Some("Updated title")
+        );
+    }
+
+    #[test]
+    fn shuffle_visits_every_remaining_entry_once_before_stopping() {
+        let queue = queue_with_three();
+        let mut navigator = ShuffleNavigator::default();
+        let mut rng = 7;
+        let mut current = queue.current_id();
+        let mut visited = HashSet::new();
+
+        while let Some(next) = navigator.next(queue.entries(), current, &mut rng) {
+            assert!(visited.insert(next), "shuffle repeated an entry");
+            current = Some(next);
+        }
+
+        assert_eq!(visited.len(), queue.len() - 1);
+    }
+
+    #[test]
+    fn shuffle_previous_retraces_history_and_next_returns_forward() {
+        let queue = queue_with_three();
+        let mut navigator = ShuffleNavigator::default();
+        let mut rng = 11;
+        let original = queue.current_id();
+
+        let first = navigator
+            .next(queue.entries(), original, &mut rng)
+            .expect("first shuffled entry");
+        let second = navigator
+            .next(queue.entries(), Some(first), &mut rng)
+            .expect("second shuffled entry");
+
+        let previous = navigator
+            .previous(queue.entries(), Some(second), &mut rng)
+            .expect("shuffle history");
+        assert_eq!(previous, first);
+
+        let forward = navigator
+            .next(queue.entries(), Some(previous), &mut rng)
+            .expect("forward after previous");
+        assert_eq!(forward, second);
+    }
+
+    #[test]
+    fn shuffle_reconciles_entries_added_during_a_session() {
+        let mut queue = queue_with_three();
+        let mut navigator = ShuffleNavigator::default();
+        let mut rng = 19;
+        let original = queue.current_id();
+
+        let first = navigator
+            .next(queue.entries(), original, &mut rng)
+            .expect("first shuffled entry");
+        queue.select(first).expect("select shuffled entry");
+        let added = queue.append(media(4));
+
+        let mut visited = HashSet::from([first]);
+        let mut current = Some(first);
+        while let Some(next) = navigator.next(queue.entries(), current, &mut rng) {
+            assert!(visited.insert(next), "shuffle repeated after queue edit");
+            current = Some(next);
+        }
+
+        assert!(visited.contains(&added));
+        assert_eq!(visited.len(), queue.len() - 1);
+    }
+
+    #[test]
+    fn repeat_one_wins_over_an_available_next_entry() {
+        let queue = queue_with_three();
+        let next = queue.entries().last().map(|entry| entry.id);
+
+        assert_eq!(queue_end_action(true, next), QueueEndAction::RepeatCurrent);
+        assert_eq!(
+            queue_end_action(false, next),
+            QueueEndAction::Play(next.expect("next ID"))
+        );
+        assert_eq!(queue_end_action(false, None), QueueEndAction::Stop);
     }
 }

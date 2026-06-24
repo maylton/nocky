@@ -62,7 +62,10 @@ use lyrics_view::LyricsPresenter;
 use model::{Track, TrackData};
 use playback::{PlaybackEngine, PlaybackEvent};
 use player_view::{PlayerView, PlayerViewHandle};
-use queue_model::{PlaybackQueue, QueueEntryId, QueueMedia, QueueSnapshot, QueueSource};
+use queue_model::{
+    queue_end_action, PlaybackQueue, QueueEndAction, QueueEntryId, QueueMedia, QueueSnapshot,
+    QueueSource, ShuffleNavigator,
+};
 use reveal_bounce::RevealBounce;
 use settings_page::SettingsPage;
 use std::{
@@ -148,6 +151,7 @@ struct AppController {
     updating_progress: Cell<bool>,
     scanning: Cell<bool>,
     shuffle_enabled: Cell<bool>,
+    shuffle_navigation: RefCell<ShuffleNavigator>,
     rng_state: Cell<u64>,
     search_query: RefCell<String>,
     lyrics_pending: RefCell<HashSet<PathBuf>>,
@@ -699,6 +703,7 @@ impl AppController {
             updating_progress: Cell::new(false),
             scanning: Cell::new(false),
             shuffle_enabled: Cell::new(false),
+            shuffle_navigation: RefCell::new(ShuffleNavigator::default()),
             rng_state: Cell::new(seed),
             search_query: RefCell::new(String::new()),
             lyrics_pending: RefCell::new(HashSet::new()),
@@ -1185,6 +1190,7 @@ impl AppController {
                         controller.footer_shuffle_button.set_active(enabled);
                     }
                     controller.shuffle_enabled.set(enabled);
+                    controller.reset_shuffle_navigation(enabled);
                     controller.mpris.send(mpris::MprisUpdate::Shuffle(enabled));
                 }
             });
@@ -1833,13 +1839,11 @@ impl AppController {
             information.set_margin_start(10);
             information.set_margin_end(8);
 
-            let source_icon = gtk::Image::from_icon_name(match &entry.media.source {
-                QueueSource::Local { .. } => "drive-harddisk-symbolic",
-                QueueSource::YouTube { .. } => "video-display-symbolic",
-            });
-            source_icon.set_pixel_size(18);
-            source_icon.add_css_class("dim-label");
-            information.append(&source_icon);
+            // queue2_completion_core_v1: real artwork with fixed natural size.
+            let artwork = build_cover(42);
+            artwork.stack.add_css_class("queue2-cover");
+            artwork.set_path_immediate(entry.media.cover_path.as_deref());
+            information.append(&artwork.stack);
 
             let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
             text.set_hexpand(true);
@@ -4507,34 +4511,62 @@ impl AppController {
         }
     }
 
-    fn random_queue_entry_id(&self) -> Option<QueueEntryId> {
+    fn reset_shuffle_navigation(&self, enabled: bool) {
+        let mut rng = self.rng_state.get();
+
+        if enabled {
+            let queue = self.playback_queue_v2.borrow();
+            self.shuffle_navigation.borrow_mut().reset(
+                queue.entries(),
+                queue.current_id(),
+                &mut rng,
+            );
+        } else {
+            self.shuffle_navigation.borrow_mut().clear();
+        }
+
+        self.rng_state.set(rng);
+    }
+
+    fn next_queue_entry_id(&self) -> Option<QueueEntryId> {
         let queue = self.playback_queue_v2.borrow();
-        if queue.is_empty() {
-            return None;
-        }
-        if queue.len() == 1 {
-            return queue.entries().first().map(|entry| entry.id);
-        }
 
-        let current = queue.current_id();
-        let candidates = queue
-            .entries()
-            .iter()
-            .filter(|entry| Some(entry.id) != current)
-            .map(|entry| entry.id)
-            .collect::<Vec<_>>();
-        drop(queue);
-
-        if candidates.is_empty() {
-            return current;
+        if !self.shuffle_enabled.get() {
+            return match queue.current_index() {
+                Some(position) => queue.entries().get(position + 1).map(|entry| entry.id),
+                None => queue.entries().first().map(|entry| entry.id),
+            };
         }
 
-        let mut value = self.rng_state.get();
-        value ^= value << 13;
-        value ^= value >> 7;
-        value ^= value << 17;
-        self.rng_state.set(value);
-        candidates.get(value as usize % candidates.len()).copied()
+        let mut rng = self.rng_state.get();
+        let next = self.shuffle_navigation.borrow_mut().next(
+            queue.entries(),
+            queue.current_id(),
+            &mut rng,
+        );
+        self.rng_state.set(rng);
+        next
+    }
+
+    fn previous_queue_entry_id(&self) -> Option<QueueEntryId> {
+        let queue = self.playback_queue_v2.borrow();
+
+        if !self.shuffle_enabled.get() {
+            return queue
+                .current_index()
+                .and_then(|position| position.checked_sub(1))
+                .and_then(|position| queue.entries().get(position))
+                .map(|entry| entry.id);
+        }
+
+        let mut rng = self.rng_state.get();
+        let previous = self.shuffle_navigation.borrow_mut().previous(
+            queue.entries(),
+            queue.current_id(),
+            &mut rng,
+        );
+        self.rng_state.set(rng);
+        previous
     }
 
     fn play_queue_entry(&self, id: QueueEntryId, autoplay: bool) {
@@ -4670,22 +4702,15 @@ impl AppController {
         }
     }
 
-    fn next_track(&self) {
+    fn next_track(&self) -> bool {
         self.ensure_active_queue_v2();
 
-        let next = if self.shuffle_enabled.get() {
-            self.random_queue_entry_id()
-        } else {
-            let queue = self.playback_queue_v2.borrow();
-            match queue.current_index() {
-                Some(position) => queue.entries().get(position + 1).map(|entry| entry.id),
-                None => queue.entries().first().map(|entry| entry.id),
-            }
+        let Some(next) = self.next_queue_entry_id() else {
+            return false;
         };
 
-        if let Some(next) = next {
-            self.play_queue_entry(next, true);
-        }
+        self.play_queue_entry(next, true);
+        true
     }
 
     fn previous_track(&self) {
@@ -4695,15 +4720,8 @@ impl AppController {
         }
 
         self.ensure_active_queue_v2();
-        let (previous, has_current) = {
-            let queue = self.playback_queue_v2.borrow();
-            let previous = queue
-                .current_index()
-                .and_then(|position| position.checked_sub(1))
-                .and_then(|position| queue.entries().get(position))
-                .map(|entry| entry.id);
-            (previous, queue.current_id().is_some())
-        };
+        let previous = self.previous_queue_entry_id();
+        let has_current = self.playback_queue_v2.borrow().current_id().is_some();
 
         if let Some(previous) = previous {
             self.play_queue_entry(previous, true);
@@ -4769,30 +4787,27 @@ impl AppController {
 
     fn handle_end_of_stream(&self) {
         self.maybe_record_listening();
-
-        if self.repeat_button.is_active() {
-            self.seek_to(0, true);
-            self.play_current();
-            return;
-        }
-
         self.ensure_active_queue_v2();
-        let has_next = {
-            let queue = self.playback_queue_v2.borrow();
-            if self.shuffle_enabled.get() {
-                queue.len() > 1
-            } else {
-                queue.has_next()
-            }
+
+        let repeat_one = self.repeat_button.is_active();
+        let next = if repeat_one {
+            None
+        } else {
+            self.next_queue_entry_id()
         };
 
-        if has_next {
-            self.next_track();
-        } else {
-            let _ = self.player.pause();
-            self.update_play_icons(false);
-            self.mpris
-                .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Stopped));
+        match queue_end_action(repeat_one, next) {
+            QueueEndAction::RepeatCurrent => {
+                self.seek_to(0, true);
+                self.play_current();
+            }
+            QueueEndAction::Play(id) => self.play_queue_entry(id, true),
+            QueueEndAction::Stop => {
+                let _ = self.player.pause();
+                self.update_play_icons(false);
+                self.mpris
+                    .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Stopped));
+            }
         }
     }
 
@@ -4843,7 +4858,9 @@ impl AppController {
                     self.mpris
                         .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Stopped));
                 }
-                mpris::MprisCommand::Next => self.next_track(),
+                mpris::MprisCommand::Next => {
+                    self.next_track();
+                }
                 mpris::MprisCommand::Previous => self.previous_track(),
                 mpris::MprisCommand::Seek(offset) => {
                     let position = self.player.position_us().saturating_add(offset);
