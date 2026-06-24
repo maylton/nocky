@@ -11,6 +11,11 @@ use gtk::prelude::*;
 
 // nocky_rust_ui_phase3c_footer_now_playing_v1
 
+// nocky_footer_optical_alignment_metadata_width_v1
+
+const TITLE_MAX_WIDTH_CHARS: i32 = 22;
+const ARTIST_MAX_WIDTH_CHARS: i32 = 18;
+
 pub(crate) struct FooterNowPlayingParts {
     pub(crate) button: gtk::Button,
     pub(crate) title: gtk::Label,
@@ -34,6 +39,8 @@ pub(crate) fn build_footer_now_playing(
     title.add_css_class("now-title");
     title.add_css_class("footer-track-title");
     title.set_hexpand(true);
+    title.set_width_chars(-1);
+    title.set_max_width_chars(TITLE_MAX_WIDTH_CHARS);
 
     let favorite_icon = gtk::Image::from_icon_name("emblem-favorite-symbolic");
     favorite_icon.set_opacity(0.28);
@@ -53,7 +60,7 @@ pub(crate) fn build_footer_now_playing(
     artist.add_css_class("footer-track-artist");
     artist.set_hexpand(false);
     artist.set_width_chars(-1);
-    artist.set_max_width_chars(18);
+    artist.set_max_width_chars(ARTIST_MAX_WIDTH_CHARS);
 
     let source = gtk::Label::new(Some(tr(Message::SourceNone)));
     source.add_css_class("source-badge");
@@ -98,6 +105,8 @@ pub(crate) fn build_footer_now_playing(
     let button = gtk::Button::new();
     button.set_child(Some(&content));
     button.set_size_request(350, 56);
+    button.set_hexpand(false);
+    button.set_halign(gtk::Align::Start);
     button.add_css_class("flat");
     button.add_css_class("footer-now-playing-button");
     button.add_css_class("footer-info-card");
@@ -117,6 +126,12 @@ pub(crate) fn build_footer_now_playing(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn metadata_width_contract_is_stable() {
+        assert_eq!(TITLE_MAX_WIDTH_CHARS, 22);
+        assert_eq!(ARTIST_MAX_WIDTH_CHARS, 18);
+    }
 
     #[test]
     fn translated_copy_exists_for_every_supported_language() {

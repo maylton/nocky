@@ -21,7 +21,8 @@ const CANVAS_HEIGHT: i32 = 42;
 const CANVAS_X: f64 = 4.0;
 const REVEAL_DURATION_MS: u32 = 280;
 const GROUP_SPACING: i32 = 6;
-const GROUP_MARGIN_TOP: i32 = 8;
+// nocky_footer_optical_alignment_metadata_width_v1
+const GROUP_MARGIN_TOP: i32 = 0;
 const GROUP_WIDTH: i32 = 220;
 const GROUP_HEIGHT: i32 = 56;
 
@@ -137,7 +138,7 @@ mod tests {
         assert_eq!(CANVAS_X, 4.0);
         assert_eq!(REVEAL_DURATION_MS, 280);
         assert_eq!((GROUP_WIDTH, GROUP_HEIGHT), (220, 56));
-        assert_eq!((GROUP_SPACING, GROUP_MARGIN_TOP), (6, 8));
+        assert_eq!((GROUP_SPACING, GROUP_MARGIN_TOP), (6, 0));
     }
 
     #[test]
