@@ -1,3 +1,4 @@
+// collection_pages_2_v2
 // queue_collection_cover_fallback_v1
 // preserve_home_carousel_scroll_v1
 // collection_card_inline_loading_fix_v2
@@ -4213,6 +4214,12 @@ impl AppController {
                 BrowserEvent::PlayYouTubePlaylist(item) => {
                     self.play_youtube_collection(item, true);
                 }
+                BrowserEvent::ShuffleLocalCollection { kind, title } => {
+                    self.play_local_collection_shuffled(&kind, &title);
+                }
+                BrowserEvent::ShuffleYouTubeCollection { item, playlist } => {
+                    self.play_youtube_collection_shuffled(item, playlist);
+                }
                 BrowserEvent::OpenYouTubePlaylist(item) => {
                     self.load_youtube_playlist_for_browser(item);
                 }
@@ -4432,6 +4439,116 @@ impl AppController {
             });
         self.pending_resume_position_us.set(None);
         self.resolve_youtube_track(items[0].clone(), items, 0, false);
+    }
+
+    fn play_local_collection_shuffled(&self, kind: &str, title: &str) {
+        let mut indices = if kind == "playlist" {
+            let paths = self
+                .config
+                .borrow()
+                .playlist(title)
+                .map(|playlist| playlist.tracks.clone())
+                .unwrap_or_default();
+            let state = self.state.borrow();
+            paths
+                .iter()
+                .filter_map(|path| state.tracks.iter().position(|track| &track.path == path))
+                .collect::<Vec<_>>()
+        } else {
+            let state = self.state.borrow();
+            state
+                .tracks
+                .iter()
+                .enumerate()
+                .filter_map(|(index, track)| {
+                    track.album.eq_ignore_ascii_case(title).then_some(index)
+                })
+                .collect::<Vec<_>>()
+        };
+
+        self.shuffle_slice(&mut indices);
+        let Some(first) = indices.first().copied() else {
+            self.show_toast("Esta coleção ainda não possui faixas reproduzíveis");
+            return;
+        };
+
+        self.listening_history_context
+            .replace(listening_history::PlaybackHistoryContext {
+                kind: kind.to_string(),
+                id: title.to_lowercase(),
+                title: title.to_string(),
+            });
+        self.pending_resume_position_us.set(None);
+        self.state.borrow_mut().playback_queue = indices.clone();
+        self.sync_local_queue_v2(&indices, first);
+        self.select_track(first, true);
+    }
+
+    fn play_youtube_collection_shuffled(&self, item: YouTubeItem, playlist: bool) {
+        let mut items = {
+            let library = self.youtube_library.borrow();
+            if playlist {
+                library
+                    .playlist_tracks
+                    .get(&item.browse_id)
+                    .cloned()
+                    .unwrap_or_default()
+            } else {
+                let key = youtube_collection_key("album", &item.title);
+                library
+                    .collection_tracks
+                    .get(&key)
+                    .cloned()
+                    .unwrap_or_default()
+            }
+        };
+
+        items.retain(YouTubeItem::playable);
+        if items.is_empty() {
+            self.show_toast("Carregue a coleção antes de embaralhar");
+            self.play_youtube_collection(item, playlist);
+            return;
+        }
+
+        self.shuffle_slice(&mut items);
+        let kind = if playlist { "playlist" } else { "album" };
+        let id = if item.browse_id.trim().is_empty() {
+            item.title.to_lowercase()
+        } else {
+            item.browse_id.clone()
+        };
+        self.listening_history_context
+            .replace(listening_history::PlaybackHistoryContext {
+                kind: kind.to_string(),
+                id,
+                title: item.title,
+            });
+        self.pending_resume_position_us.set(None);
+        self.resolve_youtube_track(items[0].clone(), items, 0, false);
+    }
+
+    fn next_random_u64(&self) -> u64 {
+        let mut state = self.rng_state.get();
+        if state == 0 {
+            state = 0x9E37_79B9_7F4A_7C15;
+        }
+
+        state ^= state >> 12;
+        state ^= state << 25;
+        state ^= state >> 27;
+        self.rng_state.set(state);
+
+        state.wrapping_mul(0x2545_F491_4F6C_DD1D)
+    }
+
+    fn shuffle_slice<T>(&self, items: &mut [T]) {
+        if items.len() < 2 {
+            return;
+        }
+        for index in (1..items.len()).rev() {
+            let random = self.next_random_u64() as usize;
+            items.swap(index, random % (index + 1));
+        }
     }
 
     fn current_track_path(&self) -> Option<PathBuf> {

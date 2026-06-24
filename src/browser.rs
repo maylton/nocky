@@ -1,3 +1,4 @@
+// collection_pages_2_v2
 // restore_circular_artist_covers_v2
 // preserve_home_carousel_scroll_v1
 // collection_card_inline_loading_fix_v2
@@ -100,6 +101,14 @@ pub enum BrowserEvent {
     PlayLocalPlaylist(String),
     PlayYouTubeAlbum(YouTubeItem),
     PlayYouTubePlaylist(YouTubeItem),
+    ShuffleLocalCollection {
+        kind: String,
+        title: String,
+    },
+    ShuffleYouTubeCollection {
+        item: YouTubeItem,
+        playlist: bool,
+    },
     OpenYouTubePlaylist(YouTubeItem),
     OpenYouTubeCollection(YouTubeItem),
     LoadMoreAlbums,
@@ -431,6 +440,7 @@ pub struct LibraryBrowser {
     search_artist_limit: Rc<Cell<usize>>,
     search_playlist_limit: Rc<Cell<usize>>,
     queue: gtk::ListBox,
+    collection_header_host: gtk::Box,
     queue_title: gtk::Label,
     albums_grid: gtk::FlowBox,
     artists_grid: gtk::FlowBox,
@@ -583,6 +593,10 @@ impl LibraryBrowser {
             });
         }
 
+        let collection_header_host = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        collection_header_host.set_hexpand(true);
+        collection_header_host.add_css_class("collection-page-header-host");
+
         let queue_title = gtk::Label::new(Some("BIBLIOTECA"));
         queue_title.set_xalign(0.0);
         queue_title.add_css_class("section-title");
@@ -597,6 +611,7 @@ impl LibraryBrowser {
         tracks_page.set_vexpand(true);
         tracks_page.add_css_class("library-panel");
         tracks_page.add_css_class("expressive-library-page");
+        tracks_page.append(&collection_header_host);
         tracks_page.append(&queue_title);
         tracks_page.append(&queue_scroll);
 
@@ -774,6 +789,7 @@ impl LibraryBrowser {
             search_artist_limit,
             search_playlist_limit,
             queue,
+            collection_header_host,
             queue_title,
             albums_grid,
             artists_grid,
@@ -852,7 +868,7 @@ impl LibraryBrowser {
                 self.root.set_visible_child_name("home");
             }
             route => {
-                self.rebuild_queue(tracks, config, youtube, query, &route);
+                self.rebuild_queue(tracks, config, youtube, context.playback, query, &route);
                 self.root.set_visible_child_name("tracks");
             }
         }
@@ -1087,17 +1103,42 @@ impl LibraryBrowser {
         ));
     }
 
+    fn rebuild_collection_header(
+        &self,
+        tracks: &[Track],
+        config: &AppConfig,
+        youtube: &YouTubeLibraryCache,
+        playback: &BrowserPlaybackState,
+        route: &BrowserRoute,
+    ) {
+        while let Some(child) = self.collection_header_host.first_child() {
+            self.collection_header_host.remove(&child);
+        }
+
+        let Some(header) =
+            collection_page_header_v2(tracks, config, youtube, playback, route, &self.event_tx)
+        else {
+            self.collection_header_host.set_visible(false);
+            return;
+        };
+
+        self.collection_header_host.set_visible(true);
+        self.collection_header_host.append(&header);
+    }
+
     fn rebuild_queue(
         &self,
         tracks: &[Track],
         config: &AppConfig,
         youtube: &YouTubeLibraryCache,
+        playback: &BrowserPlaybackState,
         query: &str,
         route: &BrowserRoute,
     ) {
         let render_token = self.queue_render_generation.get().wrapping_add(1);
         self.queue_render_generation.set(render_token);
         clear_list_box(&self.queue);
+        self.rebuild_collection_header(tracks, config, youtube, playback, route);
 
         let effective_query = match route {
             BrowserRoute::Album(_)
@@ -3839,6 +3880,475 @@ fn home_card_button(
     }
 
     overlay.upcast()
+}
+
+fn collection_page_header_v2(
+    tracks: &[Track],
+    config: &AppConfig,
+    youtube: &YouTubeLibraryCache,
+    playback: &BrowserPlaybackState,
+    route: &BrowserRoute,
+    event_tx: &Sender<BrowserEvent>,
+) -> Option<gtk::Widget> {
+    let language = config.language;
+
+    let (
+        title,
+        subtitle,
+        kind,
+        id,
+        cover_path,
+        track_count,
+        duration_seconds,
+        play_event,
+        play_next_event,
+        append_event,
+        shuffle_event,
+        loading,
+    ) = match route {
+        BrowserRoute::Album(title) => {
+            let album_tracks = tracks
+                .iter()
+                .filter(|track| track.album.eq_ignore_ascii_case(title))
+                .collect::<Vec<_>>();
+            let cover = album_tracks
+                .iter()
+                .find_map(|track| track.cover_path.as_deref())
+                .map(Path::to_path_buf);
+            let artist = album_tracks
+                .first()
+                .map(|track| track.artist.clone())
+                .unwrap_or_default();
+            let duration = album_tracks
+                .iter()
+                .map(|track| track.duration_seconds)
+                .sum();
+            (
+                title.clone(),
+                artist,
+                "album",
+                title.to_lowercase(),
+                cover,
+                album_tracks.len(),
+                duration,
+                BrowserEvent::PlayLocalAlbum(title.clone()),
+                BrowserEvent::QueueLocalCollection {
+                    kind: "album".to_string(),
+                    title: title.clone(),
+                    play_next: true,
+                },
+                BrowserEvent::QueueLocalCollection {
+                    kind: "album".to_string(),
+                    title: title.clone(),
+                    play_next: false,
+                },
+                BrowserEvent::ShuffleLocalCollection {
+                    kind: "album".to_string(),
+                    title: title.clone(),
+                },
+                false,
+            )
+        }
+        BrowserRoute::Playlist(title) => {
+            let paths = config
+                .playlist(title)
+                .map(|playlist| playlist.tracks.clone())
+                .unwrap_or_default();
+            let playlist_tracks = paths
+                .iter()
+                .filter_map(|path| tracks.iter().find(|track| &track.path == path))
+                .collect::<Vec<_>>();
+            let cover = playlist_tracks
+                .iter()
+                .find_map(|track| track.cover_path.as_deref())
+                .map(Path::to_path_buf);
+            let duration = playlist_tracks
+                .iter()
+                .map(|track| track.duration_seconds)
+                .sum();
+            (
+                title.clone(),
+                localized_collection_type(language, true),
+                "playlist",
+                title.to_lowercase(),
+                cover,
+                playlist_tracks.len(),
+                duration,
+                BrowserEvent::PlayLocalPlaylist(title.clone()),
+                BrowserEvent::QueueLocalCollection {
+                    kind: "playlist".to_string(),
+                    title: title.clone(),
+                    play_next: true,
+                },
+                BrowserEvent::QueueLocalCollection {
+                    kind: "playlist".to_string(),
+                    title: title.clone(),
+                    play_next: false,
+                },
+                BrowserEvent::ShuffleLocalCollection {
+                    kind: "playlist".to_string(),
+                    title: title.clone(),
+                },
+                false,
+            )
+        }
+        BrowserRoute::YouTubeAlbum(title) => {
+            let entry = youtube
+                .albums
+                .iter()
+                .find(|entry| entry.title.eq_ignore_ascii_case(title));
+            let item = entry
+                .map(|entry| entry.source.clone())
+                .or_else(|| {
+                    youtube
+                        .suggested_albums
+                        .iter()
+                        .find(|item| item.title.eq_ignore_ascii_case(title))
+                        .cloned()
+                })
+                .unwrap_or_else(|| YouTubeItem {
+                    result_type: "album".to_string(),
+                    title: title.clone(),
+                    ..YouTubeItem::default()
+                });
+            let key = youtube_collection_key("album", title);
+            let items = youtube
+                .collection_tracks
+                .get(&key)
+                .cloned()
+                .unwrap_or_default();
+            let cover = entry
+                .and_then(|entry| entry.cached_cover().map(Path::to_path_buf))
+                .or_else(|| item.cached_cover().map(Path::to_path_buf));
+            let subtitle = if item.artist.trim().is_empty() {
+                item.subtitle.clone()
+            } else {
+                item.artist.clone()
+            };
+            let duration = items.iter().map(|track| track.duration_seconds).sum();
+            (
+                title.clone(),
+                subtitle,
+                "album",
+                if item.browse_id.trim().is_empty() {
+                    title.to_lowercase()
+                } else {
+                    item.browse_id.clone()
+                },
+                cover,
+                items.len(),
+                duration,
+                BrowserEvent::PlayYouTubeAlbum(item.clone()),
+                BrowserEvent::QueueYouTubeCollection {
+                    item: item.clone(),
+                    playlist: false,
+                    play_next: true,
+                },
+                BrowserEvent::QueueYouTubeCollection {
+                    item: item.clone(),
+                    playlist: false,
+                    play_next: false,
+                },
+                BrowserEvent::ShuffleYouTubeCollection {
+                    item,
+                    playlist: false,
+                },
+                youtube.collection_loading.contains(&key),
+            )
+        }
+        BrowserRoute::YouTubePlaylist { title, browse_id } => {
+            let item = youtube
+                .playlists
+                .iter()
+                .chain(youtube.library.iter())
+                .find(|item| {
+                    (!browse_id.trim().is_empty() && item.browse_id == *browse_id)
+                        || item.title.eq_ignore_ascii_case(title)
+                })
+                .cloned()
+                .unwrap_or_else(|| YouTubeItem {
+                    result_type: "playlist".to_string(),
+                    title: title.clone(),
+                    browse_id: browse_id.clone(),
+                    ..YouTubeItem::default()
+                });
+            let items = youtube
+                .playlist_tracks
+                .get(browse_id)
+                .cloned()
+                .unwrap_or_default();
+            let duration = items.iter().map(|track| track.duration_seconds).sum();
+            (
+                title.clone(),
+                if item.subtitle.trim().is_empty() {
+                    localized_collection_type(language, true)
+                } else {
+                    item.subtitle.clone()
+                },
+                "playlist",
+                if browse_id.trim().is_empty() {
+                    title.to_lowercase()
+                } else {
+                    browse_id.clone()
+                },
+                item.cached_cover().map(Path::to_path_buf),
+                items.len(),
+                duration,
+                BrowserEvent::PlayYouTubePlaylist(item.clone()),
+                BrowserEvent::QueueYouTubeCollection {
+                    item: item.clone(),
+                    playlist: true,
+                    play_next: true,
+                },
+                BrowserEvent::QueueYouTubeCollection {
+                    item: item.clone(),
+                    playlist: true,
+                    play_next: false,
+                },
+                BrowserEvent::ShuffleYouTubeCollection {
+                    item,
+                    playlist: true,
+                },
+                youtube.playlist_loading.contains(browse_id),
+            )
+        }
+        _ => return None,
+    };
+
+    let active = playback.matches_collection(kind, &id, &title);
+    let playing = active && playback.playing;
+    let artwork = collection_header_artwork(cover_path.as_deref(), kind);
+
+    let title_label = gtk::Label::new(Some(&title));
+    title_label.set_xalign(0.0);
+    title_label.set_wrap(true);
+    title_label.add_css_class("collection-page-title");
+
+    let subtitle_label = gtk::Label::new(Some(&subtitle));
+    subtitle_label.set_xalign(0.0);
+    subtitle_label.set_wrap(true);
+    subtitle_label.add_css_class("collection-page-subtitle");
+    subtitle_label.add_css_class("dim-label");
+
+    let stats = gtk::Label::new(Some(&localized_collection_stats(
+        language,
+        track_count,
+        duration_seconds,
+    )));
+    stats.set_xalign(0.0);
+    stats.add_css_class("collection-page-stats");
+    stats.add_css_class("dim-label");
+
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 5);
+    text.set_hexpand(true);
+    text.set_valign(gtk::Align::End);
+    text.append(&title_label);
+    if !subtitle.trim().is_empty() {
+        text.append(&subtitle_label);
+    }
+    text.append(&stats);
+
+    let primary = gtk::Button::new();
+    primary.add_css_class("suggested-action");
+    primary.add_css_class("collection-page-primary-action");
+    primary.set_tooltip_text(Some(if playing {
+        localized_pause(language)
+    } else {
+        localized_play(language)
+    }));
+
+    if loading {
+        let spinner = gtk::Spinner::new();
+        spinner.set_spinning(true);
+        spinner.set_size_request(20, 20);
+        primary.set_child(Some(&spinner));
+        primary.set_sensitive(false);
+    } else {
+        let icon = gtk::Image::from_icon_name(if playing {
+            "media-playback-pause-symbolic"
+        } else {
+            "media-playback-start-symbolic"
+        });
+        icon.set_pixel_size(20);
+        primary.set_child(Some(&icon));
+        let sender = event_tx.clone();
+        let event = if active {
+            BrowserEvent::TogglePlayback
+        } else {
+            play_event
+        };
+        primary.connect_clicked(move |_| {
+            let _ = sender.send(event.clone());
+        });
+    }
+
+    let next = collection_header_action(
+        "media-skip-forward-symbolic",
+        localized_play_next(language),
+        play_next_event,
+        event_tx,
+    );
+    let append = collection_header_action(
+        "list-add-symbolic",
+        localized_add_queue(language),
+        append_event,
+        event_tx,
+    );
+    let shuffle = collection_header_action(
+        "media-playlist-shuffle-symbolic",
+        localized_shuffle(language),
+        shuffle_event,
+        event_tx,
+    );
+
+    let actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    actions.add_css_class("collection-page-actions");
+    actions.append(&primary);
+    actions.append(&shuffle);
+    actions.append(&next);
+    actions.append(&append);
+
+    let details = gtk::Box::new(gtk::Orientation::Vertical, 14);
+    details.set_hexpand(true);
+    details.set_valign(gtk::Align::End);
+    details.append(&text);
+    details.append(&actions);
+
+    let header = gtk::Box::new(gtk::Orientation::Horizontal, 22);
+    header.set_hexpand(true);
+    header.add_css_class("collection-page-header-v2");
+    header.append(&artwork);
+    header.append(&details);
+
+    Some(header.upcast())
+}
+
+fn collection_header_artwork(path: Option<&Path>, kind: &str) -> gtk::Stack {
+    let placeholder = gtk::Image::from_icon_name(if kind == "playlist" {
+        "view-list-symbolic"
+    } else {
+        "media-optical-symbolic"
+    });
+    placeholder.set_pixel_size(48);
+    placeholder.add_css_class("cover-icon");
+
+    let picture = gtk::Picture::new();
+    picture.set_content_fit(gtk::ContentFit::Cover);
+    picture.set_size_request(184, 184);
+
+    let stack = gtk::Stack::new();
+    stack.set_size_request(184, 184);
+    stack.set_overflow(gtk::Overflow::Hidden);
+    stack.add_css_class("collection-page-artwork");
+    stack.add_named(&placeholder, Some("placeholder"));
+    stack.add_named(&picture, Some("picture"));
+
+    if let Some(path) = path.filter(|path| path.is_file()) {
+        if let Some(texture) = cached_square_texture(path, 216) {
+            picture.set_paintable(Some(&texture));
+            stack.set_visible_child_name("picture");
+        } else {
+            stack.set_visible_child_name("placeholder");
+        }
+    } else {
+        stack.set_visible_child_name("placeholder");
+    }
+
+    stack
+}
+
+fn collection_header_action(
+    icon_name: &str,
+    tooltip: &str,
+    event: BrowserEvent,
+    event_tx: &Sender<BrowserEvent>,
+) -> gtk::Button {
+    let icon = gtk::Image::from_icon_name(icon_name);
+    icon.set_pixel_size(18);
+    let button = gtk::Button::new();
+    button.set_child(Some(&icon));
+    button.add_css_class("collection-page-secondary-action");
+    button.set_tooltip_text(Some(tooltip));
+    let sender = event_tx.clone();
+    button.connect_clicked(move |_| {
+        let _ = sender.send(event.clone());
+    });
+    button
+}
+
+fn localized_collection_stats(
+    language: AppLanguage,
+    count: usize,
+    duration_seconds: u64,
+) -> String {
+    let tracks = match language {
+        AppLanguage::Portuguese => {
+            format!("{count} {}", if count == 1 { "faixa" } else { "faixas" })
+        }
+        AppLanguage::English => {
+            format!("{count} {}", if count == 1 { "track" } else { "tracks" })
+        }
+        AppLanguage::Spanish => {
+            format!("{count} {}", if count == 1 { "pista" } else { "pistas" })
+        }
+    };
+    let minutes = duration_seconds / 60;
+    if minutes == 0 {
+        tracks
+    } else {
+        format!("{tracks} • {minutes} min")
+    }
+}
+
+fn localized_collection_type(language: AppLanguage, playlist: bool) -> String {
+    match (language, playlist) {
+        (AppLanguage::Portuguese, true) => "Playlist".to_string(),
+        (AppLanguage::English, true) => "Playlist".to_string(),
+        (AppLanguage::Spanish, true) => "Playlist".to_string(),
+        (AppLanguage::Portuguese, false) => "Álbum".to_string(),
+        (AppLanguage::English, false) => "Album".to_string(),
+        (AppLanguage::Spanish, false) => "Álbum".to_string(),
+    }
+}
+
+fn localized_play(language: AppLanguage) -> &'static str {
+    match language {
+        AppLanguage::Portuguese => "Reproduzir",
+        AppLanguage::English => "Play",
+        AppLanguage::Spanish => "Reproducir",
+    }
+}
+
+fn localized_pause(language: AppLanguage) -> &'static str {
+    match language {
+        AppLanguage::Portuguese => "Pausar",
+        AppLanguage::English => "Pause",
+        AppLanguage::Spanish => "Pausar",
+    }
+}
+
+fn localized_shuffle(language: AppLanguage) -> &'static str {
+    match language {
+        AppLanguage::Portuguese => "Embaralhar",
+        AppLanguage::English => "Shuffle",
+        AppLanguage::Spanish => "Mezclar",
+    }
+}
+
+fn localized_play_next(language: AppLanguage) -> &'static str {
+    match language {
+        AppLanguage::Portuguese => "Reproduzir em seguida",
+        AppLanguage::English => "Play next",
+        AppLanguage::Spanish => "Reproducir a continuación",
+    }
+}
+
+fn localized_add_queue(language: AppLanguage) -> &'static str {
+    match language {
+        AppLanguage::Portuguese => "Adicionar ao fim da fila",
+        AppLanguage::English => "Add to queue",
+        AppLanguage::Spanish => "Añadir al final de la cola",
+    }
 }
 
 fn home_empty_card(language: AppLanguage) -> gtk::Box {

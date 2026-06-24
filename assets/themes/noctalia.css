@@ -120,3 +120,68 @@ window.theme-noctalia
 .collection-card.artist-collection-card .collection-artwork image {
   border-radius: 999px;
 }
+
+/* collection_pages_2_v2 */
+.collection-page-header-host:empty {
+  min-height: 0;
+}
+
+.collection-page-header-v2 {
+  padding: 22px;
+  border-radius: 28px;
+  background-color: alpha(@m3_surface_container, 0.90);
+  border: 1px solid alpha(@m3_outline, 0.20);
+  box-shadow: 0 8px 24px alpha(black, 0.16);
+}
+
+.collection-page-artwork {
+  min-width: 184px;
+  min-height: 184px;
+  border-radius: 24px;
+  background-color: @m3_surface_container_high;
+  box-shadow:
+    inset 0 0 0 1px alpha(@m3_outline, 0.22),
+    0 8px 22px alpha(black, 0.22);
+}
+
+.collection-page-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: @m3_on_surface;
+}
+
+.collection-page-subtitle {
+  font-size: 15px;
+}
+
+.collection-page-stats {
+  font-size: 13px;
+}
+
+.collection-page-actions {
+  min-height: 44px;
+}
+
+.collection-page-primary-action,
+.collection-page-secondary-action {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.collection-page-primary-action {
+  min-width: 58px;
+}
+
+.collection-page-secondary-action {
+  background-color: alpha(@m3_surface_container_high, 0.94);
+  color: @m3_on_surface;
+  border: 1px solid alpha(@m3_outline, 0.24);
+}
+
+.collection-page-secondary-action:hover {
+  background-color: @m3_primary_container;
+  color: @m3_on_primary_container;
+  border-color: alpha(@m3_primary, 0.42);
+}
