@@ -1,0 +1,283 @@
+/* nocky_css_compact_volume_module_phase2f_v2 */
+
+/*
+ * Compact footer volume component
+ * -------------------------------
+ *
+ * Geometry animation remains owned by Rust. This module contains the
+ * complete Material presentation previously split between Home and
+ * footer modules.
+ */
+
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-utility-group {
+  transition:
+    background-color 180ms ease-out,
+    border-color 180ms ease-out,
+    box-shadow 200ms ease-out;
+}
+
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-utility-group.volume-expanded {
+  background-color: @m3_surface_container_highest;
+  border-color: alpha(@m3_primary, 0.34);
+  box-shadow:
+    0 8px 20px alpha(black, 0.18),
+    0 0 0 2px alpha(@m3_primary, 0.07);
+}
+
+window.theme-material-expressive
+  .footer-mode-compact
+  button.footer-utility-action.volume-panel-open {
+  color: @m3_primary;
+  background-color: alpha(@m3_primary, 0.14);
+  border-radius: 21px;
+}
+
+/* nocky_compact_volume_thickness_match_v1 */
+
+/*
+ * Match the compact volume control to the playback progress thickness.
+ * Both tracks use a 5 px capsule; the smaller thumb keeps the volume
+ * control from looking visually heavier than the progress bar.
+ */
+window.theme-material-expressive
+  .footer-volume-revealer
+  scale.footer-volume-control trough,
+window.theme-material-expressive
+  .footer-volume-revealer
+  scale.footer-volume-control trough highlight {
+  min-height: 5px;
+  border-radius: 3px;
+}
+
+window.theme-material-expressive
+  .footer-volume-revealer
+  scale.footer-volume-control slider {
+  min-width: 12px;
+  min-height: 12px;
+  border-radius: 6px;
+  border-width: 1px;
+  margin: 0;
+}
+window.theme-material-expressive
+  .footer-volume-revealer
+  scale.footer-volume-control {
+  min-width: 96px;
+  margin-left: 4px;
+  margin-right: 4px;
+}
+
+window.theme-material-expressive
+  .footer-volume-revealer
+  scale.footer-volume-control slider {
+  min-width: 12px;
+  min-height: 12px;
+  border-radius: 6px;
+  border-width: 1px;
+}
+window.theme-material-expressive
+  .footer-volume-fixed-slot
+  scale.footer-volume-control {
+  min-width: 96px;
+  min-height: 42px;
+  margin: 0;
+  padding: 0;
+}
+
+window.theme-material-expressive
+  .footer-volume-revealer {
+  min-width: 0;
+  padding: 0;
+}
+
+/* nocky_md3_volume_slider_right_v1 */
+
+/*
+ * Material 3 compact volume control:
+ * - thin rounded track
+ * - primary active segment
+ * - quiet inactive segment
+ * - small circular thumb
+ * - no classic GTK bevel or oversized handle
+ */
+window.theme-material-expressive
+  .footer-volume-fixed-slot {
+  min-width: 124px;
+  min-height: 42px;
+  padding: 0;
+}
+
+window.theme-material-expressive
+  .footer-volume-fixed-slot
+  scale.footer-volume-md3 {
+  min-width: 116px;
+  min-height: 42px;
+  margin: 0;
+  padding: 0;
+  color: @m3_primary;
+}
+
+window.theme-material-expressive
+  .footer-volume-fixed-slot
+  scale.footer-volume-md3
+  trough {
+  min-height: 5px;
+  border-radius: 999px;
+  border: none;
+  background-color: alpha(@m3_on_surface_variant, 0.22);
+  background-image: none;
+  box-shadow: none;
+}
+
+window.theme-material-expressive
+  .footer-volume-fixed-slot
+  scale.footer-volume-md3
+  trough
+  highlight {
+  min-height: 5px;
+  border-radius: 999px;
+  border: none;
+  background-color: @m3_primary;
+  background-image: none;
+  box-shadow: none;
+}
+
+window.theme-material-expressive
+  .footer-volume-fixed-slot
+  scale.footer-volume-md3
+  trough
+  slider {
+  min-width: 10px;
+  min-height: 10px;
+  margin: 0;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid @m3_surface_container_highest;
+  color: @m3_primary;
+  background-color: @m3_primary;
+  background-image: none;
+  box-shadow: 0 1px 4px alpha(black, 0.22);
+}
+
+window.theme-material-expressive
+  .footer-volume-fixed-slot
+  scale.footer-volume-md3:hover
+  trough
+  slider {
+  background-color: shade(@m3_primary, 1.07);
+  box-shadow:
+    0 1px 4px alpha(black, 0.22),
+    0 0 0 4px alpha(@m3_primary, 0.10);
+}
+
+window.theme-material-expressive
+  .footer-volume-fixed-slot
+  scale.footer-volume-md3:focus
+  trough
+  slider,
+window.theme-material-expressive
+  .footer-volume-fixed-slot
+  scale.footer-volume-md3:focus-visible
+  trough
+  slider {
+  box-shadow:
+    0 1px 4px alpha(black, 0.22),
+    0 0 0 5px alpha(@m3_primary, 0.14);
+}
+
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-utility-group.volume-expanded {
+  padding-right: 8px;
+}
+
+/* nocky_compact_volume_light_spring_v1 */
+
+/*
+ * The geometry spring is driven frame-by-frame in Rust. CSS only adds a
+ * subtle tonal response while the utility card overshoots and settles.
+ */
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-utility-group.volume-spring-active {
+  border-color: alpha(@m3_primary, 0.42);
+  box-shadow:
+    0 9px 22px alpha(black, 0.20),
+    0 0 0 2px alpha(@m3_primary, 0.09);
+}
+
+/* nocky_compact_volume_capsule_geometry_v2 */
+
+/*
+ * Keep only the outer capsule geometry.
+ *
+ * Button dimensions are intentionally left to the previous compact-volume
+ * implementation. Forcing them to 42×42 px widened the collapsed card and
+ * recreated the empty space that had already been fixed.
+ */
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-utility-group {
+  border-radius: 26px;
+  background-clip: padding-box;
+}
+
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-utility-group.volume-expanded,
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-utility-group.volume-spring-active {
+  border-radius: 26px;
+}
+
+/* nocky_custom_md3_volume_canvas_v2 */
+
+/*
+ * The visible MD3 volume control is custom-drawn. GtkScale stays unparented
+ * as the shared volume model, so no GtkScale slider gadget is compressed
+ * during the reveal animation.
+ */
+window.theme-material-expressive
+  .footer-volume-md3-canvas {
+  min-width: 116px;
+  min-height: 42px;
+  padding: 0;
+  margin: 0;
+  color: @m3_primary;
+  background-color: transparent;
+  background-image: none;
+}
+
+window.theme-material-expressive
+  .footer-volume-md3-canvas:hover {
+  background-color: alpha(@m3_primary, 0.035);
+  border-radius: 21px;
+}
+
+/* nocky_compact_volume_optical_edge_alignment_v1 */
+
+/*
+ * Optical alignment for the collapsed compact utility card.
+ *
+ * The geometry is mathematically symmetric, but the circular volume button
+ * reads slightly farther from the outer capsule on the right. Reduce only
+ * the collapsed right inset by 2 px. The expanded state keeps its own larger
+ * right padding for the MD3 slider.
+ */
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-utility-group:not(.volume-expanded) {
+  padding-left: 5px;
+  padding-right: 3px;
+}
+
+window.theme-material-expressive
+  .footer-mode-compact
+  .footer-utility-group:not(.volume-expanded)
+  button.footer-utility-action:last-child {
+  margin-right: 0;
+}

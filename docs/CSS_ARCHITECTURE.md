@@ -104,3 +104,12 @@ moved in the opposite direction.
 
 An obsolete scrollbar hover rule was removed. Final declarations for every
 moved selector were compared before and after the refactor.
+
+## Phase 2F — Compact volume component boundary
+
+The compact-footer volume presentation now lives in
+`085-compact-volume.css`, loaded between Home and footer metadata modules.
+
+The move preserves the original cascade order. Fully superseded duplicate
+rules for the revealer, legacy GtkScale payload and fixed slot were pruned only
+after exact-selector cascade comparison.
