@@ -1,3 +1,6 @@
+// smooth_home_crossfade_v1
+// recent_album_cover_resolution_v1
+// recent_activity_exact_fix_v1
 // merge_recent_activity_sources_v1
 // personalized_home_resume_v2
 use crate::{
@@ -111,7 +114,10 @@ enum HomeHistoryTrack {
     },
     LocalAlbum(String),
     LocalPlaylist(String),
-    YouTubeAlbum(YouTubeItem),
+    YouTubeAlbum {
+        item: YouTubeItem,
+        cover_path: Option<PathBuf>,
+    },
     YouTubePlaylist(YouTubeItem),
 }
 
@@ -354,7 +360,8 @@ fn home_youtube_playlist_subtitle(item: &YouTubeItem, language: AppLanguage) -> 
 
 pub struct LibraryBrowser {
     root: gtk::Stack,
-    home_content: gtk::Box,
+    home_stack: gtk::Stack,
+    home_generation: Rc<Cell<u64>>,
     search_content: gtk::Box,
     last_search_query: RefCell<String>,
     search_track_limit: Rc<Cell<usize>>,
@@ -387,12 +394,22 @@ impl LibraryBrowser {
         let playlist_names = Rc::new(RefCell::new(Vec::new()));
         let playlist_row_refs = Rc::new(RefCell::new(Vec::new()));
 
+        let home_generation = Rc::new(Cell::new(0_u64));
+        let home_stack = gtk::Stack::new();
+        home_stack.set_hexpand(true);
+        home_stack.set_vexpand(false);
+        home_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
+        home_stack.set_transition_duration(180);
+        home_stack.set_interpolate_size(true);
+
         let home_content = gtk::Box::new(gtk::Orientation::Vertical, 22);
         home_content.set_hexpand(true);
         home_content.set_vexpand(false);
         // material_expressive_library_cards_v1
         home_content.add_css_class("library-home");
         home_content.add_css_class("expressive-library-home");
+        home_stack.add_named(&home_content, Some("home-0"));
+        home_stack.set_visible_child_name("home-0");
 
         let search_content = gtk::Box::new(gtk::Orientation::Vertical, 22);
         search_content.set_hexpand(true);
@@ -414,7 +431,7 @@ impl LibraryBrowser {
         let home_scroll = gtk::ScrolledWindow::new();
         home_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
         home_scroll.set_vexpand(true);
-        home_scroll.set_child(Some(&home_content));
+        home_scroll.set_child(Some(&home_stack));
 
         let queue = gtk::ListBox::new();
         queue.set_selection_mode(gtk::SelectionMode::Single);
@@ -639,7 +656,8 @@ impl LibraryBrowser {
 
         Self {
             root,
-            home_content,
+            home_stack,
+            home_generation,
             search_content,
             last_search_query: RefCell::new(String::new()),
             search_track_limit,
@@ -1384,9 +1402,11 @@ impl LibraryBrowser {
         let card_effects = config.visual_theme == VisualTheme::MaterialExpressive
             && config.expressive_home_card_effects;
 
-        while let Some(child) = self.home_content.first_child() {
-            self.home_content.remove(&child);
-        }
+        let next_home = gtk::Box::new(gtk::Orientation::Vertical, 22);
+        next_home.set_hexpand(true);
+        next_home.set_vexpand(false);
+        next_home.add_css_class("library-home");
+        next_home.add_css_class("expressive-library-home");
 
         let mixes = youtube
             .playlists
@@ -1403,7 +1423,7 @@ impl LibraryBrowser {
             .take(12)
             .map(HomeCard::YouTubePlaylist)
             .collect::<Vec<_>>();
-        self.home_content.append(&home_section(
+        next_home.append(&home_section(
             copy.mixtapes_title,
             copy.mixtapes_subtitle,
             mixes,
@@ -1429,7 +1449,7 @@ impl LibraryBrowser {
             recent_activity.truncate(12);
             let recent = history_home_activity(tracks, youtube, recent_activity);
             if !recent.is_empty() {
-                self.home_content.append(&home_history_section(
+                next_home.append(&home_history_section(
                     copy.recent_activity_title,
                     copy.recent_activity_subtitle,
                     recent,
@@ -1440,7 +1460,7 @@ impl LibraryBrowser {
             }
         }
 
-        self.home_content.append(&home_section(
+        next_home.append(&home_section(
             copy.albums_title,
             copy.albums_subtitle,
             ranked_home_album_cards(tracks, youtube, history, active_source, language),
@@ -1449,7 +1469,7 @@ impl LibraryBrowser {
             card_effects,
         ));
 
-        self.home_content.append(&home_section(
+        next_home.append(&home_section(
             copy.artists_title,
             copy.artists_subtitle,
             ranked_home_artist_cards(tracks, youtube, history, active_source, language),
@@ -1476,7 +1496,7 @@ impl LibraryBrowser {
                 .cloned()
                 .map(HomeCard::YouTubePlaylist),
         );
-        self.home_content.append(&home_section(
+        next_home.append(&home_section(
             copy.playlists_title,
             copy.playlists_subtitle,
             playlist_cards,
@@ -1486,7 +1506,24 @@ impl LibraryBrowser {
         ));
 
         if youtube.syncing {
-            self.home_content.append(&home_syncing_hint(language));
+            next_home.append(&home_syncing_hint(language));
+        }
+
+        let generation = self.home_generation.get().wrapping_add(1);
+        self.home_generation.set(generation);
+        let child_name = format!("home-{generation}");
+        let previous = self.home_stack.visible_child();
+
+        self.home_stack.add_named(&next_home, Some(&child_name));
+        self.home_stack.set_visible_child_name(&child_name);
+
+        if let Some(previous) = previous {
+            let stack = self.home_stack.clone();
+            glib::timeout_add_local_once(Duration::from_millis(220), move || {
+                if previous.parent().as_ref() == Some(stack.upcast_ref()) {
+                    stack.remove(&previous);
+                }
+            });
         }
     }
 
@@ -1845,14 +1882,20 @@ fn history_home_activity(
 
     for item in activity {
         match item {
-            HistoryActivity::Track(item) => {
-                match item.source {
-                    ListeningSource::Local => {
-                        let Some((index, track)) = tracks.iter().enumerate().find(|(_, track)| {
-                            track.path.to_string_lossy().as_ref() == item.media_id
-                        }) else {
-                            continue;
-                        };
+            HistoryActivity::Track(item) => match item.source {
+                ListeningSource::Local => {
+                    let exact_path = tracks
+                        .iter()
+                        .enumerate()
+                        .find(|(_, track)| track.path.to_string_lossy().as_ref() == item.media_id);
+                    let metadata_match = tracks.iter().enumerate().find(|(_, track)| {
+                        track.title.eq_ignore_ascii_case(&item.title)
+                            && track.artist.eq_ignore_ascii_case(&item.artist)
+                            && (item.album.trim().is_empty()
+                                || track.album.eq_ignore_ascii_case(&item.album))
+                    });
+
+                    if let Some((index, track)) = exact_path.or(metadata_match) {
                         entries.push(HomeHistoryTrack::LocalTrack {
                             index,
                             track: track.clone(),
@@ -1861,14 +1904,23 @@ fn history_home_activity(
                             completed: item.completed,
                         });
                     }
-                    ListeningSource::YouTube => {
-                        let Some(track) = catalog
-                            .iter()
-                            .find(|track| track.video_id == item.media_id)
-                            .cloned()
-                        else {
-                            continue;
-                        };
+                }
+                ListeningSource::YouTube => {
+                    let track = catalog
+                        .iter()
+                        .find(|track| track.video_id == item.media_id)
+                        .cloned()
+                        .unwrap_or_else(|| YouTubeItem {
+                            result_type: "song".to_string(),
+                            video_id: item.media_id.clone(),
+                            title: item.title.clone(),
+                            artist: item.artist.clone(),
+                            album: item.album.clone(),
+                            duration_seconds: item.duration_seconds,
+                            ..YouTubeItem::default()
+                        });
+
+                    if !track.video_id.trim().is_empty() && !track.title.trim().is_empty() {
                         entries.push(HomeHistoryTrack::YouTubeTrack {
                             item: track,
                             position_seconds: item.position_seconds,
@@ -1877,7 +1929,7 @@ fn history_home_activity(
                         });
                     }
                 }
-            }
+            },
             HistoryActivity::Collection(collection) => match collection.source {
                 ListeningSource::Local if collection.kind == "album" => {
                     entries.push(HomeHistoryTrack::LocalAlbum(collection.title));
@@ -1886,20 +1938,39 @@ fn history_home_activity(
                     entries.push(HomeHistoryTrack::LocalPlaylist(collection.title));
                 }
                 ListeningSource::YouTube if collection.kind == "album" => {
-                    let item = youtube
-                        .albums
-                        .iter()
-                        .find(|entry| {
-                            entry.source.browse_id == collection.id
-                                || entry.title.eq_ignore_ascii_case(&collection.title)
-                        })
-                        .map(|entry| entry.source.clone());
-                    if let Some(item) = item {
-                        entries.push(HomeHistoryTrack::YouTubeAlbum(item));
-                    }
+                    let resolved = youtube.albums.iter().find(|entry| {
+                        entry.source.browse_id == collection.id
+                            || entry.title.eq_ignore_ascii_case(&collection.title)
+                    });
+
+                    let (item, cover_path) = if let Some(entry) = resolved {
+                        (
+                            entry.source.clone(),
+                            entry.cached_cover().map(Path::to_path_buf),
+                        )
+                    } else {
+                        let cover_path = catalog
+                            .iter()
+                            .find(|track| track.album.eq_ignore_ascii_case(&collection.title))
+                            .and_then(YouTubeItem::cached_cover)
+                            .map(Path::to_path_buf);
+
+                        (
+                            YouTubeItem {
+                                result_type: "album".to_string(),
+                                browse_id: collection.id.clone(),
+                                title: collection.title.clone(),
+                                album: collection.title.clone(),
+                                ..YouTubeItem::default()
+                            },
+                            cover_path,
+                        )
+                    };
+
+                    entries.push(HomeHistoryTrack::YouTubeAlbum { item, cover_path });
                 }
                 ListeningSource::YouTube if collection.kind == "playlist" => {
-                    if let Some(item) = youtube
+                    let item = youtube
                         .playlists
                         .iter()
                         .find(|item| {
@@ -1907,9 +1978,13 @@ fn history_home_activity(
                                 || item.title.eq_ignore_ascii_case(&collection.title)
                         })
                         .cloned()
-                    {
-                        entries.push(HomeHistoryTrack::YouTubePlaylist(item));
-                    }
+                        .unwrap_or_else(|| YouTubeItem {
+                            result_type: "playlist".to_string(),
+                            browse_id: collection.id.clone(),
+                            title: collection.title.clone(),
+                            ..YouTubeItem::default()
+                        });
+                    entries.push(HomeHistoryTrack::YouTubePlaylist(item));
                 }
                 _ => {}
             },
@@ -2842,9 +2917,9 @@ fn home_history_section(
                 ),
                 BrowserEvent::Navigate(BrowserRoute::Playlist(title)),
             ),
-            HomeHistoryTrack::YouTubeAlbum(item) => (
+            HomeHistoryTrack::YouTubeAlbum { item, cover_path } => (
                 collection_card(
-                    item.cached_cover(),
+                    cover_path.as_deref().or_else(|| item.cached_cover()),
                     &item.title,
                     match language {
                         AppLanguage::Portuguese => "Álbum ouvido recentemente",

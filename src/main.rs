@@ -1,3 +1,4 @@
+// recent_activity_exact_fix_v1
 // personalized_home_resume_v2
 mod animated_page_switcher;
 mod background;
@@ -5080,7 +5081,8 @@ impl AppController {
         }
 
         let previous = self.listening_session_last_saved_seconds.get();
-        let checkpoint_due = previous == 0 || listened_seconds >= previous.saturating_add(15);
+        let first_checkpoint = previous == 0;
+        let checkpoint_due = first_checkpoint || listened_seconds >= previous.saturating_add(15);
         if !completed && !checkpoint_due {
             return;
         }
@@ -5141,6 +5143,10 @@ impl AppController {
         if updated {
             self.listening_session_last_saved_seconds
                 .set(listened_seconds);
+
+            if first_checkpoint || completed {
+                self.refresh_browser();
+            }
         }
     }
 
