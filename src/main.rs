@@ -1,3 +1,4 @@
+// youtube_collection_queue_background_load_v1
 // collection_card_overflow_and_play_state_v2
 // youtube_playlist_background_autoplay_v1
 // contextual_collection_controls_v5
@@ -176,6 +177,7 @@ struct AppController {
     youtube_recovery_resume_us: Cell<i64>,
     youtube_playlist_request_id: Cell<u64>,
     youtube_playlist_play_request_id: Cell<u64>,
+    youtube_collection_queue_request_id: Cell<u64>,
     youtube_collection_prefetching: Cell<bool>,
     youtube_playlist_loading: Cell<bool>,
     youtube_playlist_prefetching: Cell<bool>,
@@ -733,6 +735,7 @@ impl AppController {
             youtube_recovery_resume_us: Cell::new(0),
             youtube_playlist_request_id: Cell::new(0),
             youtube_playlist_play_request_id: Cell::new(0),
+            youtube_collection_queue_request_id: Cell::new(0),
             youtube_collection_prefetching: Cell::new(false),
             youtube_playlist_loading: Cell::new(false),
             youtube_playlist_prefetching: Cell::new(false),
@@ -4745,15 +4748,74 @@ impl AppController {
             .collect::<Vec<_>>();
 
         if media.is_empty() {
-            self.show_toast(if playlist {
-                "Carregue esta playlist uma vez antes de adicioná-la à fila"
-            } else {
-                "Carregue este álbum uma vez antes de adicioná-lo à fila"
-            });
+            self.load_youtube_collection_for_queue(item.clone(), playlist, play_next);
             return;
         }
 
         self.enqueue_media_collection(media, play_next, &item.title);
+    }
+
+    fn load_youtube_collection_for_queue(
+        &self,
+        item: YouTubeItem,
+        playlist: bool,
+        play_next: bool,
+    ) {
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            self.show_toast("As dependências do YouTube Music não estão instaladas");
+            return;
+        };
+
+        let request_id = self
+            .youtube_collection_queue_request_id
+            .get()
+            .wrapping_add(1);
+        self.youtube_collection_queue_request_id.set(request_id);
+
+        if playlist {
+            if !item.browse_id.trim().is_empty() {
+                self.youtube_library
+                    .borrow_mut()
+                    .playlist_loading
+                    .insert(item.browse_id.clone());
+            }
+        } else {
+            self.youtube_library
+                .borrow_mut()
+                .collection_loading
+                .insert(youtube_collection_key("album", &item.title));
+        }
+
+        let message = match (self.config.borrow().language, play_next) {
+            (AppLanguage::Portuguese, true) => "Carregando coleção para reproduzir em seguida…",
+            (AppLanguage::Portuguese, false) => "Carregando coleção para adicionar à fila…",
+            (AppLanguage::English, true) => "Loading collection to play next…",
+            (AppLanguage::English, false) => "Loading collection to add to queue…",
+            (AppLanguage::Spanish, true) => "Cargando colección para reproducir a continuación…",
+            (AppLanguage::Spanish, false) => "Cargando colección para añadirla a la cola…",
+        };
+        self.show_toast(message);
+
+        let sender = self.background.sender();
+        thread::spawn(move || {
+            let result = if playlist {
+                bridge.playlist(&item)
+            } else {
+                bridge.collection(&item)
+            }
+            .map(|mut items| {
+                cache_items_for_browser(&mut items);
+                items
+            });
+
+            let _ = sender.send(BackgroundMessage::YouTubeCollectionQueueLoaded {
+                request_id,
+                item,
+                playlist,
+                play_next,
+                result,
+            });
+        });
     }
 
     fn local_queue_media(track: &Track) -> QueueMedia {
