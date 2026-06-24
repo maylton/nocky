@@ -31,6 +31,7 @@ mod reveal_bounce;
 mod settings_page;
 mod theme;
 mod theme_css;
+mod track_transition;
 mod visual_theme;
 mod visualizer;
 mod wave_progress;
@@ -71,6 +72,7 @@ use std::{
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use track_transition::TransitionClock;
 use visualizer::SpectrumVisualizer;
 use wave_progress::WaveProgress;
 use youtube::{
@@ -240,6 +242,7 @@ struct AppController {
     volume_before_mute: Cell<f64>,
     compact_volume_expanded: Cell<bool>,
     compact_volume_spring_generation: Rc<Cell<u64>>,
+    footer_metadata_transition: TransitionClock,
     lyrics_button: gtk::ToggleButton,
     footer_previous: gtk::Button,
     footer_play_button: gtk::Button,
@@ -764,6 +767,7 @@ impl AppController {
             volume_before_mute: Cell::new(initial_volume),
             compact_volume_expanded: Cell::new(false),
             compact_volume_spring_generation: Rc::new(Cell::new(0)),
+            footer_metadata_transition: TransitionClock::new(),
             lyrics_button,
             footer_previous: footer_previous.clone(),
             footer_play_button: play.clone(),
@@ -2406,6 +2410,52 @@ impl AppController {
         i18n::text(self.config.borrow().language, message)
     }
 
+    // nocky_real_metadata_transition_v1
+    fn set_footer_metadata(&self, title: &str, artist: &str) {
+        if !adw::is_animations_enabled(&self.mini_title) {
+            self.mini_title.set_text(title);
+            self.mini_artist.set_text(artist);
+            self.mini_title.set_opacity(1.0);
+            self.mini_artist.set_opacity(1.0);
+            return;
+        }
+
+        if self.mini_title.text().as_str() == title && self.mini_artist.text().as_str() == artist {
+            return;
+        }
+
+        let token = self.footer_metadata_transition.next();
+        self.footer_metadata_transition.fade(
+            token,
+            &self.mini_title,
+            self.mini_title.opacity(),
+            0.0,
+            0,
+            86,
+        );
+        self.footer_metadata_transition.fade(
+            token,
+            &self.mini_artist,
+            self.mini_artist.opacity(),
+            0.0,
+            14,
+            86,
+        );
+
+        let title_label = self.mini_title.clone();
+        let artist_label = self.mini_artist.clone();
+        let transition = self.footer_metadata_transition.clone();
+        let title = title.to_owned();
+        let artist = artist.to_owned();
+
+        self.footer_metadata_transition.after(token, 104, move || {
+            title_label.set_text(&title);
+            artist_label.set_text(&artist);
+            transition.fade(token, &title_label, 0.0, 1.0, 0, 180);
+            transition.fade(token, &artist_label, 0.0, 1.0, 44, 180);
+        });
+    }
+
     fn update_footer_source(&self) {
         self.footer_source.remove_css_class("youtube-source-badge");
         match self.playback_source.get() {
@@ -3525,8 +3575,7 @@ impl AppController {
         self.state.borrow_mut().current = Some(index);
         self.player_view
             .set_metadata(&track.title, &track.artist, &track.album);
-        self.mini_title.set_text(&track.title);
-        self.mini_artist.set_text(&track.artist);
+        self.set_footer_metadata(&track.title, &track.artist);
         self.hero_cover.set_path(track.cover_path.as_deref());
         self.mini_cover.set_path(track.cover_path.as_deref());
         self.visual_theme_manager
@@ -4217,8 +4266,7 @@ impl AppController {
             self.tr(Message::NoTrackSelected),
             message,
         );
-        self.mini_title.set_text(self.tr(Message::NothingPlaying));
-        self.mini_artist.set_text("Nocky");
+        self.set_footer_metadata(self.tr(Message::NothingPlaying), "Nocky");
         self.update_footer_source();
         self.lyrics.show_state(
             "As letras aparecerão aqui",
@@ -4463,6 +4511,7 @@ pub(crate) struct CoverView {
     placeholder: gtk::Box,
     icon: gtk::Image,
     size: i32,
+    transition: TransitionClock,
 }
 
 impl CoverView {
@@ -4479,6 +4528,26 @@ impl CoverView {
     }
 
     fn set_path(&self, path: Option<&Path>) {
+        let path = path.map(Path::to_path_buf);
+
+        if !adw::is_animations_enabled(&self.stack) {
+            self.set_path_immediate(path.as_deref());
+            self.stack.set_opacity(1.0);
+            return;
+        }
+
+        let token = self.transition.next();
+        self.transition
+            .fade(token, &self.stack, self.stack.opacity(), 0.0, 0, 105);
+
+        let cover = self.clone();
+        self.transition.after(token, 116, move || {
+            cover.set_path_immediate(path.as_deref());
+            cover.transition.fade(token, &cover.stack, 0.0, 1.0, 0, 205);
+        });
+    }
+
+    fn set_path_immediate(&self, path: Option<&Path>) {
         let Some(path) = path.filter(|path| path.is_file()) else {
             self.picture.set_paintable(None::<&gdk::Texture>);
             self.stack.set_visible_child_name("placeholder");
@@ -4566,6 +4635,7 @@ pub(crate) fn build_cover(size: i32) -> CoverView {
         placeholder,
         icon,
         size,
+        transition: TransitionClock::new(),
     }
 }
 
