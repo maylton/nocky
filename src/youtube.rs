@@ -1,3 +1,4 @@
+// multi_artist_credits_v2
 use gtk::glib;
 use gtk::prelude::*;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -106,6 +107,53 @@ pub fn youtube_like_error_message(error: &str) -> &'static str {
     } else {
         "Não foi possível sincronizar a curtida com o YouTube Music."
     }
+}
+
+pub fn credited_artists(credit: &str) -> Vec<String> {
+    let normalized = credit
+        .replace(" featuring ", " feat. ")
+        .replace(" Featuring ", " feat. ")
+        .replace(" FEATURING ", " feat. ")
+        .replace(" feat ", " feat. ")
+        .replace(" ft. ", " feat. ")
+        .replace(" ft ", " feat. ")
+        .replace(" x ", " feat. ")
+        .replace(" X ", " feat. ")
+        .replace(" with ", " feat. ")
+        .replace(" With ", " feat. ")
+        .replace(" / ", " feat. ")
+        .replace(';', " feat. ")
+        .replace(" • ", " feat. ");
+
+    let mut artists = Vec::new();
+    for segment in normalized.split(" feat. ") {
+        for artist in segment.split(',') {
+            let artist = artist.trim();
+            if artist.is_empty()
+                || artists
+                    .iter()
+                    .any(|existing: &String| existing.eq_ignore_ascii_case(artist))
+            {
+                continue;
+            }
+            artists.push(artist.to_string());
+        }
+    }
+
+    if artists.is_empty() {
+        let fallback = credit.trim();
+        if !fallback.is_empty() {
+            artists.push(fallback.to_string());
+        }
+    }
+
+    artists
+}
+
+pub fn artist_credit_contains(credit: &str, artist: &str) -> bool {
+    credited_artists(credit)
+        .iter()
+        .any(|candidate| candidate.eq_ignore_ascii_case(artist.trim()))
 }
 
 pub fn youtube_collection_key(kind: &str, title: &str) -> String {
@@ -1260,9 +1308,8 @@ fn extend_unique_youtube_items(target: &mut Vec<YouTubeItem>, items: Vec<YouTube
 fn build_artist_cache(catalog: &[YouTubeItem]) -> Vec<YouTubeCollectionEntry> {
     let mut groups: BTreeMap<String, Vec<&YouTubeItem>> = BTreeMap::new();
     for item in catalog {
-        let artist = item.artist.trim();
-        if !artist.is_empty() {
-            groups.entry(artist.to_string()).or_default().push(item);
+        for artist in credited_artists(&item.artist) {
+            groups.entry(artist).or_default().push(item);
         }
     }
 
@@ -1296,6 +1343,43 @@ fn build_artist_cache(catalog: &[YouTubeItem]) -> Vec<YouTubeCollectionEntry> {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod artist_credit_tests {
+    use super::{artist_credit_contains, credited_artists};
+
+    #[test]
+    fn splits_explicit_collaboration_separators() {
+        assert_eq!(
+            credited_artists("Artist A feat. Artist B, Artist C"),
+            vec!["Artist A", "Artist B", "Artist C"]
+        );
+        assert_eq!(
+            credited_artists("Artist A / Artist B"),
+            vec!["Artist A", "Artist B"]
+        );
+    }
+
+    #[test]
+    fn preserves_bare_ampersand_band_names() {
+        assert_eq!(
+            credited_artists("Simon & Garfunkel"),
+            vec!["Simon & Garfunkel"]
+        );
+    }
+
+    #[test]
+    fn matches_one_artist_inside_a_credit() {
+        assert!(artist_credit_contains(
+            "Artist A feat. Artist B",
+            "Artist B"
+        ));
+        assert!(!artist_credit_contains(
+            "Artist A feat. Artist B",
+            "Artist C"
+        ));
+    }
 }
 
 pub fn download_cover(item: &YouTubeItem, url: &str) -> Option<PathBuf> {

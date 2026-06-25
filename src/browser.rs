@@ -1,3 +1,4 @@
+// multi_artist_credits_v2
 // artist_featured_track_surface_restore_v1
 // artist_featured_track_fixed_radius_v3
 // youtube_artist_page_highlight_tracks_v2
@@ -40,7 +41,10 @@ use crate::{
     config::{AppConfig, AppLanguage, StartupSource, VisualTheme},
     listening_history::{HistoryActivity, ListeningHistory, ListeningSource, ListeningStats},
     model::Track,
-    youtube::{youtube_collection_key, YouTubeCollectionEntry, YouTubeItem, YouTubeLibraryCache},
+    youtube::{
+        artist_credit_contains, credited_artists, youtube_collection_key, YouTubeCollectionEntry,
+        YouTubeItem, YouTubeLibraryCache,
+    },
 };
 use gtk::{gdk, gio::prelude::ListModelExt, glib, prelude::*};
 use std::{
@@ -1483,7 +1487,9 @@ impl LibraryBrowser {
             BrowserRoute::Artist(artist) => tracks
                 .iter()
                 .enumerate()
-                .filter_map(|(index, track)| (track.artist == *artist).then_some(index))
+                .filter_map(|(index, track)| {
+                    artist_credit_contains(&track.artist, artist).then_some(index)
+                })
                 .collect::<Vec<_>>(),
             BrowserRoute::All => (0..tracks.len()).collect::<Vec<_>>(),
             _ => Vec::new(),
@@ -1533,7 +1539,7 @@ impl LibraryBrowser {
                 .collect(),
             BrowserRoute::YouTubeArtist(artist) => catalog
                 .into_iter()
-                .filter(|item| item.artist.eq_ignore_ascii_case(artist))
+                .filter(|item| artist_credit_contains(&item.artist, artist))
                 .collect(),
             BrowserRoute::YouTubePlaylist { browse_id, .. } => youtube
                 .playlist_tracks
@@ -2049,7 +2055,7 @@ impl LibraryBrowser {
         for (album, album_tracks) in local_groups {
             let artists = album_tracks
                 .iter()
-                .map(|track| track.artist.as_str())
+                .flat_map(|track| credited_artists(&track.artist))
                 .collect::<BTreeSet<_>>()
                 .into_iter()
                 .collect::<Vec<_>>()
@@ -2152,11 +2158,9 @@ impl LibraryBrowser {
 
         let mut local_names = tracks
             .iter()
-            .map(|track| track.artist.trim())
-            .filter(|artist| !artist.is_empty())
+            .flat_map(|track| credited_artists(&track.artist))
             .collect::<BTreeSet<_>>()
             .into_iter()
-            .map(str::to_string)
             .collect::<Vec<_>>();
         local_names.sort_by(|left, right| compare_text(left, right));
 
@@ -2171,7 +2175,7 @@ impl LibraryBrowser {
 
             let artist_tracks = tracks
                 .iter()
-                .filter(|track| track.artist.eq_ignore_ascii_case(&artist))
+                .filter(|track| artist_credit_contains(&track.artist, &artist))
                 .collect::<Vec<_>>();
             let album_count = artist_tracks
                 .iter()
@@ -2294,7 +2298,7 @@ impl LibraryBrowser {
         if featured_tracks.is_empty() {
             featured_tracks = catalog
                 .into_iter()
-                .filter(|item| item.artist.eq_ignore_ascii_case(artist) && item.playable())
+                .filter(|item| artist_credit_contains(&item.artist, artist) && item.playable())
                 .collect::<Vec<_>>();
             featured_tracks.sort_by(compare_youtube_items);
         }
@@ -2896,7 +2900,7 @@ fn search_album_cards(
         for (album, album_tracks) in groups {
             let artists = album_tracks
                 .iter()
-                .map(|track| track.artist.as_str())
+                .flat_map(|track| credited_artists(&track.artist))
                 .collect::<BTreeSet<_>>()
                 .into_iter()
                 .collect::<Vec<_>>()
@@ -5606,7 +5610,7 @@ fn local_collection_page_header(
         BrowserRoute::Artist(artist) => {
             let artist_tracks = tracks
                 .iter()
-                .filter(|track| track.artist.eq_ignore_ascii_case(artist))
+                .filter(|track| artist_credit_contains(&track.artist, artist))
                 .collect::<Vec<_>>();
             if artist_tracks.is_empty() {
                 return None;

@@ -509,3 +509,6 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - ✅ Featured-track rows on artist pages now preserve the same 16 px corner radius during hover, focus and press states.
 
 - ✅ Featured-track rows reuse the expressive search-result surface and hover colors while keeping a stable 16 px corner radius.
+
+- ✅ Track credits with explicit collaboration separators are now indexed under each credited artist in local and YouTube artist pages.
+- ✅ Artist filtering, featured tracks and album subtitles share one central credit parser; bare ampersands remain intact for band names.
