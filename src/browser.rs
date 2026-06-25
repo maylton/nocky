@@ -1,3 +1,4 @@
+// collection_card_entry_spring_v1
 // remove_collection_now_playing_badge_v1
 // richer_collection_cards_phase1_v1
 // collection_context_favorites_and_placeholders_v6
@@ -4303,11 +4304,18 @@ fn append_collection_grid_card(grid: &gtk::FlowBox, _position: i32, button: gtk:
             started_at.set(Some(now));
             now
         });
-        let progress = ((now - start) as f64 / 220_000.0).clamp(0.0, 1.0);
-        let eased = 1.0 - (1.0 - progress).powi(3);
+        let progress = ((now - start) as f64 / 420_000.0).clamp(0.0, 1.0);
 
-        button.set_opacity(eased);
-        button.set_margin_top(((1.0 - eased) * 14.0).round() as i32);
+        // Damped spring entrance: fast arrival, subtle overshoot and settle.
+        let damping = (-6.5 * progress).exp();
+        let oscillation = (progress * std::f64::consts::TAU * 1.65).cos();
+        let spring = 1.0 - damping * oscillation;
+
+        let opacity = (progress / 0.42).clamp(0.0, 1.0);
+        let displacement = (1.0 - spring) * 18.0;
+
+        button.set_opacity(opacity);
+        button.set_margin_top(displacement.round().clamp(-4.0, 18.0) as i32);
 
         if progress >= 1.0 {
             button.set_opacity(1.0);
