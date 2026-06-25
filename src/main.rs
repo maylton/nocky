@@ -1,3 +1,4 @@
+// youtube_resume_seek_convergence_v1
 // lyrics_2_v2
 // playback_resume_preferences_fix_v1
 // playback_persistence_resume_2_v1
@@ -167,6 +168,8 @@ struct AppController {
     listening_session_last_saved_seconds: Cell<u64>,
     listening_history_context: RefCell<listening_history::PlaybackHistoryContext>,
     pending_resume_position_us: Cell<Option<i64>>,
+    resume_seek_attempts: Cell<u8>,
+    resume_seek_cooldown_ticks: Cell<u8>,
     restored_playback_session: RefCell<Option<PlaybackSession>>,
     startup_restore_autoplay: Cell<Option<bool>>,
     playback_session_last_position_seconds: Cell<u64>,
@@ -734,6 +737,8 @@ impl AppController {
                 listening_history::PlaybackHistoryContext::default(),
             ),
             pending_resume_position_us: Cell::new(None),
+            resume_seek_attempts: Cell::new(0),
+            resume_seek_cooldown_ticks: Cell::new(0),
             restored_playback_session: RefCell::new(restored_playback_session),
             startup_restore_autoplay: Cell::new(None),
             playback_session_last_position_seconds: Cell::new(0),
@@ -4547,6 +4552,8 @@ impl AppController {
             });
         self.pending_resume_position_us
             .set(Some(session.position_us.max(0)));
+        self.resume_seek_attempts.set(0);
+        self.resume_seek_cooldown_ticks.set(0);
         let autoplay = self.config.borrow().resume_playback_on_startup && session.was_playing;
 
         match &current_media.source {
@@ -4604,15 +4611,63 @@ impl AppController {
     }
 
     fn apply_pending_resume_position(&self) {
-        let Some(position) = self.pending_resume_position_us.get() else {
+        const POSITION_TOLERANCE_US: i64 = 750_000;
+        const MAX_ATTEMPTS: u8 = 18;
+        const RETRY_COOLDOWN_TICKS: u8 = 2;
+
+        let Some(target) = self.pending_resume_position_us.get() else {
+            self.resume_seek_attempts.set(0);
+            self.resume_seek_cooldown_ticks.set(0);
             return;
         };
+
         if !self.player.is_seekable() || self.player.duration_us() <= 0 {
             return;
         }
 
-        self.pending_resume_position_us.set(None);
-        self.seek_to(position, false);
+        let current = self.player.position_us().max(0);
+        if current.abs_diff(target.max(0)) <= POSITION_TOLERANCE_US as u64 {
+            self.pending_resume_position_us.set(None);
+            self.resume_seek_attempts.set(0);
+            self.resume_seek_cooldown_ticks.set(0);
+            return;
+        }
+
+        let cooldown = self.resume_seek_cooldown_ticks.get();
+        if cooldown > 0 {
+            self.resume_seek_cooldown_ticks
+                .set(cooldown.saturating_sub(1));
+            return;
+        }
+
+        let attempts = self.resume_seek_attempts.get();
+        if attempts >= MAX_ATTEMPTS {
+            eprintln!(
+                "Could not converge restored playback position after {MAX_ATTEMPTS} attempts: target={}us current={}us",
+                target, current
+            );
+            self.pending_resume_position_us.set(None);
+            self.resume_seek_attempts.set(0);
+            self.resume_seek_cooldown_ticks.set(0);
+            return;
+        }
+
+        match self.player.seek(target.max(0)) {
+            Ok(()) => {
+                self.resume_seek_attempts.set(attempts.saturating_add(1));
+                self.resume_seek_cooldown_ticks.set(RETRY_COOLDOWN_TICKS);
+                self.last_mpris_position.set(target.max(0));
+                self.mpris.send(mpris::MprisUpdate::Position(target.max(0)));
+            }
+            Err(error) => {
+                eprintln!(
+                    "Could not apply restored playback position on attempt {}: {error}",
+                    attempts.saturating_add(1)
+                );
+                self.resume_seek_attempts.set(attempts.saturating_add(1));
+                self.resume_seek_cooldown_ticks.set(RETRY_COOLDOWN_TICKS);
+            }
+        }
     }
 
     fn current_track_path(&self) -> Option<PathBuf> {
