@@ -491,3 +491,5 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - ✅ Artist collection cards now use a compact horizontal layout with 56 px circular artwork and condensed metadata.
 
 - ✅ Compact artist cards now reuse the same expressive outline and surface language as the other collection cards.
+
+- ✅ Compact artist rows no longer inherit the large collection-button height, preserving the shared outlined surface without vertical gaps.
