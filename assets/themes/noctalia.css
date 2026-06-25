@@ -120,3 +120,39 @@ window.theme-noctalia
 .collection-card.artist-collection-card .collection-artwork image {
   border-radius: 999px;
 }
+
+/* lyrics_2_v2 */
+.lyrics-offset-controls {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background-color: alpha(@window_fg_color, 0.05);
+  border: 1px solid alpha(@window_fg_color, 0.10);
+}
+
+.lyrics-offset-button,
+.lyrics-offset-reset {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+}
+
+.lyrics-offset-label {
+  min-width: 54px;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+}
+
+window.theme-noctalia .lyrics-offset-button:hover,
+window.theme-noctalia .lyrics-offset-reset:hover {
+  color: @accent_fg_color;
+  background-color: @accent_color;
+  background-image: none;
+}
+
+window.theme-material-expressive .lyrics-offset-button:hover,
+window.theme-material-expressive .lyrics-offset-reset:hover {
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  background-image: none;
+}

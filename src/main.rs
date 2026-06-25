@@ -1,3 +1,4 @@
+// lyrics_2_v2
 // playback_resume_preferences_fix_v1
 // playback_persistence_resume_2_v1
 // queue_collection_cover_fallback_v1
@@ -4692,6 +4693,7 @@ impl AppController {
                     title: track.title.clone(),
                     artist: track.artist.clone(),
                     album: track.album.clone(),
+                    duration_seconds: track.duration_seconds,
                 },
             )
         };
@@ -4708,7 +4710,18 @@ impl AppController {
         }
         let sender = self.background.sender();
         thread::spawn(move || {
-            let result = lyrics_provider::download_to_sidecar(&path, &lookup);
+            let result =
+                lyrics_provider::download_to_sidecar(&path, &lookup, force).map(|document| {
+                    eprintln!(
+                        "Lyrics loaded from {} ({})",
+                        document.provider,
+                        if document.synchronized {
+                            "synchronized"
+                        } else {
+                            "plain fallback"
+                        }
+                    );
+                });
             let _ = sender.send(BackgroundMessage::LyricsDownloaded {
                 path,
                 result,

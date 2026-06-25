@@ -1,3 +1,4 @@
+// lyrics_2_v2
 // playback_resume_preferences_fix_v1
 use crate::{
     background::BackgroundMessage,
@@ -384,12 +385,23 @@ impl AppController {
             title: item.title.clone(),
             artist: item.artist.clone(),
             album: item.album.clone(),
+            duration_seconds: item.duration_seconds,
         };
         let video_id = item.video_id.clone();
         let sender = self.background.sender();
         thread::spawn(move || {
-            let result = lyrics_provider::fetch_synced_lyrics(&lookup)
-                .map(|contents| lyrics::parse_lrc(&contents));
+            let result = lyrics_provider::fetch_lyrics(&lookup, notify).map(|document| {
+                eprintln!(
+                    "YouTube lyrics loaded from {} ({})",
+                    document.provider,
+                    if document.synchronized {
+                        "synchronized"
+                    } else {
+                        "plain fallback"
+                    }
+                );
+                lyrics::parse_lrc(&document.contents)
+            });
             let _ = sender.send(BackgroundMessage::YouTubeLyricsDownloaded {
                 video_id,
                 notify,

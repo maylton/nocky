@@ -17,6 +17,7 @@ pub fn load_sidecar(audio_path: &Path) -> Vec<LyricLine> {
 
 pub fn parse_lrc(contents: &str) -> Vec<LyricLine> {
     let mut lines = Vec::new();
+    let mut global_offset_us = 0_i64;
 
     for raw_line in contents.lines() {
         let mut remainder = raw_line.trim();
@@ -30,11 +31,17 @@ pub fn parse_lrc(contents: &str) -> Vec<LyricLine> {
             let tag = &stripped[..end];
             let after = &stripped[end + 1..];
 
-            if let Some(timestamp) = parse_timestamp(tag) {
+            if let Some(offset_ms) = tag
+                .strip_prefix("offset:")
+                .and_then(|value| value.trim().parse::<i64>().ok())
+            {
+                global_offset_us = offset_ms.saturating_mul(1_000);
+                remainder = after;
+            } else if let Some(timestamp) = parse_timestamp(tag) {
                 timestamps.push(timestamp);
                 remainder = after;
             } else {
-                break;
+                remainder = after;
             }
         }
 
@@ -45,7 +52,7 @@ pub fn parse_lrc(contents: &str) -> Vec<LyricLine> {
 
         for timestamp_us in timestamps {
             lines.push(LyricLine {
-                timestamp_us,
+                timestamp_us: timestamp_us.saturating_add(global_offset_us),
                 text: text.to_string(),
             });
         }
@@ -53,6 +60,36 @@ pub fn parse_lrc(contents: &str) -> Vec<LyricLine> {
 
     lines.sort_by_key(|line| line.timestamp_us);
     lines
+}
+
+pub fn plain_to_lrc(contents: &str, duration_seconds: u64) -> String {
+    let lines = contents
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>();
+
+    if lines.is_empty() {
+        return String::new();
+    }
+
+    let duration_us = duration_seconds
+        .max(lines.len() as u64 * 4)
+        .saturating_mul(1_000_000);
+    let step_us = duration_us / lines.len() as u64;
+
+    lines
+        .iter()
+        .enumerate()
+        .map(|(index, text)| {
+            let timestamp_us = step_us.saturating_mul(index as u64);
+            let minutes = timestamp_us / 60_000_000;
+            let seconds = (timestamp_us % 60_000_000) / 1_000_000;
+            let centiseconds = (timestamp_us % 1_000_000) / 10_000;
+            format!("[{minutes:02}:{seconds:02}.{centiseconds:02}]{text}")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 pub fn active_index(lines: &[LyricLine], timestamp_us: i64) -> Option<usize> {
@@ -77,6 +114,20 @@ mod tests {
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].timestamp_us, 10_500_000);
         assert_eq!(result[1].timestamp_us, 62_000_000);
+    }
+
+    #[test]
+    fn applies_global_lrc_offset() {
+        let result = parse_lrc("[offset:500]\n[00:01.00]Hello");
+        assert_eq!(result[0].timestamp_us, 1_500_000);
+    }
+
+    #[test]
+    fn converts_plain_lyrics_to_timed_lrc() {
+        let result = plain_to_lrc("First\nSecond\nThird", 12);
+        assert!(result.contains("[00:00.00]First"));
+        assert!(result.contains("[00:04.00]Second"));
+        assert!(result.contains("[00:08.00]Third"));
     }
 
     #[test]
