@@ -479,3 +479,5 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 
 
 - 🟡 YouTube Music mixes now use rich rows with artwork, subtitle, type badge and cached track count.
+
+- ✅ Opened mix pages now show a rich contextual header with artwork, subtitle and track count.

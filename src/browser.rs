@@ -1,3 +1,4 @@
+// rich_youtube_mix_page_header_v1
 // rich_youtube_mix_rows_v1
 // vertical_collection_edge_scroll_spring_v5_home_timing
 // vertical_collection_edge_scroll_spring_v4
@@ -668,6 +669,7 @@ pub struct LibraryBrowser {
     search_playlist_limit: Rc<Cell<usize>>,
     queue: gtk::ListBox,
     queue_title: gtk::Label,
+    queue_context_header: gtk::Box,
     albums_grid: gtk::FlowBox,
     artists_grid: gtk::FlowBox,
     playlists_list: gtk::ListBox,
@@ -823,6 +825,11 @@ impl LibraryBrowser {
         queue_title.set_xalign(0.0);
         queue_title.add_css_class("section-title");
 
+        let queue_context_header = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        queue_context_header.set_hexpand(true);
+        queue_context_header.set_visible(false);
+        queue_context_header.add_css_class("collection-context-header");
+
         let queue_scroll = gtk::ScrolledWindow::new();
         queue_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
         queue_scroll.set_vexpand(true);
@@ -834,6 +841,7 @@ impl LibraryBrowser {
         tracks_page.set_vexpand(true);
         tracks_page.add_css_class("library-panel");
         tracks_page.add_css_class("expressive-library-page");
+        tracks_page.append(&queue_context_header);
         tracks_page.append(&queue_title);
         tracks_page.append(&queue_scroll);
 
@@ -1013,6 +1021,7 @@ impl LibraryBrowser {
             search_playlist_limit,
             queue,
             queue_title,
+            queue_context_header,
             albums_grid,
             artists_grid,
             playlists_list,
@@ -1336,6 +1345,8 @@ impl LibraryBrowser {
         let render_token = self.queue_render_generation.get().wrapping_add(1);
         self.queue_render_generation.set(render_token);
         clear_list_box(&self.queue);
+        clear_box(&self.queue_context_header);
+        self.queue_context_header.set_visible(false);
 
         let effective_query = match route {
             BrowserRoute::Album(_)
@@ -1486,6 +1497,7 @@ impl LibraryBrowser {
 
         self.queue_title
             .set_text(&route_title(route, config.startup_source, config.language));
+        self.queue_title.set_visible(true);
         if entries.is_empty() {
             let message = if youtube.syncing
                 && matches!(
@@ -1524,6 +1536,27 @@ impl LibraryBrowser {
         self.queue_title
             .set_text(&route_title(route, None, language));
         self.visible_tracks.borrow_mut().clear();
+
+        if let Some(playlist) = youtube
+            .playlists
+            .iter()
+            .find(|playlist| playlist.browse_id == browse_id)
+        {
+            if is_mix_playlist(playlist) {
+                let track_count = youtube.playlist_tracks.get(browse_id).map(Vec::len);
+                self.queue_context_header.append(&youtube_mix_page_header(
+                    playlist,
+                    track_count,
+                    language,
+                ));
+                self.queue_context_header.set_visible(true);
+                self.queue_title.set_visible(false);
+            } else {
+                self.queue_title.set_visible(true);
+            }
+        } else {
+            self.queue_title.set_visible(true);
+        }
 
         let query = query.trim().to_lowercase();
         let mut items = youtube
@@ -5134,6 +5167,95 @@ fn source_badge(text: &str, online: bool) -> gtk::Label {
         label.add_css_class("youtube-source-badge");
     }
     label
+}
+
+fn clear_box(container: &gtk::Box) {
+    while let Some(child) = container.first_child() {
+        container.remove(&child);
+    }
+}
+
+fn youtube_mix_page_header(
+    item: &YouTubeItem,
+    track_count: Option<usize>,
+    language: AppLanguage,
+) -> gtk::Box {
+    let cover = artwork(item.cached_cover(), 112);
+    cover.set_size_request(112, 112);
+    cover.set_halign(gtk::Align::Start);
+    cover.add_css_class("mix-page-cover");
+
+    let eyebrow = gtk::Label::new(Some(match language {
+        AppLanguage::Portuguese => "YOUTUBE MUSIC · MIX",
+        AppLanguage::English => "YOUTUBE MUSIC · MIX",
+        AppLanguage::Spanish => "YOUTUBE MUSIC · MIX",
+    }));
+    eyebrow.set_xalign(0.0);
+    eyebrow.add_css_class("dim-label");
+    eyebrow.add_css_class("collection-context-eyebrow");
+
+    let title = gtk::Label::new(Some(&item.title));
+    title.set_xalign(0.0);
+    title.set_wrap(true);
+    title.add_css_class("collection-page-title");
+    title.add_css_class("mix-page-title");
+
+    let subtitle_text = if item.subtitle.trim().is_empty() {
+        match language {
+            AppLanguage::Portuguese => "Mix personalizado para você",
+            AppLanguage::English => "A personalized mix for you",
+            AppLanguage::Spanish => "Un mix personalizado para ti",
+        }
+    } else {
+        item.subtitle.as_str()
+    };
+    let subtitle = gtk::Label::new(Some(subtitle_text));
+    subtitle.set_xalign(0.0);
+    subtitle.set_wrap(true);
+    subtitle.add_css_class("dim-label");
+
+    let detail_text = match track_count {
+        Some(count) => match language {
+            AppLanguage::Portuguese => {
+                format!("{count} {}", if count == 1 { "faixa" } else { "faixas" })
+            }
+            AppLanguage::English => {
+                format!("{count} {}", if count == 1 { "track" } else { "tracks" })
+            }
+            AppLanguage::Spanish => {
+                format!("{count} {}", if count == 1 { "pista" } else { "pistas" })
+            }
+        },
+        None => match language {
+            AppLanguage::Portuguese => "Seleção personalizada do YouTube Music".to_string(),
+            AppLanguage::English => "Personalized selection from YouTube Music".to_string(),
+            AppLanguage::Spanish => "Selección personalizada de YouTube Music".to_string(),
+        },
+    };
+    let detail = gtk::Label::new(Some(&detail_text));
+    detail.set_xalign(0.0);
+    detail.add_css_class("dim-label");
+    detail.add_css_class("mix-page-detail");
+
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 5);
+    text.set_hexpand(true);
+    text.set_valign(gtk::Align::Center);
+    text.append(&eyebrow);
+    text.append(&title);
+    text.append(&subtitle);
+    text.append(&detail);
+
+    let header = gtk::Box::new(gtk::Orientation::Horizontal, 18);
+    header.set_hexpand(true);
+    header.set_margin_top(4);
+    header.set_margin_bottom(14);
+    header.set_margin_start(2);
+    header.set_margin_end(2);
+    header.append(&cover);
+    header.append(&text);
+    header.add_css_class("mix-page-header");
+    header.add_css_class("expressive-page-header");
+    header
 }
 
 fn youtube_mix_row(item: &YouTubeItem, track_count: Option<usize>) -> gtk::ListBoxRow {
