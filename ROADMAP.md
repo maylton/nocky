@@ -182,10 +182,10 @@ now focuses on completing the user-facing history experience.
 - Contextual play button on collection cards.
 - ✅ Favorite action inside each collection card overflow menu.
 - Overflow menu.
-- Skeleton placeholders during remote loading.
+- 🟡 Skeleton treatment during remote loading is implemented on active collection cards; dedicated placeholder rails remain planned.
 - 🟡 Type-aware placeholders for missing artwork; palette-derived variants remain planned.
-- Animated insertion and removal.
-- Clear current-playing indicator directly on every relevant card.
+- 🟡 Animated insertion is implemented for collection grids; animated removal remains planned.
+- ✅ Clear current-playing indicator directly on active album and playlist cards.
 - ✅ Shared collection-card descriptor centralizes local and YouTube album, artist and playlist presentation.
 
 ---

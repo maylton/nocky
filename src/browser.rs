@@ -1,3 +1,4 @@
+// richer_collection_cards_phase1_v1
 // collection_context_favorites_and_placeholders_v6
 // shared_collection_card_descriptor_v1
 // hide_youtube_home_sections_in_local_mode_v1
@@ -3854,6 +3855,24 @@ fn home_card_button(
     }
     if is_loading {
         card_widget.add_css_class("collection-card-loading");
+        card_widget.add_css_class("collection-card-skeleton");
+
+        if let Some(artwork) = card_widget
+            .first_child()
+            .and_then(|child| child.downcast::<gtk::Stack>().ok())
+        {
+            artwork.set_opacity(0.58);
+            artwork.add_css_class("collection-card-skeleton-artwork");
+        }
+
+        let mut child = card_widget
+            .first_child()
+            .and_then(|widget| widget.next_sibling());
+        while let Some(widget) = child {
+            widget.set_opacity(0.52);
+            widget.add_css_class("collection-card-skeleton-line");
+            child = widget.next_sibling();
+        }
     }
 
     let main_button = gtk::Button::new();
@@ -3885,6 +3904,38 @@ fn home_card_button(
     let overlay = gtk::Overlay::new();
     overlay.set_child(Some(&main_button));
     overlay.add_css_class("home-card-context-overlay");
+
+    if is_active {
+        let indicator_icon = gtk::Image::from_icon_name(if playback.playing {
+            "audio-volume-high-symbolic"
+        } else {
+            "media-playback-pause-symbolic"
+        });
+        indicator_icon.set_pixel_size(14);
+
+        let indicator_label = gtk::Label::new(Some(match (language, playback.playing) {
+            (AppLanguage::Portuguese, true) => "Tocando",
+            (AppLanguage::Portuguese, false) => "Pausado",
+            (AppLanguage::English, true) => "Playing",
+            (AppLanguage::English, false) => "Paused",
+            (AppLanguage::Spanish, true) => "Reproduciendo",
+            (AppLanguage::Spanish, false) => "Pausado",
+        }));
+        indicator_label.add_css_class("collection-card-now-playing-label");
+
+        let indicator = gtk::Box::new(gtk::Orientation::Horizontal, 5);
+        indicator.set_halign(gtk::Align::Center);
+        indicator.set_valign(gtk::Align::End);
+        indicator.set_margin_bottom(12);
+        indicator.set_margin_start(12);
+        indicator.set_margin_end(12);
+        indicator.append(&indicator_icon);
+        indicator.append(&indicator_label);
+        indicator.add_css_class("collection-card-now-playing");
+        indicator.add_css_class("accent");
+
+        overlay.add_overlay(&indicator);
+    }
 
     if let Some(play_event) = play_event {
         let control = gtk::Button::new();
@@ -4266,7 +4317,38 @@ fn collection_page_header(title: &str, subtitle: &str, icon_name: &str) -> gtk::
 }
 
 fn append_collection_grid_card(grid: &gtk::FlowBox, _position: i32, button: gtk::Button) {
+    button.set_opacity(0.0);
+    button.set_margin_top(14);
+    button.add_css_class("collection-card-entering");
     grid.insert(&button, -1);
+
+    let button_weak = button.downgrade();
+    let started_at = Rc::new(Cell::new(None::<i64>));
+    button.add_tick_callback(move |_, frame_clock| {
+        let Some(button) = button_weak.upgrade() else {
+            return glib::ControlFlow::Break;
+        };
+
+        let now = frame_clock.frame_time();
+        let start = started_at.get().unwrap_or_else(|| {
+            started_at.set(Some(now));
+            now
+        });
+        let progress = ((now - start) as f64 / 220_000.0).clamp(0.0, 1.0);
+        let eased = 1.0 - (1.0 - progress).powi(3);
+
+        button.set_opacity(eased);
+        button.set_margin_top(((1.0 - eased) * 14.0).round() as i32);
+
+        if progress >= 1.0 {
+            button.set_opacity(1.0);
+            button.set_margin_top(0);
+            button.remove_css_class("collection-card-entering");
+            glib::ControlFlow::Break
+        } else {
+            glib::ControlFlow::Continue
+        }
+    });
 }
 
 fn collection_button(
