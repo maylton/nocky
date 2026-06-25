@@ -1,3 +1,4 @@
+// modular_collection_page_headers_v5
 // compact_youtube_mix_page_header_v2
 // rich_youtube_mix_page_header_v1
 // rich_youtube_mix_rows_v1
@@ -1359,6 +1360,15 @@ impl LibraryBrowser {
             _ => query,
         };
 
+        if let Some(header) = local_collection_page_header(route, tracks, config, config.language) {
+            self.queue_context_header
+                .append(&render_collection_page_header(&header));
+            self.queue_context_header.set_visible(true);
+            self.queue_title.set_visible(false);
+        } else {
+            self.queue_title.set_visible(true);
+        }
+
         if let BrowserRoute::YouTubePlaylist { browse_id, .. } = route {
             self.rebuild_youtube_playlist_queue(
                 youtube,
@@ -1543,18 +1553,12 @@ impl LibraryBrowser {
             .iter()
             .find(|playlist| playlist.browse_id == browse_id)
         {
-            if is_mix_playlist(playlist) {
-                let track_count = youtube.playlist_tracks.get(browse_id).map(Vec::len);
-                self.queue_context_header.append(&youtube_mix_page_header(
-                    playlist,
-                    track_count,
-                    language,
-                ));
-                self.queue_context_header.set_visible(true);
-                self.queue_title.set_visible(false);
-            } else {
-                self.queue_title.set_visible(true);
-            }
+            let track_count = youtube.playlist_tracks.get(browse_id).map(Vec::len);
+            let header = youtube_playlist_page_header(playlist, track_count, language);
+            self.queue_context_header
+                .append(&render_collection_page_header(&header));
+            self.queue_context_header.set_visible(true);
+            self.queue_title.set_visible(false);
         } else {
             self.queue_title.set_visible(true);
         }
@@ -1662,6 +1666,16 @@ impl LibraryBrowser {
             BrowserRoute::YouTubeArtist(title) => ("artist", title.as_str()),
             _ => return,
         };
+
+        if let Some(header) = youtube_collection_page_header(route, youtube, language) {
+            self.queue_context_header
+                .append(&render_collection_page_header(&header));
+            self.queue_context_header.set_visible(true);
+            self.queue_title.set_visible(false);
+        } else {
+            self.queue_title.set_visible(true);
+        }
+
         let key = youtube_collection_key(kind, title);
         let catalog = youtube_catalog(youtube);
         let mut items = youtube
@@ -5176,74 +5190,60 @@ fn clear_box(container: &gtk::Box) {
     }
 }
 
-fn youtube_mix_page_header(
-    item: &YouTubeItem,
-    track_count: Option<usize>,
-    language: AppLanguage,
-) -> gtk::Box {
-    let cover = artwork(item.cached_cover(), 88);
+#[derive(Clone, Debug)]
+struct CollectionPageHeaderData {
+    cover_path: Option<PathBuf>,
+    eyebrow: String,
+    title: String,
+    subtitle: String,
+    detail: String,
+    online: bool,
+    artist: bool,
+}
+
+fn render_collection_page_header(data: &CollectionPageHeaderData) -> gtk::Box {
+    let cover = artwork(data.cover_path.as_deref(), 88);
     cover.set_size_request(88, 88);
     cover.set_halign(gtk::Align::Start);
     cover.set_valign(gtk::Align::Center);
     cover.set_hexpand(false);
     cover.set_vexpand(false);
-    cover.add_css_class("mix-page-cover");
+    cover.add_css_class("collection-page-cover");
     cover.add_css_class("compact-collection-cover");
 
-    let eyebrow = gtk::Label::new(Some("YOUTUBE MUSIC · MIX"));
+    if data.artist {
+        cover.add_css_class("artist-artwork");
+        cover.add_css_class("circular");
+    }
+
+    let eyebrow = gtk::Label::new(Some(&data.eyebrow));
     eyebrow.set_xalign(0.0);
     eyebrow.set_ellipsize(gtk::pango::EllipsizeMode::End);
     eyebrow.add_css_class("dim-label");
     eyebrow.add_css_class("collection-context-eyebrow");
 
-    let title = gtk::Label::new(Some(&item.title));
+    let title = gtk::Label::new(Some(&data.title));
     title.set_xalign(0.0);
     title.set_hexpand(true);
     title.set_ellipsize(gtk::pango::EllipsizeMode::End);
     title.set_max_width_chars(34);
     title.add_css_class("title-2");
-    title.add_css_class("mix-page-title");
+    title.add_css_class("collection-page-title");
 
-    let subtitle_text = if item.subtitle.trim().is_empty() {
-        match language {
-            AppLanguage::Portuguese => "Mix personalizado para você",
-            AppLanguage::English => "A personalized mix for you",
-            AppLanguage::Spanish => "Un mix personalizado para ti",
-        }
-    } else {
-        item.subtitle.as_str()
-    };
-    let subtitle = gtk::Label::new(Some(subtitle_text));
+    let subtitle = gtk::Label::new(Some(&data.subtitle));
     subtitle.set_xalign(0.0);
     subtitle.set_ellipsize(gtk::pango::EllipsizeMode::End);
     subtitle.set_max_width_chars(42);
     subtitle.add_css_class("dim-label");
+    subtitle.add_css_class("collection-page-subtitle");
 
-    let count_text = match track_count {
-        Some(count) => match language {
-            AppLanguage::Portuguese => {
-                format!("{count} {}", if count == 1 { "faixa" } else { "faixas" })
-            }
-            AppLanguage::English => {
-                format!("{count} {}", if count == 1 { "track" } else { "tracks" })
-            }
-            AppLanguage::Spanish => {
-                format!("{count} {}", if count == 1 { "pista" } else { "pistas" })
-            }
-        },
-        None => match language {
-            AppLanguage::Portuguese => "Mix personalizado".to_string(),
-            AppLanguage::English => "Personalized mix".to_string(),
-            AppLanguage::Spanish => "Mix personalizado".to_string(),
-        },
-    };
-    let count = source_badge(&count_text, true);
-    count.set_halign(gtk::Align::Start);
-    count.add_css_class("mix-count-badge");
+    let detail = source_badge(&data.detail, data.online);
+    detail.set_halign(gtk::Align::Start);
+    detail.add_css_class("collection-count-badge");
 
     let metadata = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     metadata.set_halign(gtk::Align::Start);
-    metadata.append(&count);
+    metadata.append(&detail);
 
     let text = gtk::Box::new(gtk::Orientation::Vertical, 4);
     text.set_hexpand(true);
@@ -5262,9 +5262,239 @@ fn youtube_mix_page_header(
     header.set_margin_end(2);
     header.append(&cover);
     header.append(&text);
-    header.add_css_class("mix-page-header");
+    header.add_css_class("collection-page-header");
     header.add_css_class("compact-collection-header");
     header
+}
+
+fn localized_collection_eyebrow(language: AppLanguage, online: bool, kind: &str) -> String {
+    let source = if online { "YOUTUBE MUSIC" } else { "LOCAL" };
+    let localized_kind = match (language, kind) {
+        (AppLanguage::Portuguese, "album") => "ÁLBUM",
+        (AppLanguage::Portuguese, "artist") => "ARTISTA",
+        (AppLanguage::Portuguese, "playlist") => "PLAYLIST",
+        (AppLanguage::Portuguese, "mix") => "MIX",
+        (AppLanguage::English, "album") => "ALBUM",
+        (AppLanguage::English, "artist") => "ARTIST",
+        (AppLanguage::English, "playlist") => "PLAYLIST",
+        (AppLanguage::English, "mix") => "MIX",
+        (AppLanguage::Spanish, "album") => "ÁLBUM",
+        (AppLanguage::Spanish, "artist") => "ARTISTA",
+        (AppLanguage::Spanish, "playlist") => "PLAYLIST",
+        (AppLanguage::Spanish, "mix") => "MIX",
+        _ => "COLLECTION",
+    };
+    format!("{source} · {localized_kind}")
+}
+
+fn localized_artist_summary(
+    language: AppLanguage,
+    album_count: usize,
+    track_count: usize,
+) -> String {
+    format!(
+        "{} · {}",
+        format_album_count(language, album_count),
+        format_track_count(language, track_count)
+    )
+}
+
+fn localized_playlist_summary(language: AppLanguage, track_count: Option<usize>) -> String {
+    match track_count {
+        Some(count) => format_track_count(language, count),
+        None => match language {
+            AppLanguage::Portuguese => "Seleção personalizada".to_string(),
+            AppLanguage::English => "Personalized selection".to_string(),
+            AppLanguage::Spanish => "Selección personalizada".to_string(),
+        },
+    }
+}
+
+fn local_collection_page_header(
+    route: &BrowserRoute,
+    tracks: &[Track],
+    config: &AppConfig,
+    language: AppLanguage,
+) -> Option<CollectionPageHeaderData> {
+    match route {
+        BrowserRoute::Album(album) => {
+            let album_tracks = tracks
+                .iter()
+                .filter(|track| track.album.eq_ignore_ascii_case(album))
+                .collect::<Vec<_>>();
+            if album_tracks.is_empty() {
+                return None;
+            }
+
+            let artists = album_tracks
+                .iter()
+                .map(|track| track.artist.trim())
+                .filter(|artist| !artist.is_empty())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            Some(CollectionPageHeaderData {
+                cover_path: album_tracks
+                    .iter()
+                    .find_map(|track| track.cover_path.clone()),
+                eyebrow: localized_collection_eyebrow(language, false, "album"),
+                title: album.clone(),
+                subtitle: artists,
+                detail: format_track_count(language, album_tracks.len()),
+                online: false,
+                artist: false,
+            })
+        }
+        BrowserRoute::Artist(artist) => {
+            let artist_tracks = tracks
+                .iter()
+                .filter(|track| track.artist.eq_ignore_ascii_case(artist))
+                .collect::<Vec<_>>();
+            if artist_tracks.is_empty() {
+                return None;
+            }
+
+            let album_count = artist_tracks
+                .iter()
+                .map(|track| track.album.trim())
+                .filter(|album| !album.is_empty())
+                .collect::<BTreeSet<_>>()
+                .len();
+
+            Some(CollectionPageHeaderData {
+                cover_path: artist_tracks
+                    .iter()
+                    .find_map(|track| track.cover_path.clone()),
+                eyebrow: localized_collection_eyebrow(language, false, "artist"),
+                title: artist.clone(),
+                subtitle: match language {
+                    AppLanguage::Portuguese => "Artista da biblioteca local".to_string(),
+                    AppLanguage::English => "Artist from your local library".to_string(),
+                    AppLanguage::Spanish => "Artista de tu biblioteca local".to_string(),
+                },
+                detail: localized_artist_summary(language, album_count, artist_tracks.len()),
+                online: false,
+                artist: true,
+            })
+        }
+        BrowserRoute::Playlist(name) => {
+            let playlist = config.playlist(name)?;
+            let playlist_tracks = playlist
+                .tracks
+                .iter()
+                .filter_map(|path| tracks.iter().find(|track| &track.path == path))
+                .collect::<Vec<_>>();
+
+            Some(CollectionPageHeaderData {
+                cover_path: playlist_tracks
+                    .iter()
+                    .find_map(|track| track.cover_path.clone()),
+                eyebrow: localized_collection_eyebrow(language, false, "playlist"),
+                title: playlist.name.clone(),
+                subtitle: match language {
+                    AppLanguage::Portuguese => "Playlist criada no Nocky".to_string(),
+                    AppLanguage::English => "Playlist created in Nocky".to_string(),
+                    AppLanguage::Spanish => "Playlist creada en Nocky".to_string(),
+                },
+                detail: localized_playlist_summary(language, Some(playlist.tracks.len())),
+                online: false,
+                artist: false,
+            })
+        }
+        _ => None,
+    }
+}
+
+fn youtube_playlist_page_header(
+    item: &YouTubeItem,
+    track_count: Option<usize>,
+    language: AppLanguage,
+) -> CollectionPageHeaderData {
+    let mix = is_mix_playlist(item);
+    let subtitle = if item.subtitle.trim().is_empty() {
+        match (language, mix) {
+            (AppLanguage::Portuguese, true) => "Mix personalizado para você",
+            (AppLanguage::Portuguese, false) => "Playlist do YouTube Music",
+            (AppLanguage::English, true) => "A personalized mix for you",
+            (AppLanguage::English, false) => "YouTube Music playlist",
+            (AppLanguage::Spanish, true) => "Un mix personalizado para ti",
+            (AppLanguage::Spanish, false) => "Playlist de YouTube Music",
+        }
+        .to_string()
+    } else {
+        item.subtitle.clone()
+    };
+
+    CollectionPageHeaderData {
+        cover_path: item.cached_cover().map(Path::to_path_buf),
+        eyebrow: localized_collection_eyebrow(language, true, if mix { "mix" } else { "playlist" }),
+        title: item.title.clone(),
+        subtitle,
+        detail: localized_playlist_summary(language, track_count),
+        online: true,
+        artist: false,
+    }
+}
+
+fn youtube_collection_page_header(
+    route: &BrowserRoute,
+    youtube: &YouTubeLibraryCache,
+    language: AppLanguage,
+) -> Option<CollectionPageHeaderData> {
+    match route {
+        BrowserRoute::YouTubeAlbum(title) => {
+            let entry = youtube
+                .albums
+                .iter()
+                .find(|entry| entry.title.eq_ignore_ascii_case(title))?;
+            let key = youtube_collection_key("album", title);
+            let track_count = youtube
+                .collection_tracks
+                .get(&key)
+                .map(Vec::len)
+                .unwrap_or(entry.item_count);
+
+            Some(CollectionPageHeaderData {
+                cover_path: entry.cached_cover().map(Path::to_path_buf),
+                eyebrow: localized_collection_eyebrow(language, true, "album"),
+                title: entry.title.clone(),
+                subtitle: entry.subtitle.clone(),
+                detail: format_track_count(language, track_count),
+                online: true,
+                artist: false,
+            })
+        }
+        BrowserRoute::YouTubeArtist(title) => {
+            let entry = youtube
+                .artists
+                .iter()
+                .find(|entry| entry.title.eq_ignore_ascii_case(title))?;
+            let key = youtube_collection_key("artist", title);
+            let track_count = youtube
+                .collection_tracks
+                .get(&key)
+                .map(Vec::len)
+                .unwrap_or(entry.item_count);
+            let album_count = youtube
+                .artist_albums
+                .get(&key)
+                .map(Vec::len)
+                .unwrap_or_default();
+
+            Some(CollectionPageHeaderData {
+                cover_path: entry.cached_cover().map(Path::to_path_buf),
+                eyebrow: localized_collection_eyebrow(language, true, "artist"),
+                title: entry.title.clone(),
+                subtitle: entry.subtitle.clone(),
+                detail: localized_artist_summary(language, album_count, track_count),
+                online: true,
+                artist: true,
+            })
+        }
+        _ => None,
+    }
 }
 
 fn youtube_mix_row(item: &YouTubeItem, track_count: Option<usize>) -> gtk::ListBoxRow {
