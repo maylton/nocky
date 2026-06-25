@@ -1,3 +1,4 @@
+// centered_lyrics_follow_with_breath_v2
 // stable_automatic_lyrics_scroll_v3
 // stabilize_clickable_lyrics_seek_scroll_v1
 // clickable_lyrics_seek_v3
@@ -75,6 +76,8 @@ struct LyricsPresenterInner {
     inline_pages: Vec<InlinePage>,
     inline_visible: Cell<usize>,
     scroll_generation: Rc<Cell<u64>>,
+    follow_generation: Rc<Cell<u64>>,
+    auto_follow_paused_until: RefCell<Option<Instant>>,
     language: Cell<AppLanguage>,
 }
 
@@ -150,9 +153,23 @@ impl LyricsPresenter {
                 inline_pages: vec![page_a, page_b],
                 inline_visible: Cell::new(0),
                 scroll_generation: Rc::new(Cell::new(0)),
+                follow_generation: Rc::new(Cell::new(0)),
+                auto_follow_paused_until: RefCell::new(None),
                 language: Cell::new(language),
             }),
         };
+
+        let manual_scroll = gtk::EventControllerScroll::new(
+            gtk::EventControllerScrollFlags::VERTICAL | gtk::EventControllerScrollFlags::DISCRETE,
+        );
+        {
+            let presenter = presenter.clone();
+            manual_scroll.connect_scroll(move |_, _, _| {
+                presenter.pause_auto_follow();
+                glib::Propagation::Proceed
+            });
+        }
+        presenter.inner.full_scroll.add_controller(manual_scroll);
 
         presenter.show_default_state();
         presenter
@@ -286,6 +303,19 @@ impl LyricsPresenter {
             .pending_seek_started
             .replace(Some(Instant::now()));
 
+        let clicked_index = self
+            .inner
+            .lines
+            .borrow()
+            .iter()
+            .position(|line| line.timestamp_us == timestamp_us);
+
+        if let Some(index) = clicked_index {
+            self.scroll_to(index, false);
+        }
+
+        self.pause_auto_follow();
+
         if let Some(callback) = self.inner.seek_callback.borrow().as_ref() {
             callback(timestamp_us);
         }
@@ -324,7 +354,9 @@ impl LyricsPresenter {
         self.update_full_classes(current);
         self.render_inline(current, true);
         if let Some(index) = current {
-            self.scroll_to(index, true);
+            if !self.auto_follow_is_paused() {
+                self.scroll_to(index, true);
+            }
         }
     }
 
@@ -447,32 +479,55 @@ impl LyricsPresenter {
             let lower = adjustment.lower();
             let page_size = adjustment.page_size();
             let upper = (adjustment.upper() - page_size).max(lower);
-
             if page_size <= 1.0 || upper <= lower {
                 return;
             }
 
-            let current = adjustment.value().clamp(lower, upper);
-            let line_top = bounds.y() as f64;
-            let line_bottom = line_top + bounds.height() as f64;
+            let line_center = bounds.y() as f64 + bounds.height() as f64 / 2.0;
+            let target = (line_center - page_size / 2.0).clamp(lower, upper);
+            adjustment.set_value(target);
+        });
+    }
 
-            let safe_top = current + page_size * 0.28;
-            let safe_bottom = current + page_size * 0.72;
+    fn auto_follow_is_paused(&self) -> bool {
+        self.inner
+            .auto_follow_paused_until
+            .borrow()
+            .as_ref()
+            .is_some_and(|deadline| Instant::now() < *deadline)
+    }
 
-            if line_top >= safe_top && line_bottom <= safe_bottom {
+    fn pause_auto_follow(&self) {
+        const FOLLOW_BREATH: Duration = Duration::from_secs(1);
+
+        self.inner
+            .auto_follow_paused_until
+            .replace(Some(Instant::now() + FOLLOW_BREATH));
+
+        let generation = self.inner.follow_generation.clone();
+        let token = generation.get().wrapping_add(1);
+        generation.set(token);
+
+        let presenter = self.clone();
+        glib::timeout_add_local_once(FOLLOW_BREATH, move || {
+            if generation.get() != token {
                 return;
             }
 
-            let line_center = line_top + bounds.height() as f64 / 2.0;
-            let target = (line_center - page_size / 2.0).clamp(lower, upper);
-
-            adjustment.set_value(target);
+            presenter.inner.auto_follow_paused_until.replace(None);
+            if let Some(index) = presenter.inner.active_index.get() {
+                presenter.scroll_to(index, false);
+            }
         });
     }
 
     fn cancel_scroll(&self) {
         let next = self.inner.scroll_generation.get().wrapping_add(1);
         self.inner.scroll_generation.set(next);
+
+        let follow = self.inner.follow_generation.get().wrapping_add(1);
+        self.inner.follow_generation.set(follow);
+        self.inner.auto_follow_paused_until.replace(None);
     }
 }
 
