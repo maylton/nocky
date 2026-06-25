@@ -1,3 +1,4 @@
+// stabilize_clickable_lyrics_seek_scroll_v1
 // clickable_lyrics_seek_v3
 // lyrics_2_v2
 use crate::{
@@ -66,6 +67,8 @@ struct LyricsPresenterInner {
     full_scroll: gtk::ScrolledWindow,
     full_box: gtk::Box,
     seek_callback: RefCell<Option<LyricsSeekCallback>>,
+    pending_seek_target_us: Cell<Option<i64>>,
+    pending_seek_started: RefCell<Option<Instant>>,
     full_labels: RefCell<Vec<gtk::Label>>,
     inline_stack: gtk::Stack,
     inline_viewport: gtk::ScrolledWindow,
@@ -139,6 +142,8 @@ impl LyricsPresenter {
                 full_scroll,
                 full_box,
                 seek_callback: RefCell::new(None),
+                pending_seek_target_us: Cell::new(None),
+                pending_seek_started: RefCell::new(None),
                 full_labels: RefCell::new(Vec::new()),
                 inline_stack,
                 inline_viewport,
@@ -180,6 +185,8 @@ impl LyricsPresenter {
     }
 
     pub fn set_lines(&self, lines: &[LyricLine]) {
+        self.inner.pending_seek_target_us.set(None);
+        self.inner.pending_seek_started.replace(None);
         self.cancel_scroll();
         self.inner.active_index.set(None);
         self.inner.lines.replace(lines.to_vec());
@@ -234,6 +241,8 @@ impl LyricsPresenter {
         inline_title: &str,
         inline_hint: Option<&str>,
     ) {
+        self.inner.pending_seek_target_us.set(None);
+        self.inner.pending_seek_started.replace(None);
         self.cancel_scroll();
         self.inner.lines.borrow_mut().clear();
         self.inner.visible_indices.borrow_mut().clear();
@@ -271,12 +280,38 @@ impl LyricsPresenter {
     }
 
     fn emit_seek(&self, timestamp_us: i64) {
+        let timestamp_us = timestamp_us.max(0);
+        self.inner.pending_seek_target_us.set(Some(timestamp_us));
+        self.inner
+            .pending_seek_started
+            .replace(Some(Instant::now()));
+
         if let Some(callback) = self.inner.seek_callback.borrow().as_ref() {
-            callback(timestamp_us.max(0));
+            callback(timestamp_us);
         }
     }
 
     pub fn update_timestamp(&self, timestamp_us: i64) {
+        const SEEK_TOLERANCE_US: u64 = 1_500_000;
+        const SEEK_GUARD_TIMEOUT: Duration = Duration::from_secs(3);
+
+        if let Some(target) = self.inner.pending_seek_target_us.get() {
+            let converged = timestamp_us.max(0).abs_diff(target) <= SEEK_TOLERANCE_US;
+            let timed_out = self
+                .inner
+                .pending_seek_started
+                .borrow()
+                .as_ref()
+                .is_some_and(|started| started.elapsed() >= SEEK_GUARD_TIMEOUT);
+
+            if converged || timed_out {
+                self.inner.pending_seek_target_us.set(None);
+                self.inner.pending_seek_started.replace(None);
+            } else {
+                return;
+            }
+        }
+
         let current = {
             let lines = self.inner.lines.borrow();
             active_index(&lines, timestamp_us)
