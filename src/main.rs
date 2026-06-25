@@ -1,3 +1,4 @@
+// fix_shutdown_save_order_v1
 // youtube_resume_seek_convergence_v1
 // lyrics_2_v2
 // playback_resume_preferences_fix_v1
@@ -1348,14 +1349,8 @@ impl AppController {
         self.publish_mpris_capabilities();
 
         {
-            let weak = Rc::downgrade(self);
-            self.window.connect_close_request(move |_| {
-                if let Some(controller) = weak.upgrade() {
-                    controller.player.shutdown();
-                    controller.mpris.send(mpris::MprisUpdate::Shutdown);
-                }
-                glib::Propagation::Proceed
-            });
+            self.window
+                .connect_close_request(move |_| glib::Propagation::Proceed);
         }
 
         {
