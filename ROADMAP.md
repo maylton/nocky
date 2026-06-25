@@ -483,3 +483,7 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - ✅ Collection pages now share one modular compact header for local/YouTube albums, artists, playlists and mixes.
 
 - ✅ YouTube artist discography pages now reuse the modular compact collection header with artwork, metadata, album count and track count.
+
+- ✅ Album and artist collection cards now share artwork, subtitle and detail rendering across Home and dedicated library pages.
+- ✅ Dedicated artist listings now use the same rich collection-card module as Home and album pages.
+- ✅ Playlist creation and maintenance controls were consolidated into a collapsed local playlist manager, keeping navigation as the primary layout.

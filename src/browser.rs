@@ -1,3 +1,4 @@
+// unified_album_artist_playlist_layout_v2
 // youtube_artist_discography_header_v1
 // modular_collection_page_headers_v5
 // compact_youtube_mix_page_header_v2
@@ -966,6 +967,20 @@ impl LibraryBrowser {
         action_row.append(&add_button);
         action_row.append(&remove_button);
 
+        let playlist_manager_content = gtk::Box::new(gtk::Orientation::Vertical, 10);
+        playlist_manager_content.set_hexpand(true);
+        playlist_manager_content.add_css_class("playlist-manager-content");
+        playlist_manager_content.append(&create_row);
+        playlist_manager_content.append(&playlist_select_row);
+        playlist_manager_content.append(&action_row);
+
+        let playlist_manager = gtk::Expander::new(Some("Gerenciar playlists locais"));
+        playlist_manager.set_hexpand(true);
+        playlist_manager.set_expanded(false);
+        playlist_manager.set_child(Some(&playlist_manager_content));
+        playlist_manager.add_css_class("playlist-manager");
+        playlist_manager.add_css_class("boxed-list");
+
         let playlists_list = gtk::ListBox::new();
         playlists_list.set_selection_mode(gtk::SelectionMode::Single);
         playlists_list.add_css_class("playlist-list");
@@ -1004,9 +1019,7 @@ impl LibraryBrowser {
         playlists_page.set_vexpand(true);
         playlists_page.add_css_class("library-panel");
         playlists_page.append(&playlists_header);
-        playlists_page.append(&create_row);
-        playlists_page.append(&playlist_select_row);
-        playlists_page.append(&action_row);
+        playlists_page.append(&playlist_manager);
         playlists_page.append(&playlists_scroll);
 
         let root = gtk::Stack::new();
@@ -2121,12 +2134,37 @@ impl LibraryBrowser {
                 continue;
             }
 
+            let artist_tracks = tracks
+                .iter()
+                .filter(|track| track.artist.eq_ignore_ascii_case(&artist))
+                .collect::<Vec<_>>();
+            let album_count = artist_tracks
+                .iter()
+                .map(|track| track.album.trim())
+                .filter(|album| !album.is_empty())
+                .collect::<BTreeSet<_>>()
+                .len();
+            let cover = artist_tracks
+                .iter()
+                .find_map(|track| track.cover_path.as_deref());
+            let detail = format!(
+                "{} · {}",
+                format_album_count(AppLanguage::Portuguese, album_count),
+                format_track_count(AppLanguage::Portuguese, artist_tracks.len())
+            );
+
             append_collection_grid_card(
                 &self.artists_grid,
                 position,
-                artist_list_button(
-                    &artist,
-                    BrowserEvent::Navigate(BrowserRoute::Artist(artist.clone())),
+                collection_button(
+                    artist_collection_card(
+                        cover,
+                        &artist,
+                        "Artista da biblioteca local",
+                        &detail,
+                        false,
+                    ),
+                    BrowserRoute::Artist(artist.clone()),
                     &self.event_tx,
                 ),
             );
@@ -2148,8 +2186,14 @@ impl LibraryBrowser {
             append_collection_grid_card(
                 &self.artists_grid,
                 position,
-                artist_list_button(
-                    &artist_entry.title,
+                collection_event_button(
+                    artist_collection_card(
+                        artist_entry.cached_cover(),
+                        &artist_entry.title,
+                        &artist_entry.subtitle,
+                        &artist_entry.detail,
+                        true,
+                    ),
                     BrowserEvent::OpenYouTubeCollection(artist_entry.source.clone()),
                     &self.event_tx,
                 ),
@@ -2161,8 +2205,11 @@ impl LibraryBrowser {
             append_collection_grid_card(
                 &self.artists_grid,
                 position,
-                artist_list_button(
-                    &format!("Carregar mais artistas ({hidden} restantes)"),
+                collection_event_button(
+                    collection_placeholder(
+                        "Carregar mais artistas",
+                        &format!("{hidden} restantes"),
+                    ),
                     BrowserEvent::LoadMoreArtists,
                     &self.event_tx,
                 ),
@@ -4288,44 +4335,6 @@ fn artist_list_grid() -> gtk::FlowBox {
     list
 }
 
-fn artist_list_button(
-    artist: &str,
-    event: BrowserEvent,
-    event_tx: &Sender<BrowserEvent>,
-) -> gtk::Button {
-    let name = gtk::Label::new(Some(artist));
-    name.set_xalign(0.0);
-    name.set_hexpand(true);
-    name.set_ellipsize(gtk::pango::EllipsizeMode::End);
-
-    let arrow = gtk::Image::from_icon_name("go-next-symbolic");
-    arrow.set_pixel_size(16);
-    arrow.add_css_class("dim-label");
-
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    row.set_margin_start(14);
-    row.set_margin_end(14);
-    row.set_margin_top(10);
-    row.set_margin_bottom(10);
-    row.append(&name);
-    row.append(&arrow);
-
-    let button = gtk::Button::new();
-    button.set_child(Some(&row));
-    button.set_hexpand(true);
-    button.set_halign(gtk::Align::Fill);
-    button.add_css_class("flat");
-    button.add_css_class("artist-list-button");
-    button.add_css_class("expressive-list-card");
-
-    let sender = event_tx.clone();
-    button.connect_clicked(move |_| {
-        let _ = sender.send(event.clone());
-    });
-
-    button
-}
-
 fn artist_list_placeholder(message: &str) -> gtk::Button {
     let label = gtk::Label::new(Some(message));
     label.set_xalign(0.0);
@@ -4686,7 +4695,7 @@ fn collection_card(
     cover_path: Option<&Path>,
     title: &str,
     subtitle: &str,
-    _detail: &str,
+    detail: &str,
     online: bool,
 ) -> gtk::Box {
     let artwork = artwork(cover_path, COLLECTION_ARTWORK_MIN_SIZE);
@@ -4706,6 +4715,17 @@ fn collection_card(
     subtitle_label.set_max_width_chars(18);
     subtitle_label.add_css_class("dim-label");
     subtitle_label.add_css_class("expressive-card-subtitle");
+
+    let detail_label = gtk::Label::new(Some(detail));
+    detail_label.set_xalign(0.0);
+    detail_label.set_single_line_mode(true);
+    detail_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    detail_label.set_width_chars(18);
+    detail_label.set_max_width_chars(18);
+    detail_label.add_css_class("dim-label");
+    detail_label.add_css_class("collection-card-detail");
+    detail_label.add_css_class("expressive-card-detail");
+
     let card = gtk::Box::new(gtk::Orientation::Vertical, 6);
     card.set_size_request(COLLECTION_CARD_MAX_WIDTH, COLLECTION_CARD_MIN_HEIGHT);
     card.set_hexpand(true);
@@ -4721,6 +4741,9 @@ fn collection_card(
     card.append(&title_label);
     if !subtitle.is_empty() {
         card.append(&subtitle_label);
+    }
+    if !detail.is_empty() {
+        card.append(&detail_label);
     }
     bind_responsive_collection_artwork(&card, &artwork, cover_path.map(Path::to_path_buf));
     card
@@ -4753,6 +4776,34 @@ fn collection_card_with_placeholder(
                 icon.add_css_class("typed-placeholder-icon");
             }
         }
+    }
+
+    card
+}
+
+fn artist_collection_card(
+    cover_path: Option<&Path>,
+    title: &str,
+    subtitle: &str,
+    detail: &str,
+    online: bool,
+) -> gtk::Box {
+    let card = collection_card_with_placeholder(
+        cover_path,
+        title,
+        subtitle,
+        detail,
+        online,
+        "avatar-default-symbolic",
+        "artist-placeholder",
+    );
+
+    if let Some(artwork) = card
+        .first_child()
+        .and_then(|child| child.downcast::<gtk::Stack>().ok())
+    {
+        artwork.add_css_class("artist-artwork");
+        artwork.add_css_class("circular");
     }
 
     card
