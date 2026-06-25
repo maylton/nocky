@@ -1,3 +1,4 @@
+// clickable_lyrics_seek_v3
 // lyrics_2_v2
 use crate::{
     config::AppLanguage,
@@ -19,6 +20,8 @@ const INLINE_TEXT_WIDTH: i32 = 360;
 const INLINE_FOCUSED_HEIGHT: i32 = 44;
 const INLINE_SECONDARY_HEIGHT: i32 = 22;
 const SCROLL_DURATION: Duration = Duration::from_millis(220);
+
+type LyricsSeekCallback = Box<dyn Fn(i64)>;
 
 #[derive(Clone, Copy)]
 struct LyricsCopy {
@@ -62,9 +65,7 @@ struct LyricsPresenterInner {
     active_index: Cell<Option<usize>>,
     full_scroll: gtk::ScrolledWindow,
     full_box: gtk::Box,
-    offset_controls: gtk::Box,
-    offset_label: gtk::Label,
-    offset_us: Cell<i64>,
+    seek_callback: RefCell<Option<LyricsSeekCallback>>,
     full_labels: RefCell<Vec<gtk::Label>>,
     inline_stack: gtk::Stack,
     inline_viewport: gtk::ScrolledWindow,
@@ -89,24 +90,6 @@ impl LyricsPresenter {
         full_box.set_halign(gtk::Align::Fill);
         full_box.set_hexpand(true);
         full_box.add_css_class("lyrics-page");
-
-        let earlier = gtk::Button::with_label("−0.5s");
-        earlier.add_css_class("lyrics-offset-button");
-        let offset_label = gtk::Label::new(Some("0.0s"));
-        offset_label.add_css_class("lyrics-offset-label");
-        let later = gtk::Button::with_label("+0.5s");
-        later.add_css_class("lyrics-offset-button");
-        let reset = gtk::Button::with_label("Reset");
-        reset.add_css_class("lyrics-offset-reset");
-
-        let offset_controls = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        offset_controls.set_halign(gtk::Align::Center);
-        offset_controls.add_css_class("lyrics-offset-controls");
-        offset_controls.append(&earlier);
-        offset_controls.append(&offset_label);
-        offset_controls.append(&later);
-        offset_controls.append(&reset);
-        full_box.append(&offset_controls);
 
         let full_scroll = gtk::ScrolledWindow::new();
         full_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
@@ -155,9 +138,7 @@ impl LyricsPresenter {
                 active_index: Cell::new(None),
                 full_scroll,
                 full_box,
-                offset_controls,
-                offset_label,
-                offset_us: Cell::new(0),
+                seek_callback: RefCell::new(None),
                 full_labels: RefCell::new(Vec::new()),
                 inline_stack,
                 inline_viewport,
@@ -167,19 +148,6 @@ impl LyricsPresenter {
                 language: Cell::new(language),
             }),
         };
-
-        {
-            let presenter = presenter.clone();
-            earlier.connect_clicked(move |_| presenter.adjust_offset_ms(-500));
-        }
-        {
-            let presenter = presenter.clone();
-            later.connect_clicked(move |_| presenter.adjust_offset_ms(500));
-        }
-        {
-            let presenter = presenter.clone();
-            reset.connect_clicked(move |_| presenter.reset_offset());
-        }
 
         presenter.show_default_state();
         presenter
@@ -212,7 +180,6 @@ impl LyricsPresenter {
     }
 
     pub fn set_lines(&self, lines: &[LyricLine]) {
-        self.reset_offset();
         self.cancel_scroll();
         self.inner.active_index.set(None);
         self.inner.lines.replace(lines.to_vec());
@@ -233,6 +200,19 @@ impl LyricsPresenter {
             label.set_halign(gtk::Align::Center);
             label.set_hexpand(true);
             label.add_css_class("lyric-line");
+            label.add_css_class("lyric-seek-target");
+            label.set_cursor_from_name(Some("pointer"));
+            label.set_tooltip_text(Some("Ir para este trecho"));
+
+            let timestamp_us = line.timestamp_us;
+            let presenter = self.clone();
+            let click = gtk::GestureClick::new();
+            click.set_button(gtk::gdk::BUTTON_PRIMARY);
+            click.connect_released(move |_, _, _, _| {
+                presenter.emit_seek(timestamp_us);
+            });
+            label.add_controller(click);
+
             self.inner.full_box.append(&label);
             labels.push(label);
         }
@@ -283,32 +263,23 @@ impl LyricsPresenter {
         );
     }
 
-    pub fn adjust_offset_ms(&self, delta_ms: i64) {
-        let next = self
-            .inner
-            .offset_us
-            .get()
-            .saturating_add(delta_ms.saturating_mul(1_000))
-            .clamp(-10_000_000, 10_000_000);
-        self.inner.offset_us.set(next);
-        self.update_offset_label();
+    pub fn connect_seek<F>(&self, callback: F)
+    where
+        F: Fn(i64) + 'static,
+    {
+        self.inner.seek_callback.replace(Some(Box::new(callback)));
     }
 
-    pub fn reset_offset(&self) {
-        self.inner.offset_us.set(0);
-        self.update_offset_label();
-    }
-
-    fn update_offset_label(&self) {
-        let seconds = self.inner.offset_us.get() as f64 / 1_000_000.0;
-        self.inner.offset_label.set_text(&format!("{seconds:+.1}s"));
+    fn emit_seek(&self, timestamp_us: i64) {
+        if let Some(callback) = self.inner.seek_callback.borrow().as_ref() {
+            callback(timestamp_us.max(0));
+        }
     }
 
     pub fn update_timestamp(&self, timestamp_us: i64) {
-        let adjusted = timestamp_us.saturating_add(self.inner.offset_us.get());
         let current = {
             let lines = self.inner.lines.borrow();
-            active_index(&lines, adjusted)
+            active_index(&lines, timestamp_us)
         };
         let previous = self.inner.active_index.replace(current);
         if previous == current {
@@ -335,14 +306,8 @@ impl LyricsPresenter {
 
     fn clear_full_widgets(&self) {
         self.inner.full_labels.borrow_mut().clear();
-        let controls: gtk::Widget = self.inner.offset_controls.clone().upcast();
-        let mut child = self.inner.full_box.first_child();
-        while let Some(widget) = child {
-            let next = widget.next_sibling();
-            if widget != controls {
-                self.inner.full_box.remove(&widget);
-            }
-            child = next;
+        while let Some(child) = self.inner.full_box.first_child() {
+            self.inner.full_box.remove(&child);
         }
     }
 

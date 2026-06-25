@@ -1,3 +1,4 @@
+// clickable_lyrics_seek_v3
 // fix_resume_seek_oscillation_v1
 // fix_shutdown_save_order_v1
 // youtube_resume_seek_convergence_v1
@@ -859,6 +860,15 @@ impl AppController {
             visual_theme_manager,
             _theme: theme,
         });
+        {
+            let weak = Rc::downgrade(&controller);
+            controller.lyrics.connect_seek(move |timestamp_us| {
+                if let Some(controller) = weak.upgrade() {
+                    controller.seek_to(timestamp_us, true);
+                }
+            });
+        }
+
         {
             let weak = Rc::downgrade(&controller);
             page_switcher.connect_home_clicked(move || {

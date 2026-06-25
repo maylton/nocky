@@ -156,3 +156,29 @@ window.theme-material-expressive .lyrics-offset-reset:hover {
   background-color: @m3_primary_container;
   background-image: none;
 }
+
+/* clickable_lyrics_seek_v3 */
+.lyric-seek-target {
+  border-radius: 18px;
+  padding: 8px 14px;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.lyric-seek-target:hover {
+  background-color: alpha(@window_fg_color, 0.07);
+}
+
+.lyric-seek-target:active {
+  transform: scale(0.985);
+}
+
+window.theme-noctalia .lyric-seek-target:hover {
+  background-color: alpha(@accent_color, 0.16);
+}
+
+window.theme-material-expressive .lyric-seek-target:hover {
+  background-color: alpha(@m3_primary, 0.14);
+}
