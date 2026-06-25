@@ -1,3 +1,4 @@
+// collection_context_favorites_and_placeholders_v6
 // shared_collection_card_descriptor_v1
 // hide_youtube_home_sections_in_local_mode_v1
 // recently_added_local_music_v1
@@ -113,6 +114,7 @@ pub enum BrowserEvent {
     AddCurrentToPlaylist(String),
     RemoveCurrentFromPlaylist(String),
     DeletePlaylist(String),
+    ToggleCollectionFavorite(String),
 }
 
 #[derive(Clone, Debug, Default)]
@@ -232,6 +234,8 @@ struct CollectionCardDescriptor<'a> {
     detail: &'a str,
     online: bool,
     artist: bool,
+    placeholder_icon: &'static str,
+    placeholder_class: &'static str,
 }
 
 impl HomeCard {
@@ -249,6 +253,8 @@ impl HomeCard {
                 detail,
                 online: false,
                 artist: false,
+                placeholder_icon: "media-optical-symbolic",
+                placeholder_class: "album-placeholder",
             },
             Self::YouTubeAlbum {
                 item,
@@ -262,6 +268,8 @@ impl HomeCard {
                 detail,
                 online: true,
                 artist: false,
+                placeholder_icon: "media-optical-symbolic",
+                placeholder_class: "album-placeholder",
             },
             Self::LocalArtist {
                 title,
@@ -275,6 +283,8 @@ impl HomeCard {
                 detail,
                 online: false,
                 artist: true,
+                placeholder_icon: "avatar-default-symbolic",
+                placeholder_class: "artist-placeholder",
             },
             Self::YouTubeArtist {
                 item,
@@ -288,6 +298,8 @@ impl HomeCard {
                 detail,
                 online: true,
                 artist: true,
+                placeholder_icon: "avatar-default-symbolic",
+                placeholder_class: "artist-placeholder",
             },
             Self::LocalPlaylist { title, subtitle } => CollectionCardDescriptor {
                 cover_path: None,
@@ -296,6 +308,8 @@ impl HomeCard {
                 detail: home_copy(language).local_playlist,
                 online: false,
                 artist: false,
+                placeholder_icon: "view-list-symbolic",
+                placeholder_class: "playlist-placeholder",
             },
             Self::YouTubePlaylist(item) => CollectionCardDescriptor {
                 cover_path: item.cached_cover(),
@@ -304,6 +318,8 @@ impl HomeCard {
                 detail: home_youtube_playlist_detail(item, language),
                 online: true,
                 artist: false,
+                placeholder_icon: "view-list-symbolic",
+                placeholder_class: "playlist-placeholder",
             },
         }
     }
@@ -1750,6 +1766,7 @@ impl LibraryBrowser {
                     copy.mixtapes_subtitle,
                     mixes,
                     playback,
+                    config,
                     &self.event_tx,
                     language,
                     card_effects,
@@ -1795,6 +1812,7 @@ impl LibraryBrowser {
                     copy.recently_added_subtitle,
                     recently_added,
                     playback,
+                    config,
                     &self.event_tx,
                     language,
                     card_effects,
@@ -1807,6 +1825,7 @@ impl LibraryBrowser {
             copy.albums_subtitle,
             ranked_home_album_cards(tracks, youtube, history, active_source, language),
             playback,
+            config,
             &self.event_tx,
             language,
             card_effects,
@@ -1817,6 +1836,7 @@ impl LibraryBrowser {
             copy.artists_subtitle,
             ranked_home_artist_cards(tracks, youtube, history, active_source, language),
             playback,
+            config,
             &self.event_tx,
             language,
             card_effects,
@@ -1849,6 +1869,7 @@ impl LibraryBrowser {
                 copy.playlists_subtitle,
                 playlist_cards,
                 playback,
+                config,
                 &self.event_tx,
                 language,
                 card_effects,
@@ -3314,11 +3335,16 @@ fn home_history_section(
     section
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Home section rendering keeps its source-aware dependencies explicit"
+)]
 fn home_section(
     title: &str,
     subtitle: &str,
     cards: Vec<HomeCard>,
     playback: &BrowserPlaybackState,
+    config: &AppConfig,
     event_tx: &Sender<BrowserEvent>,
     language: AppLanguage,
     card_effects: bool,
@@ -3345,6 +3371,7 @@ fn home_section(
             rail.append(&home_card_button(
                 card,
                 playback,
+                config,
                 event_tx,
                 language,
                 card_effects,
@@ -3696,6 +3723,7 @@ fn home_edge_lerp(start: f64, end: f64, progress: f64) -> f64 {
 fn home_card_button(
     card: HomeCard,
     playback: &BrowserPlaybackState,
+    config: &AppConfig,
     event_tx: &Sender<BrowserEvent>,
     language: AppLanguage,
     card_effects: bool,
@@ -3799,12 +3827,14 @@ fn home_card_button(
             HomeCard::YouTubeAlbum { .. } | HomeCard::YouTubePlaylist(_)
         );
 
-    let card_widget = collection_card(
+    let card_widget = collection_card_with_placeholder(
         descriptor.cover_path,
         descriptor.title,
         descriptor.subtitle,
         descriptor.detail,
         descriptor.online,
+        descriptor.placeholder_icon,
+        descriptor.placeholder_class,
     );
     if descriptor.artist {
         card_widget.add_css_class("artist-collection-card");
@@ -3948,24 +3978,54 @@ fn home_card_button(
         actions.set_margin_start(8);
         actions.set_margin_end(8);
 
+        let is_favorite = config.is_collection_favorite(&card.identity());
         let labels = match language {
             AppLanguage::Portuguese => (
                 "Reproduzir em seguida",
                 "Adicionar ao fim da fila",
                 "Abrir coleção",
+                if is_favorite {
+                    "Remover dos favoritos"
+                } else {
+                    "Adicionar aos favoritos"
+                },
             ),
-            AppLanguage::English => ("Play next", "Add to queue", "Open collection"),
+            AppLanguage::English => (
+                "Play next",
+                "Add to queue",
+                "Open collection",
+                if is_favorite {
+                    "Remove from favorites"
+                } else {
+                    "Add to favorites"
+                },
+            ),
             AppLanguage::Spanish => (
                 "Reproducir a continuación",
                 "Añadir al final de la cola",
                 "Abrir colección",
+                if is_favorite {
+                    "Quitar de favoritos"
+                } else {
+                    "Añadir a favoritos"
+                },
             ),
         };
 
+        let favorite_event = BrowserEvent::ToggleCollectionFavorite(card.identity());
         for (label, event, icon_name) in [
             (labels.0, play_next_event, "media-skip-forward-symbolic"),
             (labels.1, append_event, "list-add-symbolic"),
             (labels.2, open_event, "go-next-symbolic"),
+            (
+                labels.3,
+                favorite_event,
+                if is_favorite {
+                    "emblem-favorite-symbolic"
+                } else {
+                    "non-starred-symbolic"
+                },
+            ),
         ] {
             let icon = gtk::Image::from_icon_name(icon_name);
             icon.set_pixel_size(18);
@@ -4310,6 +4370,38 @@ fn collection_card(
         card.append(&subtitle_label);
     }
     bind_responsive_collection_artwork(&card, &artwork, cover_path.map(Path::to_path_buf));
+    card
+}
+
+fn collection_card_with_placeholder(
+    cover_path: Option<&Path>,
+    title: &str,
+    subtitle: &str,
+    detail: &str,
+    online: bool,
+    placeholder_icon: &str,
+    placeholder_class: &str,
+) -> gtk::Box {
+    let card = collection_card(cover_path, title, subtitle, detail, online);
+
+    if cover_path.is_none() {
+        if let Some(artwork) = card
+            .first_child()
+            .and_then(|child| child.downcast::<gtk::Stack>().ok())
+        {
+            artwork.add_css_class("typed-collection-placeholder");
+            artwork.add_css_class(placeholder_class);
+
+            if let Some(icon) = artwork
+                .first_child()
+                .and_then(|child| child.downcast::<gtk::Image>().ok())
+            {
+                icon.set_icon_name(Some(placeholder_icon));
+                icon.add_css_class("typed-placeholder-icon");
+            }
+        }
+    }
+
     card
 }
 

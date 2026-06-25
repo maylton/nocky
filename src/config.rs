@@ -108,6 +108,8 @@ pub struct AppConfig {
     pub language: AppLanguage,
     pub volume: f64,
     pub liked_tracks: Vec<PathBuf>,
+    #[serde(default)]
+    pub favorite_collections: Vec<String>,
     pub playlists: Vec<Playlist>,
     pub startup_source: Option<StartupSource>,
     pub blur_mode: BlurMode,
@@ -135,6 +137,7 @@ impl Default for AppConfig {
             language: AppLanguage::detect_system(),
             volume: 0.75,
             liked_tracks: Vec::new(),
+            favorite_collections: Vec::new(),
             playlists: Vec::new(),
             startup_source: None,
             blur_mode: BlurMode::Noctalia,
@@ -221,6 +224,26 @@ impl AppConfig {
             false
         } else {
             self.liked_tracks.push(path.to_path_buf());
+            true
+        }
+    }
+
+    pub fn is_collection_favorite(&self, key: &str) -> bool {
+        self.favorite_collections
+            .iter()
+            .any(|favorite| favorite.eq_ignore_ascii_case(key))
+    }
+
+    pub fn toggle_collection_favorite(&mut self, key: &str) -> bool {
+        if let Some(index) = self
+            .favorite_collections
+            .iter()
+            .position(|favorite| favorite.eq_ignore_ascii_case(key))
+        {
+            self.favorite_collections.remove(index);
+            false
+        } else {
+            self.favorite_collections.push(key.to_string());
             true
         }
     }

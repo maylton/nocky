@@ -4327,6 +4327,16 @@ impl AppController {
                         self.show_toast(&format!("Playlist ‘{name}’ excluída"));
                     }
                 }
+                BrowserEvent::ToggleCollectionFavorite(key) => {
+                    let added = self.config.borrow_mut().toggle_collection_favorite(&key);
+                    self.save_config();
+                    self.refresh_browser();
+                    self.show_toast(if added {
+                        "Coleção adicionada aos favoritos"
+                    } else {
+                        "Coleção removida dos favoritos"
+                    });
+                }
             }
         }
     }

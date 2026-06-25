@@ -179,10 +179,10 @@ now focuses on completing the user-facing history experience.
 ### Remaining
 
 - Contextual play button on collection cards.
-- Quick favorite action.
+- ✅ Favorite action inside each collection card overflow menu.
 - Overflow menu.
 - Skeleton placeholders during remote loading.
-- Palette-based placeholders for missing artwork.
+- 🟡 Type-aware placeholders for missing artwork; palette-derived variants remain planned.
 - Animated insertion and removal.
 - Clear current-playing indicator directly on every relevant card.
 - ✅ Shared collection-card descriptor centralizes local and YouTube album, artist and playlist presentation.
