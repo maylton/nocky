@@ -1,3 +1,4 @@
+// stable_automatic_lyrics_scroll_v3
 // stabilize_clickable_lyrics_seek_scroll_v1
 // clickable_lyrics_seek_v3
 // lyrics_2_v2
@@ -20,7 +21,6 @@ const INLINE_PAGE_HEIGHT: i32 = 136;
 const INLINE_TEXT_WIDTH: i32 = 360;
 const INLINE_FOCUSED_HEIGHT: i32 = 44;
 const INLINE_SECONDARY_HEIGHT: i32 = 22;
-const SCROLL_DURATION: Duration = Duration::from_millis(220);
 
 type LyricsSeekCallback = Box<dyn Fn(i64)>;
 
@@ -417,10 +417,11 @@ impl LyricsPresenter {
         self.inner.inline_visible.set(target);
     }
 
-    fn scroll_to(&self, index: usize, animate: bool) {
+    fn scroll_to(&self, index: usize, _animate: bool) {
         if !self.inner.full_scroll.is_mapped() {
             return;
         }
+
         let Some(label) = self.inner.full_labels.borrow().get(index).cloned() else {
             return;
         };
@@ -442,35 +443,30 @@ impl LyricsPresenter {
             let Some(bounds) = label.compute_bounds(&content) else {
                 return;
             };
-            let lower = adjustment.lower();
-            let upper = (adjustment.upper() - adjustment.page_size()).max(lower);
-            let center = bounds.y() as f64 + bounds.height() as f64 / 2.0;
-            let target = (center - adjustment.page_size() / 2.0).clamp(lower, upper);
-            let start = adjustment.value();
 
-            if !animate || !animations_enabled() || (target - start).abs() < 1.0 {
-                adjustment.set_value(target);
+            let lower = adjustment.lower();
+            let page_size = adjustment.page_size();
+            let upper = (adjustment.upper() - page_size).max(lower);
+
+            if page_size <= 1.0 || upper <= lower {
                 return;
             }
 
-            let started = Instant::now();
-            glib::timeout_add_local(Duration::from_millis(16), move || {
-                if generation.get() != token {
-                    return glib::ControlFlow::Break;
-                }
+            let current = adjustment.value().clamp(lower, upper);
+            let line_top = bounds.y() as f64;
+            let line_bottom = line_top + bounds.height() as f64;
 
-                let progress =
-                    (started.elapsed().as_secs_f64() / SCROLL_DURATION.as_secs_f64()).min(1.0);
-                let eased = 1.0 - (1.0 - progress).powi(3);
-                adjustment.set_value(start + (target - start) * eased);
+            let safe_top = current + page_size * 0.28;
+            let safe_bottom = current + page_size * 0.72;
 
-                if progress >= 1.0 {
-                    adjustment.set_value(target);
-                    glib::ControlFlow::Break
-                } else {
-                    glib::ControlFlow::Continue
-                }
-            });
+            if line_top >= safe_top && line_bottom <= safe_bottom {
+                return;
+            }
+
+            let line_center = line_top + bounds.height() as f64 / 2.0;
+            let target = (line_center - page_size / 2.0).clamp(lower, upper);
+
+            adjustment.set_value(target);
         });
     }
 
@@ -595,12 +591,6 @@ fn fill_inline_lines(
             slot == INLINE_CENTER,
         );
     }
-}
-
-fn animations_enabled() -> bool {
-    gtk::Settings::default()
-        .map(|settings| settings.property::<bool>("gtk-enable-animations"))
-        .unwrap_or(true)
 }
 
 #[cfg(test)]
