@@ -518,3 +518,7 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 
 - ✅ Track overflow menus in playlists, albums and YouTube mixes now include Go to artist and Go to album actions when metadata is available.
 - ✅ Collaborative credits use the primary credited artist for direct navigation, while missing metadata hides the corresponding action.
+
+- ✅ Personalized artist cards now prefer dedicated artist profiles or solo-track artwork instead of sharing a collaboration cover.
+- ✅ Ranked Home artist cards no longer inherit the legacy album-count subtitle; they show only listening statistics and artist-specific metadata.
+- ✅ When no artist-specific image exists, the generic artist placeholder is used instead of a misleading collaborative cover.

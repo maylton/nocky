@@ -1,3 +1,4 @@
+// ranked_artist_unique_artwork_v3
 // track_menu_artist_album_navigation_v1
 // multi_artist_credits_v2
 // artist_featured_track_surface_restore_v1
@@ -2765,6 +2766,40 @@ fn ranked_home_album_cards(
     merge_ranked_home_cards(cards, fallback, 12)
 }
 
+fn local_ranked_artist_cover(tracks: &[Track], artist: &str) -> Option<PathBuf> {
+    tracks
+        .iter()
+        .filter(|track| artist_credit_contains(&track.artist, artist))
+        .find(|track| {
+            let credits = credited_artists(&track.artist);
+            credits.len() == 1 && credits[0].eq_ignore_ascii_case(artist)
+        })
+        .and_then(|track| track.cover_path.clone())
+}
+
+fn youtube_ranked_artist_cover(
+    youtube: &YouTubeLibraryCache,
+    catalog: &[YouTubeItem],
+    artist: &str,
+) -> Option<PathBuf> {
+    let key = youtube_collection_key("artist", artist);
+
+    if let Some(profile) = youtube.artist_profiles.get(&key) {
+        if let Some(path) = profile.cached_cover() {
+            return Some(path.to_path_buf());
+        }
+    }
+
+    catalog
+        .iter()
+        .filter(|item| artist_credit_contains(&item.artist, artist))
+        .find(|item| {
+            let credits = credited_artists(&item.artist);
+            credits.len() == 1 && credits[0].eq_ignore_ascii_case(artist)
+        })
+        .and_then(crate::youtube::cached_cover_for_item)
+}
+
 fn ranked_home_artist_cards(
     tracks: &[Track],
     youtube: &YouTubeLibraryCache,
@@ -2782,7 +2817,7 @@ fn ranked_home_artist_cards(
             ListeningSource::Local => {
                 let artist_tracks = tracks
                     .iter()
-                    .filter(|track| track.artist.eq_ignore_ascii_case(&name))
+                    .filter(|track| artist_credit_contains(&track.artist, &name))
                     .collect::<Vec<_>>();
                 if artist_tracks.is_empty() {
                     continue;
@@ -2793,12 +2828,10 @@ fn ranked_home_artist_cards(
                     format_track_count(language, artist_tracks.len())
                 );
                 cards.push(HomeCard::LocalArtist {
-                    title: name,
+                    title: name.clone(),
                     subtitle: String::new(),
                     detail: listening_rank_detail(&stats, &fallback_detail, language),
-                    cover_path: artist_tracks
-                        .iter()
-                        .find_map(|track| track.cover_path.clone()),
+                    cover_path: local_ranked_artist_cover(tracks, &name),
                 });
             }
             ListeningSource::YouTube => {
@@ -2809,26 +2842,21 @@ fn ranked_home_artist_cards(
                 {
                     cards.push(HomeCard::YouTubeArtist {
                         item: entry.source.clone(),
-                        subtitle: entry.subtitle.clone(),
+                        subtitle: String::new(),
                         detail: listening_rank_detail(&stats, &entry.detail, language),
-                        cover_path: entry.cached_cover().map(Path::to_path_buf),
+                        cover_path: youtube_ranked_artist_cover(youtube, &catalog, &name)
+                            .or_else(|| entry.cached_cover().map(Path::to_path_buf)),
                     });
                     continue;
                 }
 
                 let matching = catalog
                     .iter()
-                    .filter(|item| item.artist.eq_ignore_ascii_case(&name))
+                    .filter(|item| artist_credit_contains(&item.artist, &name))
                     .collect::<Vec<_>>();
-                let Some(first) = matching.first() else {
+                if matching.is_empty() {
                     continue;
-                };
-                let album_count = matching
-                    .iter()
-                    .map(|item| item.album.trim())
-                    .filter(|album| !album.is_empty())
-                    .collect::<BTreeSet<_>>()
-                    .len();
+                }
                 let source_item = YouTubeItem {
                     result_type: "artist".to_string(),
                     title: name.clone(),
@@ -2842,9 +2870,9 @@ fn ranked_home_artist_cards(
 
                 cards.push(HomeCard::YouTubeArtist {
                     item: source_item,
-                    subtitle: format_album_count(language, album_count),
+                    subtitle: String::new(),
                     detail: listening_rank_detail(&stats, &fallback_detail, language),
-                    cover_path: crate::youtube::cached_cover_for_item(first),
+                    cover_path: youtube_ranked_artist_cover(youtube, &catalog, &name),
                 });
             }
         }
