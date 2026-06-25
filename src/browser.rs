@@ -1,3 +1,4 @@
+// hide_youtube_home_sections_in_local_mode_v1
 // recently_added_local_music_v1
 // restore_circular_artist_covers_v2
 // preserve_home_carousel_scroll_v1
@@ -1601,35 +1602,41 @@ impl LibraryBrowser {
         next_home.add_css_class("library-home");
         next_home.add_css_class("expressive-library-home");
 
-        let mixes = youtube
-            .playlists
-            .iter()
-            .filter(|playlist| is_mix_playlist(playlist))
-            .cloned()
-            .chain(
-                youtube
-                    .playlists
-                    .iter()
-                    .filter(|playlist| !is_mix_playlist(playlist))
-                    .cloned(),
-            )
-            .take(12)
-            .map(HomeCard::YouTubePlaylist)
-            .collect::<Vec<_>>();
-        next_home.append(&home_section(
-            copy.mixtapes_title,
-            copy.mixtapes_subtitle,
-            mixes,
-            playback,
-            &self.event_tx,
-            language,
-            card_effects,
-        ));
+        if matches!(config.startup_source, Some(StartupSource::YouTube)) {
+            let mixes = youtube
+                .playlists
+                .iter()
+                .filter(|playlist| is_mix_playlist(playlist))
+                .cloned()
+                .chain(
+                    youtube
+                        .playlists
+                        .iter()
+                        .filter(|playlist| !is_mix_playlist(playlist))
+                        .cloned(),
+                )
+                .take(12)
+                .map(HomeCard::YouTubePlaylist)
+                .collect::<Vec<_>>();
+
+            if !mixes.is_empty() {
+                next_home.append(&home_section(
+                    copy.mixtapes_title,
+                    copy.mixtapes_subtitle,
+                    mixes,
+                    playback,
+                    &self.event_tx,
+                    language,
+                    card_effects,
+                ));
+            }
+        }
 
         let active_source = match config.startup_source {
             Some(StartupSource::YouTube) => ListeningSource::YouTube,
             _ => ListeningSource::Local,
         };
+        let youtube_home = active_source == ListeningSource::YouTube;
 
         if config.show_personalized_home_history {
             let mut recent_activity = history.recent_activity(ListeningSource::Local, 12);
@@ -1690,35 +1697,40 @@ impl LibraryBrowser {
             card_effects,
         ));
 
-        let mut playlist_cards = config
-            .playlists
-            .iter()
-            .take(8)
-            .map(|playlist| HomeCard::LocalPlaylist {
-                title: playlist.name.clone(),
-                subtitle: format_local_track_count(language, playlist.tracks.len()),
-            })
-            .collect::<Vec<_>>();
-        playlist_cards.extend(
+        let playlist_cards = if youtube_home {
             youtube
                 .playlists
                 .iter()
                 .filter(|playlist| !is_mix_playlist(playlist))
                 .take(12)
                 .cloned()
-                .map(HomeCard::YouTubePlaylist),
-        );
-        next_home.append(&home_section(
-            copy.playlists_title,
-            copy.playlists_subtitle,
-            playlist_cards,
-            playback,
-            &self.event_tx,
-            language,
-            card_effects,
-        ));
+                .map(HomeCard::YouTubePlaylist)
+                .collect::<Vec<_>>()
+        } else {
+            config
+                .playlists
+                .iter()
+                .take(8)
+                .map(|playlist| HomeCard::LocalPlaylist {
+                    title: playlist.name.clone(),
+                    subtitle: format_local_track_count(language, playlist.tracks.len()),
+                })
+                .collect::<Vec<_>>()
+        };
 
-        if youtube.syncing {
+        if !playlist_cards.is_empty() {
+            next_home.append(&home_section(
+                copy.playlists_title,
+                copy.playlists_subtitle,
+                playlist_cards,
+                playback,
+                &self.event_tx,
+                language,
+                card_effects,
+            ));
+        }
+
+        if youtube_home && youtube.syncing {
             next_home.append(&home_syncing_hint(language));
         }
 

@@ -146,7 +146,7 @@ now focuses on completing the user-facing history experience.
 - Ranked artists and albums.
 - Recently played album data.
 - Home sections based on listening behavior.
-- Suggested playlists and mixtapes hidden from local-only Home.
+- ✅ Suggested playlists, mixtapes and YouTube sync hints hidden from local-only Home.
 - YouTube recommendations kept separate from local statistics.
 
 ### Remaining
