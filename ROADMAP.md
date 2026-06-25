@@ -1,3 +1,4 @@
+<!-- youtube_likes_source_aware_navigation_roadmap_v2 -->
 <!-- personalized_home_privacy_controls_v3 -->
 <!-- optional_personalized_home_history_v1 -->
 <!-- personalized_home_resume_v2 -->
@@ -228,6 +229,19 @@ now focuses on completing the user-facing history experience.
 
 ### Remaining
 
+- ⬜ Real YouTube Music like/dislike mutations synchronized with the authenticated account.
+- ⬜ Optimistic like-state updates with rollback when the remote mutation fails.
+- ⬜ Reconcile local cache with the server after like/unlike operations and library refreshes.
+- ⬜ Dedicated **Liked songs — YouTube Music** page backed by the synchronized YouTube liked library.
+- ⬜ Source-aware navigation: show **Local liked songs** only when Local is the active source.
+- ⬜ Source-aware navigation: hide **Local liked songs** completely when YouTube Music is the active source.
+- ⬜ Show **Liked songs — YouTube Music** only when YouTube Music is the active source.
+- ⬜ Never expose liked-song pages from the inactive source in the sidebar or library navigation.
+- ⬜ Replace the current source-inaccurate “Local liked” title when YouTube Music is active.
+- ⬜ Localized liked-page titles and empty states in Portuguese, English and Spanish.
+- ⬜ Loading, retry, offline and permission-expired states for YouTube like mutations.
+- ⬜ Prevent duplicate remote requests when a user clicks like/unlike repeatedly.
+- ⬜ Unit and integration coverage for like, unlike, cache reconciliation and source switching.
 - Preserve the complete edited Queue 2.0 state during stream recovery.
 - More explicit handling for unavailable or region-blocked tracks.
 - Incremental library synchronization.
@@ -449,4 +463,16 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - Local history and YouTube recommendations remain separate.
 - Local-only mode must not display suggested YouTube playlists or mixtapes.
 - Source badges and error states should remain clear to the user.
+
+
+
+## Local and YouTube separation
+
+- Local likes and YouTube Music likes are separate concepts and must never share one persisted dataset.
+- The liked-songs route, title, empty state and available actions must reflect the active source.
+- **Local liked songs** must exist in navigation only while Local is active.
+- **Liked songs — YouTube Music** must exist in navigation only while YouTube Music is active.
+- Switching sources must rebuild the navigation immediately and remove routes belonging to the previous source.
+- YouTube like/unlike actions must mutate the remote account state, not only the local interface.
+- Remote failures must be visible and must restore the previous like state when necessary.
 
