@@ -1,3 +1,4 @@
+// vertical_collection_edge_spring_v1
 // collection_card_entry_spring_v1
 // remove_collection_now_playing_badge_v1
 // richer_collection_cards_phase1_v1
@@ -821,6 +822,7 @@ impl LibraryBrowser {
         queue_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
         queue_scroll.set_vexpand(true);
         queue_scroll.set_child(Some(&queue));
+        install_vertical_edge_spring(&queue_scroll);
 
         let tracks_page = gtk::Box::new(gtk::Orientation::Vertical, 12);
         tracks_page.set_hexpand(true);
@@ -965,6 +967,7 @@ impl LibraryBrowser {
         playlists_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
         playlists_scroll.set_vexpand(true);
         playlists_scroll.set_child(Some(&playlists_list));
+        install_vertical_edge_spring(&playlists_scroll);
 
         let playlists_header = page_header(
             "PLAYLISTS",
@@ -4243,12 +4246,90 @@ fn collection_grid() -> gtk::FlowBox {
     grid
 }
 
+fn install_vertical_edge_spring(scroll: &gtk::ScrolledWindow) {
+    let generation = Rc::new(Cell::new(0_u64));
+
+    {
+        let generation = generation.clone();
+        scroll.connect_edge_overshot(move |scroll, position| {
+            if !matches!(position, gtk::PositionType::Top | gtk::PositionType::Bottom) {
+                return;
+            }
+
+            let Some(content) = scroll.child() else {
+                return;
+            };
+
+            let token = generation.get().wrapping_add(1);
+            generation.set(token);
+
+            let from_top = position == gtk::PositionType::Top;
+            let content_weak = content.downgrade();
+            let generation = generation.clone();
+            let started_at = Rc::new(Cell::new(None::<i64>));
+
+            content.add_css_class("vertical-edge-spring");
+            content.add_tick_callback(move |_, frame_clock| {
+                if generation.get() != token {
+                    return glib::ControlFlow::Break;
+                }
+
+                let Some(content) = content_weak.upgrade() else {
+                    return glib::ControlFlow::Break;
+                };
+
+                let now = frame_clock.frame_time();
+                let start = started_at.get().unwrap_or_else(|| {
+                    started_at.set(Some(now));
+                    now
+                });
+                let progress = ((now - start) as f64 / 460_000.0).clamp(0.0, 1.0);
+
+                let damping = (-6.2 * progress).exp();
+                let oscillation = (progress * std::f64::consts::TAU * 1.55).cos();
+                let spring = 1.0 - damping * oscillation;
+                let displacement = ((1.0 - spring) * 20.0).round().clamp(-5.0, 20.0) as i32;
+
+                if from_top {
+                    content.set_margin_top(displacement);
+                    content.set_margin_bottom(0);
+                } else {
+                    content.set_margin_top(0);
+                    content.set_margin_bottom(displacement);
+                }
+
+                if progress >= 1.0 {
+                    content.set_margin_top(0);
+                    content.set_margin_bottom(0);
+                    content.remove_css_class("vertical-edge-spring");
+                    glib::ControlFlow::Break
+                } else {
+                    glib::ControlFlow::Continue
+                }
+            });
+        });
+    }
+
+    {
+        let generation = generation.clone();
+        scroll.connect_unmap(move |scroll| {
+            generation.set(generation.get().wrapping_add(1));
+            if let Some(content) = scroll.child() {
+                content.set_margin_top(0);
+                content.set_margin_bottom(0);
+                content.remove_css_class("vertical-edge-spring");
+            }
+        });
+    }
+}
+
 fn collection_page(title: &str, subtitle: &str, icon_name: &str, grid: &gtk::FlowBox) -> gtk::Box {
     let header = collection_page_header(title, subtitle, icon_name);
     let scroll = gtk::ScrolledWindow::new();
     scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
     scroll.set_vexpand(true);
     scroll.set_child(Some(grid));
+    install_vertical_edge_spring(&scroll);
 
     let page = gtk::Box::new(gtk::Orientation::Vertical, 14);
     page.set_hexpand(true);
