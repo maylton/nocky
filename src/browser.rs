@@ -1,3 +1,4 @@
+// playlist_page_responsive_rows_v2
 // playlist_page_single_scroll_layout_v1
 // compact_artist_outline_spacing_fix_v3
 // compact_artist_card_outline_v2
@@ -2362,7 +2363,9 @@ impl LibraryBrowser {
                 continue;
             }
             self.playlists_list.append(&playlist_row(
+                None,
                 &playlist.name,
+                "Playlist local",
                 &format!("{} faixas", playlist.tracks.len()),
                 false,
             ));
@@ -2392,10 +2395,14 @@ impl LibraryBrowser {
         }
 
         for mix in mixes {
-            let track_count = youtube.playlist_tracks.get(&mix.browse_id).map(Vec::len);
+            let tracks = youtube.playlist_tracks.get(&mix.browse_id);
+            let track_count = tracks.map(Vec::len);
+            let preferred_cover = tracks
+                .and_then(|tracks| tracks.iter().find_map(YouTubeItem::cached_cover))
+                .or_else(|| mix.cached_cover());
 
             self.playlists_list
-                .append(&youtube_mix_row(mix, track_count));
+                .append(&youtube_mix_row(mix, track_count, preferred_cover));
             row_refs.push(Some(PlaylistRef::YouTube(Box::new(mix.clone()))));
         }
 
@@ -2405,9 +2412,19 @@ impl LibraryBrowser {
         }
 
         for playlist in regular_playlists {
+            let track_count = youtube
+                .playlist_tracks
+                .get(&playlist.browse_id)
+                .map(Vec::len);
+            let detail = track_count
+                .map(|count| format!("{count} {}", if count == 1 { "faixa" } else { "faixas" }))
+                .unwrap_or_else(|| youtube_playlist_detail(playlist).to_string());
+
             self.playlists_list.append(&playlist_row(
+                playlist.cached_cover(),
                 &playlist.title,
                 youtube_playlist_subtitle(playlist),
+                &detail,
                 true,
             ));
             row_refs.push(Some(PlaylistRef::YouTube(Box::new(playlist.clone()))));
@@ -5692,65 +5709,120 @@ fn youtube_collection_page_header(
     }
 }
 
-fn youtube_mix_row(item: &YouTubeItem, track_count: Option<usize>) -> gtk::ListBoxRow {
-    let cover = artwork(item.cached_cover(), 56);
+fn playlist_row_content(
+    cover_path: Option<&Path>,
+    title_text: &str,
+    subtitle_text: &str,
+    detail_text: &str,
+    badge_text: Option<&str>,
+    online: bool,
+) -> gtk::Box {
+    let cover = artwork(cover_path, 56);
     cover.set_size_request(56, 56);
+    cover.set_halign(gtk::Align::Start);
+    cover.set_valign(gtk::Align::Center);
+    cover.set_hexpand(false);
+    cover.set_vexpand(false);
     cover.add_css_class("playlist-row-artwork");
-    cover.add_css_class("mix-row-artwork");
 
-    let title = gtk::Label::new(Some(&item.title));
+    let title = gtk::Label::new(Some(title_text));
     title.set_xalign(0.0);
     title.set_hexpand(true);
+    title.set_width_chars(1);
+    title.set_max_width_chars(28);
+    title.set_single_line_mode(true);
     title.set_ellipsize(gtk::pango::EllipsizeMode::End);
     title.add_css_class("track-title");
     title.add_css_class("playlist-row-title");
 
-    let subtitle_text = if item.subtitle.trim().is_empty() {
-        "Mix criado para você"
-    } else {
-        item.subtitle.as_str()
-    };
     let subtitle = gtk::Label::new(Some(subtitle_text));
     subtitle.set_xalign(0.0);
+    subtitle.set_hexpand(true);
+    subtitle.set_width_chars(1);
+    subtitle.set_max_width_chars(34);
+    subtitle.set_single_line_mode(true);
     subtitle.set_ellipsize(gtk::pango::EllipsizeMode::End);
     subtitle.add_css_class("dim-label");
     subtitle.add_css_class("playlist-row-subtitle");
 
-    let detail_text = track_count
-        .map(|count| format!("{count} {}", if count == 1 { "faixa" } else { "faixas" }))
-        .unwrap_or_else(|| "Seleção personalizada do YouTube Music".to_string());
-    let detail = gtk::Label::new(Some(&detail_text));
+    let detail = gtk::Label::new(Some(detail_text));
     detail.set_xalign(0.0);
+    detail.set_hexpand(true);
+    detail.set_width_chars(1);
+    detail.set_max_width_chars(24);
+    detail.set_single_line_mode(true);
     detail.set_ellipsize(gtk::pango::EllipsizeMode::End);
     detail.add_css_class("dim-label");
     detail.add_css_class("playlist-row-detail");
 
     let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
     text.set_hexpand(true);
+    text.set_vexpand(false);
     text.set_valign(gtk::Align::Center);
     text.append(&title);
-    text.append(&subtitle);
-    text.append(&detail);
-
-    let mix_badge = gtk::Label::new(Some("MIX"));
-    mix_badge.add_css_class("source-badge");
-    mix_badge.add_css_class("youtube-source-badge");
-    mix_badge.add_css_class("mix-source-badge");
-
-    let arrow = gtk::Image::from_icon_name("go-next-symbolic");
-    arrow.add_css_class("dim-label");
+    if !subtitle_text.trim().is_empty() {
+        text.append(&subtitle);
+    }
+    if !detail_text.trim().is_empty() {
+        text.append(&detail);
+    }
 
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    content.set_hexpand(true);
+    content.set_vexpand(false);
     content.set_margin_top(8);
     content.set_margin_bottom(8);
     content.set_margin_start(10);
     content.set_margin_end(12);
     content.append(&cover);
     content.append(&text);
-    content.append(&mix_badge);
+
+    if let Some(badge_text) = badge_text {
+        let badge = source_badge(badge_text, online);
+        badge.set_halign(gtk::Align::End);
+        badge.set_valign(gtk::Align::Center);
+        badge.set_hexpand(false);
+        badge.set_vexpand(false);
+        content.append(&badge);
+    }
+
+    let arrow = gtk::Image::from_icon_name("go-next-symbolic");
+    arrow.set_halign(gtk::Align::End);
+    arrow.set_valign(gtk::Align::Center);
+    arrow.set_hexpand(false);
+    arrow.set_vexpand(false);
+    arrow.add_css_class("dim-label");
     content.append(&arrow);
 
+    content
+}
+
+fn youtube_mix_row(
+    item: &YouTubeItem,
+    track_count: Option<usize>,
+    cover_path: Option<&Path>,
+) -> gtk::ListBoxRow {
+    let detail = track_count
+        .map(|count| format!("{count} {}", if count == 1 { "faixa" } else { "faixas" }))
+        .unwrap_or_else(|| "Seleção personalizada".to_string());
+    let subtitle = if item.subtitle.trim().is_empty() {
+        "Mix criado para você"
+    } else {
+        item.subtitle.as_str()
+    };
+
+    let content = playlist_row_content(
+        cover_path,
+        &item.title,
+        subtitle,
+        &detail,
+        Some("MIX"),
+        true,
+    );
+
     let row = gtk::ListBoxRow::new();
+    row.set_hexpand(true);
+    row.set_vexpand(false);
     row.add_css_class("playlist-card-row");
     row.add_css_class("youtube-playlist-row");
     row.add_css_class("youtube-mix-row");
@@ -5758,35 +5830,29 @@ fn youtube_mix_row(item: &YouTubeItem, track_count: Option<usize>) -> gtk::ListB
     row
 }
 
-fn playlist_row(name: &str, detail: &str, online: bool) -> gtk::ListBoxRow {
-    let icon = gtk::Image::from_icon_name(if online {
-        "network-server-symbolic"
-    } else {
-        "view-list-symbolic"
-    });
-    icon.set_pixel_size(24);
-    let title = gtk::Label::new(Some(name));
-    title.set_xalign(0.0);
-    title.set_hexpand(true);
-    title.add_css_class("track-title");
-    let count = gtk::Label::new(Some(detail));
-    count.add_css_class("dim-label");
-    let arrow = gtk::Image::from_icon_name("go-next-symbolic");
-
-    let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    content.set_margin_top(12);
-    content.set_margin_bottom(12);
-    content.set_margin_start(12);
-    content.set_margin_end(12);
-    content.append(&icon);
-    content.append(&title);
-    if online {
-        content.append(&source_badge("YouTube Music", true));
-    }
-    content.append(&count);
-    content.append(&arrow);
+fn playlist_row(
+    cover_path: Option<&Path>,
+    name: &str,
+    subtitle: &str,
+    detail: &str,
+    online: bool,
+) -> gtk::ListBoxRow {
+    let content = playlist_row_content(
+        cover_path,
+        name,
+        subtitle,
+        detail,
+        if online {
+            Some("YouTube Music")
+        } else {
+            Some("Local")
+        },
+        online,
+    );
 
     let row = gtk::ListBoxRow::new();
+    row.set_hexpand(true);
+    row.set_vexpand(false);
     row.add_css_class("playlist-card-row");
     if online {
         row.add_css_class("youtube-playlist-row");

@@ -496,3 +496,6 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 
 - ✅ The Playlists page now uses one bounded outer scroller instead of letting the playlist list and local manager dictate the window minimum size.
 - ✅ Playlist navigation, mixes and local management now live in one compact responsive page flow that remains resizable after opening.
+
+- ✅ Playlist rows now constrain title, subtitle and metadata widths so the Playlists page cannot raise the application minimum width.
+- ✅ Mix rows now prefer the first cached track artwork over malformed or text-heavy mix thumbnails, with the mix image retained as fallback.
