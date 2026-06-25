@@ -155,7 +155,7 @@ now focuses on completing the user-facing history experience.
 - ✅ Resumable position directly on incomplete track cards.
 - ✅ Optional Home visibility control for personalized history sections.
 - ✅ First-run explanation and opt-in control for personalized Home history.
-- Recently added local music.
+- ✅ Recently added local albums ordered by filesystem creation/modification time.
 - ✅ Clear-history action.
 - ✅ History privacy controls.
 - Per-section empty states.

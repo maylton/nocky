@@ -1,3 +1,4 @@
+// recently_added_local_music_v1
 // restore_circular_artist_covers_v2
 // preserve_home_carousel_scroll_v1
 // collection_card_inline_loading_fix_v2
@@ -227,6 +228,9 @@ enum HomeCard {
 struct HomeCopy {
     recent_activity_title: &'static str,
     recent_activity_subtitle: &'static str,
+    recently_added_title: &'static str,
+    recently_added_subtitle: &'static str,
+    recently_added_detail: &'static str,
     mixtapes_title: &'static str,
     mixtapes_subtitle: &'static str,
     albums_title: &'static str,
@@ -249,6 +253,9 @@ fn home_copy(language: AppLanguage) -> HomeCopy {
         AppLanguage::Portuguese => HomeCopy {
             recent_activity_title: "Ouvidos recentemente",
             recent_activity_subtitle: "Faixas, álbuns e playlists em ordem cronológica",
+            recently_added_title: "Adicionados recentemente",
+            recently_added_subtitle: "Álbuns locais mais novos na sua biblioteca",
+            recently_added_detail: "Adicionado recentemente",
             mixtapes_title: "Mixtapes criadas para você",
             mixtapes_subtitle: "Mixes e rádios sincronizadas do YouTube Music",
             albums_title: "Seus álbuns",
@@ -268,6 +275,9 @@ fn home_copy(language: AppLanguage) -> HomeCopy {
         AppLanguage::English => HomeCopy {
             recent_activity_title: "Recently listened",
             recent_activity_subtitle: "Tracks, albums and playlists in chronological order",
+            recently_added_title: "Recently added",
+            recently_added_subtitle: "Newest local albums in your library",
+            recently_added_detail: "Recently added",
             mixtapes_title: "Mixtapes made for you",
             mixtapes_subtitle: "Mixes and radio stations synchronized from YouTube Music",
             albums_title: "Your albums",
@@ -287,6 +297,9 @@ fn home_copy(language: AppLanguage) -> HomeCopy {
         AppLanguage::Spanish => HomeCopy {
             recent_activity_title: "Escuchados recientemente",
             recent_activity_subtitle: "Canciones, álbumes y playlists en orden cronológico",
+            recently_added_title: "Añadidos recientemente",
+            recently_added_subtitle: "Álbumes locales más nuevos de tu biblioteca",
+            recently_added_detail: "Añadido recientemente",
             mixtapes_title: "Mixtapes creadas para ti",
             mixtapes_subtitle: "Mixes y radios sincronizadas de YouTube Music",
             albums_title: "Tus álbumes",
@@ -304,6 +317,76 @@ fn home_copy(language: AppLanguage) -> HomeCopy {
             synchronized_playlist: "Playlist sincronizada",
         },
     }
+}
+
+fn recently_added_local_album_cards(
+    tracks: &[Track],
+    language: AppLanguage,
+    detail_label: &str,
+) -> Vec<HomeCard> {
+    let mut groups: HashMap<String, Vec<&Track>> = HashMap::new();
+    for track in tracks {
+        let album = track.album.trim();
+        if album.is_empty() {
+            continue;
+        }
+        groups.entry(album.to_string()).or_default().push(track);
+    }
+
+    let mut albums = groups
+        .into_iter()
+        .map(|(album, album_tracks)| {
+            let newest_timestamp = album_tracks
+                .iter()
+                .filter_map(|track| local_file_timestamp(&track.path))
+                .max()
+                .unwrap_or_default();
+
+            (newest_timestamp, album, album_tracks)
+        })
+        .collect::<Vec<_>>();
+
+    albums.sort_by(|left, right| {
+        right
+            .0
+            .cmp(&left.0)
+            .then_with(|| compare_text(&left.1, &right.1))
+    });
+
+    albums
+        .into_iter()
+        .take(12)
+        .map(|(_, album, album_tracks)| {
+            let artists = album_tracks
+                .iter()
+                .map(|track| track.artist.trim())
+                .filter(|artist| !artist.is_empty())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>()
+                .join(", ");
+            let cover_path = album_tracks
+                .iter()
+                .find_map(|track| track.cover_path.clone());
+            let track_count = format_track_count(language, album_tracks.len());
+
+            HomeCard::LocalAlbum {
+                title: album,
+                subtitle: artists,
+                detail: format!("{detail_label} • {track_count}"),
+                cover_path,
+            }
+        })
+        .collect()
+}
+
+fn local_file_timestamp(path: &Path) -> Option<u64> {
+    let metadata = fs::metadata(path).ok()?;
+    let timestamp = metadata.created().or_else(|_| metadata.modified()).ok()?;
+    timestamp
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_secs())
 }
 
 fn format_track_count(language: AppLanguage, count: usize) -> String {
@@ -1564,6 +1647,22 @@ impl LibraryBrowser {
                     copy.recent_activity_title,
                     copy.recent_activity_subtitle,
                     recent,
+                    &self.event_tx,
+                    language,
+                    card_effects,
+                ));
+            }
+        }
+
+        if active_source == ListeningSource::Local {
+            let recently_added =
+                recently_added_local_album_cards(tracks, language, copy.recently_added_detail);
+            if !recently_added.is_empty() {
+                next_home.append(&home_section(
+                    copy.recently_added_title,
+                    copy.recently_added_subtitle,
+                    recently_added,
+                    playback,
                     &self.event_tx,
                     language,
                     card_effects,
