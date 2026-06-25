@@ -185,7 +185,7 @@ now focuses on completing the user-facing history experience.
 - 🟡 Skeleton treatment during remote loading is implemented on active collection cards; dedicated placeholder rails remain planned.
 - 🟡 Type-aware placeholders for missing artwork; palette-derived variants remain planned.
 - 🟡 Spring-based animated insertion is implemented for collection grids; animated removal remains planned.
-- ✅ Vertical top/end overscroll uses allocation-safe damped spring feedback on album, artist and playlist surfaces.
+- ✅ Vertical top/end overscroll uses an allocation-safe damped scroll spring on album, artist and playlist surfaces.
 - ✅ Active album and playlist cards are identified by the contextual play/pause control.
 - ✅ Shared collection-card descriptor centralizes local and YouTube album, artist and playlist presentation.
 
