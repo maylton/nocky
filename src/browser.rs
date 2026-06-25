@@ -1,3 +1,4 @@
+// vertical_collection_edge_scroll_spring_v4
 // vertical_collection_edge_scroll_spring_v3
 // vertical_collection_edge_spring_allocation_safe_v2
 // vertical_collection_edge_spring_v1
@@ -4250,11 +4251,20 @@ fn collection_grid() -> gtk::FlowBox {
 
 fn install_vertical_edge_spring(scroll: &gtk::ScrolledWindow) {
     let generation = Rc::new(Cell::new(0_u64));
+    let animating = Rc::new(Cell::new(false));
+    let internal_update = Rc::new(Cell::new(false));
 
-    {
+    let trigger: Rc<dyn Fn(bool)> = {
+        let scroll_weak = scroll.downgrade();
         let generation = generation.clone();
-        scroll.connect_edge_overshot(move |scroll, position| {
-            if !matches!(position, gtk::PositionType::Top | gtk::PositionType::Bottom) {
+        let animating = animating.clone();
+        let internal_update = internal_update.clone();
+
+        Rc::new(move |from_top| {
+            let Some(scroll) = scroll_weak.upgrade() else {
+                return;
+            };
+            if animating.get() {
                 return;
             }
 
@@ -4267,18 +4277,22 @@ fn install_vertical_edge_spring(scroll: &gtk::ScrolledWindow) {
 
             let token = generation.get().wrapping_add(1);
             generation.set(token);
+            animating.set(true);
 
-            let from_top = position == gtk::PositionType::Top;
             let adjustment_weak = adjustment.downgrade();
             let generation = generation.clone();
+            let animating = animating.clone();
+            let internal_update = internal_update.clone();
             let started_at = Rc::new(Cell::new(None::<i64>));
 
             scroll.add_tick_callback(move |_, frame_clock| {
                 if generation.get() != token {
+                    animating.set(false);
                     return glib::ControlFlow::Break;
                 }
 
                 let Some(adjustment) = adjustment_weak.upgrade() else {
+                    animating.set(false);
                     return glib::ControlFlow::Break;
                 };
 
@@ -4287,15 +4301,15 @@ fn install_vertical_edge_spring(scroll: &gtk::ScrolledWindow) {
                     started_at.set(Some(now));
                     now
                 });
-                let progress = ((now - start) as f64 / 430_000.0).clamp(0.0, 1.0);
 
-                let damping = (-6.3 * progress).exp();
-                let oscillation = (progress * std::f64::consts::TAU * 1.6).cos();
+                // Slower, softer spring so the boundary feedback is visible
+                // without feeling abrupt.
+                let progress = ((now - start) as f64 / 760_000.0).clamp(0.0, 1.0);
+                let damping = (-5.1 * progress).exp();
+                let oscillation = (progress * std::f64::consts::TAU * 1.25).cos();
                 let spring = 1.0 - damping * oscillation;
+                let displacement = ((1.0 - spring) * 24.0).clamp(-5.0, 24.0);
 
-                // Keep the viewport allocation fixed and animate only the
-                // scroll position a few pixels inside the valid range.
-                let displacement = ((1.0 - spring) * 18.0).clamp(-4.0, 18.0);
                 let lower = adjustment.lower();
                 let upper = (adjustment.upper() - adjustment.page_size()).max(lower);
                 let value = if from_top {
@@ -4303,22 +4317,66 @@ fn install_vertical_edge_spring(scroll: &gtk::ScrolledWindow) {
                 } else {
                     (upper - displacement.max(0.0)).clamp(lower, upper)
                 };
+
+                internal_update.set(true);
                 adjustment.set_value(value);
+                internal_update.set(false);
 
                 if progress >= 1.0 {
+                    internal_update.set(true);
                     adjustment.set_value(if from_top { lower } else { upper });
+                    internal_update.set(false);
+                    animating.set(false);
                     glib::ControlFlow::Break
                 } else {
                     glib::ControlFlow::Continue
                 }
             });
+        })
+    };
+
+    {
+        let trigger = trigger.clone();
+        scroll.connect_edge_overshot(move |_, position| match position {
+            gtk::PositionType::Top => trigger(true),
+            gtk::PositionType::Bottom => trigger(false),
+            _ => {}
+        });
+    }
+
+    {
+        let adjustment = scroll.vadjustment();
+        let previous_value = Rc::new(Cell::new(adjustment.value()));
+        let trigger = trigger.clone();
+        let internal_update = internal_update.clone();
+        let animating = animating.clone();
+
+        adjustment.connect_value_changed(move |adjustment| {
+            let value = adjustment.value();
+            let previous = previous_value.replace(value);
+
+            if internal_update.get() || animating.get() {
+                return;
+            }
+
+            let lower = adjustment.lower();
+            let upper = (adjustment.upper() - adjustment.page_size()).max(lower);
+            const EDGE_EPSILON: f64 = 0.75;
+
+            if value <= lower + EDGE_EPSILON && previous > lower + EDGE_EPSILON {
+                trigger(true);
+            } else if value >= upper - EDGE_EPSILON && previous < upper - EDGE_EPSILON {
+                trigger(false);
+            }
         });
     }
 
     {
         let generation = generation.clone();
+        let animating = animating.clone();
         scroll.connect_unmap(move |_| {
             generation.set(generation.get().wrapping_add(1));
+            animating.set(false);
         });
     }
 }
