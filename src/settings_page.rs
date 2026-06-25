@@ -1,3 +1,4 @@
+// playback_resume_preferences_fix_v1
 use crate::{
     config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme},
     dialogs::SettingsEvent,
@@ -320,6 +321,21 @@ fn build_content(
     expressive_home_cards_row.set_visible(material_expressive);
     appearance_rows.append(&expressive_home_cards_row);
 
+    let resume_playback = settings_switch(initial.resume_playback_on_startup);
+    playback_rows.append(&switch_row(
+        group_text(
+            "Retomar reprodução automaticamente",
+            "Resume playback automatically",
+            "Reanudar reproducción automáticamente",
+        ),
+        group_text(
+            "Ao abrir o Nocky, restaura a faixa e a posição anterior e continua tocando. Desativado por padrão; quando desligado, a sessão é restaurada pausada.",
+            "When Nocky opens, restores the previous track and position and continues playing. Disabled by default; when off, the session is restored paused.",
+            "Al abrir Nocky, restaura la pista y la posición anteriores y continúa reproduciendo. Desactivado por defecto; al apagarlo, la sesión se restaura en pausa.",
+        ),
+        &resume_playback,
+    ));
+
     let visualizer = settings_switch(initial.show_home_visualizer);
     playback_rows.append(&switch_row(
         tr(Message::HomeVisualizer),
@@ -532,6 +548,7 @@ fn build_content(
             ToggleSetting::PersonalizedHomeHistory,
         ),
         (&auto_lyrics, ToggleSetting::AutoLyrics),
+        (&resume_playback, ToggleSetting::ResumePlaybackOnStartup),
         (&youtube_sync, ToggleSetting::YouTubeSync),
         (&expressive_home_cards, ToggleSetting::ExpressiveHomeCards),
         (&expressive_transport, ToggleSetting::ExpressiveTransport),
@@ -547,6 +564,9 @@ fn build_content(
                     SettingsEvent::ShowPersonalizedHomeHistory(active)
                 }
                 ToggleSetting::AutoLyrics => SettingsEvent::AutoDownloadLyrics(active),
+                ToggleSetting::ResumePlaybackOnStartup => {
+                    SettingsEvent::ResumePlaybackOnStartup(active)
+                }
                 ToggleSetting::YouTubeSync => SettingsEvent::YouTubeAutoSync(active),
                 ToggleSetting::ExpressiveTransport => {
                     SettingsEvent::ExpressiveTransportEffects(active)
@@ -569,6 +589,7 @@ enum ToggleSetting {
     Lyrics,
     PersonalizedHomeHistory,
     AutoLyrics,
+    ResumePlaybackOnStartup,
     YouTubeSync,
     ExpressiveTransport,
     ExpressiveHomeCards,

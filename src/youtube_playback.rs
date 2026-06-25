@@ -1,3 +1,4 @@
+// playback_resume_preferences_fix_v1
 use crate::{
     background::BackgroundMessage,
     lyrics, lyrics_provider, mpris,
@@ -228,9 +229,10 @@ impl AppController {
             item.duration_seconds = stream.duration_seconds;
         }
 
+        let autoplay = self.startup_restore_autoplay.replace(None).unwrap_or(true);
         if let Err(error) =
             self.player
-                .load_with_headers(&stream.stream_url, true, stream.http_headers.clone())
+                .load_with_headers(&stream.stream_url, autoplay, stream.http_headers.clone())
         {
             self.youtube_recovery_in_progress.set(false);
             self.youtube_recovery_resume_us.set(0);
@@ -313,14 +315,17 @@ impl AppController {
             );
         }
 
-        self.update_play_icons(true);
+        self.update_play_icons(autoplay);
         if !recovering {
             self.last_mpris_position.set(0);
             self.mpris.send(mpris::MprisUpdate::Position(0));
         }
         self.publish_mpris_youtube(&item, &stream, cover_path.as_deref());
-        self.mpris
-            .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Playing));
+        self.mpris.send(mpris::MprisUpdate::Playback(if autoplay {
+            mpris::MprisPlayback::Playing
+        } else {
+            mpris::MprisPlayback::Paused
+        }));
         self.prefetch_youtube_queue();
     }
 

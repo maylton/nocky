@@ -1,3 +1,4 @@
+// playback_resume_preferences_fix_v1
 use crate::{
     config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme},
     i18n::{self, Message},
@@ -32,6 +33,7 @@ pub(crate) enum SettingsEvent {
     ExpressiveTransportEffects(bool),
     ExpressiveHomeCardEffects(bool),
     AutoDownloadLyrics(bool),
+    ResumePlaybackOnStartup(bool),
     YouTubeAutoSync(bool),
     NoctaliaThemeSync(bool),
     ManageYouTube,
