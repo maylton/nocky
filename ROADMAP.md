@@ -185,7 +185,7 @@ now focuses on completing the user-facing history experience.
 - Palette-based placeholders for missing artwork.
 - Animated insertion and removal.
 - Clear current-playing indicator directly on every relevant card.
-- Shared card component to reduce duplicated card construction.
+- ✅ Shared collection-card descriptor centralizes local and YouTube album, artist and playlist presentation.
 
 ---
 

@@ -1,3 +1,4 @@
+// shared_collection_card_descriptor_v1
 // hide_youtube_home_sections_in_local_mode_v1
 // recently_added_local_music_v1
 // restore_circular_artist_covers_v2
@@ -222,6 +223,130 @@ enum HomeCard {
         subtitle: String,
     },
     YouTubePlaylist(YouTubeItem),
+}
+
+struct CollectionCardDescriptor<'a> {
+    cover_path: Option<&'a Path>,
+    title: &'a str,
+    subtitle: &'a str,
+    detail: &'a str,
+    online: bool,
+    artist: bool,
+}
+
+impl HomeCard {
+    fn descriptor(&self, language: AppLanguage) -> CollectionCardDescriptor<'_> {
+        match self {
+            Self::LocalAlbum {
+                title,
+                subtitle,
+                detail,
+                cover_path,
+            } => CollectionCardDescriptor {
+                cover_path: cover_path.as_deref(),
+                title,
+                subtitle,
+                detail,
+                online: false,
+                artist: false,
+            },
+            Self::YouTubeAlbum {
+                item,
+                subtitle,
+                detail,
+                cover_path,
+            } => CollectionCardDescriptor {
+                cover_path: cover_path.as_deref(),
+                title: &item.title,
+                subtitle,
+                detail,
+                online: true,
+                artist: false,
+            },
+            Self::LocalArtist {
+                title,
+                subtitle,
+                detail,
+                cover_path,
+            } => CollectionCardDescriptor {
+                cover_path: cover_path.as_deref(),
+                title,
+                subtitle,
+                detail,
+                online: false,
+                artist: true,
+            },
+            Self::YouTubeArtist {
+                item,
+                subtitle,
+                detail,
+                cover_path,
+            } => CollectionCardDescriptor {
+                cover_path: cover_path.as_deref(),
+                title: &item.title,
+                subtitle,
+                detail,
+                online: true,
+                artist: true,
+            },
+            Self::LocalPlaylist { title, subtitle } => CollectionCardDescriptor {
+                cover_path: None,
+                title,
+                subtitle,
+                detail: home_copy(language).local_playlist,
+                online: false,
+                artist: false,
+            },
+            Self::YouTubePlaylist(item) => CollectionCardDescriptor {
+                cover_path: item.cached_cover(),
+                title: &item.title,
+                subtitle: home_youtube_playlist_subtitle(item, language),
+                detail: home_youtube_playlist_detail(item, language),
+                online: true,
+                artist: false,
+            },
+        }
+    }
+
+    fn open_event(&self) -> BrowserEvent {
+        match self {
+            Self::LocalAlbum { title, .. } => {
+                BrowserEvent::Navigate(BrowserRoute::Album(title.clone()))
+            }
+            Self::YouTubeAlbum { item, .. } => BrowserEvent::OpenYouTubeCollection(item.clone()),
+            Self::LocalArtist { title, .. } => {
+                BrowserEvent::Navigate(BrowserRoute::Artist(title.clone()))
+            }
+            Self::YouTubeArtist { item, .. } => BrowserEvent::OpenYouTubeCollection(item.clone()),
+            Self::LocalPlaylist { title, .. } => {
+                BrowserEvent::Navigate(BrowserRoute::Playlist(title.clone()))
+            }
+            Self::YouTubePlaylist(item) => BrowserEvent::OpenYouTubePlaylist(item.clone()),
+        }
+    }
+
+    fn identity(&self) -> String {
+        match self {
+            Self::LocalAlbum { title, .. } => {
+                format!("local-album:{}", title.to_lowercase())
+            }
+            Self::YouTubeAlbum { item, .. } => {
+                format!("youtube-album:{}", item.title.to_lowercase())
+            }
+            Self::LocalArtist { title, .. } => {
+                format!("local-artist:{}", title.to_lowercase())
+            }
+            Self::YouTubeArtist { item, .. } => {
+                format!("youtube-artist:{}", item.title.to_lowercase())
+            }
+            Self::LocalPlaylist { title, .. } => {
+                format!("local-playlist:{}", title.to_lowercase())
+            }
+            Self::YouTubePlaylist(item) => {
+                format!("youtube-playlist:{}", item.title.to_lowercase())
+            }
+        }
+    }
 }
 
 // complete_surface_localization_v3
@@ -2467,22 +2592,7 @@ fn merge_ranked_home_cards(
 }
 
 fn home_card_identity(card: &HomeCard) -> String {
-    match card {
-        HomeCard::LocalAlbum { title, .. } => format!("local-album:{}", title.to_lowercase()),
-        HomeCard::YouTubeAlbum { item, .. } => {
-            format!("youtube-album:{}", item.title.to_lowercase())
-        }
-        HomeCard::LocalArtist { title, .. } => format!("local-artist:{}", title.to_lowercase()),
-        HomeCard::YouTubeArtist { item, .. } => {
-            format!("youtube-artist:{}", item.title.to_lowercase())
-        }
-        HomeCard::LocalPlaylist { title, .. } => {
-            format!("local-playlist:{}", title.to_lowercase())
-        }
-        HomeCard::YouTubePlaylist(item) => {
-            format!("youtube-playlist:{}", item.title.to_lowercase())
-        }
-    }
+    card.identity()
 }
 
 fn search_album_cards(
@@ -3590,67 +3700,8 @@ fn home_card_button(
     language: AppLanguage,
     card_effects: bool,
 ) -> gtk::Widget {
-    let (cover_path, title, subtitle, detail, online) = match &card {
-        HomeCard::LocalAlbum {
-            title,
-            subtitle,
-            detail,
-            cover_path,
-        } => (
-            cover_path.as_deref(),
-            title.as_str(),
-            subtitle.as_str(),
-            detail.as_str(),
-            false,
-        ),
-        HomeCard::LocalArtist {
-            title, cover_path, ..
-        } => (cover_path.as_deref(), title.as_str(), "", "", false),
-        HomeCard::YouTubeAlbum {
-            item,
-            subtitle,
-            detail,
-            cover_path,
-        } => (
-            cover_path.as_deref(),
-            item.title.as_str(),
-            subtitle.as_str(),
-            detail.as_str(),
-            true,
-        ),
-        HomeCard::YouTubeArtist {
-            item, cover_path, ..
-        } => (cover_path.as_deref(), item.title.as_str(), "", "", true),
-        HomeCard::LocalPlaylist { title, subtitle } => (
-            None,
-            title.as_str(),
-            subtitle.as_str(),
-            home_copy(language).local_playlist,
-            false,
-        ),
-        HomeCard::YouTubePlaylist(item) => (
-            item.cached_cover(),
-            item.title.as_str(),
-            home_youtube_playlist_subtitle(item, language),
-            home_youtube_playlist_detail(item, language),
-            true,
-        ),
-    };
-
-    let open_event = match &card {
-        HomeCard::LocalAlbum { title, .. } => {
-            BrowserEvent::Navigate(BrowserRoute::Album(title.clone()))
-        }
-        HomeCard::YouTubeAlbum { item, .. } => BrowserEvent::OpenYouTubeCollection(item.clone()),
-        HomeCard::LocalArtist { title, .. } => {
-            BrowserEvent::Navigate(BrowserRoute::Artist(title.clone()))
-        }
-        HomeCard::YouTubeArtist { item, .. } => BrowserEvent::OpenYouTubeCollection(item.clone()),
-        HomeCard::LocalPlaylist { title, .. } => {
-            BrowserEvent::Navigate(BrowserRoute::Playlist(title.clone()))
-        }
-        HomeCard::YouTubePlaylist(item) => BrowserEvent::OpenYouTubePlaylist(item.clone()),
-    };
+    let descriptor = card.descriptor(language);
+    let open_event = card.open_event();
 
     let (play_event, queue_events, collection_kind, collection_id, collection_title) = match &card {
         HomeCard::LocalAlbum { title, .. } => (
@@ -3748,11 +3799,14 @@ fn home_card_button(
             HomeCard::YouTubeAlbum { .. } | HomeCard::YouTubePlaylist(_)
         );
 
-    let card_widget = collection_card(cover_path, title, subtitle, detail, online);
-    if matches!(
-        &card,
-        HomeCard::LocalArtist { .. } | HomeCard::YouTubeArtist { .. }
-    ) {
+    let card_widget = collection_card(
+        descriptor.cover_path,
+        descriptor.title,
+        descriptor.subtitle,
+        descriptor.detail,
+        descriptor.online,
+    );
+    if descriptor.artist {
         card_widget.add_css_class("artist-collection-card");
     }
 
