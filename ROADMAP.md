@@ -507,3 +507,5 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - ✅ The artist section was renamed from Popular Tracks to Featured Tracks because no real popularity ranking is available yet.
 
 - ✅ Featured-track rows on artist pages now preserve the same 16 px corner radius during hover, focus and press states.
+
+- ✅ Featured-track rows reuse the expressive search-result surface and hover colors while keeping a stable 16 px corner radius.
