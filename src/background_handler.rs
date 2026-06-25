@@ -1,6 +1,8 @@
 // youtube_collection_background_playback_v1
 // collection_card_loading_spinner_v3\n// youtube_collection_queue_background_load_v1
 // youtube_playlist_background_autoplay_v1
+use std::thread;
+
 use crate::{
     background::BackgroundMessage,
     config::StartupSource,
@@ -161,51 +163,128 @@ impl AppController {
                     Err(error) => self.youtube_page.show_error(&error),
                 },
                 BackgroundMessage::YouTubeRatingChanged {
+                    request_id,
                     item,
                     liked,
                     result,
-                } => match result {
-                    Ok(remote_state) if remote_state == liked => {
-                        self.apply_youtube_like_cache(&item, liked);
-                        if self
-                            .current_youtube_item()
-                            .is_some_and(|current| current.video_id == item.video_id)
-                        {
-                            self.set_youtube_favorite_visual_state(liked);
-                        }
-                        self.refresh_browser();
-                        self.show_toast(if liked {
-                            "Música curtida no YouTube Music"
-                        } else {
-                            "Curtida removida do YouTube Music"
-                        });
+                } => {
+                    let latest = self
+                        .youtube_like_pending
+                        .borrow()
+                        .get(&item.video_id)
+                        .copied();
+                    if latest != Some(request_id) {
+                        continue;
                     }
-                    Ok(_) => {
-                        self.apply_youtube_like_cache(&item, !liked);
-                        if self
-                            .current_youtube_item()
-                            .is_some_and(|current| current.video_id == item.video_id)
-                        {
-                            self.set_youtube_favorite_visual_state(!liked);
+
+                    match result {
+                        Ok(remote_state) if remote_state == liked => {
+                            let Some(bridge) = self.youtube_bridge.clone() else {
+                                self.youtube_like_pending
+                                    .borrow_mut()
+                                    .remove(&item.video_id);
+                                self.show_toast(
+                                    "Curtida salva, mas a verificação remota não pôde ser iniciada",
+                                );
+                                continue;
+                            };
+
+                            let sender = self.background.sender();
+                            let video_id = item.video_id.clone();
+                            thread::spawn(move || {
+                                let result = bridge.sync_library();
+                                let _ = sender.send(BackgroundMessage::YouTubeLikeReconciled {
+                                    request_id,
+                                    video_id,
+                                    optimistic_liked: liked,
+                                    result,
+                                });
+                            });
                         }
-                        self.refresh_browser();
-                        self.show_toast("O YouTube Music retornou um estado de curtida inesperado");
-                    }
-                    Err(error) => {
-                        self.apply_youtube_like_cache(&item, !liked);
-                        if self
-                            .current_youtube_item()
-                            .is_some_and(|current| current.video_id == item.video_id)
-                        {
-                            self.set_youtube_favorite_visual_state(!liked);
+                        Ok(_) => {
+                            self.youtube_like_pending
+                                .borrow_mut()
+                                .remove(&item.video_id);
+                            self.apply_youtube_like_cache(&item, !liked);
+                            if self
+                                .current_youtube_item()
+                                .is_some_and(|current| current.video_id == item.video_id)
+                            {
+                                self.set_youtube_favorite_visual_state(!liked);
+                            }
+                            self.refresh_browser();
+                            self.show_toast(
+                                "O YouTube Music retornou um estado inesperado; a alteração foi desfeita",
+                            );
                         }
-                        self.refresh_browser();
-                        eprintln!("Could not update YouTube Music like state: {error}");
-                        self.show_toast(
-                            "Não foi possível sincronizar a curtida com o YouTube Music",
-                        );
+                        Err(error) => {
+                            self.youtube_like_pending
+                                .borrow_mut()
+                                .remove(&item.video_id);
+                            self.apply_youtube_like_cache(&item, !liked);
+                            if self
+                                .current_youtube_item()
+                                .is_some_and(|current| current.video_id == item.video_id)
+                            {
+                                self.set_youtube_favorite_visual_state(!liked);
+                            }
+                            self.refresh_browser();
+                            eprintln!("Could not update YouTube Music like state: {error}");
+                            self.show_toast(crate::youtube::youtube_like_error_message(&error));
+                        }
                     }
-                },
+                }
+                BackgroundMessage::YouTubeLikeReconciled {
+                    request_id,
+                    video_id,
+                    optimistic_liked,
+                    result,
+                } => {
+                    let latest = self.youtube_like_pending.borrow().get(&video_id).copied();
+                    if latest != Some(request_id) {
+                        continue;
+                    }
+                    self.youtube_like_pending.borrow_mut().remove(&video_id);
+
+                    match result {
+                        Ok(snapshot) => {
+                            self.youtube_library.borrow_mut().apply(snapshot);
+                            if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
+                                eprintln!("Could not save reconciled YouTube library: {error}");
+                            }
+                            let confirmed = self
+                                .youtube_library
+                                .borrow()
+                                .liked
+                                .iter()
+                                .any(|item| item.video_id == video_id);
+                            if self
+                                .current_youtube_item()
+                                .is_some_and(|current| current.video_id == video_id)
+                            {
+                                self.set_youtube_favorite_visual_state(confirmed);
+                            }
+                            self.refresh_browser();
+                            self.show_toast(if confirmed {
+                                "Música curtida no YouTube Music"
+                            } else {
+                                "Curtida removida do YouTube Music"
+                            });
+                        }
+                        Err(error) => {
+                            eprintln!("Could not reconcile YouTube Music like state: {error}");
+                            if self
+                                .current_youtube_item()
+                                .is_some_and(|current| current.video_id == video_id)
+                            {
+                                self.set_youtube_favorite_visual_state(optimistic_liked);
+                            }
+                            self.show_toast(
+                                "Curtida salva, mas a confirmação final será refeita na próxima sincronização",
+                            );
+                        }
+                    }
+                }
                 BackgroundMessage::YouTubeLibrarySynced { notify, result } => match result {
                     Ok(snapshot) => {
                         let counts = (

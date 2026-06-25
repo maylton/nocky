@@ -231,17 +231,17 @@ now focuses on completing the user-facing history experience.
 
 - ✅ Real YouTube Music like/unlike mutations synchronized with the authenticated account.
 - ✅ Optimistic like-state updates with rollback when the remote mutation fails.
-- 🟡 Like/unlike updates persist immediately; full post-mutation server reconciliation remains planned.
-- ⬜ Dedicated **Liked songs — YouTube Music** page backed by the synchronized YouTube liked library.
-- ⬜ Source-aware navigation: show **Local liked songs** only when Local is the active source.
-- ⬜ Source-aware navigation: hide **Local liked songs** completely when YouTube Music is the active source.
-- ⬜ Show **Liked songs — YouTube Music** only when YouTube Music is the active source.
-- ⬜ Never expose liked-song pages from the inactive source in the sidebar or library navigation.
-- ⬜ Replace the current source-inaccurate “Local liked” title when YouTube Music is active.
-- ⬜ Localized liked-page titles and empty states in Portuguese, English and Spanish.
-- ⬜ Loading, retry, offline and permission-expired states for YouTube like mutations.
-- ⬜ Prevent duplicate remote requests when a user clicks like/unlike repeatedly.
-- ⬜ Unit and integration coverage for like, unlike, cache reconciliation and source switching.
+- ✅ Like/unlike updates persist immediately and reconcile silently with the server after success.
+- ✅ Dedicated **Liked songs — YouTube Music** page backed by the synchronized YouTube liked library.
+- ✅ Source-aware navigation: show **Local liked songs** only when Local is the active source.
+- ✅ Source-aware navigation: hide **Local liked songs** completely when YouTube Music is the active source.
+- ✅ Show **Liked songs — YouTube Music** only when YouTube Music is the active source.
+- ✅ Never expose liked-song pages from the inactive source in the sidebar or library navigation.
+- ✅ Replace the current source-inaccurate “Local liked” title when YouTube Music is active.
+- ✅ Localized liked-page titles and empty states in Portuguese, English and Spanish.
+- ✅ Clear offline, permission and expired-session feedback for YouTube like mutations.
+- ✅ Prevent duplicate remote requests when a user clicks like/unlike repeatedly.
+- 🟡 Unit coverage includes error-state classification; broader integration coverage remains planned.
 - Preserve the complete edited Queue 2.0 state during stream recovery.
 - More explicit handling for unavailable or region-blocked tracks.
 - Incremental library synchronization.

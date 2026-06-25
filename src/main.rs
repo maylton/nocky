@@ -1,3 +1,4 @@
+// youtube_like_reconciliation_and_request_guard_v1
 // youtube_like_button_and_track_menu_v2
 // youtube_real_like_sync_v5
 // source_aware_liked_songs_page_v1
@@ -204,6 +205,8 @@ struct AppController {
     youtube_pending_playlist: RefCell<Option<YouTubeItem>>,
     youtube_bridge: Option<Arc<YouTubeBridge>>,
     youtube_library: RefCell<YouTubeLibraryCache>,
+    youtube_like_request_id: Cell<u64>,
+    youtube_like_pending: RefCell<HashMap<String, u64>>,
 
     sidebar: gtk::Revealer,
     // reveal_bounce_and_release_0_3_0_v2
@@ -773,6 +776,8 @@ impl AppController {
             youtube_pending_playlist: RefCell::new(None),
             youtube_bridge,
             youtube_library: RefCell::new(load_library_cache()),
+            youtube_like_request_id: Cell::new(0),
+            youtube_like_pending: RefCell::new(HashMap::new()),
             sidebar_motion: sidebar_parts.motion,
             sidebar_content: sidebar_parts.content,
             sidebar_bounce: sidebar_bounce.clone(),
@@ -4947,10 +4952,25 @@ impl AppController {
             return;
         }
 
+        if self
+            .youtube_like_pending
+            .borrow()
+            .contains_key(&item.video_id)
+        {
+            self.show_toast("Aguarde a confirmação da curtida anterior");
+            return;
+        }
+
         let Some(bridge) = self.youtube_bridge.clone() else {
             self.show_toast("As dependências do YouTube Music não estão instaladas");
             return;
         };
+
+        let request_id = self.youtube_like_request_id.get().wrapping_add(1);
+        self.youtube_like_request_id.set(request_id);
+        self.youtube_like_pending
+            .borrow_mut()
+            .insert(item.video_id.clone(), request_id);
 
         let liked = !self.youtube_item_is_liked(&item.video_id);
         self.apply_youtube_like_cache(&item, liked);
@@ -4967,6 +4987,7 @@ impl AppController {
         thread::spawn(move || {
             let result = bridge.rate(&item.video_id, liked);
             let _ = sender.send(BackgroundMessage::YouTubeRatingChanged {
+                request_id,
                 item,
                 liked,
                 result,

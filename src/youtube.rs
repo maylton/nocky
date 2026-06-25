@@ -82,6 +82,32 @@ pub fn cacheable_youtube_playlist(item: &YouTubeItem) -> bool {
         && (item.playlist_kind.is_empty() || item.playlist_kind == "library")
 }
 
+pub fn youtube_like_error_message(error: &str) -> &'static str {
+    let normalized = error.to_lowercase();
+
+    if normalized.contains("connect")
+        || normalized.contains("network")
+        || normalized.contains("offline")
+        || normalized.contains("timed out")
+        || normalized.contains("timeout")
+    {
+        "Sem conexão com o YouTube Music. A curtida foi restaurada ao estado anterior."
+    } else if normalized.contains("permission")
+        || normalized.contains("forbidden")
+        || normalized.contains("403")
+    {
+        "O YouTube Music recusou a alteração. Verifique as permissões da conta."
+    } else if normalized.contains("session")
+        || normalized.contains("authentication")
+        || normalized.contains("unauthorized")
+        || normalized.contains("401")
+    {
+        "A sessão do YouTube Music expirou. Reconecte sua conta para continuar."
+    } else {
+        "Não foi possível sincronizar a curtida com o YouTube Music."
+    }
+}
+
 pub fn youtube_collection_key(kind: &str, title: &str) -> String {
     let normalized_kind = if kind.eq_ignore_ascii_case("artist") {
         "artist"
@@ -1599,4 +1625,32 @@ fn find_in_path(name: &str) -> Option<PathBuf> {
     env::split_paths(&path)
         .map(|directory| directory.join(name))
         .find(|candidate| candidate.is_file())
+}
+
+#[cfg(test)]
+mod youtube_like_error_tests {
+    use super::youtube_like_error_message;
+
+    #[test]
+    fn classifies_expired_sessions() {
+        assert!(youtube_like_error_message("401 unauthorized session").contains("expirou"));
+    }
+
+    #[test]
+    fn classifies_offline_failures() {
+        assert!(youtube_like_error_message("network timeout").contains("Sem conexão"));
+    }
+
+    #[test]
+    fn classifies_permission_failures() {
+        assert!(youtube_like_error_message("403 forbidden").contains("permissões"));
+    }
+
+    #[test]
+    fn keeps_generic_fallback() {
+        assert_eq!(
+            youtube_like_error_message("unexpected backend response"),
+            "Não foi possível sincronizar a curtida com o YouTube Music."
+        );
+    }
 }
