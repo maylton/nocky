@@ -481,3 +481,5 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - 🟡 YouTube Music mixes now use rich rows with artwork, subtitle, type badge and cached track count.
 
 - ✅ Collection pages now share one modular compact header for local/YouTube albums, artists, playlists and mixes.
+
+- ✅ YouTube artist discography pages now reuse the modular compact collection header with artwork, metadata, album count and track count.

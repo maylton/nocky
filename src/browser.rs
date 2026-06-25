@@ -1,3 +1,4 @@
+// youtube_artist_discography_header_v1
 // modular_collection_page_headers_v5
 // compact_youtube_mix_page_header_v2
 // rich_youtube_mix_page_header_v1
@@ -673,6 +674,8 @@ pub struct LibraryBrowser {
     queue_title: gtk::Label,
     queue_context_header: gtk::Box,
     albums_grid: gtk::FlowBox,
+    albums_context_header: gtk::Box,
+    albums_default_header: gtk::Widget,
     artists_grid: gtk::FlowBox,
     playlists_list: gtk::ListBox,
     playlist_model: gtk::StringList,
@@ -854,6 +857,14 @@ impl LibraryBrowser {
             "media-optical-symbolic",
             &albums_grid,
         );
+        let albums_default_header = albums_page
+            .first_child()
+            .expect("albums page must have a default header");
+        let albums_context_header = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        albums_context_header.set_hexpand(true);
+        albums_context_header.set_visible(false);
+        albums_context_header.add_css_class("collection-context-header");
+        albums_page.prepend(&albums_context_header);
 
         let artists_grid = artist_list_grid();
         let artists_page = collection_page(
@@ -1025,6 +1036,8 @@ impl LibraryBrowser {
             queue_title,
             queue_context_header,
             albums_grid,
+            albums_context_header,
+            albums_default_header,
             artists_grid,
             playlists_list,
             playlist_model,
@@ -1089,7 +1102,7 @@ impl LibraryBrowser {
                 self.root.set_visible_child_name("artists");
             }
             BrowserRoute::YouTubeArtist(title) => {
-                self.rebuild_artist_albums(youtube, &title, "");
+                self.rebuild_artist_albums(youtube, &title, "", config.language);
                 self.root.set_visible_child_name("albums");
             }
             BrowserRoute::Playlists => {
@@ -1965,6 +1978,9 @@ impl LibraryBrowser {
     }
 
     fn rebuild_albums(&self, tracks: &[Track], youtube: &YouTubeLibraryCache, query: &str) {
+        clear_box(&self.albums_context_header);
+        self.albums_context_header.set_visible(false);
+        self.albums_default_header.set_visible(true);
         clear_grid(&self.albums_grid);
         let query = query.trim().to_lowercase();
         let limit = if query.is_empty() {
@@ -2167,7 +2183,26 @@ impl LibraryBrowser {
         }
     }
 
-    fn rebuild_artist_albums(&self, youtube: &YouTubeLibraryCache, artist: &str, query: &str) {
+    fn rebuild_artist_albums(
+        &self,
+        youtube: &YouTubeLibraryCache,
+        artist: &str,
+        query: &str,
+        language: AppLanguage,
+    ) {
+        clear_box(&self.albums_context_header);
+
+        let route = BrowserRoute::YouTubeArtist(artist.to_string());
+        if let Some(header) = youtube_collection_page_header(&route, youtube, language) {
+            self.albums_context_header
+                .append(&render_collection_page_header(&header));
+            self.albums_context_header.set_visible(true);
+            self.albums_default_header.set_visible(false);
+        } else {
+            self.albums_context_header.set_visible(false);
+            self.albums_default_header.set_visible(true);
+        }
+
         clear_grid(&self.albums_grid);
         let key = youtube_collection_key("artist", artist);
         let query = query.trim().to_lowercase();
