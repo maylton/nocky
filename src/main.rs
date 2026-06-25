@@ -1,3 +1,4 @@
+// youtube_real_like_sync_v5
 // source_aware_liked_songs_page_v1
 // clickable_lyrics_seek_v3
 // fix_resume_seek_oscillation_v1
@@ -3129,6 +3130,13 @@ impl AppController {
             }
             PlaybackSource::None => self.footer_source.set_text(self.tr(Message::SourceNone)),
         }
+
+        if self.playback_source.get() == PlaybackSource::YouTube {
+            if let Some(item) = self.current_youtube_item() {
+                let liked = self.youtube_item_is_liked(&item.video_id);
+                self.set_youtube_favorite_visual_state(liked);
+            }
+        }
     }
 
     fn apply_volume_icon(&self) {
@@ -4841,7 +4849,101 @@ impl AppController {
         }
     }
 
+    fn set_youtube_favorite_visual_state(&self, active: bool) {
+        let icon = if active {
+            "emblem-favorite-symbolic"
+        } else {
+            "non-starred-symbolic"
+        };
+        self.favorite_icon.set_icon_name(Some(icon));
+        self.footer_favorite_icon.set_icon_name(Some(icon));
+
+        for button in [&self.favorite_button, &self.footer_favorite_button] {
+            if active {
+                button.add_css_class("active");
+            } else {
+                button.remove_css_class("active");
+            }
+        }
+    }
+
+    fn current_youtube_item(&self) -> Option<YouTubeItem> {
+        self.youtube_state
+            .borrow()
+            .as_ref()
+            .map(|state| state.item.clone())
+    }
+
+    fn youtube_item_is_liked(&self, video_id: &str) -> bool {
+        self.youtube_library
+            .borrow()
+            .liked
+            .iter()
+            .any(|item| item.video_id == video_id)
+    }
+
+    fn apply_youtube_like_cache(&self, item: &YouTubeItem, liked: bool) {
+        let mut library = self.youtube_library.borrow_mut();
+        library
+            .liked
+            .retain(|candidate| candidate.video_id != item.video_id);
+
+        if liked {
+            let mut stored = item.clone();
+            if stored.result_type.is_empty() {
+                stored.result_type = "song".to_string();
+            }
+            library.liked.insert(0, stored);
+        }
+
+        library.rebuild_collections();
+        if let Err(error) = youtube::save_library_cache(&library) {
+            eprintln!("Could not persist YouTube liked songs: {error}");
+        }
+    }
+
+    fn toggle_youtube_favorite(&self) {
+        let Some(item) = self.current_youtube_item() else {
+            self.show_toast("Nenhuma música do YouTube Music está selecionada");
+            return;
+        };
+        if item.video_id.trim().is_empty() {
+            self.show_toast("Esta música não possui um identificador válido do YouTube");
+            return;
+        }
+
+        if !self.youtube_library.borrow().connected {
+            self.show_toast("Conecte sua conta do YouTube Music para curtir músicas");
+            return;
+        }
+
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            self.show_toast("As dependências do YouTube Music não estão instaladas");
+            return;
+        };
+
+        let liked = !self.youtube_item_is_liked(&item.video_id);
+        self.apply_youtube_like_cache(&item, liked);
+        self.set_youtube_favorite_visual_state(liked);
+        self.refresh_browser();
+
+        let sender = self.background.sender();
+        thread::spawn(move || {
+            let result = bridge.rate(&item.video_id, liked);
+            let _ = sender.send(BackgroundMessage::YouTubeRatingChanged {
+                item,
+                liked,
+                result,
+            });
+        });
+    }
+
     fn toggle_favorite(&self) {
+        if self.playback_source.get() == PlaybackSource::YouTube {
+            self.toggle_youtube_favorite();
+            return;
+        }
+
         if self.playback_source.get() == PlaybackSource::YouTube {
             self.show_toast("Gerencie curtidas do YouTube Music pela conta conectada");
             return;

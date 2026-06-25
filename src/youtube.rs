@@ -556,6 +556,16 @@ impl YouTubeBridge {
         )
     }
 
+    pub fn rate(&self, video_id: &str, liked: bool) -> Result<bool, String> {
+        self.run(
+            "rate",
+            json!({
+                "video_id": video_id,
+                "liked": liked,
+            }),
+        )
+    }
+
     pub fn resolve(&self, video_id: &str, force: bool) -> Result<YouTubeStream, String> {
         self.run("resolve", json!({ "video_id": video_id, "force": force }))
     }

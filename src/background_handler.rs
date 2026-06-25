@@ -160,6 +160,52 @@ impl AppController {
                     }
                     Err(error) => self.youtube_page.show_error(&error),
                 },
+                BackgroundMessage::YouTubeRatingChanged {
+                    item,
+                    liked,
+                    result,
+                } => match result {
+                    Ok(remote_state) if remote_state == liked => {
+                        self.apply_youtube_like_cache(&item, liked);
+                        if self
+                            .current_youtube_item()
+                            .is_some_and(|current| current.video_id == item.video_id)
+                        {
+                            self.set_youtube_favorite_visual_state(liked);
+                        }
+                        self.refresh_browser();
+                        self.show_toast(if liked {
+                            "Música curtida no YouTube Music"
+                        } else {
+                            "Curtida removida do YouTube Music"
+                        });
+                    }
+                    Ok(_) => {
+                        self.apply_youtube_like_cache(&item, !liked);
+                        if self
+                            .current_youtube_item()
+                            .is_some_and(|current| current.video_id == item.video_id)
+                        {
+                            self.set_youtube_favorite_visual_state(!liked);
+                        }
+                        self.refresh_browser();
+                        self.show_toast("O YouTube Music retornou um estado de curtida inesperado");
+                    }
+                    Err(error) => {
+                        self.apply_youtube_like_cache(&item, !liked);
+                        if self
+                            .current_youtube_item()
+                            .is_some_and(|current| current.video_id == item.video_id)
+                        {
+                            self.set_youtube_favorite_visual_state(!liked);
+                        }
+                        self.refresh_browser();
+                        eprintln!("Could not update YouTube Music like state: {error}");
+                        self.show_toast(
+                            "Não foi possível sincronizar a curtida com o YouTube Music",
+                        );
+                    }
+                },
                 BackgroundMessage::YouTubeLibrarySynced { notify, result } => match result {
                     Ok(snapshot) => {
                         let counts = (

@@ -37,6 +37,11 @@ pub(crate) enum BackgroundMessage {
         notify: bool,
         result: Result<YouTubeLibrarySnapshot, String>,
     },
+    YouTubeRatingChanged {
+        item: YouTubeItem,
+        liked: bool,
+        result: Result<bool, String>,
+    },
     YouTubeCollectionQueueLoaded {
         request_id: u64,
         item: YouTubeItem,

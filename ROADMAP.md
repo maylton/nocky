@@ -229,9 +229,9 @@ now focuses on completing the user-facing history experience.
 
 ### Remaining
 
-- ⬜ Real YouTube Music like/dislike mutations synchronized with the authenticated account.
-- ⬜ Optimistic like-state updates with rollback when the remote mutation fails.
-- ⬜ Reconcile local cache with the server after like/unlike operations and library refreshes.
+- ✅ Real YouTube Music like/unlike mutations synchronized with the authenticated account.
+- ✅ Optimistic like-state updates with rollback when the remote mutation fails.
+- 🟡 Like/unlike updates persist immediately; full post-mutation server reconciliation remains planned.
 - ⬜ Dedicated **Liked songs — YouTube Music** page backed by the synchronized YouTube liked library.
 - ⬜ Source-aware navigation: show **Local liked songs** only when Local is the active source.
 - ⬜ Source-aware navigation: hide **Local liked songs** completely when YouTube Music is the active source.
