@@ -89,6 +89,8 @@ pub enum BrowserEvent {
     QueueLocalAppend(usize),
     QueueYouTubePlayNext(YouTubeItem),
     QueueYouTubeAppend(YouTubeItem),
+    ToggleLocalTrackFavorite(usize),
+    ToggleYouTubeTrackFavorite(YouTubeItem),
     QueueLocalCollection {
         kind: String,
         title: String,
@@ -4630,6 +4632,7 @@ fn square_pixbuf(path: &Path, size: i32) -> Option<gdk_pixbuf::Pixbuf> {
 
 fn queue_action_menu(
     entry: VisibleTrack,
+    liked: bool,
     event_tx: &Sender<BrowserEvent>,
     language: AppLanguage,
 ) -> gtk::MenuButton {
@@ -4638,12 +4641,22 @@ fn queue_action_menu(
             "Mais ações",
             "Reproduzir em seguida",
             "Adicionar ao fim da fila",
+            "Curtir",
+            "Remover curtida",
         ),
-        AppLanguage::English => ("More actions", "Play next", "Add to end of queue"),
+        AppLanguage::English => (
+            "More actions",
+            "Play next",
+            "Add to end of queue",
+            "Like",
+            "Remove like",
+        ),
         AppLanguage::Spanish => (
             "Más acciones",
             "Reproducir a continuación",
             "Añadir al final de la cola",
+            "Me gusta",
+            "Quitar Me gusta",
         ),
     };
 
@@ -4665,6 +4678,10 @@ fn queue_action_menu(
     append.set_halign(gtk::Align::Fill);
     append.add_css_class("flat");
 
+    let favorite = gtk::Button::with_label(if liked { labels.4 } else { labels.3 });
+    favorite.set_halign(gtk::Align::Fill);
+    favorite.add_css_class("flat");
+
     {
         let tx = event_tx.clone();
         let entry = entry.clone();
@@ -4682,8 +4699,9 @@ fn queue_action_menu(
     {
         let tx = event_tx.clone();
         let action_popover = popover.clone();
+        let append_entry = entry.clone();
         append.connect_clicked(move |_| {
-            let event = match entry.clone() {
+            let event = match append_entry.clone() {
                 VisibleTrack::Local(index) => BrowserEvent::QueueLocalAppend(index),
                 VisibleTrack::YouTube(item) => BrowserEvent::QueueYouTubeAppend(*item),
             };
@@ -4692,8 +4710,23 @@ fn queue_action_menu(
         });
     }
 
+    {
+        let tx = event_tx.clone();
+        let action_popover = popover.clone();
+        let favorite_entry = entry.clone();
+        favorite.connect_clicked(move |_| {
+            let event = match favorite_entry.clone() {
+                VisibleTrack::Local(index) => BrowserEvent::ToggleLocalTrackFavorite(index),
+                VisibleTrack::YouTube(item) => BrowserEvent::ToggleYouTubeTrackFavorite(*item),
+            };
+            let _ = tx.send(event);
+            action_popover.popdown();
+        });
+    }
+
     actions.append(&play_next);
     actions.append(&append);
+    actions.append(&favorite);
     popover.set_child(Some(&actions));
 
     let menu = gtk::MenuButton::builder()
@@ -4747,7 +4780,7 @@ fn track_row(
     let duration = gtk::Label::new(Some(&format_duration(track.duration_seconds)));
     duration.add_css_class("time-label");
 
-    let menu = queue_action_menu(VisibleTrack::Local(index), event_tx, language);
+    let menu = queue_action_menu(VisibleTrack::Local(index), liked, event_tx, language);
 
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     content.set_margin_top(10);
@@ -4806,6 +4839,7 @@ fn youtube_track_row(
 
     let menu = queue_action_menu(
         VisibleTrack::YouTube(Box::new(item.clone())),
+        liked,
         event_tx,
         language,
     );

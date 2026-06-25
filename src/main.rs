@@ -1,3 +1,4 @@
+// youtube_like_button_and_track_menu_v2
 // youtube_real_like_sync_v5
 // source_aware_liked_songs_page_v1
 // clickable_lyrics_seek_v3
@@ -4276,6 +4277,30 @@ impl AppController {
                 BrowserEvent::QueueYouTubeAppend(item) => {
                     self.enqueue_youtube_track(&item, false);
                 }
+                BrowserEvent::ToggleLocalTrackFavorite(index) => {
+                    let path = self
+                        .state
+                        .borrow()
+                        .tracks
+                        .get(index)
+                        .map(|track| track.path.clone());
+                    if let Some(path) = path {
+                        let liked = self.config.borrow_mut().toggle_liked(&path);
+                        self.save_config();
+                        if self.current_track_path().as_deref() == Some(path.as_path()) {
+                            self.update_favorite_icon(&path);
+                        }
+                        self.refresh_browser();
+                        self.show_toast(if liked {
+                            self.tr(Message::AddedLiked)
+                        } else {
+                            self.tr(Message::RemovedLiked)
+                        });
+                    }
+                }
+                BrowserEvent::ToggleYouTubeTrackFavorite(item) => {
+                    self.toggle_youtube_item_favorite(item);
+                }
                 BrowserEvent::QueueLocalCollection {
                     kind,
                     title,
@@ -4850,13 +4875,14 @@ impl AppController {
     }
 
     fn set_youtube_favorite_visual_state(&self, active: bool) {
-        let icon = if active {
-            "emblem-favorite-symbolic"
-        } else {
-            "non-starred-symbolic"
-        };
-        self.favorite_icon.set_icon_name(Some(icon));
-        self.footer_favorite_icon.set_icon_name(Some(icon));
+        self.favorite_icon
+            .set_icon_name(Some("emblem-favorite-symbolic"));
+        self.favorite_icon
+            .set_opacity(if active { 0.98 } else { 0.28 });
+        self.footer_favorite_icon
+            .set_icon_name(Some("emblem-favorite-symbolic"));
+        self.footer_favorite_icon
+            .set_opacity(if active { 0.98 } else { 0.28 });
 
         for button in [&self.favorite_button, &self.footer_favorite_button] {
             if active {
@@ -4907,6 +4933,10 @@ impl AppController {
             self.show_toast("Nenhuma música do YouTube Music está selecionada");
             return;
         };
+        self.toggle_youtube_item_favorite(item);
+    }
+
+    fn toggle_youtube_item_favorite(&self, item: YouTubeItem) {
         if item.video_id.trim().is_empty() {
             self.show_toast("Esta música não possui um identificador válido do YouTube");
             return;
@@ -4924,7 +4954,13 @@ impl AppController {
 
         let liked = !self.youtube_item_is_liked(&item.video_id);
         self.apply_youtube_like_cache(&item, liked);
-        self.set_youtube_favorite_visual_state(liked);
+
+        if self
+            .current_youtube_item()
+            .is_some_and(|current| current.video_id == item.video_id)
+        {
+            self.set_youtube_favorite_visual_state(liked);
+        }
         self.refresh_browser();
 
         let sender = self.background.sender();
