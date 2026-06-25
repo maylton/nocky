@@ -487,3 +487,5 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - ✅ Album and artist collection cards now share artwork, subtitle and detail rendering across Home and dedicated library pages.
 - ✅ Dedicated artist listings now use the same rich collection-card module as Home and album pages.
 - ✅ Playlist creation and maintenance controls were consolidated into a collapsed local playlist manager, keeping navigation as the primary layout.
+
+- ✅ Artist collection cards now use a compact horizontal layout with 56 px circular artwork and condensed metadata.

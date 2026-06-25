@@ -1,3 +1,4 @@
+// compact_artist_cards_v1
 // unified_album_artist_playlist_layout_v2
 // youtube_artist_discography_header_v1
 // modular_collection_page_headers_v5
@@ -2156,7 +2157,7 @@ impl LibraryBrowser {
             append_collection_grid_card(
                 &self.artists_grid,
                 position,
-                collection_button(
+                artist_collection_button(
                     artist_collection_card(
                         cover,
                         &artist,
@@ -2164,7 +2165,7 @@ impl LibraryBrowser {
                         &detail,
                         false,
                     ),
-                    BrowserRoute::Artist(artist.clone()),
+                    BrowserEvent::Navigate(BrowserRoute::Artist(artist.clone())),
                     &self.event_tx,
                 ),
             );
@@ -2186,7 +2187,7 @@ impl LibraryBrowser {
             append_collection_grid_card(
                 &self.artists_grid,
                 position,
-                collection_event_button(
+                artist_collection_button(
                     artist_collection_card(
                         artist_entry.cached_cover(),
                         &artist_entry.title,
@@ -4788,25 +4789,101 @@ fn artist_collection_card(
     detail: &str,
     online: bool,
 ) -> gtk::Box {
-    let card = collection_card_with_placeholder(
-        cover_path,
-        title,
-        subtitle,
-        detail,
-        online,
-        "avatar-default-symbolic",
-        "artist-placeholder",
-    );
+    let artwork = artwork(cover_path, 56);
+    artwork.set_size_request(56, 56);
+    artwork.set_halign(gtk::Align::Start);
+    artwork.set_valign(gtk::Align::Center);
+    artwork.set_hexpand(false);
+    artwork.set_vexpand(false);
+    artwork.add_css_class("artist-artwork");
+    artwork.add_css_class("circular");
 
-    if let Some(artwork) = card
-        .first_child()
-        .and_then(|child| child.downcast::<gtk::Stack>().ok())
-    {
-        artwork.add_css_class("artist-artwork");
-        artwork.add_css_class("circular");
+    if cover_path.is_none() {
+        artwork.add_css_class("typed-collection-placeholder");
+        artwork.add_css_class("artist-placeholder");
+        if let Some(icon) = artwork
+            .first_child()
+            .and_then(|child| child.downcast::<gtk::Image>().ok())
+        {
+            icon.set_icon_name(Some("avatar-default-symbolic"));
+            icon.set_pixel_size(22);
+            icon.add_css_class("typed-placeholder-icon");
+        }
     }
 
+    let title_label = gtk::Label::new(Some(title));
+    title_label.set_xalign(0.0);
+    title_label.set_hexpand(true);
+    title_label.set_single_line_mode(true);
+    title_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    title_label.add_css_class("heading");
+    title_label.add_css_class("compact-artist-title");
+
+    let subtitle_label = gtk::Label::new(Some(subtitle));
+    subtitle_label.set_xalign(0.0);
+    subtitle_label.set_single_line_mode(true);
+    subtitle_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    subtitle_label.add_css_class("dim-label");
+    subtitle_label.add_css_class("compact-artist-subtitle");
+
+    let detail_label = gtk::Label::new(Some(detail));
+    detail_label.set_xalign(0.0);
+    detail_label.set_single_line_mode(true);
+    detail_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    detail_label.add_css_class("dim-label");
+    detail_label.add_css_class("compact-artist-detail");
+
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    text.set_hexpand(true);
+    text.set_valign(gtk::Align::Center);
+    text.append(&title_label);
+    if !subtitle.is_empty() {
+        text.append(&subtitle_label);
+    }
+    if !detail.is_empty() {
+        text.append(&detail_label);
+    }
+
+    let card = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    card.set_size_request(250, 72);
+    card.set_hexpand(true);
+    card.set_vexpand(false);
+    card.set_halign(gtk::Align::Fill);
+    card.set_valign(gtk::Align::Center);
+    card.set_margin_top(6);
+    card.set_margin_bottom(6);
+    card.set_margin_start(8);
+    card.set_margin_end(8);
+    card.append(&artwork);
+    card.append(&text);
+    card.add_css_class("compact-artist-card");
+    card.add_css_class("search-result-row");
+    if online {
+        card.add_css_class("youtube-collection-card");
+    }
     card
+}
+
+fn artist_collection_button(
+    card: gtk::Box,
+    event: BrowserEvent,
+    event_tx: &Sender<BrowserEvent>,
+) -> gtk::Button {
+    let button = gtk::Button::new();
+    button.set_child(Some(&card));
+    button.set_size_request(280, 84);
+    button.set_hexpand(true);
+    button.set_halign(gtk::Align::Fill);
+    button.set_valign(gtk::Align::Start);
+    button.add_css_class("flat");
+    button.add_css_class("compact-artist-button");
+
+    let sender = event_tx.clone();
+    button.connect_clicked(move |_| {
+        let _ = sender.send(event.clone());
+    });
+
+    button
 }
 
 fn collection_placeholder(title: &str, subtitle: &str) -> gtk::Box {
