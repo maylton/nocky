@@ -1,3 +1,5 @@
+// lyrics_2_v2
+// playback_resume_preferences_fix_v1
 use crate::{
     background::BackgroundMessage,
     lyrics, lyrics_provider, mpris,
@@ -228,9 +230,10 @@ impl AppController {
             item.duration_seconds = stream.duration_seconds;
         }
 
+        let autoplay = self.startup_restore_autoplay.replace(None).unwrap_or(true);
         if let Err(error) =
             self.player
-                .load_with_headers(&stream.stream_url, true, stream.http_headers.clone())
+                .load_with_headers(&stream.stream_url, autoplay, stream.http_headers.clone())
         {
             self.youtube_recovery_in_progress.set(false);
             self.youtube_recovery_resume_us.set(0);
@@ -313,14 +316,17 @@ impl AppController {
             );
         }
 
-        self.update_play_icons(true);
+        self.update_play_icons(autoplay);
         if !recovering {
             self.last_mpris_position.set(0);
             self.mpris.send(mpris::MprisUpdate::Position(0));
         }
         self.publish_mpris_youtube(&item, &stream, cover_path.as_deref());
-        self.mpris
-            .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Playing));
+        self.mpris.send(mpris::MprisUpdate::Playback(if autoplay {
+            mpris::MprisPlayback::Playing
+        } else {
+            mpris::MprisPlayback::Paused
+        }));
         self.prefetch_youtube_queue();
     }
 
@@ -379,12 +385,23 @@ impl AppController {
             title: item.title.clone(),
             artist: item.artist.clone(),
             album: item.album.clone(),
+            duration_seconds: item.duration_seconds,
         };
         let video_id = item.video_id.clone();
         let sender = self.background.sender();
         thread::spawn(move || {
-            let result = lyrics_provider::fetch_synced_lyrics(&lookup)
-                .map(|contents| lyrics::parse_lrc(&contents));
+            let result = lyrics_provider::fetch_lyrics(&lookup, notify).map(|document| {
+                eprintln!(
+                    "YouTube lyrics loaded from {} ({})",
+                    document.provider,
+                    if document.synchronized {
+                        "synchronized"
+                    } else {
+                        "plain fallback"
+                    }
+                );
+                lyrics::parse_lrc(&document.contents)
+            });
             let _ = sender.send(BackgroundMessage::YouTubeLyricsDownloaded {
                 video_id,
                 notify,

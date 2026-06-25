@@ -1,3 +1,9 @@
+// clickable_lyrics_seek_v3
+// fix_resume_seek_oscillation_v1
+// fix_shutdown_save_order_v1
+// youtube_resume_seek_convergence_v1
+// lyrics_2_v2
+// playback_resume_preferences_fix_v1
 // playback_persistence_resume_2_v1
 // queue_collection_cover_fallback_v1
 // preserve_home_carousel_scroll_v1
@@ -166,6 +172,7 @@ struct AppController {
     listening_history_context: RefCell<listening_history::PlaybackHistoryContext>,
     pending_resume_position_us: Cell<Option<i64>>,
     restored_playback_session: RefCell<Option<PlaybackSession>>,
+    startup_restore_autoplay: Cell<Option<bool>>,
     playback_session_last_position_seconds: Cell<u64>,
     playback_session_restore_attempts: Cell<u8>,
     updating_progress: Cell<bool>,
@@ -732,6 +739,7 @@ impl AppController {
             ),
             pending_resume_position_us: Cell::new(None),
             restored_playback_session: RefCell::new(restored_playback_session),
+            startup_restore_autoplay: Cell::new(None),
             playback_session_last_position_seconds: Cell::new(0),
             playback_session_restore_attempts: Cell::new(0),
             updating_progress: Cell::new(false),
@@ -852,6 +860,15 @@ impl AppController {
             visual_theme_manager,
             _theme: theme,
         });
+        {
+            let weak = Rc::downgrade(&controller);
+            controller.lyrics.connect_seek(move |timestamp_us| {
+                if let Some(controller) = weak.upgrade() {
+                    controller.seek_to(timestamp_us, true);
+                }
+            });
+        }
+
         {
             let weak = Rc::downgrade(&controller);
             page_switcher.connect_home_clicked(move || {
@@ -1339,14 +1356,8 @@ impl AppController {
         self.publish_mpris_capabilities();
 
         {
-            let weak = Rc::downgrade(self);
-            self.window.connect_close_request(move |_| {
-                if let Some(controller) = weak.upgrade() {
-                    controller.player.shutdown();
-                    controller.mpris.send(mpris::MprisUpdate::Shutdown);
-                }
-                glib::Propagation::Proceed
-            });
+            self.window
+                .connect_close_request(move |_| glib::Propagation::Proceed);
         }
 
         {
@@ -3615,6 +3626,10 @@ impl AppController {
                 self.save_config();
                 self.apply_home_preferences();
             }
+            SettingsEvent::ResumePlaybackOnStartup(active) => {
+                self.config.borrow_mut().resume_playback_on_startup = active;
+                self.save_config();
+            }
             SettingsEvent::YouTubeAutoSync(active) => {
                 self.config.borrow_mut().youtube_auto_sync = active;
                 self.save_config();
@@ -4539,6 +4554,7 @@ impl AppController {
             });
         self.pending_resume_position_us
             .set(Some(session.position_us.max(0)));
+        let autoplay = self.config.borrow().resume_playback_on_startup && session.was_playing;
 
         match &current_media.source {
             QueueSource::Local { path } => {
@@ -4551,7 +4567,7 @@ impl AppController {
                 let Some(index) = index else {
                     return;
                 };
-                self.select_track(index, session.was_playing);
+                self.select_track(index, autoplay);
             }
             QueueSource::YouTube { video_id } => {
                 let queue = self
@@ -4582,7 +4598,8 @@ impl AppController {
                     self.restored_playback_session.replace(None);
                     return;
                 };
-                self.resolve_youtube_track(queue[index].clone(), queue, index, session.was_playing);
+                self.startup_restore_autoplay.set(Some(autoplay));
+                self.resolve_youtube_track(queue[index].clone(), queue, index, false);
             }
         }
 
@@ -4591,6 +4608,28 @@ impl AppController {
         self.restored_playback_session.replace(None);
         self.playback_session_restore_attempts.set(0);
         self.show_toast("Reprodução anterior restaurada");
+    }
+
+    fn apply_pending_resume_position(&self) {
+        let Some(position) = self.pending_resume_position_us.get() else {
+            return;
+        };
+
+        if !self.player.is_seekable() || self.player.duration_us() <= 0 {
+            return;
+        }
+
+        match self.player.seek(position.max(0)) {
+            Ok(()) => {
+                self.pending_resume_position_us.set(None);
+                self.last_mpris_position.set(position.max(0));
+                self.mpris
+                    .send(mpris::MprisUpdate::Position(position.max(0)));
+            }
+            Err(error) => {
+                eprintln!("Could not restore playback position: {error}");
+            }
+        }
     }
 
     fn current_track_path(&self) -> Option<PathBuf> {
@@ -4671,6 +4710,7 @@ impl AppController {
                     title: track.title.clone(),
                     artist: track.artist.clone(),
                     album: track.album.clone(),
+                    duration_seconds: track.duration_seconds,
                 },
             )
         };
@@ -4687,7 +4727,18 @@ impl AppController {
         }
         let sender = self.background.sender();
         thread::spawn(move || {
-            let result = lyrics_provider::download_to_sidecar(&path, &lookup);
+            let result =
+                lyrics_provider::download_to_sidecar(&path, &lookup, force).map(|document| {
+                    eprintln!(
+                        "Lyrics loaded from {} ({})",
+                        document.provider,
+                        if document.synchronized {
+                            "synchronized"
+                        } else {
+                            "plain fallback"
+                        }
+                    );
+                });
             let _ = sender.send(BackgroundMessage::LyricsDownloaded {
                 path,
                 result,
@@ -5453,6 +5504,7 @@ impl AppController {
                 PlaybackEvent::DurationChanged => {
                     self.publish_mpris_capabilities();
                     self.resume_youtube_after_recovery();
+                    self.apply_pending_resume_position();
                 }
                 PlaybackEvent::Spectrum(values) => self.visualizer.set_values(&values),
                 PlaybackEvent::Error(error) => {
@@ -5776,12 +5828,7 @@ impl AppController {
     }
 
     fn refresh_progress(&self) {
-        if let Some(position) = self.pending_resume_position_us.get() {
-            if self.player.is_seekable() && self.player.duration_us() > 0 {
-                self.pending_resume_position_us.set(None);
-                self.seek_to(position, false);
-            }
-        }
+        self.apply_pending_resume_position();
 
         self.maybe_record_listening();
         let timestamp = self.player.position_us().max(0);

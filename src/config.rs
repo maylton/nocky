@@ -1,3 +1,4 @@
+// playback_resume_preferences_fix_v1
 use gtk::glib;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -85,6 +86,8 @@ impl AppLanguage {
 pub struct AppConfig {
     pub music_directory: Option<PathBuf>,
     pub auto_download_lyrics: bool,
+    // playback_resume_preferences_fix_v1
+    pub resume_playback_on_startup: bool,
     pub show_home_visualizer: bool,
     pub show_home_lyrics: bool,
     // optional_personalized_home_history_v1
@@ -114,6 +117,7 @@ impl Default for AppConfig {
         Self {
             music_directory: None,
             auto_download_lyrics: true,
+            resume_playback_on_startup: false,
             show_home_visualizer: true,
             show_home_lyrics: true,
             show_personalized_home_history: true,
