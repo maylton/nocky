@@ -1,3 +1,4 @@
+// compact_youtube_mix_page_header_v2
 // rich_youtube_mix_page_header_v1
 // rich_youtube_mix_rows_v1
 // vertical_collection_edge_scroll_spring_v5_home_timing
@@ -5180,24 +5181,27 @@ fn youtube_mix_page_header(
     track_count: Option<usize>,
     language: AppLanguage,
 ) -> gtk::Box {
-    let cover = artwork(item.cached_cover(), 112);
-    cover.set_size_request(112, 112);
+    let cover = artwork(item.cached_cover(), 88);
+    cover.set_size_request(88, 88);
     cover.set_halign(gtk::Align::Start);
+    cover.set_valign(gtk::Align::Center);
+    cover.set_hexpand(false);
+    cover.set_vexpand(false);
     cover.add_css_class("mix-page-cover");
+    cover.add_css_class("compact-collection-cover");
 
-    let eyebrow = gtk::Label::new(Some(match language {
-        AppLanguage::Portuguese => "YOUTUBE MUSIC · MIX",
-        AppLanguage::English => "YOUTUBE MUSIC · MIX",
-        AppLanguage::Spanish => "YOUTUBE MUSIC · MIX",
-    }));
+    let eyebrow = gtk::Label::new(Some("YOUTUBE MUSIC · MIX"));
     eyebrow.set_xalign(0.0);
+    eyebrow.set_ellipsize(gtk::pango::EllipsizeMode::End);
     eyebrow.add_css_class("dim-label");
     eyebrow.add_css_class("collection-context-eyebrow");
 
     let title = gtk::Label::new(Some(&item.title));
     title.set_xalign(0.0);
-    title.set_wrap(true);
-    title.add_css_class("collection-page-title");
+    title.set_hexpand(true);
+    title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    title.set_max_width_chars(34);
+    title.add_css_class("title-2");
     title.add_css_class("mix-page-title");
 
     let subtitle_text = if item.subtitle.trim().is_empty() {
@@ -5211,10 +5215,11 @@ fn youtube_mix_page_header(
     };
     let subtitle = gtk::Label::new(Some(subtitle_text));
     subtitle.set_xalign(0.0);
-    subtitle.set_wrap(true);
+    subtitle.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    subtitle.set_max_width_chars(42);
     subtitle.add_css_class("dim-label");
 
-    let detail_text = match track_count {
+    let count_text = match track_count {
         Some(count) => match language {
             AppLanguage::Portuguese => {
                 format!("{count} {}", if count == 1 { "faixa" } else { "faixas" })
@@ -5227,34 +5232,38 @@ fn youtube_mix_page_header(
             }
         },
         None => match language {
-            AppLanguage::Portuguese => "Seleção personalizada do YouTube Music".to_string(),
-            AppLanguage::English => "Personalized selection from YouTube Music".to_string(),
-            AppLanguage::Spanish => "Selección personalizada de YouTube Music".to_string(),
+            AppLanguage::Portuguese => "Mix personalizado".to_string(),
+            AppLanguage::English => "Personalized mix".to_string(),
+            AppLanguage::Spanish => "Mix personalizado".to_string(),
         },
     };
-    let detail = gtk::Label::new(Some(&detail_text));
-    detail.set_xalign(0.0);
-    detail.add_css_class("dim-label");
-    detail.add_css_class("mix-page-detail");
+    let count = source_badge(&count_text, true);
+    count.set_halign(gtk::Align::Start);
+    count.add_css_class("mix-count-badge");
 
-    let text = gtk::Box::new(gtk::Orientation::Vertical, 5);
+    let metadata = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    metadata.set_halign(gtk::Align::Start);
+    metadata.append(&count);
+
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 4);
     text.set_hexpand(true);
     text.set_valign(gtk::Align::Center);
     text.append(&eyebrow);
     text.append(&title);
     text.append(&subtitle);
-    text.append(&detail);
+    text.append(&metadata);
 
-    let header = gtk::Box::new(gtk::Orientation::Horizontal, 18);
+    let header = gtk::Box::new(gtk::Orientation::Horizontal, 14);
     header.set_hexpand(true);
-    header.set_margin_top(4);
-    header.set_margin_bottom(14);
+    header.set_vexpand(false);
+    header.set_margin_top(2);
+    header.set_margin_bottom(12);
     header.set_margin_start(2);
     header.set_margin_end(2);
     header.append(&cover);
     header.append(&text);
     header.add_css_class("mix-page-header");
-    header.add_css_class("expressive-page-header");
+    header.add_css_class("compact-collection-header");
     header
 }
 
