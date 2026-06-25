@@ -1,4 +1,6 @@
+// home_multi_artist_ranking_v1
 // unified_recent_activity_home_v4\n// personalized_home_resume_v2
+use crate::youtube::credited_artists;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -254,9 +256,8 @@ impl ListeningHistory {
         source: ListeningSource,
         limit: usize,
     ) -> Vec<(String, ListeningStats)> {
-        rank(
+        rank_artist_credits(
             self.events.iter().filter(|event| event.source == source),
-            |event| event.artist.trim(),
             limit,
         )
     }
@@ -490,6 +491,37 @@ fn write_history_snapshot(stored: &StoredHistory) {
     }
 }
 
+fn rank_artist_credits<'a, I>(events: I, limit: usize) -> Vec<(String, ListeningStats)>
+where
+    I: Iterator<Item = &'a PlayEvent>,
+{
+    let mut grouped = HashMap::<String, (String, ListeningStats)>::new();
+
+    for event in events {
+        for artist in credited_artists(&event.artist) {
+            let normalized = artist.to_lowercase();
+            let (_, stats) = grouped
+                .entry(normalized)
+                .or_insert_with(|| (artist, ListeningStats::default()));
+            stats.play_count += 1;
+            stats.last_played_at = stats.last_played_at.max(event.played_at);
+            stats.total_listened_seconds += event.listened_seconds;
+        }
+    }
+
+    let mut ranked = grouped.into_values().collect::<Vec<_>>();
+    ranked.sort_by(|(left_name, left), (right_name, right)| {
+        right
+            .total_listened_seconds
+            .cmp(&left.total_listened_seconds)
+            .then_with(|| right.play_count.cmp(&left.play_count))
+            .then_with(|| right.last_played_at.cmp(&left.last_played_at))
+            .then_with(|| left_name.to_lowercase().cmp(&right_name.to_lowercase()))
+    });
+    ranked.truncate(limit);
+    ranked
+}
+
 fn rank<'a, I, F>(events: I, key: F, limit: usize) -> Vec<(String, ListeningStats)>
 where
     I: Iterator<Item = &'a PlayEvent>,
@@ -583,6 +615,31 @@ mod tests {
         let artists = history.ranked_artists(ListeningSource::Local, 10);
         assert_eq!(artists[0].0, "Long Listen");
         assert_eq!(artists[0].1.total_listened_seconds, 600);
+    }
+
+    #[test]
+    fn artist_ranking_splits_collaboration_credits() {
+        let history = ListeningHistory {
+            recording_enabled: true,
+            events: vec![event(
+                "Anitta feat. Felipe Amorim, HITMAKER",
+                "Collaboration",
+                ListeningSource::YouTube,
+                10,
+                180,
+            )],
+        };
+
+        let artists = history.ranked_artists(ListeningSource::YouTube, 10);
+        let names = artists
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["Anitta", "Felipe Amorim", "HITMAKER"]);
+        assert!(artists
+            .iter()
+            .all(|(_, stats)| stats.play_count == 1 && stats.total_listened_seconds == 180));
     }
 
     #[test]

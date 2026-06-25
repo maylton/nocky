@@ -512,3 +512,6 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 
 - ✅ Track credits with explicit collaboration separators are now indexed under each credited artist in local and YouTube artist pages.
 - ✅ Artist filtering, featured tracks and album subtitles share one central credit parser; bare ampersands remain intact for band names.
+
+- ✅ Personalized Home artist rankings now split collaborative track credits and count each credited artist independently.
+- ✅ Existing listening-history events are reinterpreted at display time, so no history migration or reset is required.
