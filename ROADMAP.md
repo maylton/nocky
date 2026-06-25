@@ -477,3 +477,5 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - YouTube like/unlike actions must mutate the remote account state, not only the local interface.
 - Remote failures must be visible and must restore the previous like state when necessary.
 
+
+- 🟡 YouTube Music mixes now use rich rows with artwork, subtitle, type badge and cached track count.
