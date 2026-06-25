@@ -1,3 +1,4 @@
+// smooth_centered_lyrics_transition_v1
 // fix_lyrics_viewport_relative_bounds_v1
 // filter_transient_lyrics_timestamp_regressions_v1
 // fix_redundant_lyrics_rebuild_scroll_reset_v1
@@ -662,9 +663,50 @@ fn center_lyric_label(
                 return;
             }
 
-            adjustment.set_value(target);
+            animate_lyrics_scroll(adjustment, target, generation, token);
         },
     );
+}
+
+fn animate_lyrics_scroll(
+    adjustment: gtk::Adjustment,
+    target: f64,
+    generation: Rc<Cell<u64>>,
+    token: u64,
+) {
+    const FRAME_TIME: Duration = Duration::from_millis(16);
+    const MIN_DURATION_MS: f64 = 180.0;
+    const MAX_DURATION_MS: f64 = 360.0;
+
+    let start = adjustment.value();
+    let distance = (target - start).abs();
+
+    if distance <= 1.0 {
+        adjustment.set_value(target);
+        return;
+    }
+
+    let duration_ms = (MIN_DURATION_MS + distance * 0.22).clamp(MIN_DURATION_MS, MAX_DURATION_MS);
+    let duration = Duration::from_secs_f64(duration_ms / 1000.0);
+    let started = Instant::now();
+
+    glib::timeout_add_local(FRAME_TIME, move || {
+        if generation.get() != token {
+            return glib::ControlFlow::Break;
+        }
+
+        let progress = (started.elapsed().as_secs_f64() / duration.as_secs_f64()).clamp(0.0, 1.0);
+
+        let eased = 1.0 - (1.0 - progress).powi(3);
+        adjustment.set_value(start + (target - start) * eased);
+
+        if progress >= 1.0 {
+            adjustment.set_value(target);
+            glib::ControlFlow::Break
+        } else {
+            glib::ControlFlow::Continue
+        }
+    });
 }
 
 fn retry_center_lyric_label(
