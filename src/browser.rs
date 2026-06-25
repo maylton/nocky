@@ -1,3 +1,4 @@
+// remove_collection_now_playing_badge_v1
 // richer_collection_cards_phase1_v1
 // collection_context_favorites_and_placeholders_v6
 // shared_collection_card_descriptor_v1
@@ -3904,38 +3905,6 @@ fn home_card_button(
     let overlay = gtk::Overlay::new();
     overlay.set_child(Some(&main_button));
     overlay.add_css_class("home-card-context-overlay");
-
-    if is_active {
-        let indicator_icon = gtk::Image::from_icon_name(if playback.playing {
-            "audio-volume-high-symbolic"
-        } else {
-            "media-playback-pause-symbolic"
-        });
-        indicator_icon.set_pixel_size(14);
-
-        let indicator_label = gtk::Label::new(Some(match (language, playback.playing) {
-            (AppLanguage::Portuguese, true) => "Tocando",
-            (AppLanguage::Portuguese, false) => "Pausado",
-            (AppLanguage::English, true) => "Playing",
-            (AppLanguage::English, false) => "Paused",
-            (AppLanguage::Spanish, true) => "Reproduciendo",
-            (AppLanguage::Spanish, false) => "Pausado",
-        }));
-        indicator_label.add_css_class("collection-card-now-playing-label");
-
-        let indicator = gtk::Box::new(gtk::Orientation::Horizontal, 5);
-        indicator.set_halign(gtk::Align::Center);
-        indicator.set_valign(gtk::Align::End);
-        indicator.set_margin_bottom(12);
-        indicator.set_margin_start(12);
-        indicator.set_margin_end(12);
-        indicator.append(&indicator_icon);
-        indicator.append(&indicator_label);
-        indicator.add_css_class("collection-card-now-playing");
-        indicator.add_css_class("accent");
-
-        overlay.add_overlay(&indicator);
-    }
 
     if let Some(play_event) = play_event {
         let control = gtk::Button::new();
