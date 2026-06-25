@@ -499,3 +499,6 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 
 - ✅ Playlist rows now constrain title, subtitle and metadata widths so the Playlists page cannot raise the application minimum width.
 - ✅ Mix rows now prefer the first cached track artwork over malformed or text-heavy mix thumbnails, with the mix image retained as fallback.
+
+- ✅ YouTube artist pages now compose a rich header, up to five popular tracks and the existing album grid using shared collection modules.
+- ✅ Popular tracks on artist pages are directly playable with the visible selection preserved as the playback queue.

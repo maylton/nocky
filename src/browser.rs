@@ -1,3 +1,4 @@
+// youtube_artist_page_popular_tracks_v1
 // playlist_page_responsive_rows_v2
 // playlist_page_single_scroll_layout_v1
 // compact_artist_outline_spacing_fix_v3
@@ -2271,9 +2272,37 @@ impl LibraryBrowser {
         clear_box(&self.albums_context_header);
 
         let route = BrowserRoute::YouTubeArtist(artist.to_string());
+        let key = youtube_collection_key("artist", artist);
+        let mut has_context = false;
+
         if let Some(header) = youtube_collection_page_header(&route, youtube, language) {
             self.albums_context_header
                 .append(&render_collection_page_header(&header));
+            has_context = true;
+        }
+
+        if let Some(popular_tracks) = youtube.collection_tracks.get(&key) {
+            if let Some(section) =
+                artist_popular_tracks_section(popular_tracks, &self.event_tx, language)
+            {
+                self.albums_context_header.append(&section);
+                has_context = true;
+            }
+        }
+
+        if has_context {
+            let albums_title = match language {
+                AppLanguage::Portuguese => "ÁLBUNS",
+                AppLanguage::English => "ALBUMS",
+                AppLanguage::Spanish => "ÁLBUMES",
+            };
+            let albums_subtitle = match language {
+                AppLanguage::Portuguese => "Lançamentos disponíveis deste artista",
+                AppLanguage::English => "Available releases from this artist",
+                AppLanguage::Spanish => "Lanzamientos disponibles de este artista",
+            };
+            self.albums_context_header
+                .append(&artist_page_section_heading(albums_title, albums_subtitle));
             self.albums_context_header.set_visible(true);
             self.albums_default_header.set_visible(false);
         } else {
@@ -2282,7 +2311,6 @@ impl LibraryBrowser {
         }
 
         clear_grid(&self.albums_grid);
-        let key = youtube_collection_key("artist", artist);
         let query = query.trim().to_lowercase();
         let mut position = 0;
 
@@ -5795,6 +5823,162 @@ fn playlist_row_content(
     content.append(&arrow);
 
     content
+}
+
+fn artist_page_section_heading(title: &str, subtitle: &str) -> gtk::Box {
+    let title_label = gtk::Label::new(Some(title));
+    title_label.set_xalign(0.0);
+    title_label.add_css_class("home-section-title");
+
+    let subtitle_label = gtk::Label::new(Some(subtitle));
+    subtitle_label.set_xalign(0.0);
+    subtitle_label.set_wrap(true);
+    subtitle_label.add_css_class("dim-label");
+
+    let heading = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    heading.set_hexpand(true);
+    heading.set_margin_top(8);
+    heading.set_margin_bottom(6);
+    heading.add_css_class("artist-page-section-heading");
+    heading.append(&title_label);
+    heading.append(&subtitle_label);
+    heading
+}
+
+fn artist_popular_track_button(
+    item: &YouTubeItem,
+    queue: Vec<YouTubeItem>,
+    index: usize,
+    event_tx: &Sender<BrowserEvent>,
+) -> gtk::Button {
+    let cover = artwork(item.cached_cover(), 44);
+    cover.set_size_request(44, 44);
+    cover.set_hexpand(false);
+    cover.set_vexpand(false);
+    cover.set_halign(gtk::Align::Start);
+    cover.set_valign(gtk::Align::Center);
+    cover.add_css_class("artist-popular-track-cover");
+
+    let title = gtk::Label::new(Some(&item.title));
+    title.set_xalign(0.0);
+    title.set_hexpand(true);
+    title.set_width_chars(1);
+    title.set_max_width_chars(30);
+    title.set_single_line_mode(true);
+    title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    title.add_css_class("track-title");
+
+    let secondary_text = if item.album.trim().is_empty() {
+        item.artist.as_str()
+    } else {
+        item.album.as_str()
+    };
+    let secondary = gtk::Label::new(Some(secondary_text));
+    secondary.set_xalign(0.0);
+    secondary.set_hexpand(true);
+    secondary.set_width_chars(1);
+    secondary.set_max_width_chars(34);
+    secondary.set_single_line_mode(true);
+    secondary.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    secondary.add_css_class("dim-label");
+
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    text.set_hexpand(true);
+    text.set_valign(gtk::Align::Center);
+    text.append(&title);
+    text.append(&secondary);
+
+    let duration = gtk::Label::new(Some(&format_duration(item.duration_seconds)));
+    duration.set_halign(gtk::Align::End);
+    duration.set_valign(gtk::Align::Center);
+    duration.add_css_class("dim-label");
+
+    let play = gtk::Image::from_icon_name("media-playback-start-symbolic");
+    play.set_pixel_size(16);
+    play.set_halign(gtk::Align::End);
+    play.set_valign(gtk::Align::Center);
+
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    content.set_hexpand(true);
+    content.set_margin_top(6);
+    content.set_margin_bottom(6);
+    content.set_margin_start(8);
+    content.set_margin_end(10);
+    content.append(&cover);
+    content.append(&text);
+    content.append(&duration);
+    content.append(&play);
+
+    let button = gtk::Button::new();
+    button.set_child(Some(&content));
+    button.set_hexpand(true);
+    button.set_vexpand(false);
+    button.set_halign(gtk::Align::Fill);
+    button.add_css_class("flat");
+    button.add_css_class("artist-popular-track-button");
+    button.add_css_class("search-result-button");
+
+    let sender = event_tx.clone();
+    let item = item.clone();
+    button.connect_clicked(move |_| {
+        let _ = sender.send(BrowserEvent::YouTubeTrackActivated {
+            item: item.clone(),
+            queue: queue.clone(),
+            index,
+        });
+    });
+
+    button
+}
+
+fn artist_popular_tracks_section(
+    items: &[YouTubeItem],
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> Option<gtk::Box> {
+    let queue = items
+        .iter()
+        .filter(|item| item.playable())
+        .cloned()
+        .collect::<Vec<_>>();
+    if queue.is_empty() {
+        return None;
+    }
+
+    let title = match language {
+        AppLanguage::Portuguese => "MÚSICAS POPULARES",
+        AppLanguage::English => "POPULAR TRACKS",
+        AppLanguage::Spanish => "CANCIONES POPULARES",
+    };
+    let subtitle = match language {
+        AppLanguage::Portuguese => "Uma seleção rápida das músicas disponíveis deste artista",
+        AppLanguage::English => "A quick selection of available tracks from this artist",
+        AppLanguage::Spanish => "Una selección rápida de canciones disponibles de este artista",
+    };
+
+    let section = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    section.set_hexpand(true);
+    section.set_vexpand(false);
+    section.add_css_class("artist-popular-tracks-section");
+    section.append(&artist_page_section_heading(title, subtitle));
+
+    let list = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    list.set_hexpand(true);
+    list.set_vexpand(false);
+    list.add_css_class("boxed-list");
+    list.add_css_class("artist-popular-tracks-list");
+
+    for (index, item) in queue.iter().take(5).enumerate() {
+        list.append(&artist_popular_track_button(
+            item,
+            queue.clone(),
+            index,
+            event_tx,
+        ));
+    }
+
+    section.append(&list);
+    Some(section)
 }
 
 fn youtube_mix_row(
