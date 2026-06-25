@@ -502,3 +502,6 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 
 - ✅ YouTube artist pages now compose a rich header, up to five popular tracks and the existing album grid using shared collection modules.
 - ✅ Popular tracks on artist pages are directly playable with the visible selection preserved as the playback queue.
+
+- ✅ Artist pages now fall back to the synchronized YouTube catalog when the artist collection cache has no tracks, so the featured-tracks section is actually visible whenever matching songs exist.
+- ✅ The artist section was renamed from Popular Tracks to Featured Tracks because no real popularity ranking is available yet.

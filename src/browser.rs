@@ -1,3 +1,4 @@
+// youtube_artist_page_highlight_tracks_v2
 // youtube_artist_page_popular_tracks_v1
 // playlist_page_responsive_rows_v2
 // playlist_page_single_scroll_layout_v1
@@ -2281,13 +2282,26 @@ impl LibraryBrowser {
             has_context = true;
         }
 
-        if let Some(popular_tracks) = youtube.collection_tracks.get(&key) {
-            if let Some(section) =
-                artist_popular_tracks_section(popular_tracks, &self.event_tx, language)
-            {
-                self.albums_context_header.append(&section);
-                has_context = true;
-            }
+        let catalog = youtube_catalog(youtube);
+        let mut featured_tracks = youtube
+            .collection_tracks
+            .get(&key)
+            .cloned()
+            .unwrap_or_default();
+
+        if featured_tracks.is_empty() {
+            featured_tracks = catalog
+                .into_iter()
+                .filter(|item| item.artist.eq_ignore_ascii_case(artist) && item.playable())
+                .collect::<Vec<_>>();
+            featured_tracks.sort_by(compare_youtube_items);
+        }
+
+        if let Some(section) =
+            artist_popular_tracks_section(&featured_tracks, &self.event_tx, language)
+        {
+            self.albums_context_header.append(&section);
+            has_context = true;
         }
 
         if has_context {
@@ -5946,14 +5960,14 @@ fn artist_popular_tracks_section(
     }
 
     let title = match language {
-        AppLanguage::Portuguese => "MÚSICAS POPULARES",
-        AppLanguage::English => "POPULAR TRACKS",
-        AppLanguage::Spanish => "CANCIONES POPULARES",
+        AppLanguage::Portuguese => "FAIXAS EM DESTAQUE",
+        AppLanguage::English => "FEATURED TRACKS",
+        AppLanguage::Spanish => "CANCIONES DESTACADAS",
     };
     let subtitle = match language {
-        AppLanguage::Portuguese => "Uma seleção rápida das músicas disponíveis deste artista",
-        AppLanguage::English => "A quick selection of available tracks from this artist",
-        AppLanguage::Spanish => "Una selección rápida de canciones disponibles de este artista",
+        AppLanguage::Portuguese => "Uma seleção das faixas disponíveis deste artista",
+        AppLanguage::English => "A selection of available tracks from this artist",
+        AppLanguage::Spanish => "Una selección de canciones disponibles de este artista",
     };
 
     let section = gtk::Box::new(gtk::Orientation::Vertical, 6);
