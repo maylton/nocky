@@ -1,3 +1,4 @@
+// playlist_page_single_scroll_layout_v1
 // compact_artist_outline_spacing_fix_v3
 // compact_artist_card_outline_v2
 // compact_artist_cards_v1
@@ -979,6 +980,7 @@ impl LibraryBrowser {
 
         let playlist_manager = gtk::Expander::new(Some("Gerenciar playlists locais"));
         playlist_manager.set_hexpand(true);
+        playlist_manager.set_vexpand(false);
         playlist_manager.set_expanded(false);
         playlist_manager.set_child(Some(&playlist_manager_content));
         playlist_manager.add_css_class("playlist-manager");
@@ -986,8 +988,12 @@ impl LibraryBrowser {
 
         let playlists_list = gtk::ListBox::new();
         playlists_list.set_selection_mode(gtk::SelectionMode::Single);
+        playlists_list.set_hexpand(true);
+        playlists_list.set_vexpand(false);
+        playlists_list.set_valign(gtk::Align::Start);
         playlists_list.add_css_class("playlist-list");
         playlists_list.add_css_class("expressive-media-list");
+        playlists_list.add_css_class("boxed-list");
         {
             let tx = event_tx.clone();
             let refs = playlist_row_refs.clone();
@@ -1007,22 +1013,43 @@ impl LibraryBrowser {
             });
         }
 
-        let playlists_scroll = gtk::ScrolledWindow::new();
-        playlists_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-        playlists_scroll.set_vexpand(true);
-        playlists_scroll.set_child(Some(&playlists_list));
-        install_vertical_edge_spring(&playlists_scroll);
-
         let playlists_header = page_header(
             "PLAYLISTS",
-            "Playlists locais editáveis e playlists sincronizadas do YouTube Music",
+            "Sua biblioteca de playlists, mixes e seleções do YouTube Music",
         );
-        let playlists_page = gtk::Box::new(gtk::Orientation::Vertical, 14);
+        playlists_header.add_css_class("playlist-page-header");
+
+        let playlists_content = gtk::Box::new(gtk::Orientation::Vertical, 14);
+        playlists_content.set_hexpand(true);
+        playlists_content.set_vexpand(false);
+        playlists_content.set_valign(gtk::Align::Start);
+        playlists_content.set_margin_top(2);
+        playlists_content.set_margin_bottom(12);
+        playlists_content.set_margin_start(2);
+        playlists_content.set_margin_end(2);
+        playlists_content.add_css_class("playlist-page-content");
+        playlists_content.append(&playlists_header);
+        playlists_content.append(&playlist_manager);
+        playlists_content.append(&playlists_list);
+
+        let playlists_scroll = gtk::ScrolledWindow::new();
+        playlists_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+        playlists_scroll.set_hexpand(true);
+        playlists_scroll.set_vexpand(true);
+        playlists_scroll.set_propagate_natural_width(false);
+        playlists_scroll.set_propagate_natural_height(false);
+        playlists_scroll.set_min_content_height(240);
+        playlists_scroll.set_max_content_height(720);
+        playlists_scroll.set_child(Some(&playlists_content));
+        playlists_scroll.add_css_class("playlist-page-scroll");
+        install_vertical_edge_spring(&playlists_scroll);
+
+        let playlists_page = gtk::Box::new(gtk::Orientation::Vertical, 0);
         playlists_page.set_hexpand(true);
         playlists_page.set_vexpand(true);
+        playlists_page.set_valign(gtk::Align::Fill);
         playlists_page.add_css_class("library-panel");
-        playlists_page.append(&playlists_header);
-        playlists_page.append(&playlist_manager);
+        playlists_page.add_css_class("playlist-page");
         playlists_page.append(&playlists_scroll);
 
         let root = gtk::Stack::new();

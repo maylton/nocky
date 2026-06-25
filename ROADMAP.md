@@ -493,3 +493,6 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - ✅ Compact artist cards now reuse the same expressive outline and surface language as the other collection cards.
 
 - ✅ Compact artist rows no longer inherit the large collection-button height, preserving the shared outlined surface without vertical gaps.
+
+- ✅ The Playlists page now uses one bounded outer scroller instead of letting the playlist list and local manager dictate the window minimum size.
+- ✅ Playlist navigation, mixes and local management now live in one compact responsive page flow that remains resizable after opening.
