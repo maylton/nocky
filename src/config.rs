@@ -1,3 +1,4 @@
+// personalized_home_privacy_controls_v3
 // playback_resume_preferences_fix_v1
 use gtk::glib;
 use serde::{Deserialize, Serialize};
@@ -92,6 +93,8 @@ pub struct AppConfig {
     pub show_home_lyrics: bool,
     // optional_personalized_home_history_v1
     pub show_personalized_home_history: bool,
+    // personalized_home_privacy_controls_v1
+    pub collect_listening_history: bool,
     // home_player_collapse_and_dialog_fix_v2
     pub home_player_collapsed: bool,
     pub visual_theme: VisualTheme,
@@ -121,6 +124,7 @@ impl Default for AppConfig {
             show_home_visualizer: true,
             show_home_lyrics: true,
             show_personalized_home_history: true,
+            collect_listening_history: true,
             home_player_collapsed: false,
             visual_theme: VisualTheme::Noctalia,
             footer_mode: FooterMode::Automatic,

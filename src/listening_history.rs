@@ -96,9 +96,19 @@ struct StoredHistory {
     events: Vec<PlayEvent>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct ListeningHistory {
     events: Vec<PlayEvent>,
+    recording_enabled: bool,
+}
+
+impl Default for ListeningHistory {
+    fn default() -> Self {
+        Self {
+            events: Vec::new(),
+            recording_enabled: true,
+        }
+    }
 }
 
 impl ListeningHistory {
@@ -111,6 +121,7 @@ impl ListeningHistory {
         };
         Self {
             events: stored.events,
+            recording_enabled: true,
         }
     }
 
@@ -154,6 +165,10 @@ impl ListeningHistory {
         context: PlaybackHistoryContext,
         completed: bool,
     ) -> bool {
+        if !self.recording_enabled {
+            return false;
+        }
+
         if listened_seconds < 30 && !completed {
             return false;
         }
@@ -217,6 +232,19 @@ impl ListeningHistory {
         if self.events.len() > MAX_EVENTS {
             self.events.drain(..self.events.len() - MAX_EVENTS);
         }
+        self.save();
+        true
+    }
+
+    pub fn set_recording_enabled(&mut self, enabled: bool) {
+        self.recording_enabled = enabled;
+    }
+
+    pub fn clear(&mut self) -> bool {
+        if self.events.is_empty() {
+            return false;
+        }
+        self.events.clear();
         self.save();
         true
     }
@@ -543,6 +571,7 @@ mod tests {
     #[test]
     fn ranking_prefers_total_listening_time() {
         let history = ListeningHistory {
+            recording_enabled: true,
             events: vec![
                 event("Long Listen", "Album A", ListeningSource::Local, 10, 600),
                 event("Recent Plays", "Album B", ListeningSource::Local, 20, 45),
@@ -559,6 +588,7 @@ mod tests {
     #[test]
     fn ranking_merges_case_variants() {
         let history = ListeningHistory {
+            recording_enabled: true,
             events: vec![
                 event("Björk", "Homogenic", ListeningSource::Local, 10, 120),
                 event("BJÖRK", "homogenic", ListeningSource::Local, 11, 180),
@@ -578,6 +608,7 @@ mod tests {
     #[test]
     fn ranking_keeps_sources_separate() {
         let history = ListeningHistory {
+            recording_enabled: true,
             events: vec![
                 event(
                     "Local Artist",
@@ -634,6 +665,7 @@ mod personalized_home_resume_tests {
     #[test]
     fn recent_tracks_deduplicate_by_stable_media_id() {
         let history = ListeningHistory {
+            recording_enabled: true,
             events: vec![
                 rich_event("a", 10, 40, 200, false),
                 rich_event("b", 20, 50, 200, false),
@@ -651,6 +683,7 @@ mod personalized_home_resume_tests {
     #[test]
     fn continue_listening_filters_invalid_progress() {
         let history = ListeningHistory {
+            recording_enabled: true,
             events: vec![
                 rich_event("too-early", 10, 5, 200, false),
                 rich_event("resume", 20, 80, 200, false),

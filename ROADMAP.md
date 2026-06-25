@@ -1,3 +1,4 @@
+<!-- personalized_home_privacy_controls_v3 -->
 <!-- optional_personalized_home_history_v1 -->
 <!-- personalized_home_resume_v2 -->
 # Nocky Roadmap
@@ -6,7 +7,7 @@
 
 > Last updated: 2026-06-24  
 > Status legend: ✅ completed · 🟡 in progress · ⬜ planned  
-> Current development priority: **Personalized Home — history and resume**
+> Current development priority: **Personalized Home — privacy and recently added**
 
 Nocky is a modern Linux music player built with Rust, GTK4 and Libadwaita,
 combining Material 3 Expressive ideas with close integration with the Noctalia
@@ -155,8 +156,8 @@ now focuses on completing the user-facing history experience.
 - ✅ Optional Home visibility control for personalized history sections.
 - ✅ First-run explanation and opt-in control for personalized Home history.
 - Recently added local music.
-- Clear-history action.
-- History privacy controls.
+- ✅ Clear-history action.
+- ✅ History privacy controls.
 - Per-section empty states.
 - Better deduplication when metadata differs only slightly.
 - Optional time-window filters such as recent week or recent month.
@@ -252,7 +253,7 @@ now focuses on completing the user-facing history experience.
 
 ### Remaining
 
-- More natural line-to-line motion.
+- ✅ Natural centered line-to-line motion with clickable seeking.
 - Word-level highlighting when timestamps support it.
 - Karaoke presentation mode.
 - Manual lyric-version selection.
@@ -388,7 +389,7 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 3. ✅ Integrate previous, next, repeat and shuffle with the new queue.
 4. ✅ Build the dedicated Queue 2.0 interface.
 5. ✅ Persist and restore queue state.
-6. 🟡 Complete Personalized Home history controls and continue listening.
+6. 🟡 Complete Personalized Home with recently added music, empty states and time-window filters.
 7. Finish card actions and loading placeholders.
 8. Finish search pagination, caching and keyboard navigation.
 9. Harden YouTube unavailable-track and recovery behavior.

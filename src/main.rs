@@ -719,6 +719,8 @@ impl AppController {
         let restored_playback_session = playback_session::load();
 
         let initial_volume = config.volume.clamp(0.15, 1.0);
+        let mut listening_history = ListeningHistory::load();
+        listening_history.set_recording_enabled(config.collect_listening_history);
         let sidebar_bounce = RevealBounce::new(false);
         let player_bounce = RevealBounce::new(!config.home_player_collapsed);
         let controller = Rc::new(Self {
@@ -731,7 +733,7 @@ impl AppController {
             queue_dragged_entry: Cell::new(None),
             queue_v2_pending_entry: Cell::new(None),
             config: RefCell::new(config),
-            listening_history: RefCell::new(ListeningHistory::load()),
+            listening_history: RefCell::new(listening_history),
             listening_session_id: RefCell::new(None),
             listening_session_last_saved_seconds: Cell::new(0),
             listening_history_context: RefCell::new(
@@ -3599,6 +3601,27 @@ impl AppController {
                 self.config.borrow_mut().show_personalized_home_history = active;
                 self.save_config();
                 self.refresh_browser();
+            }
+            SettingsEvent::CollectListeningHistory(active) => {
+                self.config.borrow_mut().collect_listening_history = active;
+                self.listening_history
+                    .borrow_mut()
+                    .set_recording_enabled(active);
+                self.save_config();
+                self.show_toast(if active {
+                    "O Nocky voltou a aprender com sua atividade"
+                } else {
+                    "O registro de novas reproduções foi desativado"
+                });
+            }
+            SettingsEvent::ClearListeningHistory => {
+                let cleared = self.listening_history.borrow_mut().clear();
+                self.refresh_browser();
+                self.show_toast(if cleared {
+                    "Histórico de reprodução apagado"
+                } else {
+                    "O histórico já está vazio"
+                });
             }
             SettingsEvent::VisualTheme(theme) => {
                 self.config.borrow_mut().visual_theme = theme;

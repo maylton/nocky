@@ -28,6 +28,8 @@ pub(crate) enum SettingsEvent {
     ShowHomeVisualizer(bool),
     ShowHomeLyrics(bool),
     ShowPersonalizedHomeHistory(bool),
+    CollectListeningHistory(bool),
+    ClearListeningHistory,
     VisualTheme(VisualTheme),
     FooterMode(FooterMode),
     ExpressiveTransportEffects(bool),

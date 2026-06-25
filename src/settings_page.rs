@@ -365,6 +365,41 @@ fn build_content(
         &personalized_history,
     ));
 
+    let collect_history = settings_switch(initial.collect_listening_history);
+    playback_rows.append(&switch_row(
+        group_text(
+            "Aprender com minha atividade",
+            "Learn from my listening activity",
+            "Aprender de mi actividad",
+        ),
+        group_text(
+            "Registra reproduções para personalizar a Home. Ao desativar, o Nocky para de adicionar novos eventos, mas mantém o histórico existente.",
+            "Records plays to personalize Home. When disabled, Nocky stops adding new events but keeps existing history.",
+            "Registra reproducciones para personalizar el inicio. Al desactivarlo, Nocky deja de añadir eventos nuevos, pero conserva el historial existente.",
+        ),
+        &collect_history,
+    ));
+
+    let clear_history = gtk::Button::with_label(group_text(
+        "Limpar histórico",
+        "Clear history",
+        "Borrar historial",
+    ));
+    clear_history.add_css_class("destructive-action");
+    playback_rows.append(&button_row(
+        group_text(
+            "Apagar atividade salva",
+            "Delete saved activity",
+            "Eliminar actividad guardada",
+        ),
+        group_text(
+            "Remove permanentemente reproduções, progresso retomável e rankings usados pela Home personalizada.",
+            "Permanently removes plays, resumable progress and rankings used by personalized Home.",
+            "Elimina permanentemente reproducciones, progreso reanudable y rankings usados por el inicio personalizado.",
+        ),
+        &clear_history,
+    ));
+
     let footer_mode = gtk::DropDown::from_strings(&[
         tr(Message::FooterAutomatic),
         tr(Message::FooterFull),
@@ -537,6 +572,11 @@ fn build_content(
 
     {
         let emit = emit.clone();
+        clear_history.connect_clicked(move |_| emit(SettingsEvent::ClearListeningHistory));
+    }
+
+    {
+        let emit = emit.clone();
         youtube_button.connect_clicked(move |_| emit(SettingsEvent::ManageYouTube));
     }
 
@@ -547,6 +587,7 @@ fn build_content(
             &personalized_history,
             ToggleSetting::PersonalizedHomeHistory,
         ),
+        (&collect_history, ToggleSetting::CollectListeningHistory),
         (&auto_lyrics, ToggleSetting::AutoLyrics),
         (&resume_playback, ToggleSetting::ResumePlaybackOnStartup),
         (&youtube_sync, ToggleSetting::YouTubeSync),
@@ -562,6 +603,9 @@ fn build_content(
                 ToggleSetting::Lyrics => SettingsEvent::ShowHomeLyrics(active),
                 ToggleSetting::PersonalizedHomeHistory => {
                     SettingsEvent::ShowPersonalizedHomeHistory(active)
+                }
+                ToggleSetting::CollectListeningHistory => {
+                    SettingsEvent::CollectListeningHistory(active)
                 }
                 ToggleSetting::AutoLyrics => SettingsEvent::AutoDownloadLyrics(active),
                 ToggleSetting::ResumePlaybackOnStartup => {
@@ -588,6 +632,7 @@ enum ToggleSetting {
     Visualizer,
     Lyrics,
     PersonalizedHomeHistory,
+    CollectListeningHistory,
     AutoLyrics,
     ResumePlaybackOnStartup,
     YouTubeSync,
