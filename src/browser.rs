@@ -1,3 +1,4 @@
+// vertical_collection_edge_spring_allocation_safe_v2
 // vertical_collection_edge_spring_v1
 // collection_card_entry_spring_v1
 // remove_collection_now_playing_badge_v1
@@ -4263,7 +4264,6 @@ fn install_vertical_edge_spring(scroll: &gtk::ScrolledWindow) {
             let token = generation.get().wrapping_add(1);
             generation.set(token);
 
-            let from_top = position == gtk::PositionType::Top;
             let content_weak = content.downgrade();
             let generation = generation.clone();
             let started_at = Rc::new(Cell::new(None::<i64>));
@@ -4283,24 +4283,22 @@ fn install_vertical_edge_spring(scroll: &gtk::ScrolledWindow) {
                     started_at.set(Some(now));
                     now
                 });
-                let progress = ((now - start) as f64 / 460_000.0).clamp(0.0, 1.0);
+                let progress = ((now - start) as f64 / 420_000.0).clamp(0.0, 1.0);
 
-                let damping = (-6.2 * progress).exp();
-                let oscillation = (progress * std::f64::consts::TAU * 1.55).cos();
+                // Allocation-safe spring feedback. Changing margins inside a
+                // GtkViewport changes the measured child height every frame and
+                // can trigger "adjusted size must not decrease" warnings.
+                // Opacity preserves the viewport allocation while still giving
+                // a visible damped bounce at the scroll boundary.
+                let damping = (-6.4 * progress).exp();
+                let oscillation = (progress * std::f64::consts::TAU * 1.6).cos();
                 let spring = 1.0 - damping * oscillation;
-                let displacement = ((1.0 - spring) * 20.0).round().clamp(-5.0, 20.0) as i32;
+                let opacity = (0.92 + spring * 0.08).clamp(0.88, 1.0);
 
-                if from_top {
-                    content.set_margin_top(displacement);
-                    content.set_margin_bottom(0);
-                } else {
-                    content.set_margin_top(0);
-                    content.set_margin_bottom(displacement);
-                }
+                content.set_opacity(opacity);
 
                 if progress >= 1.0 {
-                    content.set_margin_top(0);
-                    content.set_margin_bottom(0);
+                    content.set_opacity(1.0);
                     content.remove_css_class("vertical-edge-spring");
                     glib::ControlFlow::Break
                 } else {
@@ -4315,8 +4313,7 @@ fn install_vertical_edge_spring(scroll: &gtk::ScrolledWindow) {
         scroll.connect_unmap(move |scroll| {
             generation.set(generation.get().wrapping_add(1));
             if let Some(content) = scroll.child() {
-                content.set_margin_top(0);
-                content.set_margin_bottom(0);
+                content.set_opacity(1.0);
                 content.remove_css_class("vertical-edge-spring");
             }
         });
