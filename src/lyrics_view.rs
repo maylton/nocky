@@ -1,3 +1,4 @@
+// fix_lyrics_transient_top_jump_v4
 // centered_lyrics_follow_with_breath_v2
 // stable_automatic_lyrics_scroll_v3
 // stabilize_clickable_lyrics_seek_scroll_v1
@@ -463,30 +464,7 @@ impl LyricsPresenter {
         let token = generation.get().wrapping_add(1);
         generation.set(token);
 
-        glib::idle_add_local_once(move || {
-            if generation.get() != token || !scroll.is_mapped() {
-                return;
-            }
-
-            let adjustment = scroll.vadjustment();
-            let Some(content) = scroll.child() else {
-                return;
-            };
-            let Some(bounds) = label.compute_bounds(&content) else {
-                return;
-            };
-
-            let lower = adjustment.lower();
-            let page_size = adjustment.page_size();
-            let upper = (adjustment.upper() - page_size).max(lower);
-            if page_size <= 1.0 || upper <= lower {
-                return;
-            }
-
-            let line_center = bounds.y() as f64 + bounds.height() as f64 / 2.0;
-            let target = (line_center - page_size / 2.0).clamp(lower, upper);
-            adjustment.set_value(target);
-        });
+        center_lyric_label(scroll, label, index, generation, token, 0);
     }
 
     fn auto_follow_is_paused(&self) -> bool {
@@ -529,6 +507,90 @@ impl LyricsPresenter {
         self.inner.follow_generation.set(follow);
         self.inner.auto_follow_paused_until.replace(None);
     }
+}
+
+fn center_lyric_label(
+    scroll: gtk::ScrolledWindow,
+    label: gtk::Label,
+    index: usize,
+    generation: Rc<Cell<u64>>,
+    token: u64,
+    attempt: u8,
+) {
+    const LAYOUT_RETRY_DELAY: Duration = Duration::from_millis(32);
+
+    glib::timeout_add_local_once(
+        if attempt == 0 {
+            Duration::ZERO
+        } else {
+            LAYOUT_RETRY_DELAY
+        },
+        move || {
+            if generation.get() != token || !scroll.is_mapped() {
+                return;
+            }
+
+            let adjustment = scroll.vadjustment();
+            let Some(content) = scroll.child() else {
+                return;
+            };
+            let Some(bounds) = label.compute_bounds(&content) else {
+                retry_center_lyric_label(scroll, label, index, generation, token, attempt);
+                return;
+            };
+
+            let lower = adjustment.lower();
+            let page_size = adjustment.page_size();
+            let upper = (adjustment.upper() - page_size).max(lower);
+            let line_y = bounds.y() as f64;
+            let line_height = bounds.height() as f64;
+
+            let layout_invalid = page_size <= 1.0
+                || upper <= lower
+                || line_height <= 1.0
+                || !line_y.is_finite()
+                || (index > 1 && line_y <= lower + 1.0);
+
+            if layout_invalid {
+                retry_center_lyric_label(scroll, label, index, generation, token, attempt);
+                return;
+            }
+
+            let line_center = line_y + line_height / 2.0;
+            let target = (line_center - page_size / 2.0).clamp(lower, upper);
+
+            // Never accept a transient jump to the beginning for a lyric that
+            // is clearly not one of the first lines.
+            if index > 1 && target <= lower + 1.0 {
+                retry_center_lyric_label(scroll, label, index, generation, token, attempt);
+                return;
+            }
+
+            adjustment.set_value(target);
+        },
+    );
+}
+
+fn retry_center_lyric_label(
+    scroll: gtk::ScrolledWindow,
+    label: gtk::Label,
+    index: usize,
+    generation: Rc<Cell<u64>>,
+    token: u64,
+    attempt: u8,
+) {
+    if attempt >= 4 {
+        return;
+    }
+
+    center_lyric_label(
+        scroll,
+        label,
+        index,
+        generation,
+        token,
+        attempt.saturating_add(1),
+    );
 }
 
 fn inline_page() -> InlinePage {
