@@ -515,3 +515,6 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 
 - ✅ Personalized Home artist rankings now split collaborative track credits and count each credited artist independently.
 - ✅ Existing listening-history events are reinterpreted at display time, so no history migration or reset is required.
+
+- ✅ Track overflow menus in playlists, albums and YouTube mixes now include Go to artist and Go to album actions when metadata is available.
+- ✅ Collaborative credits use the primary credited artist for direct navigation, while missing metadata hides the corresponding action.

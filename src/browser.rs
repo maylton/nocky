@@ -1,3 +1,4 @@
+// track_menu_artist_album_navigation_v1
 // multi_artist_credits_v2
 // artist_featured_track_surface_restore_v1
 // artist_featured_track_fixed_radius_v3
@@ -5203,6 +5204,8 @@ fn square_pixbuf(path: &Path, size: i32) -> Option<gdk_pixbuf::Pixbuf> {
 
 fn queue_action_menu(
     entry: VisibleTrack,
+    artist_credit: &str,
+    album: &str,
     liked: bool,
     event_tx: &Sender<BrowserEvent>,
     language: AppLanguage,
@@ -5214,6 +5217,8 @@ fn queue_action_menu(
             "Adicionar ao fim da fila",
             "Curtir",
             "Remover curtida",
+            "Ir para o artista",
+            "Ir para o álbum",
         ),
         AppLanguage::English => (
             "More actions",
@@ -5221,6 +5226,8 @@ fn queue_action_menu(
             "Add to end of queue",
             "Like",
             "Remove like",
+            "Go to artist",
+            "Go to album",
         ),
         AppLanguage::Spanish => (
             "Más acciones",
@@ -5228,6 +5235,8 @@ fn queue_action_menu(
             "Añadir al final de la cola",
             "Me gusta",
             "Quitar Me gusta",
+            "Ir al artista",
+            "Ir al álbum",
         ),
     };
 
@@ -5252,6 +5261,23 @@ fn queue_action_menu(
     let favorite = gtk::Button::with_label(if liked { labels.4 } else { labels.3 });
     favorite.set_halign(gtk::Align::Fill);
     favorite.add_css_class("flat");
+
+    let primary_artist = credited_artists(artist_credit).into_iter().next();
+    let album = album.trim().to_string();
+
+    let go_to_artist = primary_artist.as_ref().map(|_| {
+        let button = gtk::Button::with_label(labels.5);
+        button.set_halign(gtk::Align::Fill);
+        button.add_css_class("flat");
+        button
+    });
+
+    let go_to_album = (!album.is_empty()).then(|| {
+        let button = gtk::Button::with_label(labels.6);
+        button.set_halign(gtk::Align::Fill);
+        button.add_css_class("flat");
+        button
+    });
 
     {
         let tx = event_tx.clone();
@@ -5298,6 +5324,53 @@ fn queue_action_menu(
     actions.append(&play_next);
     actions.append(&append);
     actions.append(&favorite);
+
+    if let (Some(button), Some(artist)) = (go_to_artist.as_ref(), primary_artist.as_ref()) {
+        let tx = event_tx.clone();
+        let action_popover = popover.clone();
+        let artist = artist.clone();
+        let online = matches!(entry, VisibleTrack::YouTube(_));
+        button.connect_clicked(move |_| {
+            let event = if online {
+                BrowserEvent::OpenYouTubeCollection(YouTubeItem {
+                    result_type: "artist".to_string(),
+                    title: artist.clone(),
+                    artist: artist.clone(),
+                    ..YouTubeItem::default()
+                })
+            } else {
+                BrowserEvent::Navigate(BrowserRoute::Artist(artist.clone()))
+            };
+            let _ = tx.send(event);
+            action_popover.popdown();
+        });
+        actions.append(button);
+    }
+
+    if let Some(button) = go_to_album.as_ref() {
+        let tx = event_tx.clone();
+        let action_popover = popover.clone();
+        let album = album.clone();
+        let artist = primary_artist.clone().unwrap_or_default();
+        let online = matches!(entry, VisibleTrack::YouTube(_));
+        button.connect_clicked(move |_| {
+            let event = if online {
+                BrowserEvent::OpenYouTubeCollection(YouTubeItem {
+                    result_type: "album".to_string(),
+                    title: album.clone(),
+                    album: album.clone(),
+                    artist: artist.clone(),
+                    ..YouTubeItem::default()
+                })
+            } else {
+                BrowserEvent::Navigate(BrowserRoute::Album(album.clone()))
+            };
+            let _ = tx.send(event);
+            action_popover.popdown();
+        });
+        actions.append(button);
+    }
+
     popover.set_child(Some(&actions));
 
     let menu = gtk::MenuButton::builder()
@@ -5351,7 +5424,14 @@ fn track_row(
     let duration = gtk::Label::new(Some(&format_duration(track.duration_seconds)));
     duration.add_css_class("time-label");
 
-    let menu = queue_action_menu(VisibleTrack::Local(index), liked, event_tx, language);
+    let menu = queue_action_menu(
+        VisibleTrack::Local(index),
+        &track.artist,
+        &track.album,
+        liked,
+        event_tx,
+        language,
+    );
 
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     content.set_margin_top(10);
@@ -5410,6 +5490,8 @@ fn youtube_track_row(
 
     let menu = queue_action_menu(
         VisibleTrack::YouTube(Box::new(item.clone())),
+        &item.artist,
+        &item.album,
         liked,
         event_tx,
         language,
