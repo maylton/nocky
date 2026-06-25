@@ -522,3 +522,8 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - ✅ Personalized artist cards now prefer dedicated artist profiles or solo-track artwork instead of sharing a collaboration cover.
 - ✅ Ranked Home artist cards no longer inherit the legacy album-count subtitle; they show only listening statistics and artist-specific metadata.
 - ✅ When no artist-specific image exists, the generic artist placeholder is used instead of a misleading collaborative cover.
+
+- ✅ Opening Artists now revalidates up to 36 YouTube artist profiles, including split artists that must first be resolved by title.
+- ✅ Opening an individual artist always refreshes its profile and discography while keeping cached content visible.
+- ✅ Confirmed artwork is shared by the Artists grid, personalized Home cards and the artist page header/summary.
+- ✅ Bulk profile refreshes trigger one final browser rebuild; when Home is open, that rebuild uses the existing Home GtkStack crossfade instead of producing one crossfade per artist.

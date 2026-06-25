@@ -1,3 +1,4 @@
+// artist_profile_revalidation_v5
 // youtube_like_reconciliation_and_request_guard_v1
 // youtube_like_button_and_track_menu_v2
 // youtube_real_like_sync_v5
@@ -2442,13 +2443,10 @@ impl AppController {
         let key = youtube_collection_cache_key(&item);
 
         if item.result_type == "artist" {
-            let cached = self
-                .youtube_library
-                .borrow()
-                .artist_albums
-                .contains_key(&key);
-            if cached {
-                self.navigate_browser(route);
+            self.navigate_browser(route);
+
+            let already_loading = self.youtube_library.borrow().artist_loading.contains(&key);
+            if already_loading {
                 return;
             }
 
@@ -2456,11 +2454,12 @@ impl AppController {
                 self.show_toast("As dependências do YouTube Music não estão instaladas");
                 return;
             };
+
             self.youtube_library
                 .borrow_mut()
                 .artist_loading
                 .insert(key.clone());
-            self.navigate_browser(route);
+
             let sender = self.background.sender();
             thread::spawn(move || {
                 let result = resolve_youtube_collection_item(&bridge, &item, "artists")
@@ -2600,24 +2599,24 @@ impl AppController {
         });
     }
 
-    fn prefetch_home_artist_profiles(&self) {
+    fn prefetch_home_artist_profiles(&self, force: bool) {
         let Some(bridge) = self.youtube_bridge.clone() else {
             return;
         };
 
         let artists = {
             let mut library = self.youtube_library.borrow_mut();
+            let limit = if force { 36 } else { 12 };
             let candidates = library
                 .artists
                 .iter()
-                .take(12)
-                .filter(|entry| !entry.source.browse_id.is_empty())
+                .take(limit)
                 .filter_map(|entry| {
                     let key = youtube_collection_key("artist", &entry.title);
                     let missing = !library.artist_profiles.contains_key(&key);
                     let idle = !library.artist_loading.contains(&key);
 
-                    (missing && idle).then(|| (key, entry.source.clone()))
+                    ((force || missing) && idle).then(|| (key, entry.source.clone()))
                 })
                 .collect::<Vec<_>>();
 
@@ -2652,11 +2651,13 @@ impl AppController {
                         break;
                     };
 
-                    let result = bridge.artist_overview(&item).map(|mut overview| {
-                        cache_items_for_browser(std::slice::from_mut(&mut overview.profile));
-                        cache_items_for_browser(&mut overview.albums);
-                        overview
-                    });
+                    let result = resolve_youtube_collection_item(&bridge, &item, "artists")
+                        .and_then(|resolved| bridge.artist_overview(&resolved))
+                        .map(|mut overview| {
+                            cache_items_for_browser(std::slice::from_mut(&mut overview.profile));
+                            cache_items_for_browser(&mut overview.albums);
+                            overview
+                        });
 
                     let _ = sender.send(BackgroundMessage::YouTubeArtistOverview { key, result });
                 }));
@@ -4138,6 +4139,9 @@ impl AppController {
     }
 
     fn navigate_browser(&self, route: BrowserRoute) {
+        if matches!(&route, BrowserRoute::Artists) {
+            self.prefetch_home_artist_profiles(true);
+        }
         let playback = self.browser_playback_state();
         let state = self.state.borrow();
         let config = self.config.borrow();

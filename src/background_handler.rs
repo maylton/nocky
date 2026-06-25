@@ -1,3 +1,4 @@
+// artist_profile_revalidation_v5
 // youtube_collection_background_playback_v1
 // collection_card_loading_spinner_v3\n// youtube_collection_queue_background_load_v1
 // youtube_playlist_background_autoplay_v1
@@ -121,7 +122,7 @@ impl AppController {
                                 );
                             } else {
                                 self.prefetch_youtube_playlist_cache();
-                                self.prefetch_home_artist_profiles();
+                                self.prefetch_home_artist_profiles(false);
                             }
                         } else {
                             self.youtube_library.borrow_mut().clear();
@@ -589,7 +590,16 @@ impl AppController {
                             }
                         }
                     }
-                    if self.is_open_youtube_collection(&key) {
+                    let profile_batch_finished =
+                        self.youtube_library.borrow().artist_loading.is_empty();
+                    if self.is_open_youtube_collection(&key)
+                        || (profile_batch_finished
+                            && matches!(
+                                self.browser.route(),
+                                crate::browser::BrowserRoute::Artists
+                                    | crate::browser::BrowserRoute::All
+                            ))
+                    {
                         self.refresh_browser();
                     }
                 }

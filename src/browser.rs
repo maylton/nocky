@@ -1,3 +1,4 @@
+// artist_profile_revalidation_v5
 // ranked_artist_unique_artwork_v3
 // track_menu_artist_album_navigation_v1
 // multi_artist_credits_v2
@@ -2224,12 +2225,19 @@ impl LibraryBrowser {
                 continue;
             }
 
+            let key = youtube_collection_key("artist", &artist_entry.title);
+            let confirmed_cover = youtube
+                .artist_profiles
+                .get(&key)
+                .and_then(|profile| profile.cached_cover())
+                .or_else(|| artist_entry.cached_cover());
+
             append_collection_grid_card(
                 &self.artists_grid,
                 position,
                 artist_collection_button(
                     artist_collection_card(
-                        artist_entry.cached_cover(),
+                        confirmed_cover,
                         &artist_entry.title,
                         &artist_entry.subtitle,
                         &artist_entry.detail,
@@ -5852,9 +5860,13 @@ fn youtube_collection_page_header(
                 .get(&key)
                 .map(Vec::len)
                 .unwrap_or_default();
+            let profile = youtube.artist_profiles.get(&key);
 
             Some(CollectionPageHeaderData {
-                cover_path: entry.cached_cover().map(Path::to_path_buf),
+                cover_path: profile
+                    .and_then(|profile| profile.cached_cover())
+                    .or_else(|| entry.cached_cover())
+                    .map(Path::to_path_buf),
                 eyebrow: localized_collection_eyebrow(language, true, "artist"),
                 title: entry.title.clone(),
                 subtitle: entry.subtitle.clone(),
