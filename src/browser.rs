@@ -1374,7 +1374,7 @@ impl LibraryBrowser {
                         .collect::<Vec<_>>()
                 })
                 .unwrap_or_default(),
-            BrowserRoute::Liked => tracks
+            BrowserRoute::Liked if config.startup_source != Some(StartupSource::YouTube) => tracks
                 .iter()
                 .enumerate()
                 .filter_map(|(index, track)| config.is_liked(&track.path).then_some(index))
@@ -1425,7 +1425,7 @@ impl LibraryBrowser {
         let catalog = youtube_catalog(youtube);
         let mut online_candidates = match route {
             BrowserRoute::All => catalog,
-            BrowserRoute::Liked => youtube
+            BrowserRoute::Liked if config.startup_source == Some(StartupSource::YouTube) => youtube
                 .liked
                 .iter()
                 .filter(|item| item.playable())
@@ -1471,7 +1471,8 @@ impl LibraryBrowser {
             entries.push(VisibleTrack::YouTube(Box::new(item)));
         }
 
-        self.queue_title.set_text(&route_title(route));
+        self.queue_title
+            .set_text(&route_title(route, config.startup_source, config.language));
         if entries.is_empty() {
             let message = if youtube.syncing
                 && matches!(
@@ -1485,7 +1486,9 @@ impl LibraryBrowser {
                 "Sincronizando sua biblioteca do YouTube Music…"
             } else {
                 match route {
-                    BrowserRoute::Liked => "Nenhuma música curtida ainda",
+                    BrowserRoute::Liked => {
+                        liked_empty_message(config.startup_source, config.language)
+                    }
                     BrowserRoute::Playlist(_) => "Esta playlist local ainda está vazia",
                     BrowserRoute::YouTubePlaylist { .. } => "Esta playlist ainda está vazia",
                     _ => "Nenhuma faixa encontrada",
@@ -1505,7 +1508,8 @@ impl LibraryBrowser {
         render_token: u64,
         language: AppLanguage,
     ) {
-        self.queue_title.set_text(&route_title(route));
+        self.queue_title
+            .set_text(&route_title(route, None, language));
         self.visible_tracks.borrow_mut().clear();
 
         let query = query.trim().to_lowercase();
@@ -1602,7 +1606,8 @@ impl LibraryBrowser {
         render_token: u64,
         language: AppLanguage,
     ) {
-        self.queue_title.set_text(&route_title(route));
+        self.queue_title
+            .set_text(&route_title(route, None, language));
         self.visible_tracks.borrow_mut().clear();
 
         let (kind, title) = match route {
@@ -4938,10 +4943,14 @@ fn route_is_detail(route: &BrowserRoute) -> bool {
     )
 }
 
-fn route_title(route: &BrowserRoute) -> String {
+fn route_title(
+    route: &BrowserRoute,
+    source: Option<StartupSource>,
+    language: AppLanguage,
+) -> String {
     match route {
         BrowserRoute::All => "BIBLIOTECA".to_string(),
-        BrowserRoute::Liked => "MÚSICAS CURTIDAS".to_string(),
+        BrowserRoute::Liked => liked_route_title(source, language).to_string(),
         BrowserRoute::Album(name) => format!("ÁLBUM LOCAL · {name}"),
         BrowserRoute::Artist(name) => format!("ARTISTA LOCAL · {name}"),
         BrowserRoute::Playlist(name) => format!("PLAYLIST LOCAL · {name}"),
@@ -4951,6 +4960,28 @@ fn route_title(route: &BrowserRoute) -> String {
             format!("YOUTUBE MUSIC · PLAYLIST · {title}")
         }
         _ => "BIBLIOTECA".to_string(),
+    }
+}
+
+fn liked_route_title(source: Option<StartupSource>, language: AppLanguage) -> &'static str {
+    match (language, source == Some(StartupSource::YouTube)) {
+        (AppLanguage::Portuguese, false) => "MÚSICAS CURTIDAS LOCAIS",
+        (AppLanguage::Portuguese, true) => "MÚSICAS CURTIDAS · YOUTUBE MUSIC",
+        (AppLanguage::English, false) => "LOCAL LIKED SONGS",
+        (AppLanguage::English, true) => "LIKED SONGS · YOUTUBE MUSIC",
+        (AppLanguage::Spanish, false) => "CANCIONES LOCALES FAVORITAS",
+        (AppLanguage::Spanish, true) => "CANCIONES FAVORITAS · YOUTUBE MUSIC",
+    }
+}
+
+fn liked_empty_message(source: Option<StartupSource>, language: AppLanguage) -> &'static str {
+    match (language, source == Some(StartupSource::YouTube)) {
+        (AppLanguage::Portuguese, false) => "Nenhuma música local curtida ainda",
+        (AppLanguage::Portuguese, true) => "Nenhuma música curtida no YouTube Music",
+        (AppLanguage::English, false) => "No local liked songs yet",
+        (AppLanguage::English, true) => "No liked songs on YouTube Music",
+        (AppLanguage::Spanish, false) => "Aún no hay canciones locales favoritas",
+        (AppLanguage::Spanish, true) => "No hay canciones favoritas en YouTube Music",
     }
 }
 

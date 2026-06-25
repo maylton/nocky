@@ -1,3 +1,4 @@
+// source_aware_liked_songs_page_v1
 // clickable_lyrics_seek_v3
 // fix_resume_seek_oscillation_v1
 // fix_shutdown_save_order_v1
@@ -3014,6 +3015,8 @@ impl AppController {
             return;
         }
 
+        self.apply_source_aware_library_navigation();
+
         match self.config.borrow().startup_source {
             Some(StartupSource::Local) => self.refresh_browser(),
             Some(StartupSource::YouTube) => {
@@ -3031,6 +3034,12 @@ impl AppController {
         if self.lyrics_button.is_active() {
             self.lyrics_button.set_active(false);
         }
+        self.apply_source_aware_library_navigation();
+
+        if matches!(self.browser.route(), BrowserRoute::Liked) {
+            self.navigate_browser(BrowserRoute::All);
+        }
+
         match source {
             StartupSource::Local => self.refresh_browser(),
             StartupSource::YouTube => {
@@ -3038,6 +3047,26 @@ impl AppController {
                 self.refresh_youtube_status();
             }
         }
+    }
+
+    fn apply_source_aware_library_navigation(&self) {
+        let config = self.config.borrow();
+        let youtube = config.startup_source == Some(StartupSource::YouTube);
+
+        let (section, liked) = match (config.language, youtube) {
+            (AppLanguage::Portuguese, false) => ("COLEÇÃO LOCAL", "Músicas curtidas locais"),
+            (AppLanguage::Portuguese, true) => ("YOUTUBE MUSIC", "Músicas curtidas"),
+            (AppLanguage::English, false) => ("LOCAL COLLECTION", "Local liked songs"),
+            (AppLanguage::English, true) => ("YOUTUBE MUSIC", "Liked songs"),
+            (AppLanguage::Spanish, false) => ("COLECCIÓN LOCAL", "Canciones locales favoritas"),
+            (AppLanguage::Spanish, true) => ("YOUTUBE MUSIC", "Canciones favoritas"),
+        };
+
+        self.sidebar_section_label.set_text(section);
+        self.sidebar_liked_label.set_text(liked);
+        self.sidebar_liked
+            .set_visible(config.startup_source.is_some());
+        self.sidebar_liked.set_tooltip_text(Some(liked));
     }
 
     fn tr(&self, message: Message) -> &'static str {
@@ -3261,6 +3290,7 @@ impl AppController {
         self.sidebar_liked_label.set_text(tr(Message::LikedSongs));
         self.sidebar_section_label
             .set_text(tr(Message::LocalCollection));
+        self.apply_source_aware_library_navigation();
 
         self.now_heading.set_text(tr(Message::NowPlaying));
         self.favorite_button
