@@ -1,3 +1,4 @@
+// fix_redundant_lyrics_rebuild_scroll_reset_v1
 // fix_lyrics_transient_top_jump_v4
 // centered_lyrics_follow_with_breath_v2
 // stable_automatic_lyrics_scroll_v3
@@ -203,6 +204,18 @@ impl LyricsPresenter {
     }
 
     pub fn set_lines(&self, lines: &[LyricLine]) {
+        let unchanged = {
+            let current = self.inner.lines.borrow();
+            current.len() == lines.len()
+                && current.iter().zip(lines).all(|(left, right)| {
+                    left.timestamp_us == right.timestamp_us && left.text == right.text
+                })
+        };
+
+        if unchanged {
+            return;
+        }
+
         self.inner.pending_seek_target_us.set(None);
         self.inner.pending_seek_started.replace(None);
         self.cancel_scroll();
@@ -243,9 +256,11 @@ impl LyricsPresenter {
         }
         self.inner.full_labels.replace(labels);
 
-        let adjustment = self.inner.full_scroll.vadjustment();
-        adjustment.set_value(adjustment.lower());
         self.render_inline(None, self.inner.inline_stack.is_mapped());
+
+        if let Some(index) = self.inner.active_index.get() {
+            self.scroll_to(index, false);
+        }
     }
 
     pub fn show_message(&self, message: &str, hint: Option<&str>) {
