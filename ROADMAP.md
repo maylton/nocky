@@ -505,3 +505,5 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 
 - ✅ Artist pages now fall back to the synchronized YouTube catalog when the artist collection cache has no tracks, so the featured-tracks section is actually visible whenever matching songs exist.
 - ✅ The artist section was renamed from Popular Tracks to Featured Tracks because no real popularity ranking is available yet.
+
+- ✅ Featured-track rows on artist pages now preserve the same 16 px corner radius during hover, focus and press states.

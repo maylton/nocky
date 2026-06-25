@@ -1,3 +1,4 @@
+// artist_featured_track_fixed_radius_v3
 // youtube_artist_page_highlight_tracks_v2
 // youtube_artist_page_popular_tracks_v1
 // playlist_page_responsive_rows_v2
@@ -5930,7 +5931,6 @@ fn artist_popular_track_button(
     button.set_halign(gtk::Align::Fill);
     button.add_css_class("flat");
     button.add_css_class("artist-popular-track-button");
-    button.add_css_class("search-result-button");
 
     let sender = event_tx.clone();
     let item = item.clone();

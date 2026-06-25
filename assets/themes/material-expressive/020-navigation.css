@@ -435,3 +435,13 @@ window.theme-material-expressive
   background-color: transparent;
   box-shadow: none;
 }
+
+/* Artist page: keep featured-track geometry stable across interaction states. */
+button.artist-popular-track-button,
+button.artist-popular-track-button:hover,
+button.artist-popular-track-button:focus,
+button.artist-popular-track-button:focus-visible,
+button.artist-popular-track-button:active,
+button.artist-popular-track-button:checked {
+  border-radius: 16px;
+}
