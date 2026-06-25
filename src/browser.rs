@@ -1,3 +1,4 @@
+// artist_page_stable_refresh_v1
 // artist_profile_revalidation_v5
 // ranked_artist_unique_artwork_v3
 // track_menu_artist_album_navigation_v1
@@ -1175,6 +1176,17 @@ impl LibraryBrowser {
         }
     }
 
+    pub fn refresh_open_youtube_artist_context(
+        &self,
+        youtube: &YouTubeLibraryCache,
+        language: AppLanguage,
+    ) {
+        let BrowserRoute::YouTubeArtist(artist) = self.route() else {
+            return;
+        };
+        self.rebuild_youtube_artist_context(youtube, &artist, language);
+    }
+
     pub fn try_recv(&self) -> Option<BrowserEvent> {
         self.events.try_recv().ok()
     }
@@ -2279,11 +2291,10 @@ impl LibraryBrowser {
         }
     }
 
-    fn rebuild_artist_albums(
+    fn rebuild_youtube_artist_context(
         &self,
         youtube: &YouTubeLibraryCache,
         artist: &str,
-        query: &str,
         language: AppLanguage,
     ) {
         clear_box(&self.albums_context_header);
@@ -2339,7 +2350,18 @@ impl LibraryBrowser {
             self.albums_context_header.set_visible(false);
             self.albums_default_header.set_visible(true);
         }
+    }
 
+    fn rebuild_artist_albums(
+        &self,
+        youtube: &YouTubeLibraryCache,
+        artist: &str,
+        query: &str,
+        language: AppLanguage,
+    ) {
+        self.rebuild_youtube_artist_context(youtube, artist, language);
+
+        let key = youtube_collection_key("artist", artist);
         clear_grid(&self.albums_grid);
         let query = query.trim().to_lowercase();
         let mut position = 0;
@@ -6235,6 +6257,19 @@ fn loading_row(message: &str) -> gtk::ListBoxRow {
 }
 
 fn route_transition(previous: &BrowserRoute, next: &BrowserRoute) -> gtk::StackTransitionType {
+    if matches!(
+        (previous, next),
+        (
+            BrowserRoute::Artists,
+            BrowserRoute::Artist(_) | BrowserRoute::YouTubeArtist(_)
+        ) | (
+            BrowserRoute::Artist(_) | BrowserRoute::YouTubeArtist(_),
+            BrowserRoute::Artists
+        )
+    ) {
+        return gtk::StackTransitionType::Crossfade;
+    }
+
     match (route_is_detail(previous), route_is_detail(next)) {
         (false, true) => gtk::StackTransitionType::SlideLeft,
         (true, false) => gtk::StackTransitionType::SlideRight,

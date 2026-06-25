@@ -527,3 +527,8 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - ✅ Opening an individual artist always refreshes its profile and discography while keeping cached content visible.
 - ✅ Confirmed artwork is shared by the Artists grid, personalized Home cards and the artist page header/summary.
 - ✅ Bulk profile refreshes trigger one final browser rebuild; when Home is open, that rebuild uses the existing Home GtkStack crossfade instead of producing one crossfade per artist.
+
+- ✅ Artist profile confirmation now refreshes only the header, summary and featured tracks when the cached discography has not changed.
+- ✅ Album cards are rebuilt only when the artist discography actually changes, eliminating the visible flash caused by clear-and-recreate refreshes.
+- ✅ Navigation between Artists and artist detail uses a stable crossfade instead of the one-pixel GtkStack slide allocation that produced GtkButton size warnings.
+- ✅ The personalized Home keeps its existing dedicated crossfade behavior.

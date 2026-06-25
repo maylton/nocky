@@ -1,3 +1,4 @@
+// artist_page_stable_refresh_v1
 // artist_profile_revalidation_v5
 // youtube_collection_background_playback_v1
 // collection_card_loading_spinner_v3\n// youtube_collection_queue_background_load_v1
@@ -567,19 +568,56 @@ impl AppController {
                         .borrow_mut()
                         .artist_loading
                         .remove(&key);
+
+                    let mut profile_changed = false;
+                    let mut albums_changed = false;
+                    let mut load_failed = false;
+
                     match result {
                         Ok(overview) => {
                             let mut library = self.youtube_library.borrow_mut();
+
+                            profile_changed = library
+                                .artist_profiles
+                                .get(&key)
+                                .map(|current| {
+                                    current.title != overview.profile.title
+                                        || current.subtitle != overview.profile.subtitle
+                                        || current.browse_id != overview.profile.browse_id
+                                        || current.thumbnail_url != overview.profile.thumbnail_url
+                                        || current.cover_path != overview.profile.cover_path
+                                })
+                                .unwrap_or(true);
+
+                            albums_changed = library
+                                .artist_albums
+                                .get(&key)
+                                .map(|current| {
+                                    current.len() != overview.albums.len()
+                                        || current.iter().zip(&overview.albums).any(
+                                            |(left, right)| {
+                                                left.title != right.title
+                                                    || left.subtitle != right.subtitle
+                                                    || left.browse_id != right.browse_id
+                                                    || left.thumbnail_url != right.thumbnail_url
+                                                    || left.cover_path != right.cover_path
+                                            },
+                                        )
+                                })
+                                .unwrap_or(true);
+
                             library
                                 .artist_profiles
                                 .insert(key.clone(), overview.profile);
                             library.artist_albums.insert(key.clone(), overview.albums);
                             drop(library);
+
                             if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
                                 eprintln!("Could not save YouTube artist details: {error}");
                             }
                         }
                         Err(error) => {
+                            load_failed = true;
                             if !error.contains("No YouTube Music artist could be resolved") {
                                 eprintln!("Could not load YouTube artist details: {error}");
                             }
@@ -590,15 +628,26 @@ impl AppController {
                             }
                         }
                     }
+
                     let profile_batch_finished =
                         self.youtube_library.borrow().artist_loading.is_empty();
-                    if self.is_open_youtube_collection(&key)
-                        || (profile_batch_finished
-                            && matches!(
-                                self.browser.route(),
-                                crate::browser::BrowserRoute::Artists
-                                    | crate::browser::BrowserRoute::All
-                            ))
+                    let open_artist = self.is_open_youtube_collection(&key);
+
+                    if open_artist {
+                        if albums_changed || load_failed {
+                            self.refresh_browser();
+                        } else if profile_changed {
+                            let language = self.config.borrow().language;
+                            let library = self.youtube_library.borrow();
+                            self.browser
+                                .refresh_open_youtube_artist_context(&library, language);
+                        }
+                    } else if profile_batch_finished
+                        && matches!(
+                            self.browser.route(),
+                            crate::browser::BrowserRoute::Artists
+                                | crate::browser::BrowserRoute::All
+                        )
                     {
                         self.refresh_browser();
                     }
