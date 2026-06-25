@@ -489,3 +489,5 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - ✅ Playlist creation and maintenance controls were consolidated into a collapsed local playlist manager, keeping navigation as the primary layout.
 
 - ✅ Artist collection cards now use a compact horizontal layout with 56 px circular artwork and condensed metadata.
+
+- ✅ Compact artist cards now reuse the same expressive outline and surface language as the other collection cards.

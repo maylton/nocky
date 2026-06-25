@@ -1,3 +1,4 @@
+// compact_artist_card_outline_v2
 // compact_artist_cards_v1
 // unified_album_artist_playlist_layout_v2
 // youtube_artist_discography_header_v1
@@ -4857,6 +4858,8 @@ fn artist_collection_card(
     card.append(&artwork);
     card.append(&text);
     card.add_css_class("compact-artist-card");
+    card.add_css_class("collection-card");
+    card.add_css_class("expressive-collection-card");
     card.add_css_class("search-result-row");
     if online {
         card.add_css_class("youtube-collection-card");
@@ -4877,6 +4880,8 @@ fn artist_collection_button(
     button.set_valign(gtk::Align::Start);
     button.add_css_class("flat");
     button.add_css_class("compact-artist-button");
+    button.add_css_class("collection-card-button");
+    button.add_css_class("expressive-collection-button");
 
     let sender = event_tx.clone();
     button.connect_clicked(move |_| {
