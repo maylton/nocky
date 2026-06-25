@@ -1,3 +1,5 @@
+// fix_lyrics_viewport_relative_bounds_v1
+// filter_transient_lyrics_timestamp_regressions_v1
 // fix_redundant_lyrics_rebuild_scroll_reset_v1
 // fix_lyrics_transient_top_jump_v4
 // centered_lyrics_follow_with_breath_v2
@@ -67,6 +69,9 @@ struct LyricsPresenterInner {
     lines: RefCell<Vec<LyricLine>>,
     visible_indices: RefCell<Vec<usize>>,
     active_index: Cell<Option<usize>>,
+    last_transport_timestamp_us: Cell<Option<i64>>,
+    backward_candidate_us: Cell<Option<i64>>,
+    backward_candidate_hits: Cell<u8>,
     full_scroll: gtk::ScrolledWindow,
     full_box: gtk::Box,
     seek_callback: RefCell<Option<LyricsSeekCallback>>,
@@ -144,6 +149,9 @@ impl LyricsPresenter {
                 lines: RefCell::new(Vec::new()),
                 visible_indices: RefCell::new(Vec::new()),
                 active_index: Cell::new(None),
+                last_transport_timestamp_us: Cell::new(None),
+                backward_candidate_us: Cell::new(None),
+                backward_candidate_hits: Cell::new(0),
                 full_scroll,
                 full_box,
                 seek_callback: RefCell::new(None),
@@ -204,6 +212,9 @@ impl LyricsPresenter {
     }
 
     pub fn set_lines(&self, lines: &[LyricLine]) {
+        self.inner.last_transport_timestamp_us.set(None);
+        self.inner.backward_candidate_us.set(None);
+        self.inner.backward_candidate_hits.set(0);
         let unchanged = {
             let current = self.inner.lines.borrow();
             current.len() == lines.len()
@@ -274,6 +285,9 @@ impl LyricsPresenter {
         inline_title: &str,
         inline_hint: Option<&str>,
     ) {
+        self.inner.last_transport_timestamp_us.set(None);
+        self.inner.backward_candidate_us.set(None);
+        self.inner.backward_candidate_hits.set(0);
         self.inner.pending_seek_target_us.set(None);
         self.inner.pending_seek_started.replace(None);
         self.cancel_scroll();
@@ -338,6 +352,9 @@ impl LyricsPresenter {
     }
 
     pub fn update_timestamp(&self, timestamp_us: i64) {
+        if !self.accept_transport_timestamp(timestamp_us) {
+            return;
+        }
         const SEEK_TOLERANCE_US: u64 = 1_500_000;
         const SEEK_GUARD_TIMEOUT: Duration = Duration::from_secs(3);
 
@@ -374,6 +391,67 @@ impl LyricsPresenter {
                 self.scroll_to(index, true);
             }
         }
+    }
+
+    fn accept_transport_timestamp(&self, timestamp_us: i64) -> bool {
+        const BACKWARD_GLITCH_THRESHOLD_US: i64 = 2_000_000;
+        const REQUIRED_CONFIRMATIONS: u8 = 3;
+        const CANDIDATE_TOLERANCE_US: u64 = 1_000_000;
+
+        let timestamp_us = timestamp_us.max(0);
+
+        if self.inner.pending_seek_target_us.get().is_some() {
+            self.inner
+                .last_transport_timestamp_us
+                .set(Some(timestamp_us));
+            self.inner.backward_candidate_us.set(None);
+            self.inner.backward_candidate_hits.set(0);
+            return true;
+        }
+
+        let Some(previous) = self.inner.last_transport_timestamp_us.get() else {
+            self.inner
+                .last_transport_timestamp_us
+                .set(Some(timestamp_us));
+            return true;
+        };
+
+        let is_large_regression =
+            timestamp_us.saturating_add(BACKWARD_GLITCH_THRESHOLD_US) < previous;
+
+        if !is_large_regression {
+            self.inner
+                .last_transport_timestamp_us
+                .set(Some(timestamp_us));
+            self.inner.backward_candidate_us.set(None);
+            self.inner.backward_candidate_hits.set(0);
+            return true;
+        }
+
+        let same_candidate = self
+            .inner
+            .backward_candidate_us
+            .get()
+            .is_some_and(|candidate| candidate.abs_diff(timestamp_us) <= CANDIDATE_TOLERANCE_US);
+
+        let hits = if same_candidate {
+            self.inner.backward_candidate_hits.get().saturating_add(1)
+        } else {
+            self.inner.backward_candidate_us.set(Some(timestamp_us));
+            1
+        };
+        self.inner.backward_candidate_hits.set(hits);
+
+        if hits < REQUIRED_CONFIRMATIONS {
+            return false;
+        }
+
+        self.inner
+            .last_transport_timestamp_us
+            .set(Some(timestamp_us));
+        self.inner.backward_candidate_us.set(None);
+        self.inner.backward_candidate_hits.set(0);
+        true
     }
 
     pub fn recenter(&self, animate: bool) {
@@ -557,7 +635,10 @@ fn center_lyric_label(
             let lower = adjustment.lower();
             let page_size = adjustment.page_size();
             let upper = (adjustment.upper() - page_size).max(lower);
-            let line_y = bounds.y() as f64;
+            // compute_bounds() reports the label relative to the current
+            // visible content position. Convert it to a stable document
+            // coordinate before calculating the centered scroll target.
+            let line_y = adjustment.value() + bounds.y() as f64;
             let line_height = bounds.height() as f64;
 
             let layout_invalid = page_size <= 1.0
