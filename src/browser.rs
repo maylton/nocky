@@ -53,6 +53,7 @@ use crate::{
     listening_history::{HistoryActivity, ListeningHistory, ListeningSource, ListeningStats},
     local_mix_cover,
     model::Track,
+    offline_store::OfflineStore,
     search_text::{normalize_search_text, search_matches, search_score},
     youtube::{
         artist_credit_contains, credited_artists, youtube_cache_visual_state,
@@ -149,6 +150,10 @@ pub enum BrowserEvent {
     QueueYouTubeAppend(YouTubeItem),
     ToggleLocalTrackFavorite(usize),
     ToggleYouTubeTrackFavorite(YouTubeItem),
+    DownloadYouTubeCollection {
+        item: YouTubeItem,
+        playlist: bool,
+    },
     QueueLocalCollection {
         kind: String,
         title: String,
@@ -220,6 +225,7 @@ impl BrowserPlaybackState {
 pub struct BrowserRenderContext<'a> {
     pub history: &'a ListeningHistory,
     pub playback: &'a BrowserPlaybackState,
+    pub offline: &'a OfflineStore,
 }
 
 #[derive(Clone, Debug)]
@@ -996,6 +1002,251 @@ pub struct LibraryBrowser {
     events: Receiver<BrowserEvent>,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum CollectionOfflineButtonState {
+    Ready,
+    Downloading { completed: usize, total: usize },
+    Complete,
+    Retry,
+}
+
+fn collection_offline_button_label(
+    language: AppLanguage,
+    state: CollectionOfflineButtonState,
+) -> String {
+    match (language, state) {
+        (AppLanguage::Portuguese, CollectionOfflineButtonState::Ready) => {
+            "Disponibilizar offline".to_string()
+        }
+        (
+            AppLanguage::Portuguese,
+            CollectionOfflineButtonState::Downloading { completed, total },
+        ) if total > 0 => {
+            format!("Baixando {completed}/{total}")
+        }
+        (AppLanguage::Portuguese, CollectionOfflineButtonState::Downloading { .. }) => {
+            "Preparando download…".to_string()
+        }
+        (AppLanguage::Portuguese, CollectionOfflineButtonState::Complete) => {
+            "Disponível offline".to_string()
+        }
+        (AppLanguage::Portuguese, CollectionOfflineButtonState::Retry) => {
+            "Retomar download".to_string()
+        }
+
+        (AppLanguage::English, CollectionOfflineButtonState::Ready) => {
+            "Make available offline".to_string()
+        }
+        (AppLanguage::English, CollectionOfflineButtonState::Downloading { completed, total })
+            if total > 0 =>
+        {
+            format!("Downloading {completed}/{total}")
+        }
+        (AppLanguage::English, CollectionOfflineButtonState::Downloading { .. }) => {
+            "Preparing download…".to_string()
+        }
+        (AppLanguage::English, CollectionOfflineButtonState::Complete) => {
+            "Available offline".to_string()
+        }
+        (AppLanguage::English, CollectionOfflineButtonState::Retry) => {
+            "Resume download".to_string()
+        }
+
+        (AppLanguage::Spanish, CollectionOfflineButtonState::Ready) => {
+            "Hacer disponible sin conexión".to_string()
+        }
+        (AppLanguage::Spanish, CollectionOfflineButtonState::Downloading { completed, total })
+            if total > 0 =>
+        {
+            format!("Descargando {completed}/{total}")
+        }
+        (AppLanguage::Spanish, CollectionOfflineButtonState::Downloading { .. }) => {
+            "Preparando descarga…".to_string()
+        }
+        (AppLanguage::Spanish, CollectionOfflineButtonState::Complete) => {
+            "Disponible sin conexión".to_string()
+        }
+        (AppLanguage::Spanish, CollectionOfflineButtonState::Retry) => {
+            "Reanudar descarga".to_string()
+        }
+    }
+}
+
+fn apply_collection_offline_button_state(
+    button: &gtk::Button,
+    state: CollectionOfflineButtonState,
+    language: AppLanguage,
+) {
+    for class_name in [
+        "suggested-action",
+        "success",
+        "warning",
+        "collection-offline-ready",
+        "collection-offline-downloading",
+        "collection-offline-complete",
+        "collection-offline-retry",
+        "collection-offline-pressed",
+    ] {
+        button.remove_css_class(class_name);
+    }
+
+    button.set_label(&collection_offline_button_label(language, state));
+    button.set_opacity(1.0);
+
+    match state {
+        CollectionOfflineButtonState::Ready => {
+            button.set_icon_name("folder-download-symbolic");
+            button.set_sensitive(true);
+            button.add_css_class("suggested-action");
+            button.add_css_class("collection-offline-ready");
+        }
+        CollectionOfflineButtonState::Downloading { .. } => {
+            button.set_icon_name("emblem-synchronizing-symbolic");
+            button.set_sensitive(false);
+            button.add_css_class("suggested-action");
+            button.add_css_class("collection-offline-downloading");
+            button.set_opacity(1.0);
+        }
+        CollectionOfflineButtonState::Complete => {
+            button.set_icon_name("emblem-ok-symbolic");
+            button.set_sensitive(false);
+            button.add_css_class("success");
+            button.add_css_class("collection-offline-complete");
+        }
+        CollectionOfflineButtonState::Retry => {
+            button.set_icon_name("view-refresh-symbolic");
+            button.set_sensitive(true);
+            button.add_css_class("warning");
+            button.add_css_class("collection-offline-retry");
+        }
+    }
+}
+
+fn update_collection_offline_button_widget(
+    widget: &gtk::Widget,
+    target_name: &str,
+    state: CollectionOfflineButtonState,
+    language: AppLanguage,
+) -> usize {
+    let mut updated = 0;
+
+    if let Ok(button) = widget.clone().downcast::<gtk::Button>() {
+        if button.widget_name() == target_name {
+            apply_collection_offline_button_state(&button, state, language);
+            updated += 1;
+        }
+    }
+
+    let mut child = widget.first_child();
+    while let Some(current) = child {
+        updated += update_collection_offline_button_widget(&current, target_name, state, language);
+        child = current.next_sibling();
+    }
+
+    updated
+}
+
+fn set_home_offline_menu_content(button: &gtk::Button, icon_name: &str, label: &str) {
+    let Some(content) = button.child() else {
+        return;
+    };
+
+    let mut child = content.first_child();
+    while let Some(current) = child {
+        if let Ok(icon) = current.clone().downcast::<gtk::Image>() {
+            icon.set_icon_name(Some(icon_name));
+        } else if let Ok(text) = current.clone().downcast::<gtk::Label>() {
+            text.set_label(label);
+        }
+        child = current.next_sibling();
+    }
+}
+
+fn tag_home_collection_cache_indicator(widget: &gtk::Widget, target_name: &str) -> usize {
+    let mut tagged = 0;
+
+    if let Ok(image) = widget.clone().downcast::<gtk::Image>() {
+        if image.has_css_class("youtube-cache-indicator") {
+            image.set_widget_name(target_name);
+            tagged += 1;
+        }
+    }
+
+    let mut child = widget.first_child();
+    while let Some(current) = child {
+        tagged += tag_home_collection_cache_indicator(&current, target_name);
+        child = current.next_sibling();
+    }
+
+    tagged
+}
+
+fn update_home_collection_offline_widget(
+    widget: &gtk::Widget,
+    target_name: &str,
+    language: AppLanguage,
+) -> usize {
+    let mut updated = 0;
+
+    if let Ok(image) = widget.clone().downcast::<gtk::Image>() {
+        if image.widget_name() == target_name {
+            image.set_icon_name(Some("folder-download-symbolic"));
+            image.set_tooltip_text(Some(match language {
+                AppLanguage::Portuguese => "Coleção disponível offline",
+                AppLanguage::English => "Collection available offline",
+                AppLanguage::Spanish => "Colección disponible sin conexión",
+            }));
+            image.remove_css_class("youtube-cache-fresh");
+            image.add_css_class("youtube-offline-downloaded");
+            updated += 1;
+        }
+    }
+
+    if let Ok(button) = widget.clone().downcast::<gtk::Button>() {
+        if button.widget_name() == target_name {
+            set_home_offline_menu_content(
+                &button,
+                "emblem-ok-symbolic",
+                match language {
+                    AppLanguage::Portuguese => "Disponível offline",
+                    AppLanguage::English => "Available offline",
+                    AppLanguage::Spanish => "Disponible sin conexión",
+                },
+            );
+            button.set_sensitive(false);
+            button.add_css_class("success");
+            updated += 1;
+        }
+    }
+
+    let mut child = widget.first_child();
+    while let Some(current) = child {
+        updated += update_home_collection_offline_widget(&current, target_name, language);
+        child = current.next_sibling();
+    }
+
+    updated
+}
+
+fn update_youtube_offline_indicator_widget(widget: &gtk::Widget, target_name: &str) -> usize {
+    let mut updated = 0;
+
+    if let Ok(stack) = widget.clone().downcast::<gtk::Stack>() {
+        if stack.widget_name() == target_name {
+            stack.set_visible_child_name("offline");
+            updated += 1;
+        }
+    }
+
+    let mut child = widget.first_child();
+    while let Some(current) = child {
+        updated += update_youtube_offline_indicator_widget(&current, target_name);
+        child = current.next_sibling();
+    }
+
+    updated
+}
+
 fn collect_scrolled_windows(widget: &gtk::Widget, output: &mut Vec<gtk::ScrolledWindow>) {
     if let Ok(scrolled) = widget.clone().downcast::<gtk::ScrolledWindow>() {
         output.push(scrolled);
@@ -1405,6 +1656,91 @@ impl LibraryBrowser {
         self.route.borrow().clone()
     }
 
+    pub fn mark_youtube_track_offline(&self, video_id: &str) -> usize {
+        if video_id.trim().is_empty() {
+            return 0;
+        }
+
+        let target_name = format!("youtube-offline-indicator:{video_id}");
+        update_youtube_offline_indicator_widget(
+            &self.root.clone().upcast::<gtk::Widget>(),
+            &target_name,
+        )
+    }
+
+    pub fn set_collection_offline_downloading(
+        &self,
+        collection_id: &str,
+        completed: usize,
+        total: usize,
+        language: AppLanguage,
+    ) -> usize {
+        self.set_collection_offline_state(
+            collection_id,
+            CollectionOfflineButtonState::Downloading { completed, total },
+            language,
+        )
+    }
+
+    pub fn set_collection_offline_complete(
+        &self,
+        collection_id: &str,
+        language: AppLanguage,
+    ) -> usize {
+        let mut updated = self.set_collection_offline_state(
+            collection_id,
+            CollectionOfflineButtonState::Complete,
+            language,
+        );
+
+        let badge_name = format!("youtube-home-offline:{collection_id}");
+        updated += update_home_collection_offline_widget(
+            &self.root.clone().upcast::<gtk::Widget>(),
+            &badge_name,
+            language,
+        );
+
+        let menu_name = format!("youtube-home-offline-menu:{collection_id}");
+        updated += update_home_collection_offline_widget(
+            &self.root.clone().upcast::<gtk::Widget>(),
+            &menu_name,
+            language,
+        );
+
+        updated
+    }
+
+    pub fn set_collection_offline_retry(
+        &self,
+        collection_id: &str,
+        language: AppLanguage,
+    ) -> usize {
+        self.set_collection_offline_state(
+            collection_id,
+            CollectionOfflineButtonState::Retry,
+            language,
+        )
+    }
+
+    fn set_collection_offline_state(
+        &self,
+        collection_id: &str,
+        state: CollectionOfflineButtonState,
+        language: AppLanguage,
+    ) -> usize {
+        if collection_id.trim().is_empty() {
+            return 0;
+        }
+
+        let target_name = format!("youtube-offline-collection:{collection_id}");
+        update_collection_offline_button_widget(
+            &self.root.clone().upcast::<gtk::Widget>(),
+            &target_name,
+            state,
+            language,
+        )
+    }
+
     pub fn navigate(
         &self,
         route: BrowserRoute,
@@ -1457,7 +1793,7 @@ impl LibraryBrowser {
                 self.root.set_visible_child_name("home");
             }
             route => {
-                self.rebuild_queue(tracks, config, youtube, query, &route);
+                self.rebuild_queue(tracks, config, youtube, context.offline, query, &route);
                 self.root.set_visible_child_name("tracks");
             }
         }
@@ -1729,6 +2065,7 @@ impl LibraryBrowser {
                         position + 1,
                         item,
                         liked,
+                        false,
                         &self.event_tx,
                         config.language,
                     ));
@@ -1801,6 +2138,7 @@ impl LibraryBrowser {
         tracks: &[Track],
         config: &AppConfig,
         youtube: &YouTubeLibraryCache,
+        offline: &OfflineStore,
         query: &str,
         route: &BrowserRoute,
     ) {
@@ -1822,19 +2160,24 @@ impl LibraryBrowser {
 
         if let Some(header) = local_collection_page_header(route, tracks, config, config.language) {
             self.queue_context_header
-                .append(&render_collection_page_header(&header));
+                .append(&render_collection_page_header(
+                    &header,
+                    None,
+                    &self.event_tx,
+                    config.language,
+                ));
             self.queue_context_header.set_visible(true);
             self.queue_title.set_visible(false);
         } else {
             self.queue_title.set_visible(true);
         }
 
-        if let BrowserRoute::YouTubePlaylist { browse_id, .. } = route {
+        if let BrowserRoute::YouTubePlaylist { .. } = route {
             self.rebuild_youtube_playlist_queue(
                 youtube,
+                offline,
                 effective_query,
                 route,
-                browse_id,
                 render_token,
                 config.language,
             );
@@ -1847,6 +2190,7 @@ impl LibraryBrowser {
         ) {
             self.rebuild_youtube_collection_queue(
                 youtube,
+                offline,
                 effective_query,
                 route,
                 render_token,
@@ -1962,6 +2306,7 @@ impl LibraryBrowser {
                 number,
                 &item,
                 liked,
+                offline.contains(&item.video_id),
                 &self.event_tx,
                 config.language,
             ));
@@ -2000,12 +2345,15 @@ impl LibraryBrowser {
     fn rebuild_youtube_playlist_queue(
         &self,
         youtube: &YouTubeLibraryCache,
+        offline: &OfflineStore,
         query: &str,
         route: &BrowserRoute,
-        browse_id: &str,
         render_token: u64,
         language: AppLanguage,
     ) {
+        let BrowserRoute::YouTubePlaylist { browse_id, .. } = route else {
+            return;
+        };
         self.queue_title
             .set_text(&route_title(route, None, language));
         self.visible_tracks.borrow_mut().clear();
@@ -2013,12 +2361,27 @@ impl LibraryBrowser {
         if let Some(playlist) = youtube
             .playlists
             .iter()
-            .find(|playlist| playlist.browse_id == browse_id)
+            .find(|playlist| playlist.browse_id == browse_id.as_str())
         {
             let track_count = youtube.playlist_tracks.get(browse_id).map(Vec::len);
             let header = youtube_playlist_page_header(playlist, track_count, language);
+            let items = youtube
+                .playlist_tracks
+                .get(browse_id)
+                .cloned()
+                .unwrap_or_default();
             self.queue_context_header
-                .append(&render_collection_page_header(&header));
+                .append(&render_collection_page_header(
+                    &header,
+                    Some(OfflineCollectionAction {
+                        item: playlist.clone(),
+                        playlist: true,
+                        available: !items.is_empty()
+                            && items.iter().all(|track| offline.contains(&track.video_id)),
+                    }),
+                    &self.event_tx,
+                    language,
+                ));
             self.queue_context_header.set_visible(true);
             self.queue_title.set_visible(false);
         } else {
@@ -2065,6 +2428,7 @@ impl LibraryBrowser {
                 number,
                 &item,
                 liked,
+                offline.contains(&item.video_id),
                 &self.event_tx,
                 language,
             ));
@@ -2082,6 +2446,7 @@ impl LibraryBrowser {
         let visible_tracks = self.visible_tracks.clone();
         let generation = self.queue_render_generation.clone();
         let event_tx = self.event_tx.clone();
+        let offline_ids = offline.video_ids();
 
         glib::idle_add_local(move || {
             if generation.get() != render_token {
@@ -2096,7 +2461,12 @@ impl LibraryBrowser {
                 let number = visible_tracks.borrow().len() + 1;
                 let liked = liked_ids.contains(&item.video_id);
                 queue.append(&youtube_track_row(
-                    number, &item, liked, &event_tx, language,
+                    number,
+                    &item,
+                    liked,
+                    offline_ids.contains(&item.video_id),
+                    &event_tx,
+                    language,
                 ));
                 visible_tracks
                     .borrow_mut()
@@ -2114,6 +2484,7 @@ impl LibraryBrowser {
     fn rebuild_youtube_collection_queue(
         &self,
         youtube: &YouTubeLibraryCache,
+        offline: &OfflineStore,
         query: &str,
         route: &BrowserRoute,
         render_token: u64,
@@ -2131,8 +2502,25 @@ impl LibraryBrowser {
         let title = collection.title.as_str();
 
         if let Some(header) = youtube_collection_page_header(route, youtube, language) {
+            let source = youtube_collection_entry_for_route(&youtube.albums, collection)
+                .map(|entry| entry.source.clone());
+            let items = youtube
+                .collection_tracks
+                .get(&collection.key)
+                .cloned()
+                .unwrap_or_default();
             self.queue_context_header
-                .append(&render_collection_page_header(&header));
+                .append(&render_collection_page_header(
+                    &header,
+                    source.map(|item| OfflineCollectionAction {
+                        item,
+                        playlist: false,
+                        available: !items.is_empty()
+                            && items.iter().all(|track| offline.contains(&track.video_id)),
+                    }),
+                    &self.event_tx,
+                    language,
+                ));
             self.queue_context_header.set_visible(true);
             self.queue_title.set_visible(false);
         } else {
@@ -2183,12 +2571,13 @@ impl LibraryBrowser {
             return;
         }
 
-        self.append_youtube_rows_progressively(youtube, items, render_token, language);
+        self.append_youtube_rows_progressively(youtube, offline, items, render_token, language);
     }
 
     fn append_youtube_rows_progressively(
         &self,
         youtube: &YouTubeLibraryCache,
+        offline: &OfflineStore,
         mut items: Vec<YouTubeItem>,
         render_token: u64,
         language: AppLanguage,
@@ -2207,6 +2596,7 @@ impl LibraryBrowser {
                 number,
                 &item,
                 liked,
+                offline.contains(&item.video_id),
                 &self.event_tx,
                 language,
             ));
@@ -2224,6 +2614,7 @@ impl LibraryBrowser {
         let visible_tracks = self.visible_tracks.clone();
         let generation = self.queue_render_generation.clone();
         let event_tx = self.event_tx.clone();
+        let offline_ids = offline.video_ids();
 
         glib::idle_add_local(move || {
             if generation.get() != render_token {
@@ -2238,7 +2629,12 @@ impl LibraryBrowser {
                 let number = visible_tracks.borrow().len() + 1;
                 let liked = liked_ids.contains(&item.video_id);
                 queue.append(&youtube_track_row(
-                    number, &item, liked, &event_tx, language,
+                    number,
+                    &item,
+                    liked,
+                    offline_ids.contains(&item.video_id),
+                    &event_tx,
+                    language,
                 ));
                 visible_tracks
                     .borrow_mut()
@@ -2681,7 +3077,12 @@ impl LibraryBrowser {
 
         if let Some(header) = youtube_collection_page_header(&route, youtube, language) {
             self.albums_context_header
-                .append(&render_collection_page_header(&header));
+                .append(&render_collection_page_header(
+                    &header,
+                    None,
+                    &self.event_tx,
+                    language,
+                ));
             has_context = true;
         }
 
@@ -4764,6 +5165,24 @@ fn home_card_button(
         }
     };
 
+    let offline_collection = match &card {
+        HomeCard::YouTubeAlbum { item, .. } => Some((
+            format!("album:{}", youtube_collection_cache_key(item)),
+            BrowserEvent::DownloadYouTubeCollection {
+                item: item.clone(),
+                playlist: false,
+            },
+        )),
+        HomeCard::YouTubePlaylist(item) => Some((
+            format!("playlist:{}", item.browse_id),
+            BrowserEvent::DownloadYouTubeCollection {
+                item: item.clone(),
+                playlist: true,
+            },
+        )),
+        _ => None,
+    };
+
     let is_active = play_event.is_some()
         && playback.matches_collection(collection_kind, &collection_id, &collection_title);
     let is_loading = play_event.is_some()
@@ -4789,6 +5208,14 @@ fn home_card_button(
 
     card_widget.add_css_class("home-card");
     card_widget.add_css_class("expressive-collection-card");
+
+    if let Some((offline_collection_id, _)) = &offline_collection {
+        let target_name = format!("youtube-home-offline:{offline_collection_id}");
+        tag_home_collection_cache_indicator(
+            &card_widget.clone().upcast::<gtk::Widget>(),
+            &target_name,
+        );
+    }
     if is_active {
         card_widget.add_css_class("collection-card-playing");
     }
@@ -4993,7 +5420,14 @@ fn home_card_button(
             ),
         ] {
             let icon = gtk::Image::from_icon_name(icon_name);
-            icon.set_pixel_size(18);
+            icon.set_pixel_size(if icon_name == "go-next-symbolic" {
+                20
+            } else {
+                18
+            });
+            icon.set_size_request(20, 20);
+            icon.set_halign(gtk::Align::Center);
+            icon.set_valign(gtk::Align::Center);
             icon.add_css_class("collection-card-overflow-action-icon");
 
             let text = gtk::Label::new(Some(label));
@@ -5019,6 +5453,65 @@ fn home_card_button(
             button.connect_clicked(move |_| {
                 popover.popdown();
                 let _ = sender.send(event.clone());
+            });
+            actions.append(&button);
+        }
+
+        if let Some((offline_collection_id, offline_event)) = offline_collection.clone() {
+            let separator = gtk::Separator::new(gtk::Orientation::Horizontal);
+            separator.add_css_class("collection-card-overflow-separator");
+            actions.append(&separator);
+
+            let label = match language {
+                AppLanguage::Portuguese => "Disponibilizar offline",
+                AppLanguage::English => "Make available offline",
+                AppLanguage::Spanish => "Hacer disponible sin conexión",
+            };
+
+            let icon = gtk::Image::from_icon_name("folder-download-symbolic");
+            icon.set_pixel_size(18);
+            icon.set_size_request(20, 20);
+            icon.set_halign(gtk::Align::Center);
+            icon.set_valign(gtk::Align::Center);
+            icon.add_css_class("collection-card-overflow-action-icon");
+
+            let text = gtk::Label::new(Some(label));
+            text.set_xalign(0.0);
+            text.set_hexpand(true);
+            text.add_css_class("collection-card-overflow-action-label");
+
+            let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+            content.set_hexpand(true);
+            content.set_halign(gtk::Align::Fill);
+            content.append(&icon);
+            content.append(&text);
+
+            let button = gtk::Button::new();
+            button.set_child(Some(&content));
+            button.set_widget_name(&format!(
+                "youtube-home-offline-menu:{offline_collection_id}"
+            ));
+            button.set_halign(gtk::Align::Fill);
+            button.set_hexpand(true);
+            button.add_css_class("flat");
+            button.add_css_class("collection-card-overflow-action");
+            button.add_css_class("collection-card-offline-action");
+
+            let sender = event_tx.clone();
+            let popover = popover.clone();
+            button.connect_clicked(move |button| {
+                button.set_sensitive(false);
+                set_home_offline_menu_content(
+                    button,
+                    "emblem-synchronizing-symbolic",
+                    match language {
+                        AppLanguage::Portuguese => "Preparando download…",
+                        AppLanguage::English => "Preparing download…",
+                        AppLanguage::Spanish => "Preparando descarga…",
+                    },
+                );
+                popover.popdown();
+                let _ = sender.send(offline_event.clone());
             });
             actions.append(&button);
         }
@@ -6244,6 +6737,7 @@ fn youtube_track_row(
     number: usize,
     item: &YouTubeItem,
     liked: bool,
+    available_offline: bool,
     event_tx: &Sender<BrowserEvent>,
     language: AppLanguage,
 ) -> gtk::ListBoxRow {
@@ -6271,8 +6765,36 @@ fn youtube_track_row(
     text.append(&subtitle);
 
     let source = source_badge("YouTube", true);
-    let favorite = gtk::Image::from_icon_name("emblem-favorite-symbolic");
-    favorite.set_opacity(if liked { 0.95 } else { 0.20 });
+    let favorite_icon = gtk::Image::from_icon_name("emblem-favorite-symbolic");
+    favorite_icon.set_pixel_size(16);
+    favorite_icon.set_opacity(if liked { 0.95 } else { 0.32 });
+
+    let favorite_tooltip = match (language, liked) {
+        (AppLanguage::Portuguese, true) => "Remover das músicas curtidas",
+        (AppLanguage::Portuguese, false) => "Curtir música",
+        (AppLanguage::English, true) => "Remove from liked songs",
+        (AppLanguage::English, false) => "Like track",
+        (AppLanguage::Spanish, true) => "Quitar de canciones que te gustan",
+        (AppLanguage::Spanish, false) => "Me gusta",
+    };
+    let favorite = gtk::Button::new();
+    favorite.set_child(Some(&favorite_icon));
+    favorite.set_tooltip_text(Some(favorite_tooltip));
+    favorite.set_accessible_role(gtk::AccessibleRole::Button);
+    favorite.update_property(&[gtk::accessible::Property::Label(favorite_tooltip)]);
+    favorite.add_css_class("flat");
+    favorite.add_css_class("circular");
+    favorite.add_css_class("youtube-track-like-button");
+    favorite.set_valign(gtk::Align::Center);
+
+    {
+        let sender = event_tx.clone();
+        let item = item.clone();
+        favorite.connect_clicked(move |_| {
+            let _ = sender.send(BrowserEvent::ToggleYouTubeTrackFavorite(item.clone()));
+        });
+    }
+
     let duration = gtk::Label::new(Some(&format_duration(item.duration_seconds)));
     duration.add_css_class("time-label");
 
@@ -6292,9 +6814,9 @@ fn youtube_track_row(
     content.set_margin_end(8);
     content.append(&number_label);
     content.append(&text);
-    if let Some(cache_indicator) = youtube_cache_indicator(language) {
-        content.append(&cache_indicator);
-    }
+    let cache_indicator =
+        youtube_track_cache_indicator(language, &item.video_id, available_offline);
+    content.append(&cache_indicator);
     content.append(&source);
     content.append(&favorite);
     content.append(&duration);
@@ -6306,6 +6828,50 @@ fn youtube_track_row(
     row.add_css_class("youtube-track-row");
     row.set_child(Some(&content));
     row
+}
+
+fn youtube_track_cache_indicator(
+    language: AppLanguage,
+    video_id: &str,
+    available_offline: bool,
+) -> gtk::Stack {
+    let stack = gtk::Stack::new();
+    stack.set_transition_type(gtk::StackTransitionType::Crossfade);
+    stack.set_transition_duration(160);
+    stack.set_interpolate_size(false);
+    stack.set_halign(gtk::Align::Center);
+    stack.set_valign(gtk::Align::Center);
+    stack.set_widget_name(&format!("youtube-offline-indicator:{video_id}"));
+    stack.add_css_class("youtube-track-offline-stack");
+
+    let cached = youtube_cache_indicator(language).unwrap_or_else(|| {
+        let placeholder = gtk::Image::new();
+        placeholder.set_pixel_size(14);
+        placeholder.set_opacity(0.0);
+        placeholder
+    });
+    stack.add_named(&cached, Some("cached"));
+
+    let tooltip = match language {
+        AppLanguage::Portuguese => "Baixada e disponível offline",
+        AppLanguage::English => "Downloaded and available offline",
+        AppLanguage::Spanish => "Descargada y disponible sin conexión",
+    };
+    let offline = gtk::Image::from_icon_name("folder-download-symbolic");
+    offline.set_pixel_size(14);
+    offline.set_tooltip_text(Some(tooltip));
+    offline.set_accessible_role(gtk::AccessibleRole::Img);
+    offline.update_property(&[gtk::accessible::Property::Label(tooltip)]);
+    offline.add_css_class("youtube-cache-indicator");
+    offline.add_css_class("youtube-offline-downloaded");
+    stack.add_named(&offline, Some("offline"));
+
+    stack.set_visible_child_name(if available_offline {
+        "offline"
+    } else {
+        "cached"
+    });
+    stack
 }
 
 fn youtube_cache_indicator(language: AppLanguage) -> Option<gtk::Image> {
@@ -6371,6 +6937,13 @@ fn clear_box(container: &gtk::Box) {
 }
 
 #[derive(Clone, Debug)]
+struct OfflineCollectionAction {
+    item: YouTubeItem,
+    playlist: bool,
+    available: bool,
+}
+
+#[derive(Clone, Debug)]
 struct CollectionPageHeaderData {
     cover_path: Option<PathBuf>,
     eyebrow: String,
@@ -6381,7 +6954,12 @@ struct CollectionPageHeaderData {
     artist: bool,
 }
 
-fn render_collection_page_header(data: &CollectionPageHeaderData) -> gtk::Box {
+fn render_collection_page_header(
+    data: &CollectionPageHeaderData,
+    offline_action: Option<OfflineCollectionAction>,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> gtk::Box {
     let cover = artwork(data.cover_path.as_deref(), 88);
     cover.set_size_request(88, 88);
     cover.set_halign(gtk::Align::Start);
@@ -6447,6 +7025,52 @@ fn render_collection_page_header(data: &CollectionPageHeaderData) -> gtk::Box {
     header.set_margin_end(2);
     header.append(&cover);
     header.append(&text);
+    if let Some(action) = offline_action {
+        let collection_id = if action.playlist {
+            format!("playlist:{}", action.item.browse_id)
+        } else {
+            format!("album:{}", youtube_collection_cache_key(&action.item))
+        };
+
+        let button = gtk::Button::new();
+        button.set_widget_name(&format!("youtube-offline-collection:{collection_id}"));
+        button.set_valign(gtk::Align::Center);
+        button.add_css_class("pill");
+        button.add_css_class("collection-offline-button");
+        apply_collection_offline_button_state(
+            &button,
+            if action.available {
+                CollectionOfflineButtonState::Complete
+            } else {
+                CollectionOfflineButtonState::Ready
+            },
+            language,
+        );
+
+        let sender = event_tx.clone();
+        button.connect_clicked(move |button| {
+            button.add_css_class("collection-offline-pressed");
+            button.set_opacity(0.72);
+
+            let button_for_release = button.clone();
+            glib::timeout_add_local_once(Duration::from_millis(110), move || {
+                apply_collection_offline_button_state(
+                    &button_for_release,
+                    CollectionOfflineButtonState::Downloading {
+                        completed: 0,
+                        total: 0,
+                    },
+                    language,
+                );
+            });
+
+            let _ = sender.send(BrowserEvent::DownloadYouTubeCollection {
+                item: action.item.clone(),
+                playlist: action.playlist,
+            });
+        });
+        header.append(&button);
+    }
     header.add_css_class("collection-page-header");
     header.add_css_class("compact-collection-header");
     header
