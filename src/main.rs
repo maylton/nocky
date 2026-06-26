@@ -42,6 +42,7 @@ mod footer_view;
 mod i18n;
 mod library;
 mod listening_history;
+mod local_mix_cover;
 // material_dynamic_palette_v1
 mod lyrics;
 mod lyrics_provider;
@@ -4648,6 +4649,28 @@ impl AppController {
                 }
                 BrowserEvent::PlayLocalPlaylist(title) => {
                     self.play_local_collection("playlist", &title);
+                }
+                BrowserEvent::PlayLocalMix { title, indices } => {
+                    if let Some(first) = indices.first().copied() {
+                        let artist = self
+                            .state
+                            .borrow()
+                            .tracks
+                            .get(first)
+                            .map(|track| track.artist.clone())
+                            .unwrap_or_default();
+
+                        self.listening_history_context.replace(
+                            listening_history::PlaybackHistoryContext {
+                                kind: "mix".to_string(),
+                                id: artist,
+                                title,
+                            },
+                        );
+                        self.pending_resume_position_us.set(None);
+                        self.state.borrow_mut().playback_queue = indices;
+                        self.select_track(first, true);
+                    }
                 }
                 BrowserEvent::PlayYouTubeAlbum(item) => {
                     self.play_youtube_collection(item, false);
