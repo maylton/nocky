@@ -19,6 +19,22 @@ impl fmt::Display for QueueEntryId {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QueueSourceKind {
+    Local,
+    YouTube,
+}
+
+impl QueueSourceKind {
+    pub const fn state_file_name(self) -> &'static str {
+        match self {
+            Self::Local => "queue-local.json",
+            Self::YouTube => "queue-youtube.json",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum QueueSource {
@@ -27,6 +43,13 @@ pub enum QueueSource {
 }
 
 impl QueueSource {
+    pub const fn kind(&self) -> QueueSourceKind {
+        match self {
+            Self::Local { .. } => QueueSourceKind::Local,
+            Self::YouTube { .. } => QueueSourceKind::YouTube,
+        }
+    }
+
     pub fn stable_key(&self) -> String {
         match self {
             Self::Local { path } => format!("local:{}", path.to_string_lossy()),
@@ -121,10 +144,17 @@ pub struct QueueSnapshot {
 pub enum QueueError {
     EntryNotFound(QueueEntryId),
     CannotRemoveCurrent(QueueEntryId),
-    TargetIndexOutOfBounds { target: usize, len: usize },
+    TargetIndexOutOfBounds {
+        target: usize,
+        len: usize,
+    },
     UnsupportedSnapshotVersion(u32),
     DuplicateEntryId(QueueEntryId),
     InvalidCurrentEntry(QueueEntryId),
+    MixedSources {
+        expected: QueueSourceKind,
+        found: QueueSourceKind,
+    },
 }
 
 impl fmt::Display for QueueError {
@@ -146,6 +176,12 @@ impl fmt::Display for QueueError {
             Self::DuplicateEntryId(id) => write!(formatter, "duplicate queue entry ID {id}"),
             Self::InvalidCurrentEntry(id) => {
                 write!(formatter, "current queue entry {id} is missing")
+            }
+            Self::MixedSources { expected, found } => {
+                write!(
+                    formatter,
+                    "queue source mismatch: expected {expected:?}, found {found:?}"
+                )
             }
         }
     }
@@ -312,6 +348,34 @@ impl PlaybackQueue {
 
     pub fn entries(&self) -> &[QueueEntry] {
         &self.entries
+    }
+
+    pub fn source_kind(&self) -> Result<Option<QueueSourceKind>, QueueError> {
+        let Some(first) = self.entries.first() else {
+            return Ok(None);
+        };
+        let expected = first.media.source.kind();
+        if let Some(found) = self
+            .entries
+            .iter()
+            .map(|entry| entry.media.source.kind())
+            .find(|kind| *kind != expected)
+        {
+            return Err(QueueError::MixedSources { expected, found });
+        }
+        Ok(Some(expected))
+    }
+
+    pub fn accepts(&self, media: &QueueMedia) -> bool {
+        self.source_kind()
+            .is_ok_and(|kind| kind.is_none_or(|kind| kind == media.source.kind()))
+    }
+
+    pub fn validate_source(&self, expected: QueueSourceKind) -> Result<(), QueueError> {
+        match self.source_kind()? {
+            Some(found) if found != expected => Err(QueueError::MixedSources { expected, found }),
+            _ => Ok(()),
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -783,5 +847,31 @@ mod tests {
             QueueEndAction::Play(next.expect("next ID"))
         );
         assert_eq!(queue_end_action(false, None), QueueEndAction::Stop);
+    }
+    #[test]
+    fn queue_source_kind_detects_and_rejects_mixing() {
+        let mut queue = PlaybackQueue::new();
+        queue.append(QueueMedia::local(
+            PathBuf::from("/music/one.flac"),
+            "One",
+            "Artist",
+            "Album",
+            180,
+            None,
+        ));
+        assert_eq!(queue.source_kind(), Ok(Some(QueueSourceKind::Local)));
+        assert!(!queue.accepts(&QueueMedia::youtube(
+            "video-id", "Online", "Artist", "Album", 200, None
+        )));
+        queue.append(QueueMedia::youtube(
+            "video-id", "Online", "Artist", "Album", 200, None,
+        ));
+        assert_eq!(
+            queue.source_kind(),
+            Err(QueueError::MixedSources {
+                expected: QueueSourceKind::Local,
+                found: QueueSourceKind::YouTube
+            })
+        );
     }
 }

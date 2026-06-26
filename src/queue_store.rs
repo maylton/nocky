@@ -1,4 +1,4 @@
-use crate::queue_model::{PlaybackQueue, QueueSnapshot, QueueSource};
+use crate::queue_model::{PlaybackQueue, QueueSnapshot, QueueSource, QueueSourceKind};
 use std::{
     env,
     fs::{self, File},
@@ -7,7 +7,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-const QUEUE_STATE_FILE: &str = "queue.json";
+const LEGACY_QUEUE_STATE_FILE: &str = "queue.json";
 
 #[derive(Debug)]
 pub struct QueueLoadResult {
@@ -23,22 +23,43 @@ pub fn save(snapshot: &QueueSnapshot) -> io::Result<()> {
     save_to_path(&queue_state_path(), snapshot)
 }
 
+#[allow(dead_code)] // Used by the upcoming source-session controller integration.
+pub fn load_for(source: QueueSourceKind) -> QueueLoadResult {
+    load_from_path(&queue_state_path_for(source))
+}
+
+#[allow(dead_code)] // Used by the upcoming source-session controller integration.
+pub fn save_for(source: QueueSourceKind, snapshot: &QueueSnapshot) -> io::Result<()> {
+    let queue = PlaybackQueue::restore(snapshot.clone())
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
+    queue
+        .validate_source(source)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
+    save_to_path(&queue_state_path_for(source), snapshot)
+}
+
+#[allow(dead_code)] // Used by the upcoming source-session controller integration.
+pub fn queue_state_path_for(source: QueueSourceKind) -> PathBuf {
+    state_directory().join(source.state_file_name())
+}
+
 pub fn queue_state_path() -> PathBuf {
+    state_directory().join(LEGACY_QUEUE_STATE_FILE)
+}
+
+fn state_directory() -> PathBuf {
     if let Some(state_home) = env::var_os("XDG_STATE_HOME").filter(|value| !value.is_empty()) {
-        return PathBuf::from(state_home)
-            .join("nocky")
-            .join(QUEUE_STATE_FILE);
+        return PathBuf::from(state_home).join("nocky");
     }
 
     if let Some(home) = env::var_os("HOME").filter(|value| !value.is_empty()) {
         return PathBuf::from(home)
             .join(".local")
             .join("state")
-            .join("nocky")
-            .join(QUEUE_STATE_FILE);
+            .join("nocky");
     }
 
-    env::temp_dir().join("nocky").join(QUEUE_STATE_FILE)
+    env::temp_dir().join("nocky")
 }
 
 fn load_from_path(path: &Path) -> QueueLoadResult {
@@ -288,5 +309,19 @@ mod tests {
                 .starts_with("queue.invalid-")));
 
         fs::remove_dir_all(directory).expect("remove temporary queue directory");
+    }
+    #[test]
+    fn source_specific_state_paths_are_distinct() {
+        let local = queue_state_path_for(QueueSourceKind::Local);
+        let youtube = queue_state_path_for(QueueSourceKind::YouTube);
+        assert_eq!(
+            local.file_name().and_then(|name| name.to_str()),
+            Some("queue-local.json")
+        );
+        assert_eq!(
+            youtube.file_name().and_then(|name| name.to_str()),
+            Some("queue-youtube.json")
+        );
+        assert_ne!(local, youtube);
     }
 }
