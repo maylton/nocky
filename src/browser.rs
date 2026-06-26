@@ -53,8 +53,9 @@ use crate::{
     listening_history::{HistoryActivity, ListeningHistory, ListeningSource, ListeningStats},
     model::Track,
     youtube::{
-        artist_credit_contains, credited_artists, youtube_collection_cache_key,
-        youtube_collection_key, YouTubeCollectionEntry, YouTubeItem, YouTubeLibraryCache,
+        artist_credit_contains, credited_artists, youtube_cache_visual_state,
+        youtube_collection_cache_key, youtube_collection_key, YouTubeCacheVisualState,
+        YouTubeCollectionEntry, YouTubeItem, YouTubeLibraryCache,
     },
 };
 use gtk::{gdk, gio::prelude::ListModelExt, glib, prelude::*};
@@ -5008,7 +5009,18 @@ fn collection_card(
     if online {
         card.add_css_class("youtube-collection-card");
     }
-    card.append(&artwork);
+    let artwork_overlay = gtk::Overlay::new();
+    artwork_overlay.set_child(Some(&artwork));
+    if online {
+        if let Some(cache_indicator) = youtube_cache_indicator(AppLanguage::Portuguese) {
+            cache_indicator.set_halign(gtk::Align::End);
+            cache_indicator.set_valign(gtk::Align::End);
+            cache_indicator.set_margin_end(10);
+            cache_indicator.set_margin_bottom(10);
+            artwork_overlay.add_overlay(&cache_indicator);
+        }
+    }
+    card.append(&artwork_overlay);
     card.append(&title_label);
     if !subtitle.is_empty() {
         card.append(&subtitle_label);
@@ -5126,6 +5138,11 @@ fn artist_collection_card(
     card.set_margin_end(8);
     card.append(&artwork);
     card.append(&text);
+    if online {
+        if let Some(cache_indicator) = youtube_cache_indicator(AppLanguage::Portuguese) {
+            card.append(&cache_indicator);
+        }
+    }
     card.add_css_class("compact-artist-card");
     card.add_css_class("collection-card");
     card.add_css_class("expressive-collection-card");
@@ -5700,6 +5717,9 @@ fn track_row(
     content.set_margin_end(8);
     content.append(&number_label);
     content.append(&text);
+    if let Some(cache_indicator) = youtube_cache_indicator(language) {
+        content.append(&cache_indicator);
+    }
     content.append(&source);
     content.append(&favorite);
     content.append(&lyric_status);
@@ -5764,6 +5784,9 @@ fn youtube_track_row(
     content.set_margin_end(8);
     content.append(&number_label);
     content.append(&text);
+    if let Some(cache_indicator) = youtube_cache_indicator(language) {
+        content.append(&cache_indicator);
+    }
     content.append(&source);
     content.append(&favorite);
     content.append(&duration);
@@ -5775,6 +5798,53 @@ fn youtube_track_row(
     row.add_css_class("youtube-track-row");
     row.set_child(Some(&content));
     row
+}
+
+fn youtube_cache_indicator(language: AppLanguage) -> Option<gtk::Image> {
+    let state = youtube_cache_visual_state();
+    if state == YouTubeCacheVisualState::Hidden {
+        return None;
+    }
+
+    let icon_name = match state {
+        YouTubeCacheVisualState::Fresh => "weather-overcast-symbolic",
+        YouTubeCacheVisualState::Stale => "network-offline-symbolic",
+        YouTubeCacheVisualState::Hidden => return None,
+    };
+    let tooltip = match (language, state) {
+        (AppLanguage::Portuguese, YouTubeCacheVisualState::Fresh) => {
+            "Disponível em cache e atualizado"
+        }
+        (AppLanguage::Portuguese, YouTubeCacheVisualState::Stale) => {
+            "Disponível em cache, mas precisa ser atualizado"
+        }
+        (AppLanguage::English, YouTubeCacheVisualState::Fresh) => {
+            "Available in cache and up to date"
+        }
+        (AppLanguage::English, YouTubeCacheVisualState::Stale) => {
+            "Available in cache, but needs updating"
+        }
+        (AppLanguage::Spanish, YouTubeCacheVisualState::Fresh) => {
+            "Disponible en caché y actualizado"
+        }
+        (AppLanguage::Spanish, YouTubeCacheVisualState::Stale) => {
+            "Disponible en caché, pero necesita actualizarse"
+        }
+        (_, YouTubeCacheVisualState::Hidden) => return None,
+    };
+
+    let icon = gtk::Image::from_icon_name(icon_name);
+    icon.set_pixel_size(14);
+    icon.set_tooltip_text(Some(tooltip));
+    icon.set_accessible_role(gtk::AccessibleRole::Img);
+    icon.update_property(&[gtk::accessible::Property::Label(tooltip)]);
+    icon.add_css_class("youtube-cache-indicator");
+    icon.add_css_class(match state {
+        YouTubeCacheVisualState::Fresh => "youtube-cache-fresh",
+        YouTubeCacheVisualState::Stale => "youtube-cache-stale",
+        YouTubeCacheVisualState::Hidden => unreachable!(),
+    });
+    Some(icon)
 }
 
 fn source_badge(text: &str, online: bool) -> gtk::Label {
@@ -5846,6 +5916,11 @@ fn render_collection_page_header(data: &CollectionPageHeaderData) -> gtk::Box {
     let metadata = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     metadata.set_halign(gtk::Align::Start);
     metadata.append(&detail);
+    if data.online {
+        if let Some(cache_indicator) = youtube_cache_indicator(AppLanguage::Portuguese) {
+            metadata.append(&cache_indicator);
+        }
+    }
 
     let text = gtk::Box::new(gtk::Orientation::Vertical, 4);
     text.set_hexpand(true);
