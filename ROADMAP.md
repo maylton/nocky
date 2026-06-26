@@ -8,7 +8,7 @@
 
 > Last updated: 2026-06-26  
 > Status legend: ✅ completed · 🟡 in progress · ⬜ planned  
-> Current development priority: **Personalized Home — privacy and recently added**
+> Current development priority: **YouTube diagnostics and 0.3.2 reliability**
 
 Nocky is a modern Linux music player built with Rust, GTK4 and Libadwaita,
 combining Material 3 Expressive ideas with close integration with the Noctalia
@@ -243,12 +243,12 @@ now focuses on completing the user-facing history experience.
 - ✅ Clear offline, permission and expired-session feedback for YouTube like mutations.
 - ✅ Prevent duplicate remote requests when a user clicks like/unlike repeatedly.
 - 🟡 Unit coverage includes error-state classification; broader integration coverage remains planned.
-- Preserve the complete edited Queue 2.0 state during stream recovery.
-- More explicit handling for unavailable or region-blocked tracks.
-- Incremental library synchronization.
-- Cache expiration and invalidation rules.
-- Offline indicators for cached-only content.
-- Retry policy with bounded exponential delay.
+- ✅ Preserve the complete edited Queue 2.0 state during stream recovery.
+- ✅ More explicit handling for unavailable or region-blocked tracks.
+- ✅ Incremental library synchronization.
+- ✅ Cache expiration and invalidation rules.
+- ✅ Offline indicators for cached-only content.
+- ✅ Retry policy with bounded exponential delay.
 - Diagnostics view for connection and runtime problems.
 
 ---
@@ -340,12 +340,16 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 
 ### Persistence and recovery
 
-- Persist queue order and current position.
+- Persist queue order, current entry and playback position.
 - Restore local entries safely after a library rescan.
 - Restore YouTube entries from cached metadata.
 - Ignore missing entries without invalidating the whole queue.
 - Preserve edited queue state during temporary stream URL recovery.
-- Version the persisted queue schema for future migrations.
+- Keep Local and YouTube queues and playback sessions in separate state files.
+- Preserve repeat state independently for each source.
+- Preserve shuffle enablement, traversal history, upcoming order and RNG state.
+- Fall back safely when persisted shuffle state no longer matches the restored queue.
+- Version persisted queue and playback-session schemas for future migrations.
 
 ### Queue 2.0 completion criteria
 
@@ -353,11 +357,22 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - Reordering never changes the current track unexpectedly.
 - Previous and next follow the edited order.
 - Shuffle does not destroy the manually arranged queue.
-- Local and YouTube entries can coexist safely.
+- Local and YouTube queues remain fully isolated while sharing the same queue behavior.
 - Recovery and restart preserve the expected queue state.
 - No GTK warnings, Clippy warnings or quality-gate failures.
 
 ---
+
+## YouTube diagnostics design decision
+
+- Diagnostics must not add persistent controls, badges or status text to the player.
+- Routine checks should run quietly in the background and only surface actionable failures.
+- The user-facing diagnostics entry belongs in the YouTube Music section of application Settings.
+- The Settings surface should stay collapsed or secondary by default.
+- The diagnostics report must redact session headers, cookies, temporary stream URLs and personal account data.
+- Checks should cover the optional Python runtime, `ytmusicapi`, `yt-dlp`, Deno, authentication state, Secret Service availability, cache freshness, last synchronization, public search, authenticated library access and stream resolution.
+- A copy/export action may expose only a sanitized report suitable for bug reports.
+
 
 # Planned work
 
@@ -428,13 +443,16 @@ create less review and merge noise.
 3. ✅ Integrate previous, next, repeat and shuffle with the new queue.
 4. ✅ Build the dedicated Queue 2.0 interface.
 5. ✅ Persist and restore queue state.
-6. 🟡 Complete Personalized Home with recently added music, empty states and time-window filters.
-7. Finish card actions and loading placeholders.
-8. Finish search pagination, caching and keyboard navigation.
-9. Harden YouTube unavailable-track and recovery behavior.
-10. Add shared card-to-page transitions.
-11. Reorganize source modules by domain after reliability stabilization.
-12. Finish lyrics, visualizer, accessibility and release polish.
+6. ✅ Complete Queue 2.0 source isolation and full playback-state preservation.
+7. Add a discreet YouTube Music diagnostics surface in Settings, backed by background checks.
+8. Complete Personalized Home with per-section empty states, metadata deduplication and optional time-window filters.
+9. Finish card actions and loading placeholders.
+10. Finish search pagination, caching and keyboard navigation.
+11. Complete accessibility, responsiveness and performance audits.
+12. Prepare Nocky 0.3.2 packaging, translations, CI and release metadata.
+13. Add shared card-to-page transitions.
+14. Reorganize source modules by domain after reliability stabilization.
+15. Finish advanced lyrics and visualizer polish.
 
 ---
 
