@@ -105,6 +105,8 @@ pub struct AppConfig {
     pub expressive_home_card_effects: bool,
     pub noctalia_theme_sync: bool,
     pub youtube_auto_sync: bool,
+    #[serde(default)]
+    pub offline_collection_auto_sync: bool,
     pub language: AppLanguage,
     pub volume: f64,
     pub liked_tracks: Vec<PathBuf>,
@@ -134,6 +136,7 @@ impl Default for AppConfig {
             expressive_home_card_effects: true,
             noctalia_theme_sync: true,
             youtube_auto_sync: true,
+            offline_collection_auto_sync: false,
             language: AppLanguage::detect_system(),
             volume: 0.75,
             liked_tracks: Vec::new(),

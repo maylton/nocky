@@ -4,12 +4,13 @@ use crate::{
     config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme},
     dialogs::SettingsEvent,
     i18n::{self, Message},
+    offline_store::OfflineStore,
     youtube_diagnostics::{self, DiagnosticCheck, DiagnosticState},
 };
 use adw::prelude::*;
 use gtk::glib;
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     rc::Rc,
     sync::mpsc::{self, Receiver, Sender},
     time::Duration,
@@ -530,6 +531,21 @@ fn build_content(
         &youtube_sync,
     ));
 
+    let offline_collection_auto_sync = settings_switch(initial.offline_collection_auto_sync);
+    youtube_rows.append(&switch_row(
+        group_text(
+            "Manter coleções offline atualizadas",
+            "Keep offline collections updated",
+            "Mantener colecciones sin conexión actualizadas",
+        ),
+        group_text(
+            "Baixa automaticamente novas faixas das playlists, álbuns e mixes marcados para uso offline.",
+            "Automatically download new tracks from playlists, albums, and mixes marked for offline use.",
+            "Descarga automáticamente nuevas canciones de playlists, álbumes y mixes marcados para uso sin conexión.",
+        ),
+        &offline_collection_auto_sync,
+    ));
+
     let youtube_button = gtk::Button::with_label(tr(Message::YoutubeManageAction));
     youtube_button.add_css_class("suggested-action");
     youtube_button.add_css_class("settings-primary-action");
@@ -537,6 +553,103 @@ fn build_content(
         tr(Message::YoutubeManage),
         tr(Message::YoutubeManageDescription),
         &youtube_button,
+    ));
+
+    let offline_store = OfflineStore::load_default();
+    let offline_count = offline_store.track_count();
+    let offline_bytes = offline_store.total_size_bytes();
+    let (partial_count, partial_bytes) = offline_store.partial_stats();
+    let offline_path = offline_store.root_dir();
+
+    let storage_summary = gtk::Label::new(Some(&format!(
+        "{} · {}",
+        format_offline_track_count(initial.language, offline_count),
+        format_storage_size(offline_bytes)
+    )));
+    storage_summary.set_valign(gtk::Align::Center);
+    storage_summary.add_css_class("settings-version-badge");
+    youtube_rows.append(&row_with_control(
+        group_text(
+            "Armazenamento offline",
+            "Offline storage",
+            "Almacenamiento sin conexión",
+        ),
+        &format!(
+            "{} · {}",
+            offline_path.display(),
+            match initial.language {
+                AppLanguage::Portuguese => format!(
+                    "{partial_count} arquivos incompletos ({})",
+                    format_storage_size(partial_bytes)
+                ),
+                AppLanguage::English => format!(
+                    "{partial_count} incomplete files ({})",
+                    format_storage_size(partial_bytes)
+                ),
+                AppLanguage::Spanish => format!(
+                    "{partial_count} archivos incompletos ({})",
+                    format_storage_size(partial_bytes)
+                ),
+            }
+        ),
+        &storage_summary,
+    ));
+
+    let open_offline_folder =
+        gtk::Button::with_label(group_text("Abrir pasta", "Open folder", "Abrir carpeta"));
+    youtube_rows.append(&button_row(
+        group_text(
+            "Local dos arquivos",
+            "File location",
+            "Ubicación de archivos",
+        ),
+        group_text(
+            "Abra a pasta em que o Nocky mantém áudios e downloads incompletos.",
+            "Open the folder where Nocky stores audio and incomplete downloads.",
+            "Abre la carpeta donde Nocky guarda audio y descargas incompletas.",
+        ),
+        &open_offline_folder,
+    ));
+
+    let clean_partials = gtk::Button::with_label(group_text(
+        "Limpar incompletos",
+        "Clean incomplete",
+        "Limpiar incompletos",
+    ));
+    clean_partials.set_sensitive(partial_count > 0);
+    youtube_rows.append(&button_row(
+        group_text(
+            "Downloads incompletos",
+            "Incomplete downloads",
+            "Descargas incompletas",
+        ),
+        group_text(
+            "Remove somente arquivos temporários .part. As músicas concluídas são preservadas.",
+            "Remove only temporary .part files. Completed music is preserved.",
+            "Elimina solo archivos temporales .part. La música completada se conserva.",
+        ),
+        &clean_partials,
+    ));
+
+    let clear_offline = gtk::Button::with_label(group_text(
+        "Remover downloads",
+        "Remove downloads",
+        "Eliminar descargas",
+    ));
+    clear_offline.add_css_class("destructive-action");
+    clear_offline.set_sensitive(offline_count > 0 || partial_count > 0);
+    youtube_rows.append(&button_row(
+        group_text(
+            "Apagar arquivos offline",
+            "Delete offline files",
+            "Eliminar archivos sin conexión",
+        ),
+        group_text(
+            "Remove todos os áudios baixados deste dispositivo. A biblioteca do YouTube Music não é alterada.",
+            "Remove all downloaded audio from this device. Your YouTube Music library is not changed.",
+            "Elimina todo el audio descargado de este dispositivo. Tu biblioteca de YouTube Music no cambia.",
+        ),
+        &clear_offline,
     ));
 
     let diagnostics_summary = gtk::Label::new(None);
@@ -756,6 +869,48 @@ fn build_content(
     }
 
     {
+        let emit = emit.clone();
+        open_offline_folder.connect_clicked(move |_| emit(SettingsEvent::OpenOfflineFolder));
+    }
+
+    {
+        let emit = emit.clone();
+        clean_partials.connect_clicked(move |_| emit(SettingsEvent::CleanOfflinePartials));
+    }
+
+    {
+        let emit = emit.clone();
+        let awaiting_confirmation = Rc::new(Cell::new(false));
+        let language = initial.language;
+        clear_offline.connect_clicked(move |button| {
+            if awaiting_confirmation.replace(true) {
+                awaiting_confirmation.set(false);
+                emit(SettingsEvent::ClearOfflineDownloads);
+                return;
+            }
+
+            button.set_label(match language {
+                AppLanguage::Portuguese => "Clique novamente para apagar",
+                AppLanguage::English => "Click again to delete",
+                AppLanguage::Spanish => "Haz clic de nuevo para eliminar",
+            });
+
+            let weak_button = button.downgrade();
+            let awaiting_confirmation = awaiting_confirmation.clone();
+            glib::timeout_add_local_once(Duration::from_secs(4), move || {
+                awaiting_confirmation.set(false);
+                if let Some(button) = weak_button.upgrade() {
+                    button.set_label(match language {
+                        AppLanguage::Portuguese => "Remover downloads",
+                        AppLanguage::English => "Remove downloads",
+                        AppLanguage::Spanish => "Eliminar descargas",
+                    });
+                }
+            });
+        });
+    }
+
+    {
         let revealer = diagnostics_revealer.clone();
         let language = initial.language;
         diagnostics_toggle.connect_clicked(move |button| {
@@ -812,6 +967,10 @@ fn build_content(
         (&auto_lyrics, ToggleSetting::AutoLyrics),
         (&resume_playback, ToggleSetting::ResumePlaybackOnStartup),
         (&youtube_sync, ToggleSetting::YouTubeSync),
+        (
+            &offline_collection_auto_sync,
+            ToggleSetting::OfflineCollectionAutoSync,
+        ),
         (&expressive_home_cards, ToggleSetting::ExpressiveHomeCards),
         (&expressive_transport, ToggleSetting::ExpressiveTransport),
         (&noctalia, ToggleSetting::Noctalia),
@@ -833,6 +992,9 @@ fn build_content(
                     SettingsEvent::ResumePlaybackOnStartup(active)
                 }
                 ToggleSetting::YouTubeSync => SettingsEvent::YouTubeAutoSync(active),
+                ToggleSetting::OfflineCollectionAutoSync => {
+                    SettingsEvent::OfflineCollectionAutoSync(active)
+                }
                 ToggleSetting::ExpressiveTransport => {
                     SettingsEvent::ExpressiveTransportEffects(active)
                 }
@@ -857,9 +1019,44 @@ enum ToggleSetting {
     AutoLyrics,
     ResumePlaybackOnStartup,
     YouTubeSync,
+    OfflineCollectionAutoSync,
     ExpressiveTransport,
     ExpressiveHomeCards,
     Noctalia,
+}
+
+fn format_storage_size(bytes: u64) -> String {
+    const KIB: f64 = 1024.0;
+    const MIB: f64 = KIB * 1024.0;
+    const GIB: f64 = MIB * 1024.0;
+    let bytes = bytes as f64;
+
+    if bytes >= GIB {
+        format!("{:.1} GB", bytes / GIB)
+    } else if bytes >= MIB {
+        format!("{:.1} MB", bytes / MIB)
+    } else if bytes >= KIB {
+        format!("{:.1} KB", bytes / KIB)
+    } else {
+        format!("{} B", bytes as u64)
+    }
+}
+
+fn format_offline_track_count(language: AppLanguage, count: usize) -> String {
+    match language {
+        AppLanguage::Portuguese => {
+            format!("{count} {}", if count == 1 { "faixa" } else { "faixas" })
+        }
+        AppLanguage::English => {
+            format!("{count} {}", if count == 1 { "track" } else { "tracks" })
+        }
+        AppLanguage::Spanish => {
+            format!(
+                "{count} {}",
+                if count == 1 { "canción" } else { "canciones" }
+            )
+        }
+    }
 }
 
 fn settings_tab_page() -> gtk::Box {

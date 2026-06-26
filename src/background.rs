@@ -87,6 +87,20 @@ pub(crate) enum BackgroundMessage {
         query: String,
         result: Result<YouTubeSearchResults, String>,
     },
+    OfflineCollectionProgress {
+        collection_id: String,
+        completed: usize,
+        total: usize,
+        item: Box<YouTubeItem>,
+        result: Result<PathBuf, String>,
+    },
+    OfflineCollectionFinished {
+        collection_id: String,
+        collection_title: String,
+        completed: usize,
+        failed: usize,
+        automatic: bool,
+    },
     YouTubeResolved {
         request_id: u64,
         queue: Vec<YouTubeItem>,

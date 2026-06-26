@@ -53,6 +53,7 @@ mod md3_volume;
 mod mode_toggle;
 mod model;
 mod mpris;
+mod offline_store;
 mod onboarding;
 mod playback;
 mod playback_session;
@@ -95,6 +96,7 @@ use listening_history::{ListeningHistory, ListeningSource};
 use lyrics::LyricLine;
 use lyrics_view::LyricsPresenter;
 use model::{Track, TrackData};
+use offline_store::{download_youtube_track, OfflineStore};
 use playback::{PlaybackEngine, PlaybackEvent};
 use playback_session::PlaybackSession;
 use player_view::{PlayerView, PlayerViewHandle};
@@ -222,6 +224,8 @@ struct AppController {
     youtube_pending_playlist: RefCell<Option<YouTubeItem>>,
     youtube_bridge: Option<Arc<YouTubeBridge>>,
     youtube_library: RefCell<YouTubeLibraryCache>,
+    offline_store: RefCell<OfflineStore>,
+    offline_download_pending: RefCell<HashSet<String>>,
     youtube_like_request_id: Cell<u64>,
     youtube_like_pending: RefCell<HashMap<String, u64>>,
 
@@ -815,6 +819,8 @@ impl AppController {
             youtube_pending_playlist: RefCell::new(None),
             youtube_bridge,
             youtube_library: RefCell::new(load_library_cache()),
+            offline_store: RefCell::new(OfflineStore::load_default()),
+            offline_download_pending: RefCell::new(HashSet::new()),
             youtube_like_request_id: Cell::new(0),
             youtube_like_pending: RefCell::new(HashMap::new()),
             sidebar_motion: sidebar_parts.motion,
@@ -4000,12 +4006,70 @@ impl AppController {
                 self.save_config();
                 self.apply_home_preferences();
             }
+            SettingsEvent::OfflineCollectionAutoSync(active) => {
+                self.config.borrow_mut().offline_collection_auto_sync = active;
+                self.save_config();
+                if active {
+                    self.sync_followed_offline_collections();
+                }
+            }
             SettingsEvent::NoctaliaThemeSync(active) => {
                 self.config.borrow_mut().noctalia_theme_sync = active;
                 self.save_config();
                 self.apply_home_preferences();
             }
             SettingsEvent::ManageYouTube => self.show_youtube_settings_dialog(),
+            SettingsEvent::OpenOfflineFolder => {
+                let path = self.offline_store.borrow().root_dir();
+                if let Err(error) = std::fs::create_dir_all(&path) {
+                    self.show_toast(&format!("Não foi possível abrir a pasta offline: {error}"));
+                    return;
+                }
+
+                let file = gio::File::for_path(path);
+                if let Err(error) = gio::AppInfo::launch_default_for_uri(
+                    &file.uri(),
+                    None::<&gio::AppLaunchContext>,
+                ) {
+                    self.show_toast(&format!("Não foi possível abrir a pasta offline: {error}"));
+                }
+            }
+            SettingsEvent::CleanOfflinePartials => {
+                let result = self.offline_store.borrow().clear_partials();
+                match result {
+                    Ok(0) => self.show_toast("Não há downloads incompletos para remover"),
+                    Ok(count) => {
+                        self.show_toast(&format!("{count} arquivos incompletos foram removidos"))
+                    }
+                    Err(error) => self.show_toast(&error),
+                }
+
+                let initial = self.config.borrow().clone();
+                self.settings_page
+                    .rebuild(&initial, self._theme.noctalia_shell_detected());
+            }
+            SettingsEvent::ClearOfflineDownloads => {
+                if !self.offline_download_pending.borrow().is_empty() {
+                    self.show_toast(
+                        "Aguarde os downloads atuais terminarem antes de limpar os arquivos",
+                    );
+                    return;
+                }
+
+                let result = self.offline_store.borrow_mut().clear_all();
+                match result {
+                    Ok((0, _)) => self.show_toast("O armazenamento offline já está vazio"),
+                    Ok((count, _)) => self.show_toast(&format!(
+                        "{count} faixas offline foram removidas deste dispositivo"
+                    )),
+                    Err(error) => self.show_toast(&error),
+                }
+
+                self.refresh_browser();
+                let initial = self.config.borrow().clone();
+                self.settings_page
+                    .rebuild(&initial, self._theme.noctalia_shell_detected());
+            }
         }
     }
 
@@ -4443,6 +4507,7 @@ impl AppController {
             &BrowserRenderContext {
                 history: &self.listening_history.borrow(),
                 playback: &playback,
+                offline: &self.offline_store.borrow(),
             },
             &query,
         );
@@ -4482,6 +4547,7 @@ impl AppController {
             &BrowserRenderContext {
                 history: &self.listening_history.borrow(),
                 playback: &playback,
+                offline: &self.offline_store.borrow(),
             },
             &query,
         );
@@ -4551,6 +4617,170 @@ impl AppController {
             _ => listening_history::PlaybackHistoryContext::default(),
         };
         self.listening_history_context.replace(context);
+    }
+
+    fn download_youtube_collection(&self, item: YouTubeItem, playlist: bool) {
+        self.download_youtube_collection_with_mode(item, playlist, false);
+    }
+
+    fn download_youtube_collection_automatically(&self, item: YouTubeItem, playlist: bool) {
+        self.download_youtube_collection_with_mode(item, playlist, true);
+    }
+
+    fn download_youtube_collection_with_mode(
+        &self,
+        item: YouTubeItem,
+        playlist: bool,
+        automatic: bool,
+    ) {
+        let collection_id = if playlist {
+            format!("playlist:{}", item.browse_id)
+        } else {
+            format!("album:{}", youtube_collection_cache_key(&item))
+        };
+        if !automatic {
+            if let Err(error) =
+                self.offline_store
+                    .borrow_mut()
+                    .follow_collection(&collection_id, &item, playlist)
+            {
+                self.show_toast(&error);
+                return;
+            }
+        }
+
+        if !self
+            .offline_download_pending
+            .borrow_mut()
+            .insert(collection_id.clone())
+        {
+            if !automatic {
+                self.show_toast("Esta coleção já está sendo baixada");
+            }
+            return;
+        }
+
+        let items = if playlist {
+            self.youtube_library
+                .borrow()
+                .playlist_tracks
+                .get(&item.browse_id)
+                .cloned()
+                .unwrap_or_default()
+        } else {
+            self.youtube_library
+                .borrow()
+                .collection_tracks
+                .get(&youtube_collection_cache_key(&item))
+                .cloned()
+                .unwrap_or_default()
+        };
+        let items = items
+            .into_iter()
+            .filter(|track| {
+                track.playable() && !self.offline_store.borrow().contains(&track.video_id)
+            })
+            .collect::<Vec<_>>();
+        if items.is_empty() {
+            self.offline_download_pending
+                .borrow_mut()
+                .remove(&collection_id);
+            self.browser
+                .set_collection_offline_complete(&collection_id, self.config.borrow().language);
+            if !automatic {
+                self.show_toast("Esta coleção já está disponível offline");
+            }
+            return;
+        }
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            self.offline_download_pending
+                .borrow_mut()
+                .remove(&collection_id);
+            self.browser
+                .set_collection_offline_retry(&collection_id, self.config.borrow().language);
+            if !automatic {
+                self.show_toast("As dependências do YouTube Music não estão instaladas");
+            }
+            return;
+        };
+
+        let collection_title = item.title.clone();
+        let total = items.len();
+        self.browser.set_collection_offline_downloading(
+            &collection_id,
+            0,
+            total,
+            self.config.borrow().language,
+        );
+        let sender = self.background.sender();
+        if !automatic {
+            self.show_toast(&format!("Baixando {total} faixas de ‘{collection_title}’…"));
+        }
+        thread::spawn(move || {
+            let mut completed = 0;
+            let mut failed = 0;
+            for track in items {
+                let result = bridge
+                    .resolve(&track.video_id, false)
+                    .and_then(|stream| download_youtube_track(&track, &stream));
+                if result.is_ok() {
+                    completed += 1;
+                } else {
+                    failed += 1;
+                }
+                let _ = sender.send(BackgroundMessage::OfflineCollectionProgress {
+                    collection_id: collection_id.clone(),
+                    completed,
+                    total,
+                    item: Box::new(track),
+                    result,
+                });
+            }
+            let _ = sender.send(BackgroundMessage::OfflineCollectionFinished {
+                collection_id,
+                collection_title,
+                completed,
+                failed,
+                automatic,
+            });
+        });
+    }
+
+    fn sync_followed_offline_collections(&self) {
+        if !self.config.borrow().offline_collection_auto_sync {
+            return;
+        }
+
+        let followed = self.offline_store.borrow().followed_collections();
+        if followed.is_empty() {
+            return;
+        }
+
+        let ready = {
+            let library = self.youtube_library.borrow();
+            followed
+                .into_iter()
+                .filter_map(|collection| {
+                    let cache_ready = if collection.playlist {
+                        library
+                            .playlist_tracks
+                            .get(&collection.item.browse_id)
+                            .is_some_and(|tracks| !tracks.is_empty())
+                    } else {
+                        library
+                            .collection_tracks
+                            .get(&youtube_collection_cache_key(&collection.item))
+                            .is_some_and(|tracks| !tracks.is_empty())
+                    };
+
+                    cache_ready.then_some((collection.item, collection.playlist))
+                })
+                .collect::<Vec<_>>()
+        };
+
+        for (item, playlist) in ready {
+            self.download_youtube_collection_automatically(item, playlist);
+        }
     }
 
     fn handle_browser_events(&self) {
@@ -4626,6 +4856,9 @@ impl AppController {
                 }
                 BrowserEvent::ToggleYouTubeTrackFavorite(item) => {
                     self.toggle_youtube_item_favorite(item);
+                }
+                BrowserEvent::DownloadYouTubeCollection { item, playlist } => {
+                    self.download_youtube_collection(item, playlist);
                 }
                 BrowserEvent::QueueLocalCollection {
                     kind,

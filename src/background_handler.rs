@@ -761,6 +761,7 @@ impl AppController {
                         {
                             eprintln!("Could not save the YouTube collection cache: {error}");
                         }
+                        self.sync_followed_offline_collections();
                     }
                     Err(error) => {
                         self.youtube_collection_prefetching.set(false);
@@ -781,6 +782,7 @@ impl AppController {
                         {
                             eprintln!("Could not save the YouTube playlist cache: {error}");
                         }
+                        self.sync_followed_offline_collections();
                     }
                     Err(error) => {
                         self.youtube_playlist_prefetching.set(false);
@@ -840,6 +842,70 @@ impl AppController {
                     }
 
                     self.resolve_youtube_track(*item, queue, index, true);
+                }
+                BackgroundMessage::OfflineCollectionProgress {
+                    collection_id,
+                    completed,
+                    total,
+                    item,
+                    result,
+                } => match result {
+                    Ok(path) => {
+                        if let Err(error) = self.offline_store.borrow_mut().register(
+                            &item.video_id,
+                            &item.title,
+                            &item.artist,
+                            &item.album,
+                            &path,
+                        ) {
+                            eprintln!("Could not register offline track: {error}");
+                        }
+                        self.browser.mark_youtube_track_offline(&item.video_id);
+                        self.browser.set_collection_offline_downloading(
+                            &collection_id,
+                            completed,
+                            total,
+                            self.config.borrow().language,
+                        );
+                    }
+                    Err(error) => {
+                        eprintln!("Could not download offline track '{}': {error}", item.title);
+                    }
+                },
+                BackgroundMessage::OfflineCollectionFinished {
+                    collection_id,
+                    collection_title,
+                    completed,
+                    failed,
+                    automatic,
+                } => {
+                    self.offline_download_pending
+                        .borrow_mut()
+                        .remove(&collection_id);
+                    if failed == 0 {
+                        self.browser.set_collection_offline_complete(
+                            &collection_id,
+                            self.config.borrow().language,
+                        );
+                    } else {
+                        self.browser.set_collection_offline_retry(
+                            &collection_id,
+                            self.config.borrow().language,
+                        );
+                    }
+
+                    if !automatic {
+                        let message = if failed == 0 {
+                            format!(
+                                "‘{collection_title}’ está disponível offline ({completed} faixas)"
+                            )
+                        } else {
+                            format!(
+                                "Download de ‘{collection_title}’ concluído: {completed} faixas, {failed} falhas"
+                            )
+                        };
+                        self.show_toast(&message);
+                    }
                 }
                 BackgroundMessage::YouTubeResolved {
                     request_id,

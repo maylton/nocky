@@ -37,8 +37,12 @@ pub(crate) enum SettingsEvent {
     AutoDownloadLyrics(bool),
     ResumePlaybackOnStartup(bool),
     YouTubeAutoSync(bool),
+    OfflineCollectionAutoSync(bool),
     NoctaliaThemeSync(bool),
     ManageYouTube,
+    OpenOfflineFolder,
+    CleanOfflinePartials,
+    ClearOfflineDownloads,
 }
 
 #[derive(Clone, Copy)]

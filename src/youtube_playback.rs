@@ -71,13 +71,32 @@ impl AppController {
         index: usize,
         force: bool,
     ) {
+        if item.video_id.is_empty() {
+            return;
+        }
+        if !force {
+            if let Some(path) = self.offline_store.borrow().resolve(&item.video_id) {
+                let stream = YouTubeStream {
+                    video_id: item.video_id.clone(),
+                    stream_url: gio::File::for_path(&path).uri().to_string(),
+                    webpage_url: format!("https://music.youtube.com/watch?v={}", item.video_id),
+                    title: item.title.clone(),
+                    artist: item.artist.clone(),
+                    album: item.album.clone(),
+                    duration_seconds: item.duration_seconds,
+                    thumbnail_url: item.thumbnail_url.clone(),
+                    http_headers: Default::default(),
+                    expires_at: 0.0,
+                };
+                let cover = item.cached_cover().map(Path::to_path_buf);
+                self.apply_youtube_track(queue, index, item, stream, cover);
+                return;
+            }
+        }
         let Some(bridge) = self.youtube_bridge.clone() else {
             self.show_toast("As dependências do YouTube Music não estão instaladas");
             return;
         };
-        if item.video_id.is_empty() {
-            return;
-        }
         let request_id = self.youtube_request_id.get().wrapping_add(1);
         self.youtube_request_id.set(request_id);
         let sender = self.background.sender();
