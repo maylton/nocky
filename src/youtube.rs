@@ -461,7 +461,11 @@ impl YouTubeLibraryCache {
     }
 }
 
-const LIBRARY_CACHE_VERSION: u32 = 6;
+const LIBRARY_CACHE_VERSION: u32 = 7;
+const LIBRARY_CACHE_COMPAT_VERSION: u32 = 6;
+const YOUTUBE_CACHE_DETAIL_TTL_SECS: u64 = 6 * 60 * 60;
+const YOUTUBE_CACHE_SUGGESTION_TTL_SECS: u64 = 12 * 60 * 60;
+const YOUTUBE_CACHE_REVALIDATE_SECS: u64 = 24 * 60 * 60;
 const BROWSER_COVER_SIZE: u32 = 512;
 const PLAYER_COVER_SIZE: u32 = 1200;
 
@@ -1530,6 +1534,39 @@ pub fn upgrade_thumbnail_url(url: &str, size: u32) -> String {
     output
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum YouTubeCacheFreshness {
+    Fresh,
+    Revalidate,
+    StaleDetails,
+}
+
+fn unix_now_seconds() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or_default()
+}
+
+fn cache_age_seconds(saved_at: u64, now: u64) -> u64 {
+    now.saturating_sub(saved_at)
+}
+
+fn youtube_cache_freshness(saved_at: u64, now: u64) -> YouTubeCacheFreshness {
+    let age = cache_age_seconds(saved_at, now);
+    if saved_at == 0 || age >= YOUTUBE_CACHE_REVALIDATE_SECS {
+        YouTubeCacheFreshness::StaleDetails
+    } else if age >= YOUTUBE_CACHE_DETAIL_TTL_SECS {
+        YouTubeCacheFreshness::Revalidate
+    } else {
+        YouTubeCacheFreshness::Fresh
+    }
+}
+
+fn cache_is_expired(saved_at: u64, now: u64, ttl: u64) -> bool {
+    saved_at == 0 || cache_age_seconds(saved_at, now) >= ttl
+}
+
 fn rekey_collection_map<'a, T>(
     mut map: HashMap<String, T>,
     entries: impl IntoIterator<Item = &'a YouTubeCollectionEntry>,
@@ -1552,11 +1589,43 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
     let Ok(raw) = fs::read_to_string(path) else {
         return YouTubeLibraryCache::default();
     };
-    let Ok(cache) = serde_json::from_str::<PersistedYouTubeLibraryCache>(&raw) else {
+    let Ok(mut cache) = serde_json::from_str::<PersistedYouTubeLibraryCache>(&raw) else {
         return YouTubeLibraryCache::default();
     };
-    if !matches!(cache.version, 5 | LIBRARY_CACHE_VERSION) {
+    if !matches!(
+        cache.version,
+        LIBRARY_CACHE_COMPAT_VERSION | LIBRARY_CACHE_VERSION
+    ) {
+        eprintln!(
+            "Ignoring incompatible YouTube library cache version {} (expected {} or {})",
+            cache.version, LIBRARY_CACHE_COMPAT_VERSION, LIBRARY_CACHE_VERSION
+        );
         return YouTubeLibraryCache::default();
+    }
+
+    let now = unix_now_seconds();
+    let freshness = youtube_cache_freshness(cache.saved_at, now);
+    let suggestions_expired =
+        cache_is_expired(cache.saved_at, now, YOUTUBE_CACHE_SUGGESTION_TTL_SECS);
+
+    if suggestions_expired {
+        cache.suggested_albums.clear();
+        cache.suggested_artists.clear();
+    }
+
+    if freshness != YouTubeCacheFreshness::Fresh {
+        cache.playlist_tracks.clear();
+        cache.collection_tracks.clear();
+        cache.artist_profiles.clear();
+        cache.artist_albums.clear();
+        cache.albums.clear();
+        cache.artists.clear();
+    }
+
+    if freshness == YouTubeCacheFreshness::StaleDetails {
+        eprintln!(
+            "Loaded stale YouTube library metadata as an offline fallback; remote details will be revalidated"
+        );
     }
 
     let album_entries = cache.albums.clone();
@@ -1608,7 +1677,11 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
     if library.albums.is_empty() || library.artists.is_empty() {
         library.rebuild_collections();
     }
-    if repaired_covers || cache.version < LIBRARY_CACHE_VERSION {
+    if repaired_covers
+        || cache.version < LIBRARY_CACHE_VERSION
+        || freshness != YouTubeCacheFreshness::Fresh
+        || suggestions_expired
+    {
         let _ = save_library_cache(&library);
     }
     library
@@ -1624,10 +1697,7 @@ pub fn save_library_cache(cache: &YouTubeLibraryCache) -> Result<(), String> {
         fs::create_dir_all(parent)
             .map_err(|error| format!("Could not create the YouTube cache folder: {error}"))?;
     }
-    let saved_at = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs())
-        .unwrap_or_default();
+    let saved_at = unix_now_seconds();
     let cacheable_playlists = cache
         .playlists
         .iter()
@@ -1822,6 +1892,76 @@ fn find_in_path(name: &str) -> Option<PathBuf> {
     env::split_paths(&path)
         .map(|directory| directory.join(name))
         .find(|candidate| candidate.is_file())
+}
+
+#[cfg(test)]
+mod youtube_cache_expiration_tests {
+    use super::*;
+
+    #[test]
+    fn fresh_cache_keeps_remote_details() {
+        let now = 100_000;
+        assert_eq!(
+            youtube_cache_freshness(now - 60, now),
+            YouTubeCacheFreshness::Fresh
+        );
+        assert!(!cache_is_expired(
+            now - 60,
+            now,
+            YOUTUBE_CACHE_SUGGESTION_TTL_SECS
+        ));
+    }
+
+    #[test]
+    fn detail_cache_revalidates_after_six_hours() {
+        let now = 100_000;
+        assert_eq!(
+            youtube_cache_freshness(now - YOUTUBE_CACHE_DETAIL_TTL_SECS, now),
+            YouTubeCacheFreshness::Revalidate
+        );
+    }
+
+    #[test]
+    fn old_cache_preserves_core_metadata_but_drops_remote_details() {
+        let now = 200_000;
+        assert_eq!(
+            youtube_cache_freshness(now - YOUTUBE_CACHE_REVALIDATE_SECS, now),
+            YouTubeCacheFreshness::StaleDetails
+        );
+    }
+
+    #[test]
+    fn missing_timestamp_is_always_stale() {
+        assert_eq!(
+            youtube_cache_freshness(0, 200_000),
+            YouTubeCacheFreshness::StaleDetails
+        );
+        assert!(cache_is_expired(
+            0,
+            200_000,
+            YOUTUBE_CACHE_SUGGESTION_TTL_SECS
+        ));
+    }
+
+    #[test]
+    fn future_timestamp_does_not_underflow() {
+        let now = 200_000;
+        assert_eq!(cache_age_seconds(now + 100, now), 0);
+        assert_eq!(
+            youtube_cache_freshness(now + 100, now),
+            YouTubeCacheFreshness::Fresh
+        );
+    }
+
+    #[test]
+    fn suggestions_expire_after_twelve_hours() {
+        let now = 200_000;
+        assert!(cache_is_expired(
+            now - YOUTUBE_CACHE_SUGGESTION_TTL_SECS,
+            now,
+            YOUTUBE_CACHE_SUGGESTION_TTL_SECS
+        ));
+    }
 }
 
 #[cfg(test)]
