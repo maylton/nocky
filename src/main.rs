@@ -4649,6 +4649,20 @@ impl AppController {
                 BrowserEvent::PlayLocalPlaylist(title) => {
                     self.play_local_collection("playlist", &title);
                 }
+                BrowserEvent::PlayLocalMix { title, indices } => {
+                    if let Some(first) = indices.first().copied() {
+                        self.listening_history_context.replace(
+                            listening_history::PlaybackHistoryContext {
+                                kind: "playlist".to_string(),
+                                id: format!("local-mix:{}", title.to_lowercase()),
+                                title,
+                            },
+                        );
+                        self.pending_resume_position_us.set(None);
+                        self.state.borrow_mut().playback_queue = indices;
+                        self.select_track(first, true);
+                    }
+                }
                 BrowserEvent::PlayYouTubeAlbum(item) => {
                     self.play_youtube_collection(item, false);
                 }

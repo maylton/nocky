@@ -160,6 +160,10 @@ pub enum BrowserEvent {
     TogglePlayback,
     PlayLocalAlbum(String),
     PlayLocalPlaylist(String),
+    PlayLocalMix {
+        title: String,
+        indices: Vec<usize>,
+    },
     PlayYouTubeAlbum(YouTubeItem),
     PlayYouTubePlaylist(YouTubeItem),
     OpenYouTubePlaylist(YouTubeItem),
@@ -282,6 +286,13 @@ enum HomeCard {
         title: String,
         subtitle: String,
     },
+    LocalMix {
+        title: String,
+        subtitle: String,
+        detail: String,
+        cover_path: Option<PathBuf>,
+        indices: Vec<usize>,
+    },
     YouTubePlaylist(YouTubeItem),
 }
 
@@ -369,6 +380,22 @@ impl HomeCard {
                 placeholder_icon: "view-list-symbolic",
                 placeholder_class: "playlist-placeholder",
             },
+            Self::LocalMix {
+                title,
+                subtitle,
+                detail,
+                cover_path,
+                ..
+            } => CollectionCardDescriptor {
+                cover_path: cover_path.as_deref(),
+                title,
+                subtitle,
+                detail,
+                online: false,
+                artist: false,
+                placeholder_icon: "media-playlist-shuffle-symbolic",
+                placeholder_class: "playlist-placeholder",
+            },
             Self::YouTubePlaylist(item) => CollectionCardDescriptor {
                 cover_path: item.cached_cover(),
                 title: &item.title,
@@ -395,6 +422,10 @@ impl HomeCard {
             Self::LocalPlaylist { title, .. } => {
                 BrowserEvent::Navigate(BrowserRoute::Playlist(title.clone()))
             }
+            Self::LocalMix { title, indices, .. } => BrowserEvent::PlayLocalMix {
+                title: title.clone(),
+                indices: indices.clone(),
+            },
             Self::YouTubePlaylist(item) => BrowserEvent::OpenYouTubePlaylist(item.clone()),
         }
     }
@@ -416,6 +447,9 @@ impl HomeCard {
             Self::LocalPlaylist { title, .. } => {
                 format!("local-playlist:{}", title.to_lowercase())
             }
+            Self::LocalMix { title, .. } => {
+                format!("local-mix:{}", title.to_lowercase())
+            }
             Self::YouTubePlaylist(item) => {
                 format!("youtube-playlist:{}", item.title.to_lowercase())
             }
@@ -433,6 +467,8 @@ struct HomeCopy {
     recently_added_detail: &'static str,
     mixtapes_title: &'static str,
     mixtapes_subtitle: &'static str,
+    local_mixes_title: &'static str,
+    local_mixes_subtitle: &'static str,
     albums_title: &'static str,
     albums_subtitle: &'static str,
     artists_title: &'static str,
@@ -458,6 +494,8 @@ fn home_copy(language: AppLanguage) -> HomeCopy {
             recently_added_detail: "Adicionado recentemente",
             mixtapes_title: "Mixtapes criadas para você",
             mixtapes_subtitle: "Mixes e rádios sincronizadas do YouTube Music",
+            local_mixes_title: "Mixes da sua biblioteca",
+            local_mixes_subtitle: "Seleções automáticas usando seus artistas locais",
             albums_title: "Seus álbuns",
             albums_subtitle: "Mais ouvidos e reproduzidos recentemente",
             artists_title: "Seus artistas",
@@ -480,6 +518,8 @@ fn home_copy(language: AppLanguage) -> HomeCopy {
             recently_added_detail: "Recently added",
             mixtapes_title: "Mixtapes made for you",
             mixtapes_subtitle: "Mixes and radio stations synchronized from YouTube Music",
+            local_mixes_title: "Mixes from your library",
+            local_mixes_subtitle: "Automatic selections using your local artists",
             albums_title: "Your albums",
             albums_subtitle: "Most played and recently listened to",
             artists_title: "Your artists",
@@ -502,6 +542,8 @@ fn home_copy(language: AppLanguage) -> HomeCopy {
             recently_added_detail: "Añadido recientemente",
             mixtapes_title: "Mixtapes creadas para ti",
             mixtapes_subtitle: "Mixes y radios sincronizadas de YouTube Music",
+            local_mixes_title: "Mixes de tu biblioteca",
+            local_mixes_subtitle: "Selecciones automáticas con tus artistas locales",
             albums_title: "Tus álbumes",
             albums_subtitle: "Más escuchados y reproducidos recientemente",
             artists_title: "Tus artistas",
@@ -517,6 +559,98 @@ fn home_copy(language: AppLanguage) -> HomeCopy {
             synchronized_playlist: "Playlist sincronizada",
         },
     }
+}
+
+fn local_home_mix_cards(
+    tracks: &[Track],
+    history: &ListeningHistory,
+    language: AppLanguage,
+) -> Vec<HomeCard> {
+    if tracks.len() < 2 {
+        return Vec::new();
+    }
+
+    let mut artist_names = history
+        .ranked_artists(ListeningSource::Local, 8)
+        .into_iter()
+        .map(|(artist, _)| artist)
+        .filter(|artist| !artist.trim().is_empty())
+        .collect::<Vec<_>>();
+
+    let mut fallback = BTreeMap::<String, usize>::new();
+    for track in tracks {
+        let artist = track.artist.trim();
+        if !artist.is_empty() {
+            *fallback.entry(artist.to_string()).or_default() += 1;
+        }
+    }
+
+    let mut fallback = fallback.into_iter().collect::<Vec<_>>();
+    fallback.sort_by(|left, right| {
+        right
+            .1
+            .cmp(&left.1)
+            .then_with(|| compare_text(&left.0, &right.0))
+    });
+
+    for (artist, _) in fallback {
+        if !artist_names
+            .iter()
+            .any(|existing| existing.eq_ignore_ascii_case(&artist))
+        {
+            artist_names.push(artist);
+        }
+        if artist_names.len() >= 8 {
+            break;
+        }
+    }
+
+    let mut cards = Vec::new();
+    for artist in artist_names {
+        let indices = tracks
+            .iter()
+            .enumerate()
+            .filter(|(_, track)| track.artist.eq_ignore_ascii_case(&artist))
+            .map(|(index, _)| index)
+            .take(40)
+            .collect::<Vec<_>>();
+
+        if indices.len() < 2 {
+            continue;
+        }
+
+        let cover_path = indices
+            .iter()
+            .filter_map(|index| tracks.get(*index))
+            .find_map(|track| track.cover_path.clone());
+
+        let title = match language {
+            AppLanguage::Portuguese => format!("Mix de {artist}"),
+            AppLanguage::English => format!("{artist} Mix"),
+            AppLanguage::Spanish => format!("Mix de {artist}"),
+        };
+        let subtitle = match language {
+            AppLanguage::Portuguese => "Criado com músicas da sua biblioteca",
+            AppLanguage::English => "Made with music from your library",
+            AppLanguage::Spanish => "Creado con música de tu biblioteca",
+        }
+        .to_string();
+        let detail = format!("Local • {}", format_track_count(language, indices.len()));
+
+        cards.push(HomeCard::LocalMix {
+            title,
+            subtitle,
+            detail,
+            cover_path,
+            indices,
+        });
+
+        if cards.len() == 6 {
+            break;
+        }
+    }
+
+    cards
 }
 
 fn recently_added_local_album_cards(
@@ -2003,6 +2137,20 @@ impl LibraryBrowser {
                     card_effects,
                 ));
             }
+        } else {
+            let mixes = local_home_mix_cards(tracks, history, language);
+            if !mixes.is_empty() {
+                next_home.append(&home_section(
+                    copy.local_mixes_title,
+                    copy.local_mixes_subtitle,
+                    mixes,
+                    playback,
+                    config,
+                    &self.event_tx,
+                    language,
+                    card_effects,
+                ));
+            }
         }
 
         let active_source = match config.startup_source {
@@ -3469,6 +3617,20 @@ fn search_collection_button(card: HomeCard, event_tx: &Sender<BrowserEvent>) -> 
             "Playlist local",
             false,
         ),
+        HomeCard::LocalMix {
+            title,
+            subtitle,
+            detail,
+            cover_path,
+            ..
+        } => (
+            cover_path.as_deref(),
+            "media-playlist-shuffle-symbolic",
+            title.as_str(),
+            subtitle.as_str(),
+            detail.as_str(),
+            false,
+        ),
         HomeCard::YouTubePlaylist(item) => (
             item.cached_cover(),
             "view-list-symbolic",
@@ -3544,6 +3706,9 @@ fn search_collection_button(card: HomeCard, event_tx: &Sender<BrowserEvent>) -> 
             HomeCard::YouTubeArtist { item, .. } => BrowserEvent::OpenYouTubeCollection(item),
             HomeCard::LocalPlaylist { title, .. } => {
                 BrowserEvent::Navigate(BrowserRoute::Playlist(title))
+            }
+            HomeCard::LocalMix { title, indices, .. } => {
+                BrowserEvent::PlayLocalMix { title, indices }
             }
             HomeCard::YouTubePlaylist(item) => BrowserEvent::OpenYouTubePlaylist(item),
         };
@@ -4205,6 +4370,16 @@ fn home_card_button(
             )),
             "playlist",
             title.to_lowercase(),
+            title.clone(),
+        ),
+        HomeCard::LocalMix { title, indices, .. } => (
+            Some(BrowserEvent::PlayLocalMix {
+                title: title.clone(),
+                indices: indices.clone(),
+            }),
+            None,
+            "playlist",
+            format!("local-mix:{}", title.to_lowercase()),
             title.clone(),
         ),
         HomeCard::YouTubeAlbum { item, .. } => (
