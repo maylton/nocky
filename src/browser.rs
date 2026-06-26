@@ -1,3 +1,5 @@
+// cached_artist_profile_lookup_v1
+// local_artist_index_foundation_v3
 // stable_artist_directory_refresh_v1
 // stable_artist_overview_refresh_v1
 // stable_collection_identity_and_deferred_cache_v2
@@ -46,6 +48,7 @@
 // merge_recent_activity_sources_v1
 // personalized_home_resume_v2
 use crate::{
+    artist_index::LocalArtistIndex,
     config::{AppConfig, AppLanguage, StartupSource, VisualTheme},
     listening_history::{HistoryActivity, ListeningHistory, ListeningSource, ListeningStats},
     model::Track,
@@ -2316,12 +2319,7 @@ impl LibraryBrowser {
                 continue;
             }
 
-            let key = youtube_collection_cache_key(&artist_entry.source);
-            let confirmed_cover = youtube
-                .artist_profiles
-                .get(&key)
-                .and_then(|profile| profile.cached_cover())
-                .or_else(|| artist_entry.cached_cover());
+            let confirmed_cover = cached_youtube_artist_cover(youtube, artist_entry);
 
             append_collection_grid_card(
                 &self.artists_grid,
@@ -2870,31 +2868,26 @@ fn ranked_home_album_cards(
     merge_ranked_home_cards(cards, fallback, 12)
 }
 
-fn local_ranked_artist_cover(tracks: &[Track], artist: &str) -> Option<PathBuf> {
-    tracks
-        .iter()
-        .filter(|track| artist_credit_contains(&track.artist, artist))
-        .find(|track| {
-            let credits = credited_artists(&track.artist);
-            credits.len() == 1 && credits[0].eq_ignore_ascii_case(artist)
-        })
-        .and_then(|track| track.cover_path.clone())
-}
-
 fn youtube_ranked_artist_cover(
     youtube: &YouTubeLibraryCache,
     catalog: &[YouTubeItem],
     artist: &str,
 ) -> Option<PathBuf> {
-    let key = youtube
+    if let Some(entry) = youtube
         .artists
         .iter()
         .find(|entry| entry.title.eq_ignore_ascii_case(artist))
-        .map(|entry| youtube_collection_cache_key(&entry.source))
-        .unwrap_or_else(|| youtube_collection_key("artist", artist));
-
-    if let Some(profile) = youtube.artist_profiles.get(&key) {
-        if let Some(path) = profile.cached_cover() {
+    {
+        if let Some(path) = cached_youtube_artist_cover(youtube, entry) {
+            return Some(path.to_path_buf());
+        }
+    } else {
+        let fallback_key = youtube_collection_key("artist", artist);
+        if let Some(path) = youtube
+            .artist_profiles
+            .get(&fallback_key)
+            .and_then(YouTubeItem::cached_cover)
+        {
             return Some(path.to_path_buf());
         }
     }
@@ -2919,6 +2912,7 @@ fn ranked_home_artist_cards(
     let ranked = history.ranked_artists(source, 12);
     let fallback = home_artist_cards(tracks, youtube);
     let catalog = youtube_catalog(youtube);
+    let local_artist_index = LocalArtistIndex::build(tracks);
     let mut cards = Vec::new();
 
     for (name, stats) in ranked {
@@ -2940,7 +2934,9 @@ fn ranked_home_artist_cards(
                     title: name.clone(),
                     subtitle: String::new(),
                     detail: listening_rank_detail(&stats, &fallback_detail, language),
-                    cover_path: local_ranked_artist_cover(tracks, &name),
+                    cover_path: local_artist_index
+                        .first_solo_cover(&name)
+                        .map(Path::to_path_buf),
                 });
             }
             ListeningSource::YouTube => {
@@ -3221,13 +3217,50 @@ fn home_artist_cards(tracks: &[Track], youtube: &YouTubeLibraryCache) -> Vec<Hom
     }
 
     for artist in youtube.artists.iter().take(12) {
-        let key = youtube_collection_cache_key(&artist.source);
-        let profile = youtube.artist_profiles.get(&key);
-        cards.push(youtube_artist_home_card_from_source(artist, profile));
+        let cover = cached_youtube_artist_cover(youtube, artist);
+        cards.push(youtube_artist_home_card_from_source(artist, cover));
     }
 
     cards.truncate(18);
     cards
+}
+
+fn cached_youtube_artist_cover<'a>(
+    youtube: &'a YouTubeLibraryCache,
+    entry: &'a YouTubeCollectionEntry,
+) -> Option<&'a Path> {
+    let canonical_key = youtube_collection_cache_key(&entry.source);
+
+    if let Some(path) = youtube
+        .artist_profiles
+        .get(&canonical_key)
+        .and_then(YouTubeItem::cached_cover)
+    {
+        return Some(path);
+    }
+
+    let browse_id = entry.source.browse_id.trim();
+    if !browse_id.is_empty() {
+        if let Some(path) = youtube
+            .artist_profiles
+            .values()
+            .find(|profile| profile.browse_id.trim() == browse_id)
+            .and_then(YouTubeItem::cached_cover)
+        {
+            return Some(path);
+        }
+    }
+
+    if let Some(path) = youtube
+        .artist_profiles
+        .values()
+        .find(|profile| profile.title.eq_ignore_ascii_case(entry.title.trim()))
+        .and_then(YouTubeItem::cached_cover)
+    {
+        return Some(path);
+    }
+
+    entry.cached_cover()
 }
 
 fn youtube_album_home_card(entry: &YouTubeCollectionEntry) -> HomeCard {
@@ -3241,15 +3274,13 @@ fn youtube_album_home_card(entry: &YouTubeCollectionEntry) -> HomeCard {
 
 fn youtube_artist_home_card_from_source(
     entry: &YouTubeCollectionEntry,
-    profile: Option<&YouTubeItem>,
+    cover: Option<&Path>,
 ) -> HomeCard {
     HomeCard::YouTubeArtist {
         item: entry.source.clone(),
         subtitle: String::new(),
         detail: String::new(),
-        cover_path: profile
-            .and_then(YouTubeItem::cached_cover)
-            .map(Path::to_path_buf),
+        cover_path: cover.map(Path::to_path_buf),
     }
 }
 

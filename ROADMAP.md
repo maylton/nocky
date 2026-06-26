@@ -553,3 +553,12 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - ✅ Loading more artists automatically schedules profile confirmation for the newly revealed batch.
 - ✅ Resolved profiles update the exact requested collection entry by stable key, even when the returned display title differs slightly.
 - ✅ Batch completion rebuilds only the Artists grid without replaying card entrance animations; Home continues using its own crossfade.
+
+- ✅ Added the minimal LocalArtistIndex foundation without changing the Artists page, YouTube artist cache, routes, profile refresh, grid rendering or animations.
+- ✅ Production integration remains limited to ranked local-artist artwork and preserves the former first-solo-track behavior exactly.
+- ✅ The index contains no unused future-facing fields, keeping clippy -D warnings clean.
+- ✅ Added regression tests for collaboration credits, ampersand band names, normalized identity and first-solo-track artwork semantics.
+
+- ✅ Artist cards now use cached profile artwork immediately even when an older title-keyed cache entry has not yet been migrated to the current browse-ID key.
+- ✅ The canonical key remains the fast path; browse ID and normalized display title are read-only fallbacks before album artwork is considered.
+- ✅ The same lookup is shared by Artists, regular Home artist cards and ranked Home artist artwork without changing revalidation or grid refresh behavior.

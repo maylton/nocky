@@ -1,3 +1,4 @@
+// local_artist_index_foundation_v3
 // stable_artist_directory_refresh_v1
 // stable_collection_identity_and_deferred_cache_v2
 // clickable_player_artist_album_navigation_v1
@@ -24,6 +25,7 @@
 // recent_activity_exact_fix_v1
 // personalized_home_resume_v2
 mod animated_page_switcher;
+mod artist_index;
 mod background;
 mod background_handler;
 mod browser;
