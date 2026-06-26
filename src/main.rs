@@ -187,6 +187,8 @@ struct AppController {
     restored_playback_session: RefCell<Option<PlaybackSession>>,
     startup_restore_autoplay: Cell<Option<bool>>,
     playback_session_last_position_seconds: Cell<u64>,
+    playback_session_last_shuffle: Cell<bool>,
+    playback_session_last_repeat: Cell<bool>,
     playback_session_restore_attempts: Cell<u8>,
     updating_progress: Cell<bool>,
     scanning: Cell<bool>,
@@ -777,6 +779,8 @@ impl AppController {
             restored_playback_session: RefCell::new(restored_playback_session),
             startup_restore_autoplay: Cell::new(None),
             playback_session_last_position_seconds: Cell::new(0),
+            playback_session_last_shuffle: Cell::new(false),
+            playback_session_last_repeat: Cell::new(false),
             playback_session_restore_attempts: Cell::new(0),
             updating_progress: Cell::new(false),
             scanning: Cell::new(false),
@@ -3145,9 +3149,23 @@ impl AppController {
             .as_ref()
             .map(|session| (session.position_us.max(0) as u64) / 1_000_000)
             .unwrap_or_default();
+        let restored_shuffle = restored_session
+            .as_ref()
+            .is_some_and(|session| session.shuffle_enabled);
+        let restored_repeat = restored_session
+            .as_ref()
+            .is_some_and(|session| session.repeat_enabled);
         self.restored_playback_session.replace(restored_session);
         self.playback_session_last_position_seconds
             .set(restored_seconds);
+        self.playback_session_last_shuffle.set(restored_shuffle);
+        self.playback_session_last_repeat.set(restored_repeat);
+        self.shuffle_enabled.set(false);
+        self.shuffle_button.set_active(false);
+        self.footer_shuffle_button.set_active(false);
+        self.repeat_button.set_active(false);
+        self.footer_repeat_button.set_active(false);
+        self.shuffle_navigation.borrow_mut().clear();
         self.playback_session_restore_attempts.set(0);
         self.pending_resume_position_us.set(None);
         self.startup_restore_autoplay.set(None);
@@ -4877,6 +4895,10 @@ impl AppController {
         session.was_playing = self.player.is_playing();
         session.shuffle_enabled = self.shuffle_enabled.get();
         session.repeat_enabled = self.repeat_button.is_active();
+        session.shuffle_state = session
+            .shuffle_enabled
+            .then(|| self.shuffle_navigation.borrow().snapshot());
+        session.shuffle_rng_state = self.rng_state.get();
         session.context_kind = context.kind.clone();
         session.context_id = context.id.clone();
         session.context_title = context.title.clone();
@@ -4893,11 +4915,18 @@ impl AppController {
         };
 
         let seconds = (session.position_us.max(0) as u64) / 1_000_000;
-        if seconds == self.playback_session_last_position_seconds.get() {
+        let shuffle = session.shuffle_enabled;
+        let repeat = session.repeat_enabled;
+        if seconds == self.playback_session_last_position_seconds.get()
+            && shuffle == self.playback_session_last_shuffle.get()
+            && repeat == self.playback_session_last_repeat.get()
+        {
             return;
         }
 
         self.playback_session_last_position_seconds.set(seconds);
+        self.playback_session_last_shuffle.set(shuffle);
+        self.playback_session_last_repeat.set(repeat);
         let source = self.active_queue_source.get();
         if let Err(error) = playback_session::save_for(source, &session) {
             eprintln!("Could not save playback session for {source:?}: {error}");
@@ -4950,6 +4979,26 @@ impl AppController {
             .set_active(session.shuffle_enabled);
         self.repeat_button.set_active(session.repeat_enabled);
         self.footer_repeat_button.set_active(session.repeat_enabled);
+
+        if session.shuffle_enabled {
+            if session.shuffle_rng_state != 0 {
+                self.rng_state.set(session.shuffle_rng_state);
+            }
+            let restored_shuffle = session.shuffle_state.as_ref().is_some_and(|snapshot| {
+                let queue = self.playback_queue_v2.borrow();
+                self.shuffle_navigation.borrow_mut().restore(
+                    queue.entries(),
+                    queue.current_id(),
+                    snapshot,
+                )
+            });
+            if !restored_shuffle {
+                self.reset_shuffle_navigation(true);
+            }
+        } else {
+            self.shuffle_navigation.borrow_mut().clear();
+        }
+
         self.listening_history_context
             .replace(listening_history::PlaybackHistoryContext {
                 kind: session.context_kind.clone(),
@@ -5009,6 +5058,10 @@ impl AppController {
 
         self.playback_session_last_position_seconds
             .set((session.position_us.max(0) as u64) / 1_000_000);
+        self.playback_session_last_shuffle
+            .set(session.shuffle_enabled);
+        self.playback_session_last_repeat
+            .set(session.repeat_enabled);
         self.restored_playback_session.replace(None);
         self.playback_session_restore_attempts.set(0);
         self.show_toast("Reprodução anterior restaurada");
