@@ -96,7 +96,7 @@ use playback_session::PlaybackSession;
 use player_view::{PlayerView, PlayerViewHandle};
 use queue_model::{
     queue_end_action, PlaybackQueue, QueueEndAction, QueueEntryId, QueueMedia, QueueSnapshot,
-    QueueSource, ShuffleNavigator,
+    QueueSource, QueueSourceKind, ShuffleNavigator,
 };
 use reveal_bounce::RevealBounce;
 use settings_page::SettingsPage;
@@ -173,6 +173,7 @@ struct AppController {
     // queue2_browser_actions_dnd_v1
     // queue2_persistence_v1
     playback_queue_v2: RefCell<PlaybackQueue>,
+    active_queue_source: Cell<QueueSourceKind>,
     queue_last_saved_snapshot: RefCell<QueueSnapshot>,
     queue_dragged_entry: Cell<Option<QueueEntryId>>,
     queue_v2_pending_entry: Cell<Option<QueueEntryId>>,
@@ -726,7 +727,11 @@ impl AppController {
             .map(|duration| duration.as_nanos() as u64)
             .unwrap_or(0x9e37_79b9_7f4a_7c15);
 
-        let queue_load = queue_store::load();
+        let initial_queue_source = match config.startup_source {
+            Some(StartupSource::YouTube) => QueueSourceKind::YouTube,
+            Some(StartupSource::Local) | None => QueueSourceKind::Local,
+        };
+        let queue_load = queue_store::load_for(initial_queue_source);
         if queue_load.discarded_entries > 0 {
             eprintln!(
                 "Queue 2.0 recovery discarded {} unavailable entr{}",
@@ -753,6 +758,7 @@ impl AppController {
             player,
             state: RefCell::new(AppState::default()),
             playback_queue_v2: RefCell::new(restored_queue),
+            active_queue_source: Cell::new(initial_queue_source),
             queue_last_saved_snapshot: RefCell::new(restored_queue_snapshot),
             queue_dragged_entry: Cell::new(None),
             queue_v2_pending_entry: Cell::new(None),
@@ -3065,6 +3071,71 @@ impl AppController {
         app.set_accels_for_action("app.quit", &["<Primary>Q"]);
     }
 
+    fn queue_source_kind(source: StartupSource) -> QueueSourceKind {
+        match source {
+            StartupSource::Local => QueueSourceKind::Local,
+            StartupSource::YouTube => QueueSourceKind::YouTube,
+        }
+    }
+
+    fn report_queue_recovery(&self, source: QueueSourceKind, discarded_entries: usize) {
+        if discarded_entries == 0 {
+            return;
+        }
+
+        eprintln!(
+            "Queue 2.0 recovery for {source:?} discarded {discarded_entries} unavailable entr{}",
+            if discarded_entries == 1 { "y" } else { "ies" }
+        );
+    }
+
+    fn persist_active_queue_to_source(&self, context: &str) -> bool {
+        let source = self.active_queue_source.get();
+        let snapshot = self.playback_queue_v2.borrow().snapshot();
+
+        match queue_store::save_for(source, &snapshot) {
+            Ok(()) => {
+                self.queue_last_saved_snapshot.replace(snapshot);
+                true
+            }
+            Err(error) => {
+                eprintln!("Could not save {context} Queue 2.0 state for {source:?}: {error}");
+                false
+            }
+        }
+    }
+
+    fn switch_active_queue_source(&self, source: QueueSourceKind) {
+        if self.active_queue_source.get() == source {
+            return;
+        }
+
+        if !self.persist_active_queue_to_source("outgoing") {
+            self.show_toast("Não foi possível salvar a fila atual antes de trocar de fonte");
+            return;
+        }
+
+        self.maybe_record_listening();
+        let _ = self.player.pause();
+        self.update_play_icons(false);
+        self.playback_source.set(PlaybackSource::None);
+        self.state.borrow_mut().current = None;
+        self.youtube_state.borrow_mut().take();
+        self.queue_v2_pending_entry.set(None);
+        self.queue_dragged_entry.set(None);
+
+        let queue_load = queue_store::load_for(source);
+        self.report_queue_recovery(source, queue_load.discarded_entries);
+        let snapshot = queue_load.queue.snapshot();
+
+        self.playback_queue_v2.replace(queue_load.queue);
+        self.queue_last_saved_snapshot.replace(snapshot);
+        self.active_queue_source.set(source);
+        self.reset_shuffle_navigation(self.shuffle_enabled.get());
+        self.publish_mpris_capabilities();
+        self.update_footer_source();
+    }
+
     fn apply_startup_source(self: &Rc<Self>) {
         self.views.set_visible_child_name("music");
         if self.lyrics_button.is_active() {
@@ -3094,6 +3165,11 @@ impl AppController {
     }
 
     fn set_startup_source(&self, source: StartupSource) {
+        self.switch_active_queue_source(Self::queue_source_kind(source));
+        if self.active_queue_source.get() != Self::queue_source_kind(source) {
+            return;
+        }
+
         self.config.borrow_mut().startup_source = Some(source);
         self.save_config();
         self.views.set_visible_child_name("music");
@@ -5243,6 +5319,16 @@ impl AppController {
 
     // queue2_playback_bridge_v1
     fn enqueue_browser_media(&self, media: QueueMedia, play_next: bool) {
+        let expected = self.active_queue_source.get();
+        if media.source.kind() != expected {
+            eprintln!(
+                "Rejected Queue 2.0 enqueue: active source is {expected:?}, media source is {:?}",
+                media.source.kind()
+            );
+            self.show_toast("Esta faixa pertence a outra fonte de reprodução");
+            return;
+        }
+
         self.ensure_active_queue_v2();
         let title = media.title.clone();
 
@@ -5285,6 +5371,13 @@ impl AppController {
 
     fn enqueue_media_collection(&self, media: Vec<QueueMedia>, play_next: bool, title: &str) {
         if media.is_empty() {
+            return;
+        }
+
+        let expected = self.active_queue_source.get();
+        if media.iter().any(|item| item.source.kind() != expected) {
+            eprintln!("Rejected Queue 2.0 collection enqueue: active source is {expected:?}");
+            self.show_toast("Esta coleção pertence a outra fonte de reprodução");
             return;
         }
 
@@ -5636,6 +5729,15 @@ impl AppController {
     }
 
     fn ensure_active_queue_v2(&self) {
+        let playback_kind = match self.playback_source.get() {
+            PlaybackSource::Local => Some(QueueSourceKind::Local),
+            PlaybackSource::YouTube => Some(QueueSourceKind::YouTube),
+            PlaybackSource::None => None,
+        };
+        if playback_kind.is_some_and(|kind| kind != self.active_queue_source.get()) {
+            return;
+        }
+
         match self.playback_source.get() {
             PlaybackSource::Local => {
                 if let Some(selected) = self.state.borrow().current {
@@ -6375,26 +6477,19 @@ impl AppController {
             return;
         }
 
-        match queue_store::save(&snapshot) {
+        let source = self.active_queue_source.get();
+        match queue_store::save_for(source, &snapshot) {
             Ok(()) => {
                 self.queue_last_saved_snapshot.replace(snapshot);
             }
             Err(error) => {
-                eprintln!("Could not save Queue 2.0 state: {error}");
+                eprintln!("Could not save Queue 2.0 state for {source:?}: {error}");
             }
         }
     }
 
     fn persist_queue_now(&self) {
-        let snapshot = self.playback_queue_v2.borrow().snapshot();
-        match queue_store::save(&snapshot) {
-            Ok(()) => {
-                self.queue_last_saved_snapshot.replace(snapshot);
-            }
-            Err(error) => {
-                eprintln!("Could not save final Queue 2.0 state: {error}");
-            }
-        }
+        let _ = self.persist_active_queue_to_source("final");
     }
 
     fn save_config(&self) {
