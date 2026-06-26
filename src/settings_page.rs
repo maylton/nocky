@@ -1,8 +1,10 @@
 // playback_resume_preferences_fix_v1
 use crate::{
+    animated_page_switcher::{AnimatedPageSpec, AnimatedPageSwitcher},
     config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme},
     dialogs::SettingsEvent,
     i18n::{self, Message},
+    youtube_diagnostics::{self, DiagnosticCheck, DiagnosticState},
 };
 use adw::prelude::*;
 use gtk::glib;
@@ -187,12 +189,108 @@ fn build_content(
     );
     about_group.add_css_class("settings-about-group");
 
-    page.append(&general_group);
-    page.append(&appearance_group);
-    page.append(&playback_group);
-    page.append(&lyrics_group);
-    page.append(&youtube_group);
-    page.append(&about_group);
+    let settings_stack = gtk::Stack::new();
+    settings_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
+    settings_stack.set_transition_duration(180);
+    settings_stack.set_vexpand(true);
+    settings_stack.set_hexpand(true);
+    settings_stack.add_css_class("settings-tabs-stack");
+
+    let general_page = settings_tab_page();
+    general_page.append(&general_group);
+    let appearance_page = settings_tab_page();
+    appearance_page.append(&appearance_group);
+    let playback_page = settings_tab_page();
+    playback_page.append(&playback_group);
+    playback_page.append(&lyrics_group);
+    let youtube_page = settings_tab_page();
+    youtube_page.append(&youtube_group);
+    let about_page = settings_tab_page();
+    about_page.append(&about_group);
+
+    settings_stack.add_titled(
+        &general_page,
+        Some("general"),
+        group_text("Geral", "General", "General"),
+    );
+    settings_stack.add_titled(
+        &appearance_page,
+        Some("appearance"),
+        group_text("Aparência", "Appearance", "Apariencia"),
+    );
+    settings_stack.add_titled(
+        &playback_page,
+        Some("playback"),
+        group_text("Reprodução", "Playback", "Reproducción"),
+    );
+    settings_stack.add_titled(&youtube_page, Some("youtube"), "YouTube Music");
+    settings_stack.add_titled(
+        &about_page,
+        Some("about"),
+        group_text("Sobre", "About", "Acerca de"),
+    );
+    settings_stack.set_visible_child_name("general");
+
+    let settings_switcher = AnimatedPageSwitcher::from_specs(&[
+        AnimatedPageSpec {
+            icon_name: "preferences-system-symbolic",
+            label: group_text("Geral", "General", "General"),
+        },
+        AnimatedPageSpec {
+            icon_name: "applications-graphics-symbolic",
+            label: group_text("Aparência", "Appearance", "Apariencia"),
+        },
+        AnimatedPageSpec {
+            icon_name: "media-playback-start-symbolic",
+            label: group_text("Reprodução", "Playback", "Reproducción"),
+        },
+        AnimatedPageSpec {
+            icon_name: "folder-remote-symbolic",
+            label: "YouTube Music",
+        },
+        AnimatedPageSpec {
+            icon_name: "help-about-symbolic",
+            label: group_text("Sobre", "About", "Acerca de"),
+        },
+    ]);
+
+    {
+        let stack = settings_stack.clone();
+        let switcher = settings_switcher.clone();
+        settings_switcher.connect_selected(move |index| {
+            const PAGE_NAMES: [&str; 5] = ["general", "appearance", "playback", "youtube", "about"];
+            if let Some(name) = PAGE_NAMES.get(index) {
+                stack.set_visible_child_name(name);
+                switcher.set_active_index(index, true);
+            }
+        });
+    }
+
+    {
+        let switcher = settings_switcher.clone();
+        settings_stack.connect_visible_child_name_notify(move |stack| {
+            let index = match stack.visible_child_name().as_deref() {
+                Some("appearance") => 1,
+                Some("playback") => 2,
+                Some("youtube") => 3,
+                Some("about") => 4,
+                _ => 0,
+            };
+            switcher.set_active_index(index, true);
+        });
+    }
+
+    let tab_scroll = gtk::ScrolledWindow::new();
+    tab_scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Never);
+    tab_scroll.set_propagate_natural_width(true);
+    tab_scroll.set_hexpand(true);
+    tab_scroll.set_halign(gtk::Align::Fill);
+    settings_switcher.root().set_halign(gtk::Align::Center);
+    tab_scroll.set_child(Some(settings_switcher.root()));
+    tab_scroll.add_css_class("settings-tabs-scroll");
+
+    page.append(&tab_scroll);
+    page.append(&settings_stack);
 
     let language = gtk::DropDown::from_strings(&[
         AppLanguage::Portuguese.label(),
@@ -441,6 +539,83 @@ fn build_content(
         &youtube_button,
     ));
 
+    let diagnostics_summary = gtk::Label::new(None);
+    diagnostics_summary.set_xalign(0.0);
+    diagnostics_summary.set_wrap(true);
+    diagnostics_summary.add_css_class("settings-row-subtitle");
+
+    let diagnostics_icon = gtk::Image::from_icon_name("emblem-system-symbolic");
+    diagnostics_icon.set_pixel_size(18);
+
+    let diagnostics_status = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    diagnostics_status.set_valign(gtk::Align::Center);
+    diagnostics_status.append(&diagnostics_icon);
+    diagnostics_status.append(&diagnostics_summary);
+
+    let diagnostics_toggle = gtk::Button::with_label(group_text(
+        "Ver diagnóstico",
+        "View diagnostics",
+        "Ver diagnóstico",
+    ));
+    diagnostics_toggle.add_css_class("settings-row-action");
+
+    youtube_rows.append(&row_with_control(
+        group_text(
+            "Diagnóstico e solução de problemas",
+            "Diagnostics and troubleshooting",
+            "Diagnóstico y solución de problemas",
+        ),
+        group_text(
+            "Verificações silenciosas do runtime, da conta e do cache. Nada é exibido no player.",
+            "Quiet runtime, account and cache checks. Nothing is shown in the player.",
+            "Comprobaciones silenciosas del entorno, la cuenta y la caché. No se muestra nada en el reproductor.",
+        ),
+        &diagnostics_toggle,
+    ));
+
+    let diagnostics_details = gtk::Box::new(gtk::Orientation::Vertical, 8);
+    diagnostics_details.add_css_class("settings-group-rows");
+
+    let diagnostics_actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    diagnostics_actions.set_halign(gtk::Align::End);
+
+    let diagnostics_refresh = gtk::Button::with_label(group_text(
+        "Executar novamente",
+        "Run again",
+        "Ejecutar de nuevo",
+    ));
+    diagnostics_refresh.add_css_class("settings-row-action");
+
+    let diagnostics_copy = gtk::Button::with_label(group_text(
+        "Copiar relatório",
+        "Copy report",
+        "Copiar informe",
+    ));
+    diagnostics_copy.add_css_class("settings-primary-action");
+    diagnostics_copy.add_css_class("settings-row-action");
+
+    diagnostics_actions.append(&diagnostics_refresh);
+    diagnostics_actions.append(&diagnostics_copy);
+
+    let diagnostics_panel = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    diagnostics_panel.append(&diagnostics_status);
+    diagnostics_panel.append(&diagnostics_details);
+    diagnostics_panel.append(&diagnostics_actions);
+
+    let diagnostics_revealer = gtk::Revealer::new();
+    diagnostics_revealer.set_transition_type(gtk::RevealerTransitionType::SlideDown);
+    diagnostics_revealer.set_transition_duration(180);
+    diagnostics_revealer.set_child(Some(&diagnostics_panel));
+    diagnostics_revealer.set_reveal_child(false);
+    youtube_rows.append(&diagnostics_revealer);
+
+    update_diagnostics_view(
+        &diagnostics_icon,
+        &diagnostics_summary,
+        &diagnostics_details,
+        initial.language,
+    );
+
     let about_button = gtk::Button::with_label(group_text(
         "Ver informações",
         "View details",
@@ -580,6 +755,52 @@ fn build_content(
         youtube_button.connect_clicked(move |_| emit(SettingsEvent::ManageYouTube));
     }
 
+    {
+        let revealer = diagnostics_revealer.clone();
+        let language = initial.language;
+        diagnostics_toggle.connect_clicked(move |button| {
+            let reveal = !revealer.reveals_child();
+            revealer.set_reveal_child(reveal);
+            button.set_label(match (language, reveal) {
+                (AppLanguage::Portuguese, true) => "Ocultar diagnóstico",
+                (AppLanguage::English, true) => "Hide diagnostics",
+                (AppLanguage::Spanish, true) => "Ocultar diagnóstico",
+                (AppLanguage::Portuguese, false) => "Ver diagnóstico",
+                (AppLanguage::English, false) => "View diagnostics",
+                (AppLanguage::Spanish, false) => "Ver diagnóstico",
+            });
+        });
+    }
+
+    {
+        let icon = diagnostics_icon.clone();
+        let summary = diagnostics_summary.clone();
+        let details = diagnostics_details.clone();
+        let button = diagnostics_refresh.clone();
+        let language = initial.language;
+        diagnostics_refresh.connect_clicked(move |_| {
+            button.set_sensitive(false);
+            youtube_diagnostics::refresh_now();
+
+            let icon = icon.clone();
+            let summary = summary.clone();
+            let details = details.clone();
+            let button = button.clone();
+            glib::timeout_add_local_once(Duration::from_millis(1200), move || {
+                update_diagnostics_view(&icon, &summary, &details, language);
+                button.set_sensitive(true);
+            });
+        });
+    }
+
+    diagnostics_copy.connect_clicked(move |_| {
+        if let Some(display) = gtk::gdk::Display::default() {
+            display
+                .clipboard()
+                .set_text(&youtube_diagnostics::sanitized_report());
+        }
+    });
+
     for (switch, setting) in [
         (&visualizer, ToggleSetting::Visualizer),
         (&lyrics, ToggleSetting::Lyrics),
@@ -639,6 +860,123 @@ enum ToggleSetting {
     ExpressiveTransport,
     ExpressiveHomeCards,
     Noctalia,
+}
+
+fn settings_tab_page() -> gtk::Box {
+    let page = gtk::Box::new(gtk::Orientation::Vertical, 14);
+    page.set_hexpand(true);
+    page.set_vexpand(true);
+    page.add_css_class("settings-tab-page");
+    page
+}
+
+fn update_diagnostics_view(
+    icon: &gtk::Image,
+    summary: &gtk::Label,
+    details: &gtk::Box,
+    language: AppLanguage,
+) {
+    let snapshot = youtube_diagnostics::snapshot();
+    let overall = snapshot.overall_state();
+
+    icon.set_icon_name(Some(match overall {
+        DiagnosticState::Ok => "emblem-ok-symbolic",
+        DiagnosticState::Warning => "dialog-warning-symbolic",
+        DiagnosticState::Error => "dialog-error-symbolic",
+        DiagnosticState::Unknown => "emblem-system-symbolic",
+    }));
+
+    summary.set_text(match (language, overall) {
+        (AppLanguage::Portuguese, DiagnosticState::Ok) => {
+            "O ambiente do YouTube Music está funcionando normalmente."
+        }
+        (AppLanguage::English, DiagnosticState::Ok) => {
+            "The YouTube Music environment is working normally."
+        }
+        (AppLanguage::Spanish, DiagnosticState::Ok) => {
+            "El entorno de YouTube Music funciona normalmente."
+        }
+        (AppLanguage::Portuguese, DiagnosticState::Warning) => {
+            "Há um aviso não crítico. Abra os detalhes para verificar."
+        }
+        (AppLanguage::English, DiagnosticState::Warning) => {
+            "There is a non-critical warning. Open the details to review it."
+        }
+        (AppLanguage::Spanish, DiagnosticState::Warning) => {
+            "Hay una advertencia no crítica. Abre los detalles para revisarla."
+        }
+        (AppLanguage::Portuguese, DiagnosticState::Error) => {
+            "Foi detectado um problema no ambiente do YouTube Music."
+        }
+        (AppLanguage::English, DiagnosticState::Error) => {
+            "A problem was detected in the YouTube Music environment."
+        }
+        (AppLanguage::Spanish, DiagnosticState::Error) => {
+            "Se detectó un problema en el entorno de YouTube Music."
+        }
+        (AppLanguage::Portuguese, DiagnosticState::Unknown) => {
+            "As verificações ainda não foram concluídas."
+        }
+        (AppLanguage::English, DiagnosticState::Unknown) => "The checks have not finished yet.",
+        (AppLanguage::Spanish, DiagnosticState::Unknown) => {
+            "Las comprobaciones aún no han terminado."
+        }
+    });
+
+    while let Some(child) = details.first_child() {
+        details.remove(&child);
+    }
+
+    for (title, check) in [
+        ("Helper", &snapshot.helper),
+        ("Python", &snapshot.python_runtime),
+        ("ytmusicapi", &snapshot.ytmusicapi),
+        ("yt-dlp", &snapshot.yt_dlp),
+        ("Deno", &snapshot.deno),
+        (
+            match language {
+                AppLanguage::Portuguese => "Conta",
+                AppLanguage::English => "Account",
+                AppLanguage::Spanish => "Cuenta",
+            },
+            &snapshot.account,
+        ),
+        (
+            match language {
+                AppLanguage::Portuguese => "Cache",
+                AppLanguage::English => "Cache",
+                AppLanguage::Spanish => "Caché",
+            },
+            &snapshot.cache,
+        ),
+    ] {
+        details.append(&diagnostic_check_row(title, check));
+    }
+}
+
+fn diagnostic_check_row(title: &str, check: &DiagnosticCheck) -> gtk::Box {
+    let icon = gtk::Image::from_icon_name(match check.state {
+        DiagnosticState::Ok => "emblem-ok-symbolic",
+        DiagnosticState::Warning => "dialog-warning-symbolic",
+        DiagnosticState::Error => "dialog-error-symbolic",
+        DiagnosticState::Unknown => "emblem-system-symbolic",
+    });
+    icon.set_pixel_size(16);
+
+    let status = if check.detail.trim().is_empty() {
+        check.summary.clone()
+    } else {
+        format!("{} · {}", check.summary, check.detail)
+    };
+
+    let row = row_with_control(title, &status, &icon);
+    row.add_css_class(match check.state {
+        DiagnosticState::Ok => "diagnostic-state-ok",
+        DiagnosticState::Warning => "diagnostic-state-warning",
+        DiagnosticState::Error => "diagnostic-state-error",
+        DiagnosticState::Unknown => "diagnostic-state-unknown",
+    });
+    row
 }
 
 fn settings_group(icon_name: &str, title: &str, description: &str) -> (gtk::Box, gtk::Box) {

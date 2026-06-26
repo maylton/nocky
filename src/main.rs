@@ -66,6 +66,7 @@ mod visual_theme;
 mod visualizer;
 mod wave_progress;
 mod youtube;
+mod youtube_diagnostics;
 mod youtube_error;
 mod youtube_playback;
 
@@ -389,6 +390,7 @@ fn main() -> glib::ExitCode {
 }
 
 fn build_application(app: &adw::Application) {
+    youtube_diagnostics::start_background_checks();
     let controller = AppController::new(app);
     controller.setup_callbacks();
     controller.install_actions(app);
