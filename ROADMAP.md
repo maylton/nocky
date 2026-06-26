@@ -6,7 +6,7 @@
 
 <!-- roadmap_rebaseline_2026_06_24_v2 -->
 
-> Last updated: 2026-06-24  
+> Last updated: 2026-06-26  
 > Status legend: ✅ completed · 🟡 in progress · ⬜ planned  
 > Current development priority: **Personalized Home — privacy and recently added**
 
@@ -383,7 +383,31 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - Profile CPU and memory during long playback sessions.
 - Add power-saving behavior for animation-heavy components.
 
-## 10. ⬜ Packaging and release readiness
+## 10. ⬜ Source-module reorganization
+
+Reorganize the current flat `src/` layout into domain-focused modules after the
+0.3.2 reliability work, when feature churn is lower and large file moves will
+create less review and merge noise.
+
+### Proposed domains
+
+- `library/`: local models, scanning and indexing.
+- `lyrics/`: LRC parsing, providers and synchronization.
+- `playback/`: GStreamer engine, recovery and source-specific playback.
+- `ui/`: browser, visualizer and reusable presentation modules.
+- `youtube/`: bridge, authenticated library and remote metadata.
+
+### Constraints
+
+- Treat the work as a pure refactor with no behavior changes.
+- Move one domain at a time in small reviewable pull requests.
+- Preserve Queue 2.0 and source-isolated Local/YouTube sessions.
+- Preserve public module boundaries where practical.
+- Run the complete quality gate after every move.
+- Do not cherry-pick the older fork commit directly because the current
+  codebase has diverged substantially.
+
+## 11. ⬜ Packaging and release readiness
 
 - Final Flatpak permission review.
 - Stable application ID and desktop metadata.
@@ -409,7 +433,8 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 8. Finish search pagination, caching and keyboard navigation.
 9. Harden YouTube unavailable-track and recovery behavior.
 10. Add shared card-to-page transitions.
-11. Finish lyrics, visualizer, accessibility and release polish.
+11. Reorganize source modules by domain after reliability stabilization.
+12. Finish lyrics, visualizer, accessibility and release polish.
 
 ---
 
@@ -458,6 +483,12 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - Avoid hover scaling that changes layout allocation.
 - Every expressive animation requires a reduced-motion fallback.
 - Hidden controls must release all unused allocation.
+
+## Deferred source-module organization
+
+- Organize modules by domain only after the current reliability work is stable.
+- Keep the reorganization behavior-neutral and split it into small pull requests.
+- Use the older fork only as architectural inspiration, not as a commit source.
 
 ## Source separation
 
