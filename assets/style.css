@@ -878,3 +878,22 @@ button.queue-popover-row.active {
 .onboarding-radio {
   margin: 0 2px;
 }
+
+/* material_scrollbar_slider_geometry_fix_v1 */
+window.theme-material-expressive scrollbar.horizontal slider {
+  min-width: 24px;
+  min-height: 3px;
+  margin: 2px 0;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+}
+
+window.theme-material-expressive scrollbar.vertical slider {
+  min-width: 3px;
+  min-height: 24px;
+  margin: 0 2px;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+}
