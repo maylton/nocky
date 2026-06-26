@@ -301,9 +301,9 @@ impl AppController {
                         );
                         let previous_signature =
                             self.youtube_library.borrow().presentation_signature();
-                        self.youtube_library.borrow_mut().apply(snapshot);
-                        let content_changed =
-                            self.youtube_library.borrow().presentation_signature()
+                        let sync_changes = self.youtube_library.borrow_mut().apply(snapshot);
+                        let content_changed = sync_changes.changed()
+                            || self.youtube_library.borrow().presentation_signature()
                                 != previous_signature;
                         if let Err(error) = queue_library_cache_save(&self.youtube_library.borrow())
                         {
@@ -318,8 +318,13 @@ impl AppController {
                         self.prefetch_youtube_collection_cache();
                         if notify {
                             self.show_toast(&format!(
-                                "YouTube Music sincronizado: {} faixas, {} curtidas e {} playlists",
-                                counts.0, counts.1, counts.2
+                                "YouTube Music sincronizado: {} faixas, {} curtidas e {} playlists • {} adicionados, {} atualizados, {} removidos",
+                                counts.0,
+                                counts.1,
+                                counts.2,
+                                sync_changes.added,
+                                sync_changes.updated,
+                                sync_changes.removed
                             ));
                         }
                     }
