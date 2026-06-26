@@ -334,7 +334,7 @@ pub fn download_youtube_track(
             let mut request = client
                 .get(&stream.stream_url)
                 .header(ACCEPT_ENCODING, "identity")
-                .header(USER_AGENT, "Mozilla/5.0 Nocky/0.3.1")
+                .header(USER_AGENT, "Mozilla/5.0 Nocky/0.4.0")
                 .header(RANGE, format!("bytes={downloaded}-{range_end}"));
 
             for (name, value) in &stream.http_headers {
