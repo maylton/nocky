@@ -433,12 +433,8 @@ impl YouTubeLibraryCache {
         self.search = YouTubeSearchResults::default();
     }
 
-<<<<<<< HEAD
-    pub fn apply(&mut self, snapshot: YouTubeLibrarySnapshot) {
-        set_youtube_cache_visual_state(YouTubeCacheVisualState::Fresh);
-=======
     pub fn apply(&mut self, snapshot: YouTubeLibrarySnapshot) -> YouTubeLibrarySyncChanges {
->>>>>>> origin/main
+        set_youtube_cache_visual_state(YouTubeCacheVisualState::Fresh);
         self.syncing = false;
         self.synced = true;
 
