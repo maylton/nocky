@@ -13,7 +13,7 @@ use crate::{
     config::StartupSource,
     youtube::{
         cacheable_youtube_playlist, clear_library_cache, queue_library_cache_save,
-        youtube_collection_cache_key, youtube_collection_key, YouTubeSearchResults,
+        youtube_collection_cache_key, youtube_collection_key,
     },
     AppController,
 };
@@ -802,15 +802,16 @@ impl AppController {
                     let mut library = self.youtube_library.borrow_mut();
                     match result {
                         Ok(mut categorized) => {
+                            categorized.merge_cached_results(&library.search);
                             categorized.loading = false;
                             library.search = categorized;
                         }
                         Err(error) => {
-                            library.search = YouTubeSearchResults {
-                                query,
-                                error,
-                                ..YouTubeSearchResults::default()
-                            };
+                            let mut cached = library.search.clone();
+                            cached.query = query;
+                            cached.loading = false;
+                            cached.error = error;
+                            library.search = cached;
                         }
                     }
                     drop(library);

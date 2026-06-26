@@ -43,6 +43,7 @@ mod i18n;
 mod library;
 mod listening_history;
 mod local_mix_cover;
+mod search_text;
 // material_dynamic_palette_v1
 mod lyrics;
 mod lyrics_provider;
@@ -1117,11 +1118,12 @@ impl AppController {
                 }
 
                 if youtube_only {
-                    controller.youtube_library.borrow_mut().search = YouTubeSearchResults {
-                        query: query.clone(),
-                        loading: true,
-                        ..YouTubeSearchResults::default()
-                    };
+                    let mut cached = controller
+                        .youtube_library
+                        .borrow()
+                        .cached_search_results(&query);
+                    cached.loading = true;
+                    controller.youtube_library.borrow_mut().search = cached;
                 }
                 controller.navigate_browser(BrowserRoute::All);
 
@@ -2767,11 +2769,9 @@ impl AppController {
 
         let request_id = self.youtube_search_request_id.get().wrapping_add(1);
         self.youtube_search_request_id.set(request_id);
-        self.youtube_library.borrow_mut().search = YouTubeSearchResults {
-            query: query.clone(),
-            loading: true,
-            ..YouTubeSearchResults::default()
-        };
+        let mut cached = self.youtube_library.borrow().cached_search_results(&query);
+        cached.loading = true;
+        self.youtube_library.borrow_mut().search = cached;
         self.refresh_browser();
 
         let sender = self.background.sender();
