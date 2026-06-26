@@ -539,3 +539,8 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - ✅ The main player artist and album metadata are now clickable navigation targets with localized tooltips and pointer affordance.
 - ✅ Local playback opens the matching local artist or album route, while YouTube playback reuses cached collection identifiers or resolves the collection by title when necessary.
 - ✅ Collaborative credits navigate through the primary credited artist, matching the track overflow-menu behavior.
+
+- ✅ YouTube album and artist routes now carry a stable collection key, preferring browse IDs and falling back to title + artist for albums.
+- ✅ Version 5 collection caches are migrated in place to the new stable key format.
+- ✅ Background cache updates are coalesced by a dedicated debounced writer, keeping JSON serialization and disk I/O away from GTK's main loop.
+- ✅ Collection identity tests cover browse-ID priority and duplicate album titles.

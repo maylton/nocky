@@ -1,3 +1,4 @@
+// stable_collection_identity_and_deferred_cache_v2
 // artist_page_stable_refresh_v1
 // artist_profile_revalidation_v5
 // youtube_collection_background_playback_v1
@@ -9,7 +10,7 @@ use crate::{
     background::BackgroundMessage,
     config::StartupSource,
     youtube::{
-        cacheable_youtube_playlist, clear_library_cache, save_library_cache,
+        cacheable_youtube_playlist, clear_library_cache, queue_library_cache_save,
         youtube_collection_key, YouTubeSearchResults,
     },
     AppController,
@@ -251,7 +252,9 @@ impl AppController {
                     match result {
                         Ok(snapshot) => {
                             self.youtube_library.borrow_mut().apply(snapshot);
-                            if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
+                            if let Err(error) =
+                                queue_library_cache_save(&self.youtube_library.borrow())
+                            {
                                 eprintln!("Could not save reconciled YouTube library: {error}");
                             }
                             let confirmed = self
@@ -300,7 +303,8 @@ impl AppController {
                         let content_changed =
                             self.youtube_library.borrow().presentation_signature()
                                 != previous_signature;
-                        if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
+                        if let Err(error) = queue_library_cache_save(&self.youtube_library.borrow())
+                        {
                             eprintln!("Could not save the YouTube library cache: {error}");
                         }
                         self.youtube_page
@@ -366,7 +370,9 @@ impl AppController {
                                     .insert(youtube_collection_key("album", &item.title), items);
                             }
 
-                            if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
+                            if let Err(error) =
+                                queue_library_cache_save(&self.youtube_library.borrow())
+                            {
                                 eprintln!("Could not save the YouTube collection cache: {error}");
                             }
 
@@ -438,7 +444,7 @@ impl AppController {
                             let should_save = !playlist || cacheable_youtube_playlist(&item);
                             if should_save {
                                 if let Err(error) =
-                                    save_library_cache(&self.youtube_library.borrow())
+                                    queue_library_cache_save(&self.youtube_library.borrow())
                                 {
                                     eprintln!(
                                         "Could not save the YouTube collection cache: {error}"
@@ -528,7 +534,7 @@ impl AppController {
                                 .insert(browse_id.clone(), items);
                             if cacheable_youtube_playlist(&playlist) {
                                 if let Err(error) =
-                                    save_library_cache(&self.youtube_library.borrow())
+                                    queue_library_cache_save(&self.youtube_library.borrow())
                                 {
                                     eprintln!("Could not save the YouTube playlist cache: {error}");
                                 }
@@ -612,7 +618,9 @@ impl AppController {
                             library.artist_albums.insert(key.clone(), overview.albums);
                             drop(library);
 
-                            if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
+                            if let Err(error) =
+                                queue_library_cache_save(&self.youtube_library.borrow())
+                            {
                                 eprintln!("Could not save YouTube artist details: {error}");
                             }
                         }
@@ -663,7 +671,9 @@ impl AppController {
                                 .borrow_mut()
                                 .collection_tracks
                                 .insert(key.clone(), items);
-                            if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
+                            if let Err(error) =
+                                queue_library_cache_save(&self.youtube_library.borrow())
+                            {
                                 eprintln!("Could not save the YouTube collection cache: {error}");
                             }
                         }
@@ -707,7 +717,8 @@ impl AppController {
                             .borrow_mut()
                             .collection_tracks
                             .extend(cached);
-                        if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
+                        if let Err(error) = queue_library_cache_save(&self.youtube_library.borrow())
+                        {
                             eprintln!("Could not save the YouTube collection cache: {error}");
                         }
                     }
@@ -726,7 +737,8 @@ impl AppController {
                             .borrow_mut()
                             .playlist_tracks
                             .extend(cached);
-                        if let Err(error) = save_library_cache(&self.youtube_library.borrow()) {
+                        if let Err(error) = queue_library_cache_save(&self.youtube_library.borrow())
+                        {
                             eprintln!("Could not save the YouTube playlist cache: {error}");
                         }
                     }

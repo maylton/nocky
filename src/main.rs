@@ -1,3 +1,4 @@
+// stable_collection_identity_and_deferred_cache_v2
 // clickable_player_artist_album_navigation_v1
 // artist_profile_revalidation_v5
 // youtube_like_reconciliation_and_request_guard_v1
@@ -69,6 +70,7 @@ use animated_page_switcher::{AnimatedPageSwitcher, TopPage};
 use background::{BackgroundChannel, BackgroundMessage};
 use browser::{
     BrowserEvent, BrowserPlaybackState, BrowserRenderContext, BrowserRoute, LibraryBrowser,
+    YouTubeCollectionRoute,
 };
 use compact_volume_motion::{run_compact_volume_spring, CompactVolumeSpring};
 use config::{AppLanguage, BlurMode, StartupSource, VisualTheme};
@@ -336,7 +338,16 @@ fn resolve_youtube_collection_item(
 
     candidates
         .iter()
-        .position(|candidate| candidate.title.eq_ignore_ascii_case(query))
+        .position(|candidate| {
+            candidate.title.eq_ignore_ascii_case(query)
+                && (item.artist.trim().is_empty()
+                    || candidate.artist.eq_ignore_ascii_case(item.artist.trim()))
+        })
+        .or_else(|| {
+            candidates
+                .iter()
+                .position(|candidate| candidate.title.eq_ignore_ascii_case(query))
+        })
         .map(|index| candidates.remove(index))
         .or_else(|| candidates.into_iter().next())
         .ok_or_else(|| {
@@ -2466,13 +2477,13 @@ impl AppController {
     }
 
     fn load_youtube_collection_for_browser(&self, item: YouTubeItem) {
-        let title = item.title.clone();
+        let collection = YouTubeCollectionRoute::from_item(&item);
+        let key = collection.key.clone();
         let route = if item.result_type == "artist" {
-            BrowserRoute::YouTubeArtist(title)
+            BrowserRoute::YouTubeArtist(collection)
         } else {
-            BrowserRoute::YouTubeAlbum(title)
+            BrowserRoute::YouTubeAlbum(collection)
         };
-        let key = youtube_collection_cache_key(&item);
 
         if item.result_type == "artist" {
             self.navigate_browser(route);
@@ -2543,8 +2554,9 @@ impl AppController {
 
     fn is_open_youtube_collection(&self, key: &str) -> bool {
         match self.browser.route() {
-            BrowserRoute::YouTubeAlbum(title) => youtube_collection_key("album", &title) == key,
-            BrowserRoute::YouTubeArtist(title) => youtube_collection_key("artist", &title) == key,
+            BrowserRoute::YouTubeAlbum(collection) | BrowserRoute::YouTubeArtist(collection) => {
+                collection.key == key
+            }
             _ => false,
         }
     }
@@ -2644,7 +2656,7 @@ impl AppController {
                 .iter()
                 .take(limit)
                 .filter_map(|entry| {
-                    let key = youtube_collection_key("artist", &entry.title);
+                    let key = youtube_collection_cache_key(&entry.source);
                     let missing = !library.artist_profiles.contains_key(&key);
                     let idle = !library.artist_loading.contains(&key);
 
@@ -3245,7 +3257,18 @@ impl AppController {
                 library
                     .albums
                     .iter()
-                    .find(|entry| entry.title.eq_ignore_ascii_case(&album))
+                    .find(|entry| {
+                        entry.title.eq_ignore_ascii_case(&album)
+                            && (artist.is_empty()
+                                || entry.source.artist.eq_ignore_ascii_case(&artist)
+                                || entry.subtitle.eq_ignore_ascii_case(&artist))
+                    })
+                    .or_else(|| {
+                        library
+                            .albums
+                            .iter()
+                            .find(|entry| entry.title.eq_ignore_ascii_case(&album))
+                    })
                     .map(|entry| entry.source.clone())
             }
             .unwrap_or_else(|| YouTubeItem {
@@ -4356,10 +4379,10 @@ impl AppController {
                 id: title.to_lowercase(),
                 title,
             },
-            BrowserRoute::YouTubeAlbum(title) => listening_history::PlaybackHistoryContext {
+            BrowserRoute::YouTubeAlbum(collection) => listening_history::PlaybackHistoryContext {
                 kind: "album".to_string(),
-                id: title.to_lowercase(),
-                title,
+                id: collection.key,
+                title: collection.title,
             },
             BrowserRoute::YouTubePlaylist { title, browse_id } => {
                 listening_history::PlaybackHistoryContext {

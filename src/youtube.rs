@@ -1,3 +1,4 @@
+// stable_collection_identity_and_deferred_cache_v2
 // multi_artist_credits_v2
 use gtk::glib;
 use gtk::prelude::*;
@@ -12,13 +13,14 @@ use std::{
     process::{Command, Stdio},
     rc::Rc,
     sync::{
-        mpsc::{self, Receiver, Sender},
-        OnceLock,
+        mpsc::{self, Receiver, RecvTimeoutError, Sender},
+        Mutex, OnceLock,
     },
-    time::{SystemTime, UNIX_EPOCH},
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct YouTubeItem {
     pub result_type: String,
@@ -156,17 +158,47 @@ pub fn artist_credit_contains(credit: &str, artist: &str) -> bool {
         .any(|candidate| candidate.eq_ignore_ascii_case(artist.trim()))
 }
 
-pub fn youtube_collection_key(kind: &str, title: &str) -> String {
-    let normalized_kind = if kind.eq_ignore_ascii_case("artist") {
+fn normalize_collection_component(value: &str) -> String {
+    value
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+fn normalized_collection_kind(kind: &str) -> &'static str {
+    if kind.eq_ignore_ascii_case("artist") {
         "artist"
     } else {
         "album"
-    };
-    format!("{normalized_kind}:{}", title.trim().to_lowercase())
+    }
+}
+
+pub fn youtube_collection_key(kind: &str, title: &str) -> String {
+    let kind = normalized_collection_kind(kind);
+    format!("{kind}:{}", normalize_collection_component(title))
+}
+
+fn youtube_collection_legacy_key(item: &YouTubeItem) -> String {
+    youtube_collection_key(&item.result_type, &item.title)
 }
 
 pub fn youtube_collection_cache_key(item: &YouTubeItem) -> String {
-    youtube_collection_key(&item.result_type, &item.title)
+    let kind = normalized_collection_kind(&item.result_type);
+    let browse_id = normalize_collection_component(&item.browse_id);
+    if !browse_id.is_empty() {
+        return format!("{kind}:browse:{browse_id}");
+    }
+
+    let title = normalize_collection_component(&item.title);
+    if kind == "album" {
+        let artist = normalize_collection_component(&item.artist);
+        if !artist.is_empty() {
+            return format!("album:title:{title}:artist:{artist}");
+        }
+    }
+
+    youtube_collection_key(kind, &item.title)
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -194,7 +226,7 @@ pub struct YouTubeLibrarySnapshot {
     pub suggested_artists: Vec<YouTubeItem>,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct YouTubeCollectionEntry {
     pub title: String,
@@ -429,11 +461,13 @@ impl YouTubeLibraryCache {
     }
 }
 
-const LIBRARY_CACHE_VERSION: u32 = 5;
+const LIBRARY_CACHE_VERSION: u32 = 6;
 const BROWSER_COVER_SIZE: u32 = 512;
 const PLAYER_COVER_SIZE: u32 = 1200;
 
 static COVER_CLIENT: OnceLock<Option<reqwest::blocking::Client>> = OnceLock::new();
+static LIBRARY_CACHE_WRITER: OnceLock<Option<Sender<YouTubeLibraryCache>>> = OnceLock::new();
+static LIBRARY_CACHE_WRITE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -1496,6 +1530,23 @@ pub fn upgrade_thumbnail_url(url: &str, size: u32) -> String {
     output
 }
 
+fn rekey_collection_map<'a, T>(
+    mut map: HashMap<String, T>,
+    entries: impl IntoIterator<Item = &'a YouTubeCollectionEntry>,
+) -> HashMap<String, T> {
+    for entry in entries {
+        let legacy = youtube_collection_legacy_key(&entry.source);
+        let stable = youtube_collection_cache_key(&entry.source);
+        if legacy == stable || map.contains_key(&stable) {
+            continue;
+        }
+        if let Some(value) = map.remove(&legacy) {
+            map.insert(stable, value);
+        }
+    }
+    map
+}
+
 pub fn load_library_cache() -> YouTubeLibraryCache {
     let path = youtube_library_cache_path();
     let Ok(raw) = fs::read_to_string(path) else {
@@ -1504,10 +1555,12 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
     let Ok(cache) = serde_json::from_str::<PersistedYouTubeLibraryCache>(&raw) else {
         return YouTubeLibraryCache::default();
     };
-    if cache.version != LIBRARY_CACHE_VERSION {
+    if !matches!(cache.version, 5 | LIBRARY_CACHE_VERSION) {
         return YouTubeLibraryCache::default();
     }
 
+    let album_entries = cache.albums.clone();
+    let artist_entries = cache.artists.clone();
     let cacheable_playlists = cache
         .playlists
         .iter()
@@ -1519,11 +1572,16 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
         .into_iter()
         .filter(|(browse_id, items)| cacheable_playlists.contains(browse_id) && !items.is_empty())
         .collect();
-    let collection_tracks = cache
-        .collection_tracks
-        .into_iter()
-        .filter(|(_, items)| !items.is_empty())
-        .collect();
+    let collection_tracks = rekey_collection_map(
+        cache.collection_tracks,
+        album_entries.iter().chain(artist_entries.iter()),
+    )
+    .into_iter()
+    .filter(|(_, items)| !items.is_empty())
+    .collect();
+    let artist_profiles = rekey_collection_map(cache.artist_profiles, artist_entries.iter());
+    let artist_albums = rekey_collection_map(cache.artist_albums, artist_entries.iter());
+
     let mut library = YouTubeLibraryCache {
         search: Default::default(),
         connected: false,
@@ -1540,8 +1598,8 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
         playlist_loading: HashSet::new(),
         collection_tracks,
         collection_loading: HashSet::new(),
-        artist_profiles: cache.artist_profiles,
-        artist_albums: cache.artist_albums,
+        artist_profiles,
+        artist_albums,
         artist_loading: HashSet::new(),
         albums: cache.albums,
         artists: cache.artists,
@@ -1550,13 +1608,17 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
     if library.albums.is_empty() || library.artists.is_empty() {
         library.rebuild_collections();
     }
-    if repaired_covers {
+    if repaired_covers || cache.version < LIBRARY_CACHE_VERSION {
         let _ = save_library_cache(&library);
     }
     library
 }
 
 pub fn save_library_cache(cache: &YouTubeLibraryCache) -> Result<(), String> {
+    let lock = LIBRARY_CACHE_WRITE_LOCK.get_or_init(|| Mutex::new(()));
+    let _guard = lock
+        .lock()
+        .map_err(|_| "Could not lock the YouTube library cache writer".to_string())?;
     let path = youtube_library_cache_path();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
@@ -1608,6 +1670,57 @@ pub fn save_library_cache(cache: &YouTubeLibraryCache) -> Result<(), String> {
     fs::rename(&temporary, &path)
         .map_err(|error| format!("Could not replace the YouTube library cache: {error}"))?;
     Ok(())
+}
+
+pub fn queue_library_cache_save(cache: &YouTubeLibraryCache) -> Result<(), String> {
+    let snapshot = cache.clone();
+    if let Some(sender) = library_cache_writer() {
+        if sender.send(snapshot.clone()).is_ok() {
+            return Ok(());
+        }
+    }
+
+    save_library_cache(&snapshot)
+}
+
+fn library_cache_writer() -> Option<&'static Sender<YouTubeLibraryCache>> {
+    LIBRARY_CACHE_WRITER
+        .get_or_init(|| {
+            let (sender, receiver) = mpsc::channel::<YouTubeLibraryCache>();
+            let worker = thread::Builder::new()
+                .name("nocky-youtube-cache-writer".to_string())
+                .spawn(move || {
+                    while let Ok(mut snapshot) = receiver.recv() {
+                        loop {
+                            match receiver.recv_timeout(Duration::from_millis(180)) {
+                                Ok(newer) => snapshot = newer,
+                                Err(RecvTimeoutError::Timeout) => break,
+                                Err(RecvTimeoutError::Disconnected) => {
+                                    if let Err(error) = save_library_cache(&snapshot) {
+                                        eprintln!(
+                                            "Could not save the YouTube library cache: {error}"
+                                        );
+                                    }
+                                    return;
+                                }
+                            }
+                        }
+
+                        if let Err(error) = save_library_cache(&snapshot) {
+                            eprintln!("Could not save the YouTube library cache: {error}");
+                        }
+                    }
+                });
+
+            match worker {
+                Ok(_) => Some(sender),
+                Err(error) => {
+                    eprintln!("Could not start the YouTube cache writer: {error}");
+                    None
+                }
+            }
+        })
+        .as_ref()
 }
 
 pub fn clear_library_cache() {
@@ -1709,6 +1822,51 @@ fn find_in_path(name: &str) -> Option<PathBuf> {
     env::split_paths(&path)
         .map(|directory| directory.join(name))
         .find(|candidate| candidate.is_file())
+}
+
+#[cfg(test)]
+mod stable_collection_identity_tests {
+    use super::*;
+
+    fn collection(kind: &str, title: &str, artist: &str, browse_id: &str) -> YouTubeItem {
+        YouTubeItem {
+            result_type: kind.to_string(),
+            title: title.to_string(),
+            artist: artist.to_string(),
+            browse_id: browse_id.to_string(),
+            ..YouTubeItem::default()
+        }
+    }
+
+    #[test]
+    fn browse_id_has_priority_over_display_metadata() {
+        let first = collection("album", "Old title", "Artist", "MPREb_same");
+        let renamed = collection("album", "New title", "Artist", "MPREb_same");
+        assert_eq!(
+            youtube_collection_cache_key(&first),
+            youtube_collection_cache_key(&renamed)
+        );
+    }
+
+    #[test]
+    fn albums_with_the_same_title_keep_separate_fallback_keys() {
+        let first = collection("album", "Greatest Hits", "Artist A", "");
+        let second = collection("album", "Greatest Hits", "Artist B", "");
+        assert_ne!(
+            youtube_collection_cache_key(&first),
+            youtube_collection_cache_key(&second)
+        );
+    }
+
+    #[test]
+    fn artists_with_different_browse_ids_never_collide() {
+        let first = collection("artist", "The Band", "", "UC_artist_a");
+        let second = collection("artist", "The Band", "", "UC_artist_b");
+        assert_ne!(
+            youtube_collection_cache_key(&first),
+            youtube_collection_cache_key(&second)
+        );
+    }
 }
 
 #[cfg(test)]

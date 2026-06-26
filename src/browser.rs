@@ -1,3 +1,4 @@
+// stable_collection_identity_and_deferred_cache_v2
 // compact_artist_load_more_button_v1
 // artist_page_stable_refresh_v1
 // artist_profile_revalidation_v5
@@ -47,8 +48,8 @@ use crate::{
     listening_history::{HistoryActivity, ListeningHistory, ListeningSource, ListeningStats},
     model::Track,
     youtube::{
-        artist_credit_contains, credited_artists, youtube_collection_key, YouTubeCollectionEntry,
-        YouTubeItem, YouTubeLibraryCache,
+        artist_credit_contains, credited_artists, youtube_collection_cache_key,
+        youtube_collection_key, YouTubeCollectionEntry, YouTubeItem, YouTubeLibraryCache,
     },
 };
 use gtk::{gdk, gio::prelude::ListModelExt, glib, prelude::*};
@@ -82,6 +83,23 @@ thread_local! {
         RefCell::new(ArtworkTextureCache::default());
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct YouTubeCollectionRoute {
+    pub title: String,
+    pub artist: String,
+    pub key: String,
+}
+
+impl YouTubeCollectionRoute {
+    pub fn from_item(item: &YouTubeItem) -> Self {
+        Self {
+            title: item.title.clone(),
+            artist: item.artist.clone(),
+            key: youtube_collection_cache_key(item),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum BrowserRoute {
     #[default]
@@ -93,8 +111,8 @@ pub enum BrowserRoute {
     Album(String),
     Artist(String),
     Playlist(String),
-    YouTubeAlbum(String),
-    YouTubeArtist(String),
+    YouTubeAlbum(YouTubeCollectionRoute),
+    YouTubeArtist(YouTubeCollectionRoute),
     YouTubePlaylist {
         title: String,
         browse_id: String,
@@ -1158,8 +1176,8 @@ impl LibraryBrowser {
                 self.rebuild_artists(tracks, youtube, query);
                 self.root.set_visible_child_name("artists");
             }
-            BrowserRoute::YouTubeArtist(title) => {
-                self.rebuild_artist_albums(youtube, &title, "", config.language);
+            BrowserRoute::YouTubeArtist(collection) => {
+                self.rebuild_artist_albums(youtube, &collection, "", config.language);
                 self.root.set_visible_child_name("albums");
             }
             BrowserRoute::Playlists => {
@@ -1182,10 +1200,10 @@ impl LibraryBrowser {
         youtube: &YouTubeLibraryCache,
         language: AppLanguage,
     ) {
-        let BrowserRoute::YouTubeArtist(artist) = self.route() else {
+        let BrowserRoute::YouTubeArtist(collection) = self.route() else {
             return;
         };
-        self.rebuild_youtube_artist_context(youtube, &artist, language);
+        self.rebuild_youtube_artist_context(youtube, &collection, language);
     }
 
     pub fn try_recv(&self) -> Option<BrowserEvent> {
@@ -1551,11 +1569,11 @@ impl LibraryBrowser {
                 .collect(),
             BrowserRoute::YouTubeAlbum(album) => catalog
                 .into_iter()
-                .filter(|item| item.album.eq_ignore_ascii_case(album))
+                .filter(|item| item.album.eq_ignore_ascii_case(&album.title))
                 .collect(),
             BrowserRoute::YouTubeArtist(artist) => catalog
                 .into_iter()
-                .filter(|item| artist_credit_contains(&item.artist, artist))
+                .filter(|item| artist_credit_contains(&item.artist, &artist.title))
                 .collect(),
             BrowserRoute::YouTubePlaylist { browse_id, .. } => youtube
                 .playlist_tracks
@@ -1744,11 +1762,12 @@ impl LibraryBrowser {
             .set_text(&route_title(route, None, language));
         self.visible_tracks.borrow_mut().clear();
 
-        let (kind, title) = match route {
-            BrowserRoute::YouTubeAlbum(title) => ("album", title.as_str()),
-            BrowserRoute::YouTubeArtist(title) => ("artist", title.as_str()),
+        let (kind, collection) = match route {
+            BrowserRoute::YouTubeAlbum(collection) => ("album", collection),
+            BrowserRoute::YouTubeArtist(collection) => ("artist", collection),
             _ => return,
         };
+        let title = collection.title.as_str();
 
         if let Some(header) = youtube_collection_page_header(route, youtube, language) {
             self.queue_context_header
@@ -1759,7 +1778,7 @@ impl LibraryBrowser {
             self.queue_title.set_visible(true);
         }
 
-        let key = youtube_collection_key(kind, title);
+        let key = collection.key.clone();
         let catalog = youtube_catalog(youtube);
         let mut items = youtube
             .collection_tracks
@@ -2238,7 +2257,7 @@ impl LibraryBrowser {
                 continue;
             }
 
-            let key = youtube_collection_key("artist", &artist_entry.title);
+            let key = youtube_collection_cache_key(&artist_entry.source);
             let confirmed_cover = youtube
                 .artist_profiles
                 .get(&key)
@@ -2288,13 +2307,14 @@ impl LibraryBrowser {
     fn rebuild_youtube_artist_context(
         &self,
         youtube: &YouTubeLibraryCache,
-        artist: &str,
+        collection: &YouTubeCollectionRoute,
         language: AppLanguage,
     ) {
         clear_box(&self.albums_context_header);
 
-        let route = BrowserRoute::YouTubeArtist(artist.to_string());
-        let key = youtube_collection_key("artist", artist);
+        let route = BrowserRoute::YouTubeArtist(collection.clone());
+        let artist = collection.title.as_str();
+        let key = collection.key.clone();
         let mut has_context = false;
 
         if let Some(header) = youtube_collection_page_header(&route, youtube, language) {
@@ -2349,13 +2369,14 @@ impl LibraryBrowser {
     fn rebuild_artist_albums(
         &self,
         youtube: &YouTubeLibraryCache,
-        artist: &str,
+        collection: &YouTubeCollectionRoute,
         query: &str,
         language: AppLanguage,
     ) {
-        self.rebuild_youtube_artist_context(youtube, artist, language);
+        self.rebuild_youtube_artist_context(youtube, collection, language);
 
-        let key = youtube_collection_key("artist", artist);
+        let artist = collection.title.as_str();
+        let key = collection.key.clone();
         clear_grid(&self.albums_grid);
         let query = query.trim().to_lowercase();
         let mut position = 0;
@@ -2403,7 +2424,7 @@ impl LibraryBrowser {
                         },
                         artist,
                     ),
-                    BrowserRoute::YouTubeArtist(artist.to_string()),
+                    BrowserRoute::YouTubeArtist(collection.clone()),
                     &self.event_tx,
                 ),
             );
@@ -2806,7 +2827,12 @@ fn youtube_ranked_artist_cover(
     catalog: &[YouTubeItem],
     artist: &str,
 ) -> Option<PathBuf> {
-    let key = youtube_collection_key("artist", artist);
+    let key = youtube
+        .artists
+        .iter()
+        .find(|entry| entry.title.eq_ignore_ascii_case(artist))
+        .map(|entry| youtube_collection_cache_key(&entry.source))
+        .unwrap_or_else(|| youtube_collection_key("artist", artist));
 
     if let Some(profile) = youtube.artist_profiles.get(&key) {
         if let Some(path) = profile.cached_cover() {
@@ -3136,7 +3162,7 @@ fn home_artist_cards(tracks: &[Track], youtube: &YouTubeLibraryCache) -> Vec<Hom
     }
 
     for artist in youtube.artists.iter().take(12) {
-        let key = youtube_collection_key("artist", &artist.title);
+        let key = youtube_collection_cache_key(&artist.source);
         let profile = youtube.artist_profiles.get(&key);
         cards.push(youtube_artist_home_card_from_source(artist, profile));
     }
@@ -5917,21 +5943,34 @@ fn youtube_playlist_page_header(
     }
 }
 
+fn youtube_collection_entry_for_route<'a>(
+    entries: &'a [YouTubeCollectionEntry],
+    collection: &YouTubeCollectionRoute,
+) -> Option<&'a YouTubeCollectionEntry> {
+    entries
+        .iter()
+        .find(|entry| youtube_collection_cache_key(&entry.source) == collection.key)
+        .or_else(|| {
+            entries.iter().find(|entry| {
+                entry.title.eq_ignore_ascii_case(&collection.title)
+                    && (collection.artist.trim().is_empty()
+                        || entry.source.artist.eq_ignore_ascii_case(&collection.artist)
+                        || entry.subtitle.eq_ignore_ascii_case(&collection.artist))
+            })
+        })
+}
+
 fn youtube_collection_page_header(
     route: &BrowserRoute,
     youtube: &YouTubeLibraryCache,
     language: AppLanguage,
 ) -> Option<CollectionPageHeaderData> {
     match route {
-        BrowserRoute::YouTubeAlbum(title) => {
-            let entry = youtube
-                .albums
-                .iter()
-                .find(|entry| entry.title.eq_ignore_ascii_case(title))?;
-            let key = youtube_collection_key("album", title);
+        BrowserRoute::YouTubeAlbum(collection) => {
+            let entry = youtube_collection_entry_for_route(&youtube.albums, collection)?;
             let track_count = youtube
                 .collection_tracks
-                .get(&key)
+                .get(&collection.key)
                 .map(Vec::len)
                 .unwrap_or(entry.item_count);
 
@@ -5945,32 +5984,37 @@ fn youtube_collection_page_header(
                 artist: false,
             })
         }
-        BrowserRoute::YouTubeArtist(title) => {
-            let entry = youtube
-                .artists
-                .iter()
-                .find(|entry| entry.title.eq_ignore_ascii_case(title))?;
-            let key = youtube_collection_key("artist", title);
+        BrowserRoute::YouTubeArtist(collection) => {
+            let entry = youtube_collection_entry_for_route(&youtube.artists, collection);
+            let profile = youtube.artist_profiles.get(&collection.key);
             let track_count = youtube
                 .collection_tracks
-                .get(&key)
+                .get(&collection.key)
                 .map(Vec::len)
-                .unwrap_or(entry.item_count);
+                .or_else(|| entry.map(|entry| entry.item_count))
+                .unwrap_or_default();
             let album_count = youtube
                 .artist_albums
-                .get(&key)
+                .get(&collection.key)
                 .map(Vec::len)
                 .unwrap_or_default();
-            let profile = youtube.artist_profiles.get(&key);
+            let title = entry
+                .map(|entry| entry.title.clone())
+                .or_else(|| profile.map(|profile| profile.title.clone()))
+                .unwrap_or_else(|| collection.title.clone());
+            let subtitle = entry
+                .map(|entry| entry.subtitle.clone())
+                .or_else(|| profile.map(|profile| profile.subtitle.clone()))
+                .unwrap_or_default();
 
             Some(CollectionPageHeaderData {
                 cover_path: profile
                     .and_then(|profile| profile.cached_cover())
-                    .or_else(|| entry.cached_cover())
+                    .or_else(|| entry.and_then(YouTubeCollectionEntry::cached_cover))
                     .map(Path::to_path_buf),
                 eyebrow: localized_collection_eyebrow(language, true, "artist"),
-                title: entry.title.clone(),
-                subtitle: entry.subtitle.clone(),
+                title,
+                subtitle,
                 detail: localized_artist_summary(language, album_count, track_count),
                 online: true,
                 artist: true,
@@ -6379,8 +6423,12 @@ fn route_title(
         BrowserRoute::Album(name) => format!("ÁLBUM LOCAL · {name}"),
         BrowserRoute::Artist(name) => format!("ARTISTA LOCAL · {name}"),
         BrowserRoute::Playlist(name) => format!("PLAYLIST LOCAL · {name}"),
-        BrowserRoute::YouTubeAlbum(name) => format!("YOUTUBE MUSIC · ÁLBUM · {name}"),
-        BrowserRoute::YouTubeArtist(name) => format!("YOUTUBE MUSIC · ARTISTA · {name}"),
+        BrowserRoute::YouTubeAlbum(collection) => {
+            format!("YOUTUBE MUSIC · ÁLBUM · {}", collection.title)
+        }
+        BrowserRoute::YouTubeArtist(collection) => {
+            format!("YOUTUBE MUSIC · ARTISTA · {}", collection.title)
+        }
         BrowserRoute::YouTubePlaylist { title, .. } => {
             format!("YOUTUBE MUSIC · PLAYLIST · {title}")
         }
