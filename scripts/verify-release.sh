@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 APP_ID="io.github.maylton.Nocky"
-EXPECTED_VERSION="0.2.6"
+EXPECTED_VERSION="0.3.1"
 expected_sizes=(32 48 64 128 256 512)
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
@@ -40,7 +40,9 @@ grep -q 'library-cache.json' src/youtube.rs || fail "YouTube library cache"
 grep -q 'STREAM_CACHE_LIMIT = 80' helpers/nocky_youtube.py || fail "bounded YouTube stream cache"
 grep -q 'PLAYER_COVER_SIZE: u32 = 1200' src/youtube.rs || fail "HD YouTube artwork"
 [[ -f requirements-youtube.txt ]] || fail "YouTube requirements file"
-! find . -type f \( -name '.env' -o -name 'youtube-session.json' -o -name 'stream-cache.json' -o -name '*.pyc' \) | grep -q . || fail "sensitive/generated files found"
+if git ls-files | grep -Eq '(^|/)(\.env|youtube-session\.json|stream-cache\.json|[^/]+\.pyc)$'; then
+  fail "tracked sensitive/generated files found"
+fi
 pass "desktop/application identity and YouTube integration"
 
 for size in "${expected_sizes[@]}"; do

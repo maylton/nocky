@@ -4,7 +4,7 @@
 
 This app is vibe-coded and any improvement suggestion is welcomed, but don't expect much as it's just a free time hobby project =)
 
-> **Status:** Nocky 0.2.7 is a beta release. It introduces a faithful GTK/Cairo port of Noctalia's compact mirrored spectrum behavior, a zero-warning quality baseline and a synchronized universal installer.
+> **Status:** Nocky 0.3.1 is a beta release. It consolidates Queue 2.0, synchronized-lyrics and playback-resume improvements, modular UI/theme refactors, localization audits and GTK scrollbar geometry fixes.
 
 <!-- noctalia-inspiration:start -->
 > [!NOTE]

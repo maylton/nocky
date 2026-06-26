@@ -23,6 +23,17 @@
   <url type="homepage">https://github.com/maylton/nocky</url>
   <url type="bugtracker">https://github.com/maylton/nocky/issues</url>
   <releases>
+    <release version="0.3.1" date="2026-06-25">
+      <description>
+        <ul>
+          <li>Adds Queue 2.0 with persistent, source-aware playback ordering and improved queue interactions.</li>
+          <li>Improves synchronized lyrics, playback resume, artist pages and personalized Home refresh behavior.</li>
+          <li>Completes the modular Material Expressive CSS and Rust UI refactors with stronger validation coverage.</li>
+          <li>Fixes GTK scrollbar slider geometry warnings and refines footer, compact volume and transport behavior.</li>
+          <li>Expands reviewed Portuguese, English and Spanish localization coverage.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-06-23">
       <description>
         <ul>

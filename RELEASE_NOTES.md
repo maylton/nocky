@@ -1,63 +1,46 @@
-# Nocky 0.2.6 Beta — A Better First Experience
+# Nocky 0.3.1 Beta — Reliability, Queue 2.0 and UI Architecture
 
-Nocky 0.2.6 focuses on the first experience, appearance discovery and clearer synchronized lyrics behavior.
+Nocky 0.3.1 consolidates the large post-0.3.0 development cycle with a stronger playback model, more reliable navigation and lyrics, a modular UI architecture and a fully audited Material Expressive theme.
 
-## First-run onboarding
+## Queue and playback
 
-New installations now open a five-step setup wizard before entering the main interface:
+- Introduces Queue 2.0 with source-independent entries, persistent ordering and improved playback navigation.
+- Improves queue interactions, context handling and restore behavior across local and YouTube Music playback.
+- Stabilizes optional playback-session resume and YouTube stream recovery.
 
-1. Welcome
-2. Music source
-3. Appearance
-4. Player and footer
-5. Setup summary
+## Lyrics and listening continuity
 
-The wizard allows users to choose:
+- Improves synchronized-lyrics scrolling, recentering and clickable line seeking.
+- Makes automatic following more stable while preserving manual navigation.
+- Strengthens playback history and resume checkpoints.
 
-- local files or YouTube Music as the initial Home source;
-- custom blur, Noctalia blur or an opaque window;
-- Noctalia palette synchronization when Noctalia Shell is running;
-- the Material Design 3-inspired wavy progress bar;
-- Automatic, Full, Compact or Hidden footer behavior.
+## Home, artists and library
 
-Selecting the local library opens the folder chooser after setup when no directory has been configured.
+- Improves personalized Home ordering based on listening activity.
+- Refines artist grouping, collaborative credits, directory profiles and artist-page refresh behavior.
+- Keeps YouTube-specific Home sections hidden when the local library is selected.
 
-## YouTube Music explanation
+## Material Expressive and interface architecture
 
-The onboarding clearly explains that YouTube Music support is experimental, uses unofficial interfaces, may require future compatibility updates and does not require connecting an account for public search.
+- Splits the Material Expressive stylesheet into audited modules with size and selector validation.
+- Extracts player and footer surfaces into focused Rust modules.
+- Refines transport motion, compact volume, footer layouts and tonal surfaces.
+- Fixes invalid GTK scrollbar slider geometry that produced repeated `min width -8` warnings.
 
-## Noctalia-aware setup
+## Localization and quality
 
-Noctalia-specific palette and blur options are shown only when Noctalia Shell is detected. Other desktops continue receiving custom blur and opaque-window options without misleading settings.
+- Reviews Portuguese, English and Spanish coverage across 87 interface messages.
+- Audits Settings, Home, onboarding, lyrics and themed pop-up surfaces.
+- Passes the complete Rust, translation, localization and shell/Python quality gates.
 
-## Lyrics
+## Release metadata
 
-The focused inline lyric is now measured with Pango:
-
-- short lines remain on one line;
-- long lines wrap only when the available width is exceeded;
-- wrapping is limited to two lines;
-- embedded whitespace and unexpected line breaks are normalized.
-
-## Branding
-
-The official Nocky icon now appears:
-
-- in the onboarding welcome page;
-- above the application name in the About dialog.
-
-## Existing users
-
-Existing configuration files are migrated as already onboarded. Updating from Nocky 0.2.5 will not unexpectedly interrupt users with the setup wizard.
-
-Developers can safely test the flow with:
-
-```bash
-NOCKY_FORCE_ONBOARDING=1 cargo run
-```
+- Version: `0.3.1`
+- Date: `2026-06-25`
+- License: GPL-3.0-or-later
 
 ## Suggested tag
 
 ```text
-v0.2.6-beta
+v0.3.1-beta
 ```
