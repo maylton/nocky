@@ -254,6 +254,19 @@ pub struct YouTubeLibrarySnapshot {
     pub suggested_artists: Vec<YouTubeItem>,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct YouTubeLibrarySyncChanges {
+    pub added: usize,
+    pub updated: usize,
+    pub removed: usize,
+}
+
+impl YouTubeLibrarySyncChanges {
+    pub fn changed(self) -> bool {
+        self.added > 0 || self.updated > 0 || self.removed > 0
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct YouTubeCollectionEntry {
@@ -295,6 +308,103 @@ pub struct YouTubeLibraryCache {
     pub search: YouTubeSearchResults,
 }
 
+fn youtube_item_identity(item: &YouTubeItem) -> String {
+    if !item.video_id.trim().is_empty() {
+        return format!("video:{}", item.video_id.trim());
+    }
+    if !item.browse_id.trim().is_empty() {
+        return format!(
+            "browse:{}:{}",
+            item.result_type.trim().to_ascii_lowercase(),
+            item.browse_id.trim()
+        );
+    }
+
+    format!(
+        "fallback:{}:{}:{}:{}",
+        item.result_type.trim().to_ascii_lowercase(),
+        item.title.trim().to_ascii_lowercase(),
+        item.artist.trim().to_ascii_lowercase(),
+        item.album.trim().to_ascii_lowercase()
+    )
+}
+
+fn preserve_cached_item_fields(new_item: &mut YouTubeItem, previous: &YouTubeItem) {
+    if new_item.cover_path.is_empty() {
+        new_item.cover_path = previous.cover_path.clone();
+    }
+    if new_item.thumbnail_url.is_empty() {
+        new_item.thumbnail_url = previous.thumbnail_url.clone();
+    }
+    if new_item.album.is_empty() {
+        new_item.album = previous.album.clone();
+    }
+    if new_item.artist.is_empty() {
+        new_item.artist = previous.artist.clone();
+    }
+    if new_item.subtitle.is_empty() {
+        new_item.subtitle = previous.subtitle.clone();
+    }
+    if new_item.duration_seconds == 0 {
+        new_item.duration_seconds = previous.duration_seconds;
+    }
+}
+
+fn merge_youtube_items(
+    previous: &[YouTubeItem],
+    incoming: Vec<YouTubeItem>,
+) -> (Vec<YouTubeItem>, YouTubeLibrarySyncChanges) {
+    let previous_by_id = previous
+        .iter()
+        .map(|item| (youtube_item_identity(item), item))
+        .collect::<HashMap<_, _>>();
+    let incoming_ids = incoming
+        .iter()
+        .map(youtube_item_identity)
+        .collect::<HashSet<_>>();
+
+    let mut changes = YouTubeLibrarySyncChanges {
+        removed: previous_by_id
+            .keys()
+            .filter(|identity| !incoming_ids.contains(*identity))
+            .count(),
+        ..YouTubeLibrarySyncChanges::default()
+    };
+
+    let mut merged = Vec::with_capacity(incoming.len());
+    let mut seen = HashSet::new();
+
+    for mut item in incoming {
+        let identity = youtube_item_identity(&item);
+        if !seen.insert(identity.clone()) {
+            continue;
+        }
+
+        match previous_by_id.get(&identity) {
+            Some(previous_item) => {
+                preserve_cached_item_fields(&mut item, previous_item);
+                if item != **previous_item {
+                    changes.updated += 1;
+                }
+            }
+            None => changes.added += 1,
+        }
+
+        merged.push(item);
+    }
+
+    (merged, changes)
+}
+
+fn merge_sync_change_counts(
+    total: &mut YouTubeLibrarySyncChanges,
+    next: YouTubeLibrarySyncChanges,
+) {
+    total.added += next.added;
+    total.updated += next.updated;
+    total.removed += next.removed;
+}
+
 impl YouTubeLibraryCache {
     pub fn has_content(&self) -> bool {
         !self.library.is_empty() || !self.liked.is_empty() || !self.playlists.is_empty()
@@ -323,15 +433,45 @@ impl YouTubeLibraryCache {
         self.search = YouTubeSearchResults::default();
     }
 
+<<<<<<< HEAD
     pub fn apply(&mut self, snapshot: YouTubeLibrarySnapshot) {
         set_youtube_cache_visual_state(YouTubeCacheVisualState::Fresh);
+=======
+    pub fn apply(&mut self, snapshot: YouTubeLibrarySnapshot) -> YouTubeLibrarySyncChanges {
+>>>>>>> origin/main
         self.syncing = false;
         self.synced = true;
-        self.library = snapshot.library;
-        self.liked = snapshot.liked;
-        self.playlists = snapshot.playlists;
-        self.suggested_albums = snapshot.suggested_albums;
-        self.suggested_artists = snapshot.suggested_artists;
+
+        let mut changes = YouTubeLibrarySyncChanges::default();
+
+        let (library, library_changes) = merge_youtube_items(&self.library, snapshot.library);
+        merge_sync_change_counts(&mut changes, library_changes);
+        self.library = library;
+
+        let (liked, liked_changes) = merge_youtube_items(&self.liked, snapshot.liked);
+        merge_sync_change_counts(&mut changes, liked_changes);
+        self.liked = liked;
+
+        let previous_playlist_ids = self
+            .playlists
+            .iter()
+            .filter(|item| cacheable_youtube_playlist(item))
+            .map(|item| item.browse_id.clone())
+            .collect::<HashSet<_>>();
+        let (playlists, playlist_changes) =
+            merge_youtube_items(&self.playlists, snapshot.playlists);
+        merge_sync_change_counts(&mut changes, playlist_changes);
+        self.playlists = playlists;
+
+        let (suggested_albums, album_changes) =
+            merge_youtube_items(&self.suggested_albums, snapshot.suggested_albums);
+        merge_sync_change_counts(&mut changes, album_changes);
+        self.suggested_albums = suggested_albums;
+
+        let (suggested_artists, artist_changes) =
+            merge_youtube_items(&self.suggested_artists, snapshot.suggested_artists);
+        merge_sync_change_counts(&mut changes, artist_changes);
+        self.suggested_artists = suggested_artists;
 
         let valid_playlists = self
             .playlists
@@ -339,10 +479,19 @@ impl YouTubeLibraryCache {
             .filter(|item| cacheable_youtube_playlist(item))
             .map(|item| item.browse_id.clone())
             .collect::<HashSet<_>>();
-        self.playlist_tracks
-            .retain(|browse_id, _| valid_playlists.contains(browse_id));
+        self.playlist_tracks.retain(|browse_id, _| {
+            valid_playlists.contains(browse_id) && previous_playlist_ids.contains(browse_id)
+        });
         self.playlist_loading
             .retain(|browse_id| valid_playlists.contains(browse_id));
+
+        let previous_collection_keys = self
+            .albums
+            .iter()
+            .chain(self.artists.iter())
+            .map(|entry| youtube_collection_cache_key(&entry.source))
+            .collect::<HashSet<_>>();
+
         self.rebuild_collections();
 
         let valid_collections = self
@@ -351,10 +500,19 @@ impl YouTubeLibraryCache {
             .chain(self.artists.iter())
             .map(|entry| youtube_collection_cache_key(&entry.source))
             .collect::<HashSet<_>>();
-        self.collection_tracks
-            .retain(|key, _| valid_collections.contains(key));
+        self.collection_tracks.retain(|key, _| {
+            valid_collections.contains(key) && previous_collection_keys.contains(key)
+        });
         self.collection_loading
             .retain(|key| valid_collections.contains(key));
+        self.artist_profiles
+            .retain(|key, _| valid_collections.contains(key));
+        self.artist_albums
+            .retain(|key, _| valid_collections.contains(key));
+        self.artist_loading
+            .retain(|key| valid_collections.contains(key));
+
+        changes
     }
 
     pub fn rebuild_collections(&mut self) {
@@ -2006,6 +2164,83 @@ mod youtube_cache_expiration_tests {
             now,
             YOUTUBE_CACHE_SUGGESTION_TTL_SECS
         ));
+    }
+}
+
+#[cfg(test)]
+mod youtube_incremental_sync_tests {
+    use super::*;
+
+    fn song(video_id: &str, title: &str, cover_path: &str) -> YouTubeItem {
+        YouTubeItem {
+            result_type: "song".to_string(),
+            video_id: video_id.to_string(),
+            title: title.to_string(),
+            artist: "Artist".to_string(),
+            cover_path: cover_path.to_string(),
+            ..YouTubeItem::default()
+        }
+    }
+
+    #[test]
+    fn preserves_cached_cover_for_unchanged_identity() {
+        let previous = vec![song("video-1", "Old title", "/tmp/cover.jpg")];
+        let incoming = vec![song("video-1", "New title", "")];
+
+        let (merged, changes) = merge_youtube_items(&previous, incoming);
+
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].cover_path, "/tmp/cover.jpg");
+        assert_eq!(merged[0].title, "New title");
+        assert_eq!(changes.updated, 1);
+        assert_eq!(changes.added, 0);
+        assert_eq!(changes.removed, 0);
+    }
+
+    #[test]
+    fn detects_added_and_removed_items() {
+        let previous = vec![
+            song("video-1", "One", "/tmp/one.jpg"),
+            song("video-2", "Two", "/tmp/two.jpg"),
+        ];
+        let incoming = vec![song("video-2", "Two", ""), song("video-3", "Three", "")];
+
+        let (merged, changes) = merge_youtube_items(&previous, incoming);
+
+        assert_eq!(merged.len(), 2);
+        assert_eq!(changes.added, 1);
+        assert_eq!(changes.removed, 1);
+    }
+
+    #[test]
+    fn removes_duplicate_items_from_incoming_snapshot() {
+        let incoming = vec![song("video-1", "One", ""), song("video-1", "Duplicate", "")];
+
+        let (merged, changes) = merge_youtube_items(&[], incoming);
+
+        assert_eq!(merged.len(), 1);
+        assert_eq!(changes.added, 1);
+    }
+
+    #[test]
+    fn browse_identity_is_used_when_video_id_is_missing() {
+        let item = YouTubeItem {
+            result_type: "playlist".to_string(),
+            browse_id: "VL_test".to_string(),
+            title: "Playlist".to_string(),
+            ..YouTubeItem::default()
+        };
+
+        assert_eq!(youtube_item_identity(&item), "browse:playlist:VL_test");
+    }
+
+    #[test]
+    fn no_changes_for_identical_snapshot() {
+        let previous = vec![song("video-1", "One", "/tmp/one.jpg")];
+        let (merged, changes) = merge_youtube_items(&previous, previous.clone());
+
+        assert_eq!(merged, previous);
+        assert!(!changes.changed());
     }
 }
 
