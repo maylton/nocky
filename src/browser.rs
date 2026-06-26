@@ -53,6 +53,7 @@ use crate::{
     listening_history::{HistoryActivity, ListeningHistory, ListeningSource, ListeningStats},
     local_mix_cover,
     model::Track,
+    search_text::{normalize_search_text, search_matches, search_score},
     youtube::{
         artist_credit_contains, credited_artists, youtube_cache_visual_state,
         youtube_collection_cache_key, youtube_collection_key, YouTubeCacheVisualState,
@@ -488,6 +489,95 @@ struct HomeCopy {
     youtube_mix: &'static str,
     youtube_recommendation: &'static str,
     synchronized_playlist: &'static str,
+}
+
+#[derive(Clone, Copy)]
+struct SearchCopy {
+    eyebrow: &'static str,
+    results_for: &'static str,
+    tracks: &'static str,
+    albums: &'static str,
+    artists: &'static str,
+    playlists: &'static str,
+    no_tracks: &'static str,
+    no_albums: &'static str,
+    no_artists: &'static str,
+    no_playlists: &'static str,
+    searching: &'static str,
+    cached_while_searching: &'static str,
+    no_results: &'static str,
+    showing_cached_after_error: &'static str,
+    search_unavailable: &'static str,
+    showing_results: &'static str,
+    load_more: &'static str,
+}
+
+fn search_copy(language: AppLanguage) -> SearchCopy {
+    match language {
+        AppLanguage::Portuguese => SearchCopy {
+            eyebrow: "RESULTADOS DA BUSCA",
+            results_for: "Resultados para",
+            tracks: "Faixas",
+            albums: "Álbuns",
+            artists: "Artistas",
+            playlists: "Playlists",
+            no_tracks: "Nenhuma faixa encontrada",
+            no_albums: "Nenhum álbum encontrado",
+            no_artists: "Nenhum artista encontrado",
+            no_playlists: "Nenhuma playlist encontrada",
+            searching: "Buscando no YouTube Music…",
+            cached_while_searching:
+                "Resultados sincronizados exibidos enquanto o YouTube Music busca mais opções.",
+            no_results: "Nenhum resultado",
+            showing_cached_after_error:
+                "Não foi possível atualizar a busca. Exibindo os resultados sincronizados disponíveis.",
+            search_unavailable: "A busca do YouTube Music não está disponível",
+            showing_results: "Mostrando",
+            load_more: "Carregar mais",
+        },
+        AppLanguage::English => SearchCopy {
+            eyebrow: "SEARCH RESULTS",
+            results_for: "Results for",
+            tracks: "Tracks",
+            albums: "Albums",
+            artists: "Artists",
+            playlists: "Playlists",
+            no_tracks: "No tracks found",
+            no_albums: "No albums found",
+            no_artists: "No artists found",
+            no_playlists: "No playlists found",
+            searching: "Searching YouTube Music…",
+            cached_while_searching:
+                "Showing synchronized results while YouTube Music searches for more.",
+            no_results: "No results",
+            showing_cached_after_error:
+                "The search could not be refreshed. Showing available synchronized results.",
+            search_unavailable: "YouTube Music search is unavailable",
+            showing_results: "Showing",
+            load_more: "Load more",
+        },
+        AppLanguage::Spanish => SearchCopy {
+            eyebrow: "RESULTADOS DE BÚSQUEDA",
+            results_for: "Resultados para",
+            tracks: "Canciones",
+            albums: "Álbumes",
+            artists: "Artistas",
+            playlists: "Playlists",
+            no_tracks: "No se encontraron canciones",
+            no_albums: "No se encontraron álbumes",
+            no_artists: "No se encontraron artistas",
+            no_playlists: "No se encontraron playlists",
+            searching: "Buscando en YouTube Music…",
+            cached_while_searching:
+                "Mostrando resultados sincronizados mientras YouTube Music busca más opciones.",
+            no_results: "Ningún resultado",
+            showing_cached_after_error:
+                "No se pudo actualizar la búsqueda. Se muestran los resultados sincronizados disponibles.",
+            search_unavailable: "La búsqueda de YouTube Music no está disponible",
+            showing_results: "Mostrando",
+            load_more: "Cargar más",
+        },
+    }
 }
 
 fn home_copy(language: AppLanguage) -> HomeCopy {
@@ -1487,7 +1577,7 @@ impl LibraryBrowser {
         youtube: &YouTubeLibraryCache,
         raw_query: &str,
     ) {
-        let query = raw_query.trim().to_lowercase();
+        let query = normalize_search_text(raw_query);
         let changed = self.last_search_query.borrow().as_str() != query.as_str();
         if changed {
             self.last_search_query.replace(query.clone());
@@ -1501,33 +1591,67 @@ impl LibraryBrowser {
             self.search_content.remove(&child);
         }
 
+        let copy = search_copy(config.language);
         self.search_content.append(&page_header(
-            "RESULTADOS DA BUSCA",
-            &format!("Resultados para “{}”", raw_query.trim()),
+            copy.eyebrow,
+            &format!("{} “{}”", copy.results_for, raw_query.trim()),
         ));
 
         let local_mode = config.startup_source != Some(StartupSource::YouTube);
         let online_state_matches =
             !local_mode && youtube.search.query.eq_ignore_ascii_case(raw_query.trim());
         let loading = online_state_matches && youtube.search.loading;
+        let error = if online_state_matches {
+            youtube.search.error.as_str()
+        } else {
+            ""
+        };
+        let cached_result_count = if online_state_matches {
+            youtube.search.songs.len()
+                + youtube.search.albums.len()
+                + youtube.search.artists.len()
+                + youtube.search.playlists.len()
+        } else {
+            0
+        };
 
-        if online_state_matches && !youtube.search.error.is_empty() && !youtube.search.loading {
-            self.search_content
-                .append(&search_status_label(&youtube.search.error));
+        if !local_mode {
+            let status = if loading && cached_result_count > 0 {
+                Some((copy.cached_while_searching, false))
+            } else if loading {
+                Some((copy.searching, false))
+            } else if !error.is_empty() && cached_result_count > 0 {
+                Some((copy.showing_cached_after_error, true))
+            } else if !error.is_empty() {
+                Some((copy.search_unavailable, true))
+            } else {
+                None
+            };
+
+            if let Some((message, is_error)) = status {
+                self.search_content
+                    .append(&search_status_banner(message, is_error, error));
+            }
         }
 
         let mut track_matches = Vec::new();
         if local_mode {
             let mut indices = (0..tracks.len()).collect::<Vec<_>>();
             indices.sort_by(|left, right| compare_library_tracks(&tracks[*left], &tracks[*right]));
+            let mut ranked_matches = Vec::new();
             for index in indices {
                 let track = &tracks[index];
-                let haystack =
-                    format!("{} {} {}", track.title, track.artist, track.album).to_lowercase();
-                if haystack.contains(&query) {
-                    track_matches.push(VisibleTrack::Local(index));
+                let haystack = format!("{} {} {}", track.title, track.artist, track.album);
+                if search_matches(&haystack, &query) {
+                    ranked_matches.push((search_score(&haystack, &query), index));
                 }
             }
+            ranked_matches.sort_by_key(|(score, _)| *score);
+            track_matches.extend(
+                ranked_matches
+                    .into_iter()
+                    .map(|(_, index)| VisibleTrack::Local(index)),
+            );
         } else if online_state_matches {
             track_matches.extend(
                 youtube
@@ -1615,9 +1739,9 @@ impl LibraryBrowser {
 
         if track_matches.is_empty() {
             search_list.append(&empty_row(if loading {
-                "Buscando faixas no YouTube Music…"
+                copy.searching
             } else {
-                "Nenhuma faixa encontrada"
+                copy.no_tracks
             }));
         }
 
@@ -1625,48 +1749,50 @@ impl LibraryBrowser {
         track_section.add_css_class("home-section");
         track_section.add_css_class("search-section-card");
         track_section.append(&search_section_heading(
-            "Faixas",
+            copy.tracks,
             track_matches.len().min(track_limit),
             track_matches.len(),
             loading,
+            copy,
         ));
         track_section.append(&search_list);
         if track_matches.len() > track_limit {
             track_section.append(&search_more_button(
-                "faixas",
+                copy.tracks,
                 track_matches.len() - track_limit,
                 self.search_track_limit.clone(),
                 &self.event_tx,
+                copy,
             ));
         }
         self.search_content.append(&track_section);
 
         self.search_content.append(&search_list_section(
-            "Álbuns",
-            "álbuns",
-            "Nenhum álbum encontrado",
+            copy.albums,
+            copy.no_albums,
             search_album_cards(tracks, youtube, &query, online_state_matches),
             self.search_album_limit.clone(),
             &self.event_tx,
             loading,
+            copy,
         ));
         self.search_content.append(&search_list_section(
-            "Artistas",
-            "artistas",
-            "Nenhum artista encontrado",
+            copy.artists,
+            copy.no_artists,
             search_artist_cards(tracks, youtube, &query, online_state_matches),
             self.search_artist_limit.clone(),
             &self.event_tx,
             loading,
+            copy,
         ));
         self.search_content.append(&search_list_section(
-            "Playlists",
-            "playlists",
-            "Nenhuma playlist encontrada",
+            copy.playlists,
+            copy.no_playlists,
             search_playlist_cards(tracks, config, youtube, &query, online_state_matches),
             self.search_playlist_limit.clone(),
             &self.event_tx,
             loading,
+            copy,
         ));
     }
 
@@ -3253,6 +3379,73 @@ fn home_card_identity(card: &HomeCard) -> String {
     card.identity()
 }
 
+fn search_card_text(card: &HomeCard) -> String {
+    match card {
+        HomeCard::LocalAlbum {
+            title,
+            subtitle,
+            detail,
+            ..
+        } => format!("{title} {subtitle} {detail}"),
+        HomeCard::YouTubeAlbum {
+            item,
+            subtitle,
+            detail,
+            ..
+        } => format!(
+            "{} {} {} {} {}",
+            item.title, item.artist, item.album, subtitle, detail
+        ),
+        HomeCard::LocalArtist {
+            title,
+            subtitle,
+            detail,
+            ..
+        } => format!("{title} {subtitle} {detail}"),
+        HomeCard::YouTubeArtist {
+            item,
+            subtitle,
+            detail,
+            ..
+        } => format!("{} {} {} {}", item.title, item.artist, subtitle, detail),
+        HomeCard::LocalPlaylist { title, subtitle } => {
+            format!("{title} {subtitle}")
+        }
+        HomeCard::LocalMix {
+            title,
+            subtitle,
+            detail,
+            ..
+        } => format!("{title} {subtitle} {detail}"),
+        HomeCard::YouTubePlaylist(item) => format!(
+            "{} {} {} {} {}",
+            item.title, item.subtitle, item.artist, item.album, item.playlist_kind
+        ),
+    }
+}
+
+fn rank_search_cards(cards: Vec<HomeCard>, query: &str) -> Vec<HomeCard> {
+    let mut seen = HashSet::new();
+    let mut ranked = cards
+        .into_iter()
+        .filter(|card| seen.insert(home_card_identity(card)))
+        .map(|card| {
+            let text = search_card_text(&card);
+            let score = search_score(&text, query);
+            (score, normalize_search_text(&text), card)
+        })
+        .collect::<Vec<_>>();
+
+    ranked.sort_by(|left, right| {
+        left.0
+            .cmp(&right.0)
+            .then_with(|| left.1.cmp(&right.1))
+            .then_with(|| home_card_identity(&left.2).cmp(&home_card_identity(&right.2)))
+    });
+
+    ranked.into_iter().map(|(_, _, card)| card).collect()
+}
+
 fn search_album_cards(
     tracks: &[Track],
     youtube: &YouTubeLibraryCache,
@@ -3273,7 +3466,7 @@ fn search_album_cards(
                 .into_iter()
                 .collect::<Vec<_>>()
                 .join(", ");
-            if !format!("{album} {artists}").to_lowercase().contains(query) {
+            if !search_matches(&format!("{album} {artists}"), query) {
                 continue;
             }
             cards.push(HomeCard::LocalAlbum {
@@ -3304,7 +3497,7 @@ fn search_album_cards(
                 }),
         );
     }
-    cards
+    rank_search_cards(cards, query)
 }
 
 fn search_artist_cards(
@@ -3320,7 +3513,7 @@ fn search_artist_cards(
             groups.entry(track.artist.clone()).or_default().push(track);
         }
         for (artist, artist_tracks) in groups {
-            if !artist.to_lowercase().contains(query) {
+            if !search_matches(&artist, query) {
                 continue;
             }
             cards.push(HomeCard::LocalArtist {
@@ -3351,7 +3544,7 @@ fn search_artist_cards(
                 }),
         );
     }
-    cards
+    rank_search_cards(cards, query)
 }
 
 fn search_playlist_cards(
@@ -3364,7 +3557,7 @@ fn search_playlist_cards(
     let mut cards = Vec::new();
     if !tracks.is_empty() {
         for playlist in &config.playlists {
-            if playlist.name.to_lowercase().contains(query) {
+            if search_matches(&playlist.name, query) {
                 cards.push(HomeCard::LocalPlaylist {
                     title: playlist.name.clone(),
                     subtitle: format!("{} faixas locais", playlist.tracks.len()),
@@ -3381,7 +3574,7 @@ fn search_playlist_cards(
                 .map(HomeCard::YouTubePlaylist),
         );
     }
-    cards
+    rank_search_cards(cards, query)
 }
 
 fn home_album_cards(
@@ -3545,17 +3738,23 @@ fn youtube_playlist_subtitle(item: &YouTubeItem) -> &str {
     }
 }
 
-fn search_section_heading(title: &str, visible: usize, total: usize, loading: bool) -> gtk::Box {
+fn search_section_heading(
+    title: &str,
+    visible: usize,
+    total: usize,
+    loading: bool,
+    copy: SearchCopy,
+) -> gtk::Box {
     let title_label = gtk::Label::new(Some(title));
     title_label.set_xalign(0.0);
     title_label.add_css_class("home-section-title");
 
     let subtitle = if loading && total == 0 {
-        "Buscando no YouTube Music…".to_string()
+        copy.searching.to_string()
     } else if total == 0 {
-        "Nenhum resultado".to_string()
+        copy.no_results.to_string()
     } else {
-        format!("Mostrando {visible} de {total} resultados")
+        format!("{} {visible} / {total}", copy.showing_results)
     };
     let subtitle_label = gtk::Label::new(Some(&subtitle));
     subtitle_label.set_xalign(0.0);
@@ -3568,12 +3767,39 @@ fn search_section_heading(title: &str, visible: usize, total: usize, loading: bo
     heading
 }
 
-fn search_status_label(message: &str) -> gtk::Label {
-    let label = gtk::Label::new(Some(message));
-    label.set_xalign(0.0);
-    label.set_wrap(true);
-    label.add_css_class("dim-label");
-    label
+fn search_status_banner(message: &str, is_error: bool, detail: &str) -> gtk::Box {
+    let icon = gtk::Image::from_icon_name(if is_error {
+        "dialog-warning-symbolic"
+    } else {
+        "view-refresh-symbolic"
+    });
+    icon.set_pixel_size(18);
+
+    let title = gtk::Label::new(Some(message));
+    title.set_xalign(0.0);
+    title.set_hexpand(true);
+    title.set_wrap(true);
+
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    row.append(&icon);
+    row.append(&title);
+
+    let banner = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    banner.add_css_class("search-status-banner");
+    if is_error {
+        banner.add_css_class("warning");
+    }
+    banner.append(&row);
+
+    if is_error && !detail.trim().is_empty() {
+        let detail_label = gtk::Label::new(Some(detail));
+        detail_label.set_xalign(0.0);
+        detail_label.set_wrap(true);
+        detail_label.add_css_class("dim-label");
+        banner.append(&detail_label);
+    }
+
+    banner
 }
 
 fn search_more_button(
@@ -3581,9 +3807,10 @@ fn search_more_button(
     remaining: usize,
     limit: Rc<Cell<usize>>,
     event_tx: &Sender<BrowserEvent>,
+    copy: SearchCopy,
 ) -> gtk::Button {
     let next = remaining.min(SEARCH_BATCH_SIZE);
-    let button = gtk::Button::with_label(&format!("Carregar mais {next} {category}"));
+    let button = gtk::Button::with_label(&format!("{} {next} {category}", copy.load_more));
     button.set_halign(gtk::Align::Start);
     button.add_css_class("pill");
     let sender = event_tx.clone();
@@ -3596,19 +3823,21 @@ fn search_more_button(
 
 fn search_list_section(
     title: &str,
-    category: &str,
     empty_message: &str,
     cards: Vec<HomeCard>,
     limit: Rc<Cell<usize>>,
     event_tx: &Sender<BrowserEvent>,
     loading: bool,
+    copy: SearchCopy,
 ) -> gtk::Box {
     let total = cards.len();
     let visible = total.min(limit.get());
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
     section.add_css_class("home-section");
     section.add_css_class("search-section-card");
-    section.append(&search_section_heading(title, visible, total, loading));
+    section.append(&search_section_heading(
+        title, visible, total, loading, copy,
+    ));
 
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::None);
@@ -3618,7 +3847,7 @@ fn search_list_section(
 
     if total == 0 {
         list.append(&empty_row(if loading {
-            "Buscando no YouTube Music…"
+            copy.searching
         } else {
             empty_message
         }));
@@ -3631,10 +3860,11 @@ fn search_list_section(
 
     if total > visible {
         section.append(&search_more_button(
-            category,
+            title,
             total - visible,
             limit,
             event_tx,
+            copy,
         ));
     }
     section

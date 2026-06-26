@@ -1,5 +1,6 @@
 // stable_collection_identity_and_deferred_cache_v2
 // multi_artist_credits_v2
+use crate::search_text::{normalize_search_text, search_matches, search_score};
 use gtk::glib;
 use gtk::prelude::*;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -709,6 +710,119 @@ pub struct YouTubeSearchResults {
     pub albums: Vec<YouTubeItem>,
     pub artists: Vec<YouTubeItem>,
     pub playlists: Vec<YouTubeItem>,
+}
+
+fn youtube_search_item_key(item: &YouTubeItem) -> String {
+    if !item.video_id.is_empty() {
+        return format!("video:{}", item.video_id);
+    }
+    if !item.browse_id.is_empty() {
+        return format!("browse:{}", item.browse_id);
+    }
+
+    format!(
+        "metadata:{}:{}:{}:{}",
+        normalize_search_text(&item.result_type),
+        normalize_search_text(&item.title),
+        normalize_search_text(&item.artist),
+        normalize_search_text(&item.album),
+    )
+}
+
+fn youtube_search_haystack(item: &YouTubeItem) -> String {
+    format!(
+        "{} {} {} {} {}",
+        item.title, item.subtitle, item.artist, item.album, item.playlist_kind
+    )
+}
+
+fn append_unique_search_items(
+    target: &mut Vec<YouTubeItem>,
+    items: impl IntoIterator<Item = YouTubeItem>,
+) {
+    let mut seen = target
+        .iter()
+        .map(youtube_search_item_key)
+        .collect::<HashSet<_>>();
+
+    for item in items {
+        if seen.insert(youtube_search_item_key(&item)) {
+            target.push(item);
+        }
+    }
+}
+
+fn cached_search_items<'a>(
+    items: impl IntoIterator<Item = &'a YouTubeItem>,
+    query: &str,
+    playable_only: bool,
+) -> Vec<YouTubeItem> {
+    let mut matches = items
+        .into_iter()
+        .filter(|item| !playable_only || item.playable())
+        .filter_map(|item| {
+            let haystack = youtube_search_haystack(item);
+            search_matches(&haystack, query).then(|| (search_score(&haystack, query), item.clone()))
+        })
+        .collect::<Vec<_>>();
+
+    matches.sort_by_key(|(score, _)| *score);
+    let mut unique = Vec::new();
+    append_unique_search_items(&mut unique, matches.into_iter().map(|(_, item)| item));
+    unique
+}
+
+impl YouTubeSearchResults {
+    pub(crate) fn merge_cached_results(&mut self, cached: &Self) {
+        append_unique_search_items(&mut self.songs, cached.songs.clone());
+        append_unique_search_items(&mut self.albums, cached.albums.clone());
+        append_unique_search_items(&mut self.artists, cached.artists.clone());
+        append_unique_search_items(&mut self.playlists, cached.playlists.clone());
+    }
+}
+
+impl YouTubeLibraryCache {
+    pub(crate) fn cached_search_results(&self, raw_query: &str) -> YouTubeSearchResults {
+        let query = normalize_search_text(raw_query);
+        let mut results = YouTubeSearchResults {
+            query: raw_query.trim().to_string(),
+            ..YouTubeSearchResults::default()
+        };
+
+        results.songs = cached_search_items(
+            self.library
+                .iter()
+                .chain(self.liked.iter())
+                .chain(self.recently_played.iter())
+                .chain(self.playlist_tracks.values().flatten())
+                .chain(self.collection_tracks.values().flatten()),
+            &query,
+            true,
+        );
+
+        results.albums = cached_search_items(
+            self.albums
+                .iter()
+                .map(|entry| &entry.source)
+                .chain(self.suggested_albums.iter())
+                .chain(self.artist_albums.values().flatten()),
+            &query,
+            false,
+        );
+
+        results.artists = cached_search_items(
+            self.artists
+                .iter()
+                .map(|entry| &entry.source)
+                .chain(self.suggested_artists.iter())
+                .chain(self.artist_profiles.values()),
+            &query,
+            false,
+        );
+
+        results.playlists = cached_search_items(self.playlists.iter(), &query, false);
+        results
+    }
 }
 
 #[derive(Debug, Deserialize)]
