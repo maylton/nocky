@@ -15,15 +15,6 @@ pub struct QueueLoadResult {
     pub discarded_entries: usize,
 }
 
-pub fn load() -> QueueLoadResult {
-    load_from_path(&queue_state_path())
-}
-
-pub fn save(snapshot: &QueueSnapshot) -> io::Result<()> {
-    save_to_path(&queue_state_path(), snapshot)
-}
-
-#[allow(dead_code)] // Used by the upcoming source-session controller integration.
 pub fn load_for(source: QueueSourceKind) -> QueueLoadResult {
     let source_path = queue_state_path_for(source);
     if source_path.is_file() {
@@ -42,7 +33,6 @@ pub fn load_for(source: QueueSourceKind) -> QueueLoadResult {
     })
 }
 
-#[allow(dead_code)] // Used by the upcoming source-session controller integration.
 pub fn save_for(source: QueueSourceKind, snapshot: &QueueSnapshot) -> io::Result<()> {
     let queue = PlaybackQueue::restore(snapshot.clone())
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
@@ -52,7 +42,6 @@ pub fn save_for(source: QueueSourceKind, snapshot: &QueueSnapshot) -> io::Result
     save_to_path(&queue_state_path_for(source), snapshot)
 }
 
-#[allow(dead_code)] // Used by the upcoming source-session controller integration.
 pub fn queue_state_path_for(source: QueueSourceKind) -> PathBuf {
     state_directory().join(source.state_file_name())
 }
