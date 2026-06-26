@@ -2127,11 +2127,25 @@ fn stable_hash(value: &str) -> u64 {
 fn helper_path() -> Option<PathBuf> {
     if let Some(path) = env::var_os("NOCKY_YOUTUBE_HELPER").map(PathBuf::from) {
         if path.is_file() {
+            eprintln!(
+                "Nocky YouTube helper selected from NOCKY_YOUTUBE_HELPER: {}",
+                path.display()
+            );
             return Some(path);
         }
     }
 
+    let source_helper = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("helpers/nocky_youtube.py");
     let mut candidates = Vec::new();
+
+    // Development builds must exercise the helper from the current checkout.
+    // Previously, cargo run preferred an older installed helper under
+    // ~/.local/share/nocky, so helper patches compiled successfully but were
+    // never used at runtime.
+    if cfg!(debug_assertions) {
+        candidates.push(source_helper.clone());
+    }
+
     if let Ok(executable) = env::current_exe() {
         if let Some(prefix) = executable.parent().and_then(Path::parent) {
             candidates.push(prefix.join("share/nocky/helpers/nocky_youtube.py"));
@@ -2147,8 +2161,16 @@ fn helper_path() -> Option<PathBuf> {
         "/usr/local/share/nocky/helpers/nocky_youtube.py",
     ));
     candidates.push(PathBuf::from("/usr/share/nocky/helpers/nocky_youtube.py"));
-    candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("helpers/nocky_youtube.py"));
-    candidates.into_iter().find(|path| path.is_file())
+
+    if !cfg!(debug_assertions) {
+        candidates.push(source_helper);
+    }
+
+    let selected = candidates.into_iter().find(|path| path.is_file());
+    if let Some(path) = selected.as_ref() {
+        eprintln!("Nocky YouTube helper selected: {}", path.display());
+    }
+    selected
 }
 
 fn python_path() -> Option<PathBuf> {

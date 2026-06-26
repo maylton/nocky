@@ -20,6 +20,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -821,6 +822,122 @@ def _deno_path() -> str:
     return str(sibling) if sibling.is_file() else ""
 
 
+def _write_yt_dlp_cookie_file(cookie_header: str) -> Path | None:
+    pairs: list[tuple[str, str]] = []
+    for raw_part in cookie_header.split(";"):
+        part = raw_part.strip()
+        if not part or "=" not in part:
+            continue
+        name, value = part.split("=", 1)
+        name = name.strip()
+        value = value.strip()
+        if not name or not value:
+            continue
+        pairs.append((name, value))
+
+    if not pairs:
+        return None
+
+    descriptor, raw_path = tempfile.mkstemp(
+        prefix="nocky-youtube-",
+        suffix=".cookies.txt",
+    )
+    os.close(descriptor)
+    path = Path(raw_path)
+    os.chmod(path, 0o600)
+
+    lines = ["# Netscape HTTP Cookie File", ""]
+    for name, value in pairs:
+        lines.append(
+            "\t".join(
+                (
+                    ".youtube.com",
+                    "TRUE",
+                    "/",
+                    "TRUE",
+                    "0",
+                    name,
+                    value,
+                )
+            )
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _yt_dlp_auth_args() -> tuple[list[str], Path | None]:
+    payload = _load_session()
+    stored_headers = payload.get("headers")
+    if not isinstance(stored_headers, dict) or not stored_headers:
+        return [], None
+
+    headers = {
+        str(key).strip().lower(): str(value).strip()
+        for key, value in stored_headers.items()
+        if str(key).strip() and str(value).strip()
+    }
+
+    args: list[str] = []
+    cookie_file = _write_yt_dlp_cookie_file(headers.get("cookie", ""))
+    if cookie_file is not None:
+        args += ["--cookies", str(cookie_file)]
+
+    forwarded_headers = (
+        ("user-agent", "User-Agent"),
+        ("referer", "Referer"),
+        ("origin", "Origin"),
+        ("accept-language", "Accept-Language"),
+        ("x-goog-authuser", "X-Goog-AuthUser"),
+    )
+    for key, display_name in forwarded_headers:
+        value = headers.get(key, "")
+        if value:
+            args += ["--add-header", f"{display_name}: {value}"]
+
+    return args, cookie_file
+
+
+def _premium_authentication_error(message: str) -> bool:
+    normalized = message.lower()
+    return (
+        "only available to music premium members" in normalized
+        or "music premium members" in normalized
+        or "premium members" in normalized
+    )
+
+
+def _authenticated_retry_command(
+    command: list[str],
+    auth_args: list[str],
+) -> list[str]:
+    if not command:
+        return command
+
+    executable = command[:-1]
+    webpage_url = command[-1]
+    filtered: list[str] = []
+    index = 0
+
+    while index < len(executable):
+        argument = executable[index]
+        if argument == "--check-formats":
+            index += 1
+            continue
+        if argument in ("--format", "-f") and index + 1 < len(executable):
+            index += 2
+            continue
+        filtered.append(argument)
+        index += 1
+
+    filtered += auth_args
+    filtered += [
+        "--extractor-args",
+        "youtube:player_client=web_music,web",
+    ]
+    filtered.append(webpage_url)
+    return filtered
+
+
 def _resolve_stream(video_or_url: str, force: bool = False) -> dict[str, Any]:
     video_id = _extract_video_id(video_or_url)
     cache = _load_stream_cache()
@@ -869,17 +986,117 @@ def _resolve_stream(video_or_url: str, force: bool = False) -> dict[str, Any]:
         f"deno:{deno}",
         webpage_url,
     ]
-    process = subprocess.run(command, capture_output=True, text=True, timeout=60, check=False)
+    process = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+    used_authenticated_retry = False
     if process.returncode != 0:
-        lines = [line.strip() for line in (process.stderr or process.stdout).splitlines() if line.strip()]
-        raise RuntimeError("\n".join(lines[-6:]) or "yt-dlp could not resolve this track")
+        lines = [
+            line.strip()
+            for line in (process.stderr or process.stdout).splitlines()
+            if line.strip()
+        ]
+        detail = "\n".join(lines[-6:]) or "yt-dlp could not resolve this track"
+
+        retry_with_auth = (
+            _premium_authentication_error(detail)
+            or "requested format is not available" in detail.lower()
+        )
+        if retry_with_auth:
+            auth_args, cookie_file = _yt_dlp_auth_args()
+            if not auth_args:
+                raise RuntimeError(
+                    "This track requires YouTube Music Premium. "
+                    "Connect a Premium browser session in Nocky and try again."
+                )
+
+            authenticated_command = _authenticated_retry_command(command, auth_args)
+            try:
+                process = subprocess.run(
+                    authenticated_command,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    check=False,
+                )
+                used_authenticated_retry = process.returncode == 0
+            finally:
+                if cookie_file is not None:
+                    try:
+                        cookie_file.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+
+            if process.returncode != 0:
+                retry_lines = [
+                    line.strip()
+                    for line in (process.stderr or process.stdout).splitlines()
+                    if line.strip()
+                ]
+                retry_detail = (
+                    "\n".join(retry_lines[-6:])
+                    or "yt-dlp could not resolve this Premium track"
+                )
+                retry_normalized = retry_detail.lower()
+                if "requested format is not available" in retry_normalized:
+                    raise RuntimeError(
+                        "__NOCKY_PREMIUM_STREAM_UNAVAILABLE__"
+                        "This Premium track did not expose a compatible audio stream."
+                    )
+                if _premium_authentication_error(retry_detail):
+                    raise RuntimeError(
+                        "YouTube Music Premium rejected the saved browser session. "
+                        "Reconnect the account in Nocky and try the download again."
+                    )
+                raise RuntimeError(retry_detail)
+        else:
+            raise RuntimeError(detail)
     payload = json.loads(process.stdout)
+    if used_authenticated_retry:
+        payload["_nocky_authenticated_retry"] = True
+
+    selected_format = payload
     stream_url = str(payload.get("url") or "").strip()
     if not stream_url:
-        raise RuntimeError("yt-dlp returned no playable stream URL")
+        formats = [
+            item
+            for item in (payload.get("formats") or [])
+            if isinstance(item, dict)
+            and str(item.get("url") or "").strip()
+            and str(item.get("acodec") or "none") != "none"
+        ]
+        audio_only = [
+            item
+            for item in formats
+            if str(item.get("vcodec") or "none") == "none"
+        ]
+        candidates = audio_only or formats
+        if candidates:
+            selected_format = max(
+                candidates,
+                key=lambda item: (
+                    float(item.get("abr") or 0),
+                    float(item.get("tbr") or 0),
+                    int(item.get("filesize") or item.get("filesize_approx") or 0),
+                ),
+            )
+            stream_url = str(selected_format.get("url") or "").strip()
+
+    if not stream_url:
+        raise RuntimeError("yt-dlp returned no playable audio stream URL")
+
     headers = {
         str(key): str(value)
-        for key, value in (payload.get("http_headers") or {}).items()
+        for key, value in (
+            selected_format.get("http_headers")
+            or payload.get("http_headers")
+            or {}
+        ).items()
         if value is not None
     }
     thumbnail = str(payload.get("thumbnail") or "")
@@ -896,10 +1113,10 @@ def _resolve_stream(video_or_url: str, force: bool = False) -> dict[str, Any]:
         "duration_seconds": _duration(payload.get("duration")),
         "thumbnail_url": _upgrade_thumbnail_url(thumbnail),
         "http_headers": headers,
-        "format_id": str(payload.get("format_id") or ""),
-        "protocol": str(payload.get("protocol") or ""),
-        "container": str(payload.get("ext") or ""),
-        "audio_codec": str(payload.get("acodec") or ""),
+        "format_id": str(selected_format.get("format_id") or ""),
+        "protocol": str(selected_format.get("protocol") or ""),
+        "container": str(selected_format.get("ext") or ""),
+        "audio_codec": str(selected_format.get("acodec") or ""),
         "expires_at": time.time() + STREAM_CACHE_TTL,
     }
     cache[video_id] = result

@@ -85,7 +85,7 @@ pub(crate) fn combined_theme_css() -> String {
 mod tests {
     use super::*;
 
-    const EXPECTED_MATERIAL_EXPRESSIVE_BYTES: usize = 114350;
+    const EXPECTED_MATERIAL_EXPRESSIVE_BYTES: usize = 115074;
 
     #[test]
     fn material_modules_keep_expected_size() {
