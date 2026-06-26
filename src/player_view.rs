@@ -1,3 +1,4 @@
+// clickable_player_artist_album_navigation_v1
 use crate::{
     build_cover,
     config::AppLanguage,
@@ -104,6 +105,7 @@ impl PlayerViewHandle {
 pub(crate) struct PlayerView {
     pub(crate) handle: PlayerViewHandle,
     pub(crate) root: gtk::Box,
+    pub(crate) artist: gtk::Label,
     pub(crate) album: gtk::Label,
     pub(crate) now_heading: gtk::Label,
     pub(crate) favorite_button: gtk::Button,
@@ -160,6 +162,8 @@ impl PlayerView {
         artist.set_overflow(gtk::Overflow::Hidden);
         artist.add_css_class("hero-artist");
         artist.add_css_class("player-artist");
+        artist.add_css_class("player-metadata-link");
+        artist.set_cursor_from_name(Some("pointer"));
 
         let album = gtk::Label::new(Some(tr(Message::ChooseFolderToStart)));
         album.set_xalign(0.0);
@@ -171,6 +175,8 @@ impl PlayerView {
         album.set_overflow(gtk::Overflow::Hidden);
         album.add_css_class("dim-label");
         album.add_css_class("player-album");
+        album.add_css_class("player-metadata-link");
+        album.set_cursor_from_name(Some("pointer"));
 
         let favorite_icon = gtk::Image::from_icon_name("emblem-favorite-symbolic");
         favorite_icon.set_opacity(0.28);
@@ -478,6 +484,7 @@ impl PlayerView {
         Self {
             handle,
             root: now_card,
+            artist,
             album,
             now_heading,
             favorite_button: favorite,

@@ -1,3 +1,4 @@
+// clickable_player_artist_album_navigation_v1
 // artist_profile_revalidation_v5
 // youtube_like_reconciliation_and_request_guard_v1
 // youtube_like_button_and_track_menu_v2
@@ -108,7 +109,7 @@ use track_transition::TransitionClock;
 use visualizer::SpectrumVisualizer;
 use wave_progress::WaveProgress;
 use youtube::{
-    cache_items_for_browser, load_library_cache, youtube_collection_cache_key,
+    cache_items_for_browser, credited_artists, load_library_cache, youtube_collection_cache_key,
     youtube_collection_key, YouTubeBridge, YouTubeItem, YouTubeLibraryCache, YouTubePage,
     YouTubePageEvent, YouTubeSearchResults, YouTubeStatus,
 };
@@ -249,6 +250,7 @@ struct AppController {
     player_bounce: Rc<RevealBounce>,
     player_toggle_button: gtk::Button,
     player_toggle_icon: gtk::Image,
+    player_artist: gtk::Label,
     album: gtk::Label,
     now_heading: gtk::Label,
     favorite_button: gtk::Button,
@@ -523,6 +525,7 @@ impl AppController {
         let PlayerView {
             handle: player_view,
             root: now_card,
+            artist: player_artist,
             album,
             now_heading,
             favorite_button: favorite,
@@ -815,6 +818,7 @@ impl AppController {
             player_bounce: player_bounce.clone(),
             player_toggle_button: player_toggle_button.clone(),
             player_toggle_icon: player_toggle_icon.clone(),
+            player_artist,
             album,
             now_heading,
             favorite_button: favorite.clone(),
@@ -871,6 +875,34 @@ impl AppController {
             visual_theme_manager,
             _theme: theme,
         });
+        {
+            let weak = Rc::downgrade(&controller);
+            let click = gtk::GestureClick::new();
+            click.set_button(1);
+            click.connect_released(move |_, presses, _, _| {
+                if presses == 1 {
+                    if let Some(controller) = weak.upgrade() {
+                        controller.open_current_artist_from_player();
+                    }
+                }
+            });
+            controller.player_artist.add_controller(click);
+        }
+
+        {
+            let weak = Rc::downgrade(&controller);
+            let click = gtk::GestureClick::new();
+            click.set_button(1);
+            click.connect_released(move |_, presses, _, _| {
+                if presses == 1 {
+                    if let Some(controller) = weak.upgrade() {
+                        controller.open_current_album_from_player();
+                    }
+                }
+            });
+            controller.album.add_controller(click);
+        }
+
         {
             let weak = Rc::downgrade(&controller);
             controller.lyrics.connect_seek(move |timestamp_us| {
@@ -3127,6 +3159,108 @@ impl AppController {
         });
     }
 
+    fn open_current_artist_from_player(&self) {
+        let artist = match self.playback_source.get() {
+            PlaybackSource::Local => {
+                let state = self.state.borrow();
+                state
+                    .current
+                    .and_then(|index| state.tracks.get(index))
+                    .and_then(|track| credited_artists(&track.artist).into_iter().next())
+            }
+            PlaybackSource::YouTube => self
+                .current_youtube_item()
+                .and_then(|item| credited_artists(&item.artist).into_iter().next()),
+            PlaybackSource::None => None,
+        };
+
+        let Some(artist) = artist.filter(|artist| !artist.trim().is_empty()) else {
+            return;
+        };
+
+        self.close_settings_page();
+        self.views.set_visible_child_name("music");
+
+        if self.playback_source.get() == PlaybackSource::YouTube {
+            let item = {
+                let library = self.youtube_library.borrow();
+                library
+                    .artists
+                    .iter()
+                    .find(|entry| entry.title.eq_ignore_ascii_case(&artist))
+                    .map(|entry| entry.source.clone())
+            }
+            .unwrap_or_else(|| YouTubeItem {
+                result_type: "artist".to_string(),
+                title: artist.clone(),
+                artist: artist.clone(),
+                ..YouTubeItem::default()
+            });
+            self.load_youtube_collection_for_browser(item);
+        } else {
+            self.navigate_browser(BrowserRoute::Artist(artist));
+        }
+    }
+
+    fn open_current_album_from_player(&self) {
+        let (album, artist) = match self.playback_source.get() {
+            PlaybackSource::Local => {
+                let state = self.state.borrow();
+                let Some(track) = state.current.and_then(|index| state.tracks.get(index)) else {
+                    return;
+                };
+                (
+                    track.album.trim().to_string(),
+                    credited_artists(&track.artist)
+                        .into_iter()
+                        .next()
+                        .unwrap_or_default(),
+                )
+            }
+            PlaybackSource::YouTube => {
+                let Some(item) = self.current_youtube_item() else {
+                    return;
+                };
+                (
+                    item.album.trim().to_string(),
+                    credited_artists(&item.artist)
+                        .into_iter()
+                        .next()
+                        .unwrap_or_default(),
+                )
+            }
+            PlaybackSource::None => return,
+        };
+
+        if album.is_empty() {
+            return;
+        }
+
+        self.close_settings_page();
+        self.views.set_visible_child_name("music");
+
+        if self.playback_source.get() == PlaybackSource::YouTube {
+            let item = {
+                let library = self.youtube_library.borrow();
+                library
+                    .albums
+                    .iter()
+                    .find(|entry| entry.title.eq_ignore_ascii_case(&album))
+                    .map(|entry| entry.source.clone())
+            }
+            .unwrap_or_else(|| YouTubeItem {
+                result_type: "album".to_string(),
+                title: album.clone(),
+                album: album.clone(),
+                artist,
+                ..YouTubeItem::default()
+            });
+            self.load_youtube_collection_for_browser(item);
+        } else {
+            self.navigate_browser(BrowserRoute::Album(album));
+        }
+    }
+
     fn update_footer_source(&self) {
         self.footer_source.remove_css_class("youtube-source-badge");
         match self.playback_source.get() {
@@ -3308,6 +3442,13 @@ impl AppController {
         self.apply_source_aware_library_navigation();
 
         self.now_heading.set_text(tr(Message::NowPlaying));
+        let (artist_tooltip, album_tooltip) = match language {
+            AppLanguage::Portuguese => ("Abrir página do artista", "Abrir página do álbum"),
+            AppLanguage::English => ("Open artist page", "Open album page"),
+            AppLanguage::Spanish => ("Abrir página del artista", "Abrir página del álbum"),
+        };
+        self.player_artist.set_tooltip_text(Some(artist_tooltip));
+        self.album.set_tooltip_text(Some(album_tooltip));
         self.favorite_button
             .set_tooltip_text(Some(tr(Message::FavoriteTooltip)));
         self.footer_favorite_button

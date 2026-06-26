@@ -535,3 +535,7 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 
 - ✅ The Artists page now renders “Load more artists” as a compact artist-list row instead of an oversized album-style collection card.
 - ✅ The control reuses the page’s circular artwork surface, typography, outline and row spacing for a visually consistent result.
+
+- ✅ The main player artist and album metadata are now clickable navigation targets with localized tooltips and pointer affordance.
+- ✅ Local playback opens the matching local artist or album route, while YouTube playback reuses cached collection identifiers or resolves the collection by title when necessary.
+- ✅ Collaborative credits navigate through the primary credited artist, matching the track overflow-menu behavior.
