@@ -1,4 +1,4 @@
-use crate::queue_model::{QueueSource, QueueSourceKind};
+use crate::queue_model::{QueueSource, QueueSourceKind, ShuffleSnapshot};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
@@ -29,6 +29,8 @@ pub struct PlaybackSession {
     pub was_playing: bool,
     pub shuffle_enabled: bool,
     pub repeat_enabled: bool,
+    pub shuffle_state: Option<ShuffleSnapshot>,
+    pub shuffle_rng_state: u64,
     pub context_kind: String,
     pub context_id: String,
     pub context_title: String,
@@ -237,6 +239,21 @@ mod tests {
 
         assert!(validate_session_source(&session, QueueSourceKind::YouTube).is_ok());
         assert!(validate_session_source(&session, QueueSourceKind::Local).is_err());
+    }
+
+    #[test]
+    fn shuffle_state_is_backward_compatible_when_missing() {
+        let json = r#"{
+            "version": 1,
+            "source_key": "youtube:video-1",
+            "position_us": 1000000,
+            "shuffle_enabled": true
+        }"#;
+
+        let session: PlaybackSession = serde_json::from_str(json).expect("parse old session");
+        assert!(session.valid());
+        assert!(session.shuffle_state.is_none());
+        assert_eq!(session.shuffle_rng_state, 0);
     }
 
     #[test]

@@ -462,6 +462,14 @@ pub const fn queue_end_action(repeat_one: bool, next: Option<QueueEntryId>) -> Q
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ShuffleSnapshot {
+    current: Option<QueueEntryId>,
+    history: Vec<QueueEntryId>,
+    upcoming: Vec<QueueEntryId>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ShuffleNavigator {
     current: Option<QueueEntryId>,
@@ -474,6 +482,50 @@ impl ShuffleNavigator {
         self.current = None;
         self.history.clear();
         self.upcoming.clear();
+    }
+
+    pub fn snapshot(&self) -> ShuffleSnapshot {
+        ShuffleSnapshot {
+            current: self.current,
+            history: self.history.clone(),
+            upcoming: self.upcoming.clone(),
+        }
+    }
+
+    pub fn restore(
+        &mut self,
+        entries: &[QueueEntry],
+        current: Option<QueueEntryId>,
+        snapshot: &ShuffleSnapshot,
+    ) -> bool {
+        let valid = entries.iter().map(|entry| entry.id).collect::<HashSet<_>>();
+        let snapshot_ids_valid = snapshot
+            .current
+            .into_iter()
+            .chain(snapshot.history.iter().copied())
+            .chain(snapshot.upcoming.iter().copied())
+            .all(|id| valid.contains(&id));
+
+        if !snapshot_ids_valid || snapshot.current != current {
+            return false;
+        }
+
+        let mut unique = HashSet::new();
+        let no_duplicates = snapshot
+            .history
+            .iter()
+            .copied()
+            .chain(snapshot.upcoming.iter().copied())
+            .all(|id| unique.insert(id));
+
+        if !no_duplicates {
+            return false;
+        }
+
+        self.current = snapshot.current;
+        self.history = snapshot.history.clone();
+        self.upcoming = snapshot.upcoming.clone();
+        true
     }
 
     pub fn reset(
@@ -873,5 +925,46 @@ mod tests {
                 found: QueueSourceKind::YouTube
             })
         );
+    }
+    #[test]
+    fn shuffle_snapshot_round_trip_preserves_navigation() {
+        let mut queue = PlaybackQueue::new();
+        let first = queue.append(QueueMedia::youtube(
+            "one", "One", "Artist", "Album", 120, None,
+        ));
+        queue.append(QueueMedia::youtube(
+            "two", "Two", "Artist", "Album", 120, None,
+        ));
+        queue.append(QueueMedia::youtube(
+            "three", "Three", "Artist", "Album", 120, None,
+        ));
+        queue.select(first).expect("select first");
+
+        let mut seed = 42;
+        let mut navigator = ShuffleNavigator::default();
+        navigator.reset(queue.entries(), queue.current_id(), &mut seed);
+        let _ = navigator.next(queue.entries(), queue.current_id(), &mut seed);
+
+        let snapshot = navigator.snapshot();
+        let mut restored = ShuffleNavigator::default();
+        assert!(restored.restore(queue.entries(), snapshot.current, &snapshot));
+        assert_eq!(restored.snapshot(), snapshot);
+    }
+
+    #[test]
+    fn shuffle_snapshot_rejects_unknown_entries() {
+        let mut queue = PlaybackQueue::new();
+        let first = queue.append(QueueMedia::youtube(
+            "one", "One", "Artist", "Album", 120, None,
+        ));
+        queue.select(first).expect("select first");
+
+        let snapshot = ShuffleSnapshot {
+            current: Some(first),
+            history: Vec::new(),
+            upcoming: vec![QueueEntryId(999)],
+        };
+        let mut restored = ShuffleNavigator::default();
+        assert!(!restored.restore(queue.entries(), Some(first), &snapshot));
     }
 }
