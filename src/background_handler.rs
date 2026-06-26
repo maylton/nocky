@@ -832,9 +832,47 @@ impl AppController {
                         Err(error) => {
                             let recovery_failed =
                                 error.starts_with("__NOCKY_STREAM_RECOVERY_FAILED__");
-                            self.show_error(&error);
-                            if !recovery_failed {
-                                self.youtube_page.show_error(&error);
+                            let detail = error
+                                .strip_prefix("__NOCKY_STREAM_RECOVERY_FAILED__")
+                                .unwrap_or(&error);
+                            let kind =
+                                crate::youtube_error::classify_youtube_playback_error(detail);
+                            let message = kind.message(self.config.borrow().language);
+
+                            if recovery_failed {
+                                self.reset_youtube_recovery();
+                            }
+
+                            eprintln!(
+                                "Nocky YouTube track resolution failed ({kind:?}): {}",
+                                crate::redact_stream_url(detail)
+                            );
+                            self.album.set_text(message);
+                            self.show_toast(message);
+                            self.update_play_icons(false);
+                            self.mpris.send(crate::mpris::MprisUpdate::Playback(
+                                crate::mpris::MprisPlayback::Stopped,
+                            ));
+
+                            if kind.is_terminal() {
+                                let failed_video_id = item.video_id.clone();
+                                let current_matches =
+                                    self.playback_queue_v2.borrow().current().is_some_and(
+                                        |entry| {
+                                            matches!(
+                                                &entry.media.source,
+                                                crate::queue_model::QueueSource::YouTube {
+                                                    video_id
+                                                } if video_id == &failed_video_id
+                                            )
+                                        },
+                                    );
+
+                                if current_matches {
+                                    if let Some(next) = self.next_queue_entry_id() {
+                                        self.play_queue_entry(next, true);
+                                    }
+                                }
                             }
                         }
                     }

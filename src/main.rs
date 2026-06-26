@@ -66,6 +66,7 @@ mod visual_theme;
 mod visualizer;
 mod wave_progress;
 mod youtube;
+mod youtube_error;
 mod youtube_playback;
 
 use adw::prelude::*;
@@ -6615,18 +6616,9 @@ fn youtube_playlist_is_mix(playlist: &YouTubeItem) -> bool {
     title.contains("mix") || title.contains("radio") || title.contains("supermix")
 }
 
-fn playback_error_message(message: &str) -> &str {
-    let lower = message.to_ascii_lowercase();
-    if lower.contains("forbidden") || lower.contains("(403)") || lower.contains("http 403") {
-        "O YouTube recusou o stream desta faixa mesmo após a renovação."
-    } else if lower.contains("souphttpsrc")
-        || lower.contains("internal data stream error")
-        || lower.contains("can't typefind stream")
-    {
-        "A reprodução online foi interrompida. Verifique a conexão e tente novamente."
-    } else {
-        "Não foi possível reproduzir esta faixa."
-    }
+fn playback_error_message(message: &str) -> &'static str {
+    youtube_error::classify_youtube_playback_error(message)
+        .message(config::AppConfig::load().language)
 }
 
 fn redact_stream_url(message: &str) -> String {
