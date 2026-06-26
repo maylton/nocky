@@ -20,6 +20,16 @@ use super::{
     PlaybackSource, YouTubePlaybackState,
 };
 
+const YOUTUBE_RECOVERY_MAX_ATTEMPTS: u8 = 3;
+
+fn youtube_recovery_delay_seconds(next_attempt: u8) -> Option<u64> {
+    match next_attempt {
+        2 => Some(1),
+        3 => Some(3),
+        _ => None,
+    }
+}
+
 // queue2_completion_core_v1
 fn matching_youtube_queue_entry(
     queue: &PlaybackQueue,
@@ -125,6 +135,9 @@ impl AppController {
         self.queue_v2_pending_entry.set(recovery_entry);
 
         self.youtube_recovery_attempted.set(true);
+        self.youtube_recovery_retry_count.set(1);
+        self.youtube_recovery_generation
+            .set(self.youtube_recovery_generation.get().wrapping_add(1));
         self.youtube_recovery_in_progress.set(true);
         self.youtube_recovery_was_playing
             .set(self.player.is_playing());
@@ -133,16 +146,54 @@ impl AppController {
         let _ = self.player.stop();
 
         eprintln!(
-            "Nocky YouTube stream rejected; refreshing signed URL: {}",
+            "Nocky YouTube stream rejected; refreshing signed URL (attempt 1/{YOUTUBE_RECOVERY_MAX_ATTEMPTS}): {}",
             redact_stream_url(error)
         );
         self.resolve_youtube_track(item, queue, index, true);
         true
     }
 
+    pub(super) fn schedule_youtube_recovery_retry(
+        &self,
+        queue: Vec<YouTubeItem>,
+        index: usize,
+        item: YouTubeItem,
+    ) -> bool {
+        let next_attempt = self.youtube_recovery_retry_count.get().saturating_add(1);
+        let Some(delay_seconds) = youtube_recovery_delay_seconds(next_attempt) else {
+            return false;
+        };
+        if next_attempt > YOUTUBE_RECOVERY_MAX_ATTEMPTS {
+            return false;
+        }
+
+        self.youtube_recovery_retry_count.set(next_attempt);
+        self.youtube_recovery_in_progress.set(true);
+        let generation = self.youtube_recovery_generation.get();
+        let sender = self.background.sender();
+
+        eprintln!(
+            "Nocky YouTube recovery attempt {next_attempt}/{YOUTUBE_RECOVERY_MAX_ATTEMPTS} scheduled in {delay_seconds}s"
+        );
+
+        thread::spawn(move || {
+            thread::sleep(std::time::Duration::from_secs(delay_seconds));
+            let _ = sender.send(BackgroundMessage::YouTubeRecoveryRetry {
+                generation,
+                queue,
+                index,
+                item: Box::new(item),
+            });
+        });
+        true
+    }
+
     pub(super) fn reset_youtube_recovery(&self) {
         self.youtube_recovery_in_progress.set(false);
         self.youtube_recovery_attempted.set(false);
+        self.youtube_recovery_retry_count.set(0);
+        self.youtube_recovery_generation
+            .set(self.youtube_recovery_generation.get().wrapping_add(1));
         self.youtube_recovery_resume_us.set(0);
         self.youtube_recovery_was_playing.set(false);
     }
@@ -176,6 +227,10 @@ impl AppController {
         cover_path: Option<PathBuf>,
     ) {
         let recovering = self.youtube_recovery_in_progress.replace(false);
+        if recovering {
+            self.youtube_recovery_attempted.set(false);
+            self.youtube_recovery_retry_count.set(0);
+        }
         let pending = self.queue_v2_pending_entry.replace(None);
         let preserved_id = if recovering {
             let playback_queue = self.playback_queue_v2.borrow();
@@ -423,6 +478,14 @@ impl AppController {
 mod tests {
     use super::*;
     use crate::queue_model::QueueMedia;
+
+    #[test]
+    fn bounded_recovery_delays_are_explicit() {
+        assert_eq!(youtube_recovery_delay_seconds(1), None);
+        assert_eq!(youtube_recovery_delay_seconds(2), Some(1));
+        assert_eq!(youtube_recovery_delay_seconds(3), Some(3));
+        assert_eq!(youtube_recovery_delay_seconds(4), None);
+    }
 
     #[test]
     fn recovery_prefers_the_exact_entry_id_for_duplicate_videos() {

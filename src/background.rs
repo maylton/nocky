@@ -94,6 +94,12 @@ pub(crate) enum BackgroundMessage {
         item: Box<YouTubeItem>,
         result: Result<(YouTubeStream, Option<PathBuf>), String>,
     },
+    YouTubeRecoveryRetry {
+        generation: u64,
+        queue: Vec<YouTubeItem>,
+        index: usize,
+        item: Box<YouTubeItem>,
+    },
 }
 
 pub(crate) struct BackgroundChannel {

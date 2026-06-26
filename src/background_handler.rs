@@ -815,6 +815,26 @@ impl AppController {
                     Ok(items) => self.youtube_page.show_items(&title, items),
                     Err(error) => self.youtube_page.show_error(&error),
                 },
+                BackgroundMessage::YouTubeRecoveryRetry {
+                    generation,
+                    queue,
+                    index,
+                    item,
+                } => {
+                    let current_video_id = self
+                        .youtube_state
+                        .borrow()
+                        .as_ref()
+                        .map(|state| state.item.video_id.clone());
+                    if generation != self.youtube_recovery_generation.get()
+                        || !self.youtube_recovery_in_progress.get()
+                        || current_video_id.as_deref() != Some(item.video_id.as_str())
+                    {
+                        continue;
+                    }
+
+                    self.resolve_youtube_track(*item, queue, index, true);
+                }
                 BackgroundMessage::YouTubeResolved {
                     request_id,
                     queue,
@@ -837,8 +857,19 @@ impl AppController {
                                 .unwrap_or(&error);
                             let kind =
                                 crate::youtube_error::classify_youtube_playback_error(detail);
-                            let message = kind.message(self.config.borrow().language);
 
+                            if recovery_failed
+                                && kind == crate::youtube_error::YouTubePlaybackErrorKind::TemporaryNetwork
+                                && self.schedule_youtube_recovery_retry(
+                                    queue,
+                                    index,
+                                    (*item).clone(),
+                                )
+                            {
+                                continue;
+                            }
+
+                            let message = kind.message(self.config.borrow().language);
                             if recovery_failed {
                                 self.reset_youtube_recovery();
                             }
