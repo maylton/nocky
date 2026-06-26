@@ -1,3 +1,4 @@
+// compact_artist_load_more_button_v1
 // artist_page_stable_refresh_v1
 // artist_profile_revalidation_v5
 // ranked_artist_unique_artwork_v3
@@ -2266,14 +2267,7 @@ impl LibraryBrowser {
             append_collection_grid_card(
                 &self.artists_grid,
                 position,
-                collection_event_button(
-                    collection_placeholder(
-                        "Carregar mais artistas",
-                        &format!("{hidden} restantes"),
-                    ),
-                    BrowserEvent::LoadMoreArtists,
-                    &self.event_tx,
-                ),
+                artist_load_more_button(hidden, &self.event_tx),
             );
             position += 1;
         }
@@ -5037,6 +5031,91 @@ fn artist_collection_button(
     let sender = event_tx.clone();
     button.connect_clicked(move |_| {
         let _ = sender.send(event.clone());
+    });
+
+    button
+}
+
+fn artist_load_more_button(remaining: usize, event_tx: &Sender<BrowserEvent>) -> gtk::Button {
+    let icon = gtk::Image::from_icon_name("view-more-symbolic");
+    icon.set_pixel_size(22);
+    icon.set_halign(gtk::Align::Center);
+    icon.set_valign(gtk::Align::Center);
+    icon.add_css_class("typed-placeholder-icon");
+
+    let icon_surface = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    icon_surface.set_size_request(56, 56);
+    icon_surface.set_halign(gtk::Align::Start);
+    icon_surface.set_valign(gtk::Align::Center);
+    icon_surface.set_hexpand(false);
+    icon_surface.set_vexpand(false);
+    icon_surface.add_css_class("artist-artwork");
+    icon_surface.add_css_class("circular");
+    icon_surface.add_css_class("typed-collection-placeholder");
+    icon_surface.add_css_class("artist-placeholder");
+    icon_surface.append(&icon);
+
+    let title = gtk::Label::new(Some("Carregar mais artistas"));
+    title.set_xalign(0.0);
+    title.set_hexpand(true);
+    title.set_single_line_mode(true);
+    title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    title.add_css_class("heading");
+    title.add_css_class("compact-artist-title");
+
+    let subtitle = gtk::Label::new(Some(&format!("{remaining} restantes")));
+    subtitle.set_xalign(0.0);
+    subtitle.set_single_line_mode(true);
+    subtitle.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    subtitle.add_css_class("dim-label");
+    subtitle.add_css_class("compact-artist-subtitle");
+
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    text.set_hexpand(true);
+    text.set_valign(gtk::Align::Center);
+    text.append(&title);
+    text.append(&subtitle);
+
+    let arrow = gtk::Image::from_icon_name("go-down-symbolic");
+    arrow.set_pixel_size(18);
+    arrow.set_halign(gtk::Align::End);
+    arrow.set_valign(gtk::Align::Center);
+    arrow.set_hexpand(false);
+    arrow.add_css_class("dim-label");
+
+    let card = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    card.set_size_request(250, 72);
+    card.set_hexpand(true);
+    card.set_vexpand(false);
+    card.set_halign(gtk::Align::Fill);
+    card.set_valign(gtk::Align::Center);
+    card.set_margin_top(6);
+    card.set_margin_bottom(6);
+    card.set_margin_start(8);
+    card.set_margin_end(8);
+    card.append(&icon_surface);
+    card.append(&text);
+    card.append(&arrow);
+    card.add_css_class("compact-artist-card");
+    card.add_css_class("collection-card");
+    card.add_css_class("expressive-collection-card");
+    card.add_css_class("search-result-row");
+    card.add_css_class("artist-load-more-card");
+
+    let button = gtk::Button::new();
+    button.set_child(Some(&card));
+    button.set_size_request(280, 84);
+    button.set_hexpand(true);
+    button.set_vexpand(false);
+    button.set_halign(gtk::Align::Fill);
+    button.set_valign(gtk::Align::Start);
+    button.add_css_class("flat");
+    button.add_css_class("compact-artist-button");
+    button.add_css_class("artist-load-more-button");
+
+    let sender = event_tx.clone();
+    button.connect_clicked(move |_| {
+        let _ = sender.send(BrowserEvent::LoadMoreArtists);
     });
 
     button

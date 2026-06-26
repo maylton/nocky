@@ -532,3 +532,6 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - ✅ Album cards are rebuilt only when the artist discography actually changes, eliminating the visible flash caused by clear-and-recreate refreshes.
 - ✅ Navigation between Artists and artist detail uses a stable crossfade instead of the one-pixel GtkStack slide allocation that produced GtkButton size warnings.
 - ✅ The personalized Home keeps its existing dedicated crossfade behavior.
+
+- ✅ The Artists page now renders “Load more artists” as a compact artist-list row instead of an oversized album-style collection card.
+- ✅ The control reuses the page’s circular artwork surface, typography, outline and row spacing for a visually consistent result.
