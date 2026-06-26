@@ -25,7 +25,21 @@ pub fn save(snapshot: &QueueSnapshot) -> io::Result<()> {
 
 #[allow(dead_code)] // Used by the upcoming source-session controller integration.
 pub fn load_for(source: QueueSourceKind) -> QueueLoadResult {
-    load_from_path(&queue_state_path_for(source))
+    let source_path = queue_state_path_for(source);
+    if source_path.is_file() {
+        return load_from_path_for_source(&source_path, source);
+    }
+
+    migrate_legacy_queue(source, &source_path).unwrap_or_else(|error| {
+        eprintln!(
+            "Could not migrate legacy queue for {source:?} to {}: {error}",
+            source_path.display()
+        );
+        QueueLoadResult {
+            queue: PlaybackQueue::new(),
+            discarded_entries: 0,
+        }
+    })
 }
 
 #[allow(dead_code)] // Used by the upcoming source-session controller integration.
@@ -60,6 +74,95 @@ fn state_directory() -> PathBuf {
     }
 
     env::temp_dir().join("nocky")
+}
+
+fn migrate_legacy_queue(
+    source: QueueSourceKind,
+    source_path: &Path,
+) -> io::Result<QueueLoadResult> {
+    let legacy_path = queue_state_path();
+    if !legacy_path.is_file() {
+        return Ok(QueueLoadResult {
+            queue: PlaybackQueue::new(),
+            discarded_entries: 0,
+        });
+    }
+
+    let contents = fs::read_to_string(&legacy_path)?;
+    let mut snapshot = match serde_json::from_str::<QueueSnapshot>(&contents) {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            eprintln!(
+                "Could not parse legacy Queue 2.0 state at {}: {error}",
+                legacy_path.display()
+            );
+            quarantine_invalid_state(&legacy_path);
+            return Ok(QueueLoadResult {
+                queue: PlaybackQueue::new(),
+                discarded_entries: 0,
+            });
+        }
+    };
+
+    let original_len = snapshot.entries.len();
+    snapshot
+        .entries
+        .retain(|entry| entry.media.source.kind() == source);
+    let source_filtered = original_len.saturating_sub(snapshot.entries.len());
+
+    let valid_before = snapshot.entries.len();
+    snapshot.entries.retain(|entry| match &entry.media.source {
+        QueueSource::Local { path } => path.is_file(),
+        QueueSource::YouTube { video_id } => !video_id.trim().is_empty(),
+    });
+    let invalid_filtered = valid_before.saturating_sub(snapshot.entries.len());
+
+    if snapshot
+        .current_id
+        .is_some_and(|current_id| !snapshot.entries.iter().any(|entry| entry.id == current_id))
+    {
+        snapshot.current_id = None;
+    }
+
+    let queue = match PlaybackQueue::restore(snapshot) {
+        Ok(queue) => queue,
+        Err(error) => {
+            eprintln!("Could not restore legacy Queue 2.0 state for {source:?}: {error}");
+            return Ok(QueueLoadResult {
+                queue: PlaybackQueue::new(),
+                discarded_entries: source_filtered.saturating_add(invalid_filtered),
+            });
+        }
+    };
+
+    queue
+        .validate_source(source)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
+
+    save_to_path(source_path, &queue.snapshot())?;
+
+    Ok(QueueLoadResult {
+        queue,
+        discarded_entries: source_filtered.saturating_add(invalid_filtered),
+    })
+}
+
+fn load_from_path_for_source(path: &Path, source: QueueSourceKind) -> QueueLoadResult {
+    let result = load_from_path(path);
+
+    if let Err(error) = result.queue.validate_source(source) {
+        eprintln!(
+            "Saved queue at {} does not belong to {source:?}: {error}",
+            path.display()
+        );
+        quarantine_invalid_state(path);
+        return QueueLoadResult {
+            queue: PlaybackQueue::new(),
+            discarded_entries: result.queue.len(),
+        };
+    }
+
+    result
 }
 
 fn load_from_path(path: &Path) -> QueueLoadResult {
@@ -156,7 +259,12 @@ fn quarantine_invalid_state(path: &Path) {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_secs())
         .unwrap_or_default();
-    let quarantine = path.with_file_name(format!("queue.invalid-{stamp}.json"));
+    let stem = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.is_empty())
+        .unwrap_or("queue");
+    let quarantine = path.with_file_name(format!("{stem}.invalid-{stamp}.json"));
 
     if let Err(error) = fs::rename(path, &quarantine) {
         eprintln!(
@@ -323,5 +431,84 @@ mod tests {
             Some("queue-youtube.json")
         );
         assert_ne!(local, youtube);
+    }
+    #[test]
+    fn legacy_migration_keeps_only_requested_source() {
+        let directory = temporary_directory("legacy-split");
+        let legacy = directory.join("queue.json");
+        let local_state = directory.join("queue-local.json");
+
+        let local_path = directory.join("song.flac");
+        fs::write(&local_path, b"fixture").expect("create local fixture");
+
+        let mut queue = PlaybackQueue::new();
+        let local_id = queue.append(QueueMedia::local(
+            local_path, "Local", "Artist", "Album", 180, None,
+        ));
+        queue.append(QueueMedia::youtube(
+            "video-id", "Online", "Artist", "Album", 200, None,
+        ));
+        queue.select(local_id).expect("select local entry");
+        save_to_path(&legacy, &queue.snapshot()).expect("save legacy queue");
+
+        let contents = fs::read_to_string(&legacy).expect("read legacy queue");
+        let mut snapshot: QueueSnapshot =
+            serde_json::from_str(&contents).expect("parse legacy queue");
+        let original_len = snapshot.entries.len();
+        snapshot
+            .entries
+            .retain(|entry| entry.media.source.kind() == QueueSourceKind::Local);
+        let discarded = original_len - snapshot.entries.len();
+
+        if snapshot
+            .current_id
+            .is_some_and(|id| !snapshot.entries.iter().any(|entry| entry.id == id))
+        {
+            snapshot.current_id = None;
+        }
+
+        let migrated = PlaybackQueue::restore(snapshot).expect("restore split queue");
+        migrated
+            .validate_source(QueueSourceKind::Local)
+            .expect("validate local queue");
+        save_to_path(&local_state, &migrated.snapshot()).expect("save split queue");
+
+        assert_eq!(discarded, 1);
+        assert_eq!(migrated.len(), 1);
+        assert!(matches!(
+            migrated.entries()[0].media.source,
+            QueueSource::Local { .. }
+        ));
+        assert!(local_state.is_file());
+        assert!(legacy.is_file());
+
+        fs::remove_dir_all(directory).expect("remove temporary queue directory");
+    }
+
+    #[test]
+    fn source_specific_loader_quarantines_wrong_source_file() {
+        let directory = temporary_directory("wrong-source");
+        let path = directory.join("queue-local.json");
+
+        let mut queue = PlaybackQueue::new();
+        queue.append(QueueMedia::youtube(
+            "video-id", "Online", "Artist", "Album", 200, None,
+        ));
+        save_to_path(&path, &queue.snapshot()).expect("save wrong source queue");
+
+        let loaded = load_from_path_for_source(&path, QueueSourceKind::Local);
+
+        assert!(loaded.queue.is_empty());
+        assert_eq!(loaded.discarded_entries, 1);
+        assert!(!path.exists());
+        assert!(fs::read_dir(&directory)
+            .expect("read directory")
+            .flatten()
+            .any(|entry| entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("queue-local.invalid-")));
+
+        fs::remove_dir_all(directory).expect("remove temporary queue directory");
     }
 }
