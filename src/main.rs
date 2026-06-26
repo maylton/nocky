@@ -745,7 +745,7 @@ impl AppController {
         }
         let restored_queue = queue_load.queue;
         let restored_queue_snapshot = restored_queue.snapshot();
-        let restored_playback_session = playback_session::load();
+        let restored_playback_session = playback_session::load_for(initial_queue_source);
 
         let initial_volume = config.volume.clamp(0.15, 1.0);
         let mut listening_history = ListeningHistory::load();
@@ -3115,6 +3115,7 @@ impl AppController {
             return;
         }
 
+        self.persist_playback_session_now();
         self.maybe_record_listening();
         let _ = self.player.pause();
         self.update_play_icons(false);
@@ -3131,9 +3132,23 @@ impl AppController {
         self.playback_queue_v2.replace(queue_load.queue);
         self.queue_last_saved_snapshot.replace(snapshot);
         self.active_queue_source.set(source);
+
+        let restored_session = playback_session::load_for(source);
+        let restored_seconds = restored_session
+            .as_ref()
+            .map(|session| (session.position_us.max(0) as u64) / 1_000_000)
+            .unwrap_or_default();
+        self.restored_playback_session.replace(restored_session);
+        self.playback_session_last_position_seconds
+            .set(restored_seconds);
+        self.playback_session_restore_attempts.set(0);
+        self.pending_resume_position_us.set(None);
+        self.startup_restore_autoplay.set(None);
+
         self.reset_shuffle_navigation(self.shuffle_enabled.get());
         self.publish_mpris_capabilities();
         self.update_footer_source();
+        self.try_restore_playback_session();
     }
 
     fn apply_startup_source(self: &Rc<Self>) {
@@ -4876,18 +4891,20 @@ impl AppController {
         }
 
         self.playback_session_last_position_seconds.set(seconds);
-        if let Err(error) = playback_session::save(&session) {
-            eprintln!("Could not save playback session: {error}");
+        let source = self.active_queue_source.get();
+        if let Err(error) = playback_session::save_for(source, &session) {
+            eprintln!("Could not save playback session for {source:?}: {error}");
         }
     }
 
     fn persist_playback_session_now(&self) {
+        let source = self.active_queue_source.get();
         if let Some(session) = self.playback_session_snapshot() {
-            if let Err(error) = playback_session::save(&session) {
-                eprintln!("Could not save playback session: {error}");
+            if let Err(error) = playback_session::save_for(source, &session) {
+                eprintln!("Could not save playback session for {source:?}: {error}");
             }
-        } else if let Err(error) = playback_session::clear() {
-            eprintln!("Could not clear playback session: {error}");
+        } else if let Err(error) = playback_session::clear_for(source) {
+            eprintln!("Could not clear playback session for {source:?}: {error}");
         }
     }
 
