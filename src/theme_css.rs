@@ -58,6 +58,10 @@ const MATERIAL_EXPRESSIVE_MODULES: &[(&str, &str)] = &[
         "097-queue.css",
         include_str!("../assets/themes/material-expressive/097-queue.css"),
     ),
+    (
+        "098-cache-indicators.css",
+        include_str!("../assets/themes/material-expressive/098-cache-indicators.css"),
+    ),
 ];
 
 pub(crate) fn combined_theme_css() -> String {
@@ -81,7 +85,7 @@ pub(crate) fn combined_theme_css() -> String {
 mod tests {
     use super::*;
 
-    const EXPECTED_MATERIAL_EXPRESSIVE_BYTES: usize = 113838;
+    const EXPECTED_MATERIAL_EXPRESSIVE_BYTES: usize = 114350;
 
     #[test]
     fn material_modules_keep_expected_size() {

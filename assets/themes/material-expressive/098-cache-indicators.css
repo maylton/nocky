@@ -1,0 +1,28 @@
+.youtube-cache-indicator {
+  min-width: 14px;
+  min-height: 14px;
+  margin: 0 2px;
+  transition: opacity 160ms ease;
+}
+
+.youtube-cache-indicator.youtube-cache-fresh {
+  opacity: 0.72;
+}
+
+.youtube-cache-indicator.youtube-cache-stale {
+  opacity: 0.34;
+}
+
+.youtube-collection-card .youtube-cache-indicator {
+  margin-top: -2px;
+  margin-bottom: -2px;
+}
+
+.youtube-track-row .youtube-cache-indicator {
+  margin-left: 2px;
+  margin-right: 2px;
+}
+
+.collection-page-header .youtube-cache-indicator {
+  opacity: 0.62;
+}

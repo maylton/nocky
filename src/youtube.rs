@@ -13,6 +13,7 @@ use std::{
     process::{Command, Stdio},
     rc::Rc,
     sync::{
+        atomic::{AtomicU8, Ordering as AtomicOrdering},
         mpsc::{self, Receiver, RecvTimeoutError, Sender},
         Mutex, OnceLock,
     },
@@ -46,6 +47,33 @@ impl YouTubeItem {
         let path = Path::new(&self.cover_path);
         (!self.cover_path.is_empty() && path.is_file()).then_some(path)
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum YouTubeCacheVisualState {
+    #[default]
+    Hidden,
+    Fresh,
+    Stale,
+}
+
+static YOUTUBE_CACHE_VISUAL_STATE: AtomicU8 = AtomicU8::new(0);
+
+pub fn youtube_cache_visual_state() -> YouTubeCacheVisualState {
+    match YOUTUBE_CACHE_VISUAL_STATE.load(AtomicOrdering::Relaxed) {
+        1 => YouTubeCacheVisualState::Fresh,
+        2 => YouTubeCacheVisualState::Stale,
+        _ => YouTubeCacheVisualState::Hidden,
+    }
+}
+
+fn set_youtube_cache_visual_state(state: YouTubeCacheVisualState) {
+    let value = match state {
+        YouTubeCacheVisualState::Hidden => 0,
+        YouTubeCacheVisualState::Fresh => 1,
+        YouTubeCacheVisualState::Stale => 2,
+    };
+    YOUTUBE_CACHE_VISUAL_STATE.store(value, AtomicOrdering::Relaxed);
 }
 
 pub fn cached_cover_for_item(item: &YouTubeItem) -> Option<PathBuf> {
@@ -383,6 +411,7 @@ impl YouTubeLibraryCache {
     }
 
     pub fn clear(&mut self) {
+        set_youtube_cache_visual_state(YouTubeCacheVisualState::Hidden);
         self.connected = false;
         self.syncing = false;
         self.synced = false;
@@ -405,6 +434,7 @@ impl YouTubeLibraryCache {
     }
 
     pub fn apply(&mut self, snapshot: YouTubeLibrarySnapshot) -> YouTubeLibrarySyncChanges {
+        set_youtube_cache_visual_state(YouTubeCacheVisualState::Fresh);
         self.syncing = false;
         self.synced = true;
 
@@ -1741,10 +1771,16 @@ fn rekey_collection_map<'a, T>(
 pub fn load_library_cache() -> YouTubeLibraryCache {
     let path = youtube_library_cache_path();
     let Ok(raw) = fs::read_to_string(path) else {
-        return YouTubeLibraryCache::default();
+        {
+            set_youtube_cache_visual_state(YouTubeCacheVisualState::Hidden);
+            return YouTubeLibraryCache::default();
+        }
     };
     let Ok(mut cache) = serde_json::from_str::<PersistedYouTubeLibraryCache>(&raw) else {
-        return YouTubeLibraryCache::default();
+        {
+            set_youtube_cache_visual_state(YouTubeCacheVisualState::Hidden);
+            return YouTubeLibraryCache::default();
+        }
     };
     if !matches!(
         cache.version,
@@ -1754,11 +1790,20 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
             "Ignoring incompatible YouTube library cache version {} (expected {} or {})",
             cache.version, LIBRARY_CACHE_COMPAT_VERSION, LIBRARY_CACHE_VERSION
         );
-        return YouTubeLibraryCache::default();
+        {
+            set_youtube_cache_visual_state(YouTubeCacheVisualState::Hidden);
+            return YouTubeLibraryCache::default();
+        }
     }
 
     let now = unix_now_seconds();
     let freshness = youtube_cache_freshness(cache.saved_at, now);
+    set_youtube_cache_visual_state(match freshness {
+        YouTubeCacheFreshness::Fresh => YouTubeCacheVisualState::Fresh,
+        YouTubeCacheFreshness::Revalidate | YouTubeCacheFreshness::StaleDetails => {
+            YouTubeCacheVisualState::Stale
+        }
+    });
     let suggestions_expired =
         cache_is_expired(cache.saved_at, now, YOUTUBE_CACHE_SUGGESTION_TTL_SECS);
 
