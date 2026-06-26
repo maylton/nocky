@@ -126,6 +126,8 @@ impl AppController {
 
         self.youtube_recovery_attempted.set(true);
         self.youtube_recovery_in_progress.set(true);
+        self.youtube_recovery_was_playing
+            .set(self.player.is_playing());
         self.youtube_recovery_resume_us
             .set(self.player.position_us().max(0));
         let _ = self.player.stop();
@@ -142,6 +144,7 @@ impl AppController {
         self.youtube_recovery_in_progress.set(false);
         self.youtube_recovery_attempted.set(false);
         self.youtube_recovery_resume_us.set(0);
+        self.youtube_recovery_was_playing.set(false);
     }
 
     pub(super) fn resume_youtube_after_recovery(&self) {
@@ -230,13 +233,18 @@ impl AppController {
             item.duration_seconds = stream.duration_seconds;
         }
 
-        let autoplay = self.startup_restore_autoplay.replace(None).unwrap_or(true);
+        let autoplay = if recovering {
+            self.youtube_recovery_was_playing.replace(false)
+        } else {
+            self.startup_restore_autoplay.replace(None).unwrap_or(true)
+        };
         if let Err(error) =
             self.player
                 .load_with_headers(&stream.stream_url, autoplay, stream.http_headers.clone())
         {
             self.youtube_recovery_in_progress.set(false);
             self.youtube_recovery_resume_us.set(0);
+            self.youtube_recovery_was_playing.set(false);
             self.show_error(&error);
             return;
         }

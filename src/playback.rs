@@ -13,6 +13,7 @@ use std::{
 pub enum PlaybackEvent {
     EndOfStream,
     DurationChanged,
+    ClockLost,
     Spectrum(Vec<f32>),
     Error(String),
 }
@@ -129,6 +130,9 @@ impl PlaybackEngine {
                     MessageView::DurationChanged(..) | MessageView::AsyncDone(..) => {
                         let _ = event_tx.send(PlaybackEvent::DurationChanged);
                     }
+                    MessageView::ClockLost(..) => {
+                        let _ = event_tx.send(PlaybackEvent::ClockLost);
+                    }
                     MessageView::Element(element) => {
                         if let Some(structure) = element.structure() {
                             if structure.name().as_str() == "spectrum" {
@@ -235,6 +239,25 @@ impl PlaybackEngine {
             .set_state(gst::State::Paused)
             .map(|_| ())
             .map_err(|_| "GStreamer could not pause playback".to_string())
+    }
+
+    pub fn recover_clock(&self) -> Result<(), String> {
+        if !self.loaded.get() {
+            return Ok(());
+        }
+
+        let should_resume = self.pipeline.current_state() == gst::State::Playing;
+        self.pipeline
+            .set_state(gst::State::Paused)
+            .map_err(|_| "GStreamer could not pause after losing its clock".to_string())?;
+
+        if should_resume {
+            self.pipeline
+                .set_state(gst::State::Playing)
+                .map_err(|_| "GStreamer could not resume after recovering its clock".to_string())?;
+        }
+
+        Ok(())
     }
 
     pub fn stop(&self) -> Result<(), String> {
