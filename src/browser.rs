@@ -51,6 +51,7 @@ use crate::{
     artist_index::LocalArtistIndex,
     config::{AppConfig, AppLanguage, StartupSource, VisualTheme},
     listening_history::{HistoryActivity, ListeningHistory, ListeningSource, ListeningStats},
+    local_mix_cover,
     model::Track,
     youtube::{
         artist_credit_contains, credited_artists, youtube_cache_visual_state,
@@ -243,6 +244,11 @@ enum HomeHistoryTrack {
     },
     LocalAlbum(String),
     LocalPlaylist(String),
+    LocalMix {
+        title: String,
+        cover_path: Option<PathBuf>,
+        indices: Vec<usize>,
+    },
     YouTubeAlbum {
         item: YouTubeItem,
         cover_path: Option<PathBuf>,
@@ -561,6 +567,41 @@ fn home_copy(language: AppLanguage) -> HomeCopy {
     }
 }
 
+fn local_mix_album_covers(tracks: &[Track], indices: &[usize]) -> Vec<PathBuf> {
+    let mut seen_albums = BTreeSet::new();
+    let mut covers = Vec::new();
+
+    for index in indices {
+        let Some(track) = tracks.get(*index) else {
+            continue;
+        };
+
+        let album = track.album.trim();
+        let Some(cover_path) = track.cover_path.clone() else {
+            continue;
+        };
+
+        // Prefer album identity over artist/track identity. This prevents
+        // duplicate tiles when one album contains feats, remixes or
+        // differently credited tracks that share the same artwork.
+        let album_key = if album.is_empty() {
+            cover_path.to_string_lossy().to_lowercase()
+        } else {
+            album.to_lowercase()
+        };
+
+        if seen_albums.insert(album_key) {
+            covers.push(cover_path);
+        }
+
+        if covers.len() == 4 {
+            break;
+        }
+    }
+
+    covers
+}
+
 fn local_home_mix_cards(
     tracks: &[Track],
     history: &ListeningHistory,
@@ -619,10 +660,7 @@ fn local_home_mix_cards(
             continue;
         }
 
-        let cover_path = indices
-            .iter()
-            .filter_map(|index| tracks.get(*index))
-            .find_map(|track| track.cover_path.clone());
+        let cover_path = local_mix_cover::cover_for_mix(local_mix_album_covers(tracks, &indices));
 
         let title = match language {
             AppLanguage::Portuguese => format!("Mix de {artist}"),
@@ -2160,15 +2198,7 @@ impl LibraryBrowser {
         let youtube_home = active_source == ListeningSource::YouTube;
 
         if config.show_personalized_home_history {
-            let mut recent_activity = history.recent_activity(ListeningSource::Local, 12);
-            recent_activity.extend(history.recent_activity(ListeningSource::YouTube, 12));
-            recent_activity.sort_by_key(|item| {
-                std::cmp::Reverse(match item {
-                    HistoryActivity::Track(track) => track.played_at,
-                    HistoryActivity::Collection(collection) => collection.played_at,
-                })
-            });
-            recent_activity.truncate(12);
+            let recent_activity = history.recent_activity(active_source, 12);
             let recent = history_home_activity(tracks, youtube, recent_activity);
             if !recent.is_empty() {
                 next_home.append(&home_history_section(
@@ -2827,6 +2857,49 @@ fn history_home_activity(
                 ListeningSource::Local if collection.kind == "album" => {
                     entries.push(HomeHistoryTrack::LocalAlbum(collection.title));
                 }
+                ListeningSource::Local
+                    if collection.kind == "mix"
+                        || (collection.kind == "playlist"
+                            && collection.id.starts_with("local-mix:")) =>
+                {
+                    let artist = if collection.kind == "mix" {
+                        collection.id.trim().to_string()
+                    } else {
+                        tracks
+                            .iter()
+                            .map(|track| track.artist.trim())
+                            .filter(|artist| !artist.is_empty())
+                            .find(|artist| {
+                                format!("Mix de {artist}").eq_ignore_ascii_case(&collection.title)
+                                    || format!("{artist} Mix")
+                                        .eq_ignore_ascii_case(&collection.title)
+                            })
+                            .unwrap_or_default()
+                            .to_string()
+                    };
+
+                    let indices = tracks
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, track)| {
+                            !artist.is_empty() && track.artist.eq_ignore_ascii_case(&artist)
+                        })
+                        .map(|(index, _)| index)
+                        .collect::<Vec<_>>();
+
+                    let cover_path =
+                        local_mix_cover::cover_for_mix(local_mix_album_covers(tracks, &indices));
+
+                    if indices.is_empty() {
+                        entries.push(HomeHistoryTrack::LocalPlaylist(collection.title));
+                    } else {
+                        entries.push(HomeHistoryTrack::LocalMix {
+                            title: collection.title,
+                            cover_path,
+                            indices,
+                        });
+                    }
+                }
                 ListeningSource::Local if collection.kind == "playlist" => {
                     entries.push(HomeHistoryTrack::LocalPlaylist(collection.title));
                 }
@@ -2926,7 +2999,13 @@ fn ranked_home_album_cards(
         }
     }
 
-    let fallback = home_album_cards(tracks, youtube, language);
+    let fallback = home_album_cards(tracks, youtube, language)
+        .into_iter()
+        .filter(|card| match source {
+            ListeningSource::Local => matches!(card, HomeCard::LocalAlbum { .. }),
+            ListeningSource::YouTube => matches!(card, HomeCard::YouTubeAlbum { .. }),
+        })
+        .collect::<Vec<_>>();
     let catalog = youtube_catalog(youtube);
     let mut cards = Vec::new();
 
@@ -3059,7 +3138,13 @@ fn ranked_home_artist_cards(
     language: AppLanguage,
 ) -> Vec<HomeCard> {
     let ranked = history.ranked_artists(source, 12);
-    let fallback = home_artist_cards(tracks, youtube);
+    let fallback = home_artist_cards(tracks, youtube)
+        .into_iter()
+        .filter(|card| match source {
+            ListeningSource::Local => matches!(card, HomeCard::LocalArtist { .. }),
+            ListeningSource::YouTube => matches!(card, HomeCard::YouTubeArtist { .. }),
+        })
+        .collect::<Vec<_>>();
     let catalog = youtube_catalog(youtube);
     let local_artist_index = LocalArtistIndex::build(tracks);
     let mut cards = Vec::new();
@@ -3862,6 +3947,24 @@ fn home_history_section(
                     false,
                 ),
                 BrowserEvent::Navigate(BrowserRoute::Album(title)),
+            ),
+            HomeHistoryTrack::LocalMix {
+                title,
+                cover_path,
+                indices,
+            } => (
+                collection_card(
+                    cover_path.as_deref(),
+                    &title,
+                    match language {
+                        AppLanguage::Portuguese => "Mix ouvido recentemente",
+                        AppLanguage::English => "Recently listened mix",
+                        AppLanguage::Spanish => "Mix escuchado recientemente",
+                    },
+                    "Local",
+                    false,
+                ),
+                BrowserEvent::PlayLocalMix { title, indices },
             ),
             HomeHistoryTrack::LocalPlaylist(title) => (
                 collection_card(
