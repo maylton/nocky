@@ -1,3 +1,4 @@
+// stable_artist_overview_refresh_v1
 // stable_collection_identity_and_deferred_cache_v2
 // artist_page_stable_refresh_v1
 // artist_profile_revalidation_v5
@@ -11,7 +12,7 @@ use crate::{
     config::StartupSource,
     youtube::{
         cacheable_youtube_playlist, clear_library_cache, queue_library_cache_save,
-        youtube_collection_key, YouTubeSearchResults,
+        youtube_collection_cache_key, youtube_collection_key, YouTubeSearchResults,
     },
     AppController,
 };
@@ -578,44 +579,70 @@ impl AppController {
                     let mut profile_changed = false;
                     let mut albums_changed = false;
                     let mut load_failed = false;
+                    let mut open_artist = false;
+                    let mut route_reference_changed = false;
 
                     match result {
-                        Ok(overview) => {
-                            let mut library = self.youtube_library.borrow_mut();
+                        Ok(mut overview) => {
+                            if overview.profile.result_type.trim().is_empty() {
+                                overview.profile.result_type = "artist".to_string();
+                            }
 
+                            let canonical_key = youtube_collection_cache_key(&overview.profile);
+                            open_artist = self
+                                .browser
+                                .update_open_youtube_artist_reference(&key, &overview.profile);
+                            route_reference_changed = open_artist && canonical_key != key;
+
+                            let mut library = self.youtube_library.borrow_mut();
                             profile_changed = library
                                 .artist_profiles
-                                .get(&key)
-                                .map(|current| {
-                                    current.title != overview.profile.title
-                                        || current.subtitle != overview.profile.subtitle
-                                        || current.browse_id != overview.profile.browse_id
-                                        || current.thumbnail_url != overview.profile.thumbnail_url
-                                        || current.cover_path != overview.profile.cover_path
-                                })
-                                .unwrap_or(true);
-
+                                .get(&canonical_key)
+                                .or_else(|| library.artist_profiles.get(&key))
+                                != Some(&overview.profile);
                             albums_changed = library
                                 .artist_albums
-                                .get(&key)
-                                .map(|current| {
-                                    current.len() != overview.albums.len()
-                                        || current.iter().zip(&overview.albums).any(
-                                            |(left, right)| {
-                                                left.title != right.title
-                                                    || left.subtitle != right.subtitle
-                                                    || left.browse_id != right.browse_id
-                                                    || left.thumbnail_url != right.thumbnail_url
-                                                    || left.cover_path != right.cover_path
-                                            },
-                                        )
-                                })
-                                .unwrap_or(true);
+                                .get(&canonical_key)
+                                .or_else(|| library.artist_albums.get(&key))
+                                != Some(&overview.albums);
+
+                            if canonical_key != key {
+                                library.artist_profiles.remove(&key);
+                                library.artist_albums.remove(&key);
+                                if let Some(items) = library.collection_tracks.remove(&key) {
+                                    library
+                                        .collection_tracks
+                                        .entry(canonical_key.clone())
+                                        .or_insert(items);
+                                }
+                            }
+
+                            if let Some(entry) = library.artists.iter_mut().find(|entry| {
+                                entry
+                                    .title
+                                    .eq_ignore_ascii_case(overview.profile.title.trim())
+                            }) {
+                                if !overview.profile.browse_id.trim().is_empty() {
+                                    entry.source.browse_id = overview.profile.browse_id.clone();
+                                }
+                                if !overview.profile.thumbnail_url.trim().is_empty() {
+                                    entry.source.thumbnail_url =
+                                        overview.profile.thumbnail_url.clone();
+                                }
+                                if !overview.profile.cover_path.trim().is_empty() {
+                                    entry.source.cover_path = overview.profile.cover_path.clone();
+                                    entry.cover_path = overview.profile.cover_path.clone();
+                                }
+                                if !overview.profile.subtitle.trim().is_empty() {
+                                    entry.source.subtitle = overview.profile.subtitle.clone();
+                                    entry.subtitle = overview.profile.subtitle.clone();
+                                }
+                            }
 
                             library
                                 .artist_profiles
-                                .insert(key.clone(), overview.profile);
-                            library.artist_albums.insert(key.clone(), overview.albums);
+                                .insert(canonical_key.clone(), overview.profile);
+                            library.artist_albums.insert(canonical_key, overview.albums);
                             drop(library);
 
                             if let Err(error) =
@@ -637,16 +664,20 @@ impl AppController {
                         }
                     }
 
+                    if !open_artist {
+                        open_artist = self.is_open_youtube_collection(&key);
+                    }
+
                     let profile_batch_finished =
                         self.youtube_library.borrow().artist_loading.is_empty();
-                    let open_artist = self.is_open_youtube_collection(&key);
 
                     if open_artist {
-                        if albums_changed || load_failed {
-                            self.refresh_browser();
+                        let language = self.config.borrow().language;
+                        let library = self.youtube_library.borrow();
+                        if albums_changed || load_failed || route_reference_changed {
+                            self.browser
+                                .refresh_open_youtube_artist_page(&library, language);
                         } else if profile_changed {
-                            let language = self.config.borrow().language;
-                            let library = self.youtube_library.borrow();
                             self.browser
                                 .refresh_open_youtube_artist_context(&library, language);
                         }

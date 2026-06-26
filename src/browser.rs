@@ -1,3 +1,4 @@
+// stable_artist_overview_refresh_v1
 // stable_collection_identity_and_deferred_cache_v2
 // compact_artist_load_more_button_v1
 // artist_page_stable_refresh_v1
@@ -1204,6 +1205,43 @@ impl LibraryBrowser {
             return;
         };
         self.rebuild_youtube_artist_context(youtube, &collection, language);
+    }
+
+    pub fn update_open_youtube_artist_reference(
+        &self,
+        requested_key: &str,
+        profile: &YouTubeItem,
+    ) -> bool {
+        let mut route = self.route.borrow_mut();
+        let BrowserRoute::YouTubeArtist(current) = &mut *route else {
+            return false;
+        };
+
+        if current.key != requested_key && !current.title.eq_ignore_ascii_case(profile.title.trim())
+        {
+            return false;
+        }
+
+        *current = YouTubeCollectionRoute::from_item(profile);
+        true
+    }
+
+    pub fn refresh_open_youtube_artist_page(
+        &self,
+        youtube: &YouTubeLibraryCache,
+        language: AppLanguage,
+    ) {
+        let BrowserRoute::YouTubeArtist(collection) = self.route() else {
+            return;
+        };
+
+        // Background confirmation should not replay every album card's entrance
+        // spring. Rebuilding synchronously without the entrance animation keeps
+        // the already-open page stable and avoids transient footer allocations.
+        self.albums_grid.add_css_class("skip-card-entry-animation");
+        self.rebuild_artist_albums(youtube, &collection, "", language);
+        self.albums_grid
+            .remove_css_class("skip-card-entry-animation");
     }
 
     pub fn try_recv(&self) -> Option<BrowserEvent> {
@@ -4757,6 +4795,13 @@ fn collection_page_header(title: &str, subtitle: &str, icon_name: &str) -> gtk::
 }
 
 fn append_collection_grid_card(grid: &gtk::FlowBox, _position: i32, button: gtk::Button) {
+    if grid.has_css_class("skip-card-entry-animation") {
+        button.set_opacity(1.0);
+        button.set_margin_top(0);
+        grid.insert(&button, -1);
+        return;
+    }
+
     button.set_opacity(0.0);
     button.set_margin_top(14);
     button.add_css_class("collection-card-entering");

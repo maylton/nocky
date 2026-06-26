@@ -544,3 +544,7 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - ✅ Version 5 collection caches are migrated in place to the new stable key format.
 - ✅ Background cache updates are coalesced by a dedicated debounced writer, keeping JSON serialization and disk I/O away from GTK's main loop.
 - ✅ Collection identity tests cover browse-ID priority and duplicate album titles.
+
+- ✅ Artist overview responses now canonicalize the open route to the resolved browse-ID key and migrate any temporary title-keyed cache entries.
+- ✅ An open artist page refreshes directly instead of rebuilding the entire browser, so footer progress sliders are not transiently compressed during background updates.
+- ✅ Album cards keep their current presentation during background confirmation and do not replay the entrance spring, eliminating the visible page flash.
