@@ -21,6 +21,7 @@ use std::{
 
 const MANIFEST_VERSION: u32 = 1;
 const MIN_VALID_AUDIO_BYTES: u64 = 4 * 1024;
+pub const OFFLINE_STREAM_REJECTED_PREFIX: &str = "__NOCKY_OFFLINE_STREAM_REJECTED__";
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -49,6 +50,7 @@ struct OfflineManifest {
     version: u32,
     tracks: HashMap<String, OfflineTrack>,
     collections: HashMap<String, OfflineCollection>,
+    unavailable_tracks: HashMap<String, String>,
 }
 
 #[derive(Debug)]
@@ -74,6 +76,7 @@ impl OfflineStore {
                 version: MANIFEST_VERSION,
                 tracks: HashMap::new(),
                 collections: HashMap::new(),
+                unavailable_tracks: HashMap::new(),
             });
 
         manifest.tracks.retain(|video_id, track| {
@@ -120,6 +123,21 @@ impl OfflineStore {
 
     pub fn contains(&self, video_id: &str) -> bool {
         self.resolve(video_id).is_some()
+    }
+
+    pub fn is_unavailable(&self, video_id: &str) -> bool {
+        self.manifest.unavailable_tracks.contains_key(video_id)
+    }
+
+    pub fn mark_unavailable(&mut self, video_id: &str, reason: &str) -> Result<(), String> {
+        if video_id.trim().is_empty() {
+            return Err("A faixa indisponível não possui video_id".to_string());
+        }
+
+        self.manifest
+            .unavailable_tracks
+            .insert(video_id.to_string(), reason.to_string());
+        self.save()
     }
 
     pub fn video_ids(&self) -> HashSet<String> {
@@ -188,6 +206,7 @@ impl OfflineStore {
                 downloaded_at: unix_timestamp(),
             },
         );
+        self.manifest.unavailable_tracks.remove(video_id);
         self.save()
     }
 
@@ -267,6 +286,7 @@ impl OfflineStore {
 
         self.manifest.tracks.clear();
         self.manifest.collections.clear();
+        self.manifest.unavailable_tracks.clear();
         self.save()?;
 
         fs::create_dir_all(self.audio_dir())
@@ -334,8 +354,15 @@ pub fn download_youtube_track(
             let mut request = client
                 .get(&stream.stream_url)
                 .header(ACCEPT_ENCODING, "identity")
-                .header(USER_AGENT, "Mozilla/5.0 Nocky/0.4.0")
                 .header(RANGE, format!("bytes={downloaded}-{range_end}"));
+
+            if !stream
+                .http_headers
+                .keys()
+                .any(|name| name.eq_ignore_ascii_case("user-agent"))
+            {
+                request = request.header(USER_AGENT, "Mozilla/5.0 Nocky/0.4.0");
+            }
 
             for (name, value) in &stream.http_headers {
                 let Ok(name) = HeaderName::from_bytes(name.as_bytes()) else {
@@ -368,7 +395,21 @@ pub fn download_youtube_track(
             }
 
             if !response.status().is_success() {
-                last_error = Some(format!("o servidor respondeu com {}", response.status()));
+                let status = response.status();
+
+                if matches!(
+                    status,
+                    reqwest::StatusCode::UNAUTHORIZED
+                        | reqwest::StatusCode::FORBIDDEN
+                        | reqwest::StatusCode::GONE
+                ) {
+                    return Err(format!(
+                        "{OFFLINE_STREAM_REJECTED_PREFIX}{}",
+                        status.as_u16()
+                    ));
+                }
+
+                last_error = Some(format!("o servidor respondeu com {status}"));
                 if attempt < MAX_CHUNK_ATTEMPTS {
                     std::thread::sleep(std::time::Duration::from_millis(250 * attempt as u64));
                     continue;

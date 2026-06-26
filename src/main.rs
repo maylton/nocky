@@ -60,6 +60,7 @@ mod playback_session;
 mod player_view;
 pub mod queue_model;
 mod queue_store;
+mod queue_view;
 mod reveal_bounce;
 mod settings_page;
 mod theme;
@@ -96,7 +97,7 @@ use listening_history::{ListeningHistory, ListeningSource};
 use lyrics::LyricLine;
 use lyrics_view::LyricsPresenter;
 use model::{Track, TrackData};
-use offline_store::{download_youtube_track, OfflineStore};
+use offline_store::{download_youtube_track, OfflineStore, OFFLINE_STREAM_REJECTED_PREFIX};
 use playback::{PlaybackEngine, PlaybackEvent};
 use playback_session::PlaybackSession;
 use player_view::{PlayerView, PlayerViewHandle};
@@ -104,6 +105,7 @@ use queue_model::{
     queue_end_action, PlaybackQueue, QueueEndAction, QueueEntryId, QueueMedia, QueueSnapshot,
     QueueSource, QueueSourceKind, ShuffleNavigator,
 };
+use queue_view::{QueuePresentation, QueueSection};
 use reveal_bounce::RevealBounce;
 use settings_page::SettingsPage;
 use std::{
@@ -1581,34 +1583,53 @@ impl AppController {
             list.remove(&child);
         }
 
-        let (entries, current_id, current_index) = {
+        let presentation = {
             let queue = self.playback_queue_v2.borrow();
-            (
-                queue.entries().to_vec(),
-                queue.current_id(),
-                queue.current_index(),
-            )
+            QueuePresentation::from_queue(&queue, self.active_queue_source.get())
         };
 
         let language = self.config.borrow().language;
-        let count = entries.len();
+        let current_index = presentation.current_index;
+        let count = presentation.total;
+        let source_label = match (language, presentation.source) {
+            (AppLanguage::Portuguese, QueueSourceKind::Local) => "Biblioteca local",
+            (AppLanguage::Portuguese, QueueSourceKind::YouTube) => "YouTube Music",
+            (AppLanguage::English, QueueSourceKind::Local) => "Local library",
+            (AppLanguage::English, QueueSourceKind::YouTube) => "YouTube Music",
+            (AppLanguage::Spanish, QueueSourceKind::Local) => "Biblioteca local",
+            (AppLanguage::Spanish, QueueSourceKind::YouTube) => "YouTube Music",
+        };
         let summary_text = match language {
-            AppLanguage::Portuguese => {
-                format!("{count} {}", if count == 1 { "faixa" } else { "faixas" })
-            }
-            AppLanguage::English => {
-                format!("{count} {}", if count == 1 { "track" } else { "tracks" })
-            }
-            AppLanguage::Spanish => {
-                format!("{count} {}", if count == 1 { "pista" } else { "pistas" })
-            }
+            AppLanguage::Portuguese => format!(
+                "{source_label} • {} {} • {count} {}",
+                presentation.upcoming_count,
+                if presentation.upcoming_count == 1 {
+                    "próxima"
+                } else {
+                    "próximas"
+                },
+                if count == 1 { "faixa" } else { "faixas" }
+            ),
+            AppLanguage::English => format!(
+                "{source_label} • {} up next • {count} {}",
+                presentation.upcoming_count,
+                if count == 1 { "track" } else { "tracks" }
+            ),
+            AppLanguage::Spanish => format!(
+                "{source_label} • {} {} • {count} {}",
+                presentation.upcoming_count,
+                if presentation.upcoming_count == 1 {
+                    "siguiente"
+                } else {
+                    "siguientes"
+                },
+                if count == 1 { "pista" } else { "pistas" }
+            ),
         };
         summary.set_text(&summary_text);
-        clear_upcoming.set_sensitive(
-            current_index.is_some_and(|position| position.saturating_add(1) < entries.len()),
-        );
+        clear_upcoming.set_sensitive(presentation.can_clear_upcoming());
 
-        if entries.is_empty() {
+        if presentation.items.is_empty() {
             // queue2_interface_polish_v1: richer empty state
             let empty = gtk::Box::new(gtk::Orientation::Vertical, 7);
             empty.set_margin_top(18);
@@ -1652,8 +1673,52 @@ impl AppController {
             return;
         }
 
-        for (position, entry) in entries.into_iter().enumerate() {
-            let is_current = current_id == Some(entry.id);
+        let mut rendered_section = None;
+        for item in presentation.items.iter().cloned() {
+            if rendered_section != Some(item.section) {
+                let section_header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+                section_header.set_margin_top(if rendered_section.is_some() { 12 } else { 4 });
+                section_header.set_margin_bottom(4);
+                section_header.set_margin_start(8);
+                section_header.set_margin_end(8);
+                section_header.add_css_class("queue2-section-header");
+
+                let icon_name = match item.section {
+                    QueueSection::Played => "document-open-recent-symbolic",
+                    QueueSection::Current => "media-playback-start-symbolic",
+                    QueueSection::Upcoming => "view-list-symbolic",
+                };
+                let icon = gtk::Image::from_icon_name(icon_name);
+                icon.set_pixel_size(15);
+                icon.add_css_class("queue2-section-icon");
+
+                let section_count = presentation.section_count(item.section);
+                let section_title = match (language, item.section) {
+                    (AppLanguage::Portuguese, QueueSection::Played) => "Reproduzidas",
+                    (AppLanguage::Portuguese, QueueSection::Current) => "Tocando agora",
+                    (AppLanguage::Portuguese, QueueSection::Upcoming) => "Próximas",
+                    (AppLanguage::English, QueueSection::Played) => "Previously played",
+                    (AppLanguage::English, QueueSection::Current) => "Now playing",
+                    (AppLanguage::English, QueueSection::Upcoming) => "Up next",
+                    (AppLanguage::Spanish, QueueSection::Played) => "Reproducidas",
+                    (AppLanguage::Spanish, QueueSection::Current) => "Reproduciendo ahora",
+                    (AppLanguage::Spanish, QueueSection::Upcoming) => "Siguientes",
+                };
+                let section_label =
+                    gtk::Label::new(Some(&format!("{section_title} · {section_count}")));
+                section_label.set_xalign(0.0);
+                section_label.set_hexpand(true);
+                section_label.add_css_class("queue2-section-title");
+
+                section_header.append(&icon);
+                section_header.append(&section_label);
+                list.append(&section_header);
+                rendered_section = Some(item.section);
+            }
+
+            let position = item.position;
+            let entry = item.entry;
+            let is_current = item.is_current;
 
             let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
             row.set_margin_top(4);
@@ -1744,7 +1809,6 @@ impl AppController {
             {
                 let list = list.clone();
                 let row = row.clone();
-                let drag_origin = drag_origin.clone();
                 let drag_target = drag_target.clone();
                 let drag_indicator = drag_indicator.clone();
 
@@ -1757,33 +1821,54 @@ impl AppController {
                         return;
                     };
 
-                    let row_height = row.height().max(1) as f64;
-                    let delta = (offset_y / row_height).round() as isize;
-                    let last_index = count.saturating_sub(1) as isize;
-                    let target = (drag_origin.get() as isize + delta).clamp(0, last_index) as usize;
+                    let row_widget: gtk::Widget = row.clone().upcast();
+                    let indicator_widget: gtk::Widget = indicator.clone().upcast();
+                    let Some(row_origin) =
+                        row.compute_point(&list, &gtk::graphene::Point::new(0.0, 0.0))
+                    else {
+                        return;
+                    };
+                    let pointer_y =
+                        row_origin.y() as f64 + row.height().max(1) as f64 / 2.0 + offset_y;
+
+                    let mut queue_rows = Vec::with_capacity(count.saturating_sub(1));
+                    let mut child = list.first_child();
+                    while let Some(widget) = child {
+                        let next = widget.next_sibling();
+                        if widget != row_widget
+                            && widget != indicator_widget
+                            && widget.has_css_class("queue2-row")
+                        {
+                            queue_rows.push(widget);
+                        }
+                        child = next;
+                    }
+
+                    let mut target = 0usize;
+                    for candidate in &queue_rows {
+                        let Some(origin) =
+                            candidate.compute_point(&list, &gtk::graphene::Point::new(0.0, 0.0))
+                        else {
+                            continue;
+                        };
+                        let midpoint = origin.y() as f64 + candidate.height().max(1) as f64 / 2.0;
+                        if pointer_y > midpoint {
+                            target = target.saturating_add(1);
+                        }
+                    }
+                    target = target.min(count.saturating_sub(1));
 
                     if target == drag_target.get() {
                         return;
                     }
 
-                    let row_widget: gtk::Widget = row.clone().upcast();
-                    let indicator_widget: gtk::Widget = indicator.clone().upcast();
-                    let mut stable_rows = Vec::with_capacity(count.saturating_sub(1));
-                    let mut child = list.first_child();
-                    while let Some(widget) = child {
-                        let next = widget.next_sibling();
-                        if widget != row_widget && widget != indicator_widget {
-                            stable_rows.push(widget);
-                        }
-                        child = next;
-                    }
-
-                    let previous_sibling = if target == 0 {
-                        None
+                    let previous_sibling = if let Some(target_row) = queue_rows.get(target) {
+                        target_row.prev_sibling()
                     } else {
-                        stable_rows.get(target - 1)
+                        queue_rows.last().cloned()
                     };
-                    list.reorder_child_after(&indicator, previous_sibling);
+
+                    list.reorder_child_after(&indicator, previous_sibling.as_ref());
                     drag_target.set(target);
                 });
             }
@@ -4678,7 +4763,10 @@ impl AppController {
         let items = items
             .into_iter()
             .filter(|track| {
-                track.playable() && !self.offline_store.borrow().contains(&track.video_id)
+                let store = self.offline_store.borrow();
+                track.playable()
+                    && !store.contains(&track.video_id)
+                    && !store.is_unavailable(&track.video_id)
             })
             .collect::<Vec<_>>();
         if items.is_empty() {
@@ -4720,9 +4808,38 @@ impl AppController {
             let mut completed = 0;
             let mut failed = 0;
             for track in items {
-                let result = bridge
+                let first_result = bridge
                     .resolve(&track.video_id, false)
                     .and_then(|stream| download_youtube_track(&track, &stream));
+
+                let result = match first_result {
+                    Err(error) if error.starts_with(OFFLINE_STREAM_REJECTED_PREFIX) => {
+                        eprintln!(
+                            "Nocky offline stream for '{}' was rejected; refreshing the signed URL once",
+                            track.title
+                        );
+                        bridge
+                            .resolve(&track.video_id, true)
+                            .and_then(|stream| download_youtube_track(&track, &stream))
+                    }
+                    other => other,
+                };
+
+                if let Err(error) = result.as_ref() {
+                    if let Some(reason) = error.strip_prefix("__NOCKY_PREMIUM_STREAM_UNAVAILABLE__")
+                    {
+                        let mut store = OfflineStore::load_default();
+                        if let Err(save_error) =
+                            store.mark_unavailable(&track.video_id, reason.trim())
+                        {
+                            eprintln!(
+                                "Could not persist unsupported Premium track '{}': {save_error}",
+                                track.title
+                            );
+                        }
+                    }
+                }
+
                 if result.is_ok() {
                     completed += 1;
                 } else {
