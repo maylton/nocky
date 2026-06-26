@@ -1,3 +1,4 @@
+// stable_artist_directory_refresh_v1
 // stable_artist_overview_refresh_v1
 // stable_collection_identity_and_deferred_cache_v2
 // artist_page_stable_refresh_v1
@@ -618,9 +619,10 @@ impl AppController {
                             }
 
                             if let Some(entry) = library.artists.iter_mut().find(|entry| {
-                                entry
-                                    .title
-                                    .eq_ignore_ascii_case(overview.profile.title.trim())
+                                youtube_collection_cache_key(&entry.source) == key
+                                    || entry
+                                        .title
+                                        .eq_ignore_ascii_case(overview.profile.title.trim())
                             }) {
                                 if !overview.profile.browse_id.trim().is_empty() {
                                     entry.source.browse_id = overview.profile.browse_id.clone();
@@ -681,14 +683,16 @@ impl AppController {
                             self.browser
                                 .refresh_open_youtube_artist_context(&library, language);
                         }
-                    } else if profile_batch_finished
-                        && matches!(
-                            self.browser.route(),
-                            crate::browser::BrowserRoute::Artists
-                                | crate::browser::BrowserRoute::All
-                        )
-                    {
-                        self.refresh_browser();
+                    } else if profile_batch_finished {
+                        match self.browser.route() {
+                            crate::browser::BrowserRoute::Artists => {
+                                self.refresh_artist_directory();
+                            }
+                            crate::browser::BrowserRoute::All => {
+                                self.refresh_browser();
+                            }
+                            _ => {}
+                        }
                     }
                 }
                 BackgroundMessage::YouTubeBrowserCollection { item, key, result } => {

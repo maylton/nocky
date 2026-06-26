@@ -1,3 +1,4 @@
+// stable_artist_directory_refresh_v1
 // stable_collection_identity_and_deferred_cache_v2
 // clickable_player_artist_album_navigation_v1
 // artist_profile_revalidation_v5
@@ -2648,12 +2649,23 @@ impl AppController {
             return;
         };
 
+        let limit = if force {
+            self.browser.artist_display_limit()
+        } else {
+            12
+        };
+
         let artists = {
             let mut library = self.youtube_library.borrow_mut();
-            let limit = if force { 36 } else { 12 };
-            let candidates = library
-                .artists
-                .iter()
+            let mut entries = library.artists.iter().collect::<Vec<_>>();
+            if force {
+                entries.sort_by(|left, right| {
+                    left.title.to_lowercase().cmp(&right.title.to_lowercase())
+                });
+            }
+
+            let candidates = entries
+                .into_iter()
                 .take(limit)
                 .filter_map(|entry| {
                     let key = youtube_collection_cache_key(&entry.source);
@@ -4260,6 +4272,26 @@ impl AppController {
         }
     }
 
+    fn refresh_artist_directory(&self) {
+        if !matches!(self.browser.route(), BrowserRoute::Artists) {
+            return;
+        }
+
+        let state = self.state.borrow();
+        let config = self.config.borrow();
+        let youtube = self.youtube_library.borrow();
+        let query = self.search_query.borrow();
+        let youtube_only = config.startup_source == Some(StartupSource::YouTube);
+        let effective_tracks: &[Track] = if youtube_only {
+            &[]
+        } else {
+            state.tracks.as_slice()
+        };
+
+        self.browser
+            .refresh_artists_page(effective_tracks, &youtube, &query);
+    }
+
     fn refresh_browser(&self) {
         let home_scroll_positions = self.browser.home_scroll_positions();
         let playback = self.browser_playback_state();
@@ -4515,6 +4547,7 @@ impl AppController {
                 }
                 BrowserEvent::LoadMoreArtists => {
                     self.browser.show_more_artists();
+                    self.prefetch_home_artist_profiles(true);
                     self.refresh_browser();
                 }
                 BrowserEvent::Navigate(route) => self.navigate_browser(route),

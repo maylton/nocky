@@ -1,3 +1,4 @@
+// stable_artist_directory_refresh_v1
 // stable_artist_overview_refresh_v1
 // stable_collection_identity_and_deferred_cache_v2
 // compact_artist_load_more_button_v1
@@ -1256,6 +1257,26 @@ impl LibraryBrowser {
     pub fn show_more_artists(&self) {
         self.artist_display_limit
             .set(self.artist_display_limit.get() + COLLECTION_BATCH_INCREMENT);
+    }
+
+    pub fn artist_display_limit(&self) -> usize {
+        self.artist_display_limit.get()
+    }
+
+    pub fn refresh_artists_page(
+        &self,
+        tracks: &[Track],
+        youtube: &YouTubeLibraryCache,
+        query: &str,
+    ) {
+        if !matches!(self.route(), BrowserRoute::Artists) {
+            return;
+        }
+
+        self.artists_grid.add_css_class("skip-card-entry-animation");
+        self.rebuild_artists(tracks, youtube, query);
+        self.artists_grid
+            .remove_css_class("skip-card-entry-animation");
     }
 
     pub fn visible_indices(&self) -> Vec<usize> {

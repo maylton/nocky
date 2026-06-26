@@ -548,3 +548,8 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - ✅ Artist overview responses now canonicalize the open route to the resolved browse-ID key and migrate any temporary title-keyed cache entries.
 - ✅ An open artist page refreshes directly instead of rebuilding the entire browser, so footer progress sliders are not transiently compressed during background updates.
 - ✅ Album cards keep their current presentation during background confirmation and do not replay the entrance spring, eliminating the visible page flash.
+
+- ✅ Opening Artists now revalidates the same alphabetically sorted entries that are actually visible, instead of an unrelated fixed unsorted group of 36.
+- ✅ Loading more artists automatically schedules profile confirmation for the newly revealed batch.
+- ✅ Resolved profiles update the exact requested collection entry by stable key, even when the returned display title differs slightly.
+- ✅ Batch completion rebuilds only the Artists grid without replaying card entrance animations; Home continues using its own crossfade.
