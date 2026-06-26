@@ -204,6 +204,7 @@ struct AppController {
     youtube_recovery_in_progress: Cell<bool>,
     youtube_recovery_attempted: Cell<bool>,
     youtube_recovery_resume_us: Cell<i64>,
+    youtube_recovery_was_playing: Cell<bool>,
     youtube_playlist_request_id: Cell<u64>,
     youtube_collection_play_request_id: Cell<u64>,
     youtube_collection_queue_request_id: Cell<u64>,
@@ -791,6 +792,7 @@ impl AppController {
             youtube_recovery_in_progress: Cell::new(false),
             youtube_recovery_attempted: Cell::new(false),
             youtube_recovery_resume_us: Cell::new(0),
+            youtube_recovery_was_playing: Cell::new(false),
             youtube_playlist_request_id: Cell::new(0),
             youtube_collection_play_request_id: Cell::new(0),
             youtube_collection_queue_request_id: Cell::new(0),
@@ -6050,6 +6052,11 @@ impl AppController {
                     self.resume_youtube_after_recovery();
                     self.apply_pending_resume_position();
                 }
+                PlaybackEvent::ClockLost => {
+                    if let Err(error) = self.player.recover_clock() {
+                        eprintln!("Could not recover GStreamer clock after resume: {error}");
+                    }
+                }
                 PlaybackEvent::Spectrum(values) => self.visualizer.set_values(&values),
                 PlaybackEvent::Error(error) => {
                     if self.youtube_recovery_in_progress.get() {
@@ -6525,6 +6532,7 @@ impl AppController {
         if let Some(detail) = message.strip_prefix("__NOCKY_STREAM_RECOVERY_FAILED__") {
             self.youtube_recovery_in_progress.set(false);
             self.youtube_recovery_resume_us.set(0);
+            self.youtube_recovery_was_playing.set(false);
             eprintln!(
                 "Nocky stream recovery failed: {}",
                 redact_stream_url(detail)
@@ -6554,7 +6562,17 @@ fn is_refreshable_stream_error(message: &str) -> bool {
         || message.contains("(401)")
         || message.contains("gone")
         || message.contains("(410)");
-    network_source && rejected
+    let transient_network = message.contains("connection reset")
+        || message.contains("connection timed out")
+        || message.contains("timed out")
+        || message.contains("temporary failure")
+        || message.contains("network is unreachable")
+        || message.contains("host is unreachable")
+        || message.contains("could not connect")
+        || message.contains("internal data stream error")
+        || message.contains("resource not found");
+
+    network_source && (rejected || transient_network)
 }
 
 fn youtube_home_prefetch_candidates(library: &YouTubeLibraryCache) -> Vec<YouTubeItem> {

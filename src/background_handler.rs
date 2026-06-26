@@ -830,8 +830,12 @@ impl AppController {
                             self.apply_youtube_track(queue, index, *item, stream, cover)
                         }
                         Err(error) => {
+                            let recovery_failed =
+                                error.starts_with("__NOCKY_STREAM_RECOVERY_FAILED__");
                             self.show_error(&error);
-                            self.youtube_page.show_error(&error);
+                            if !recovery_failed {
+                                self.youtube_page.show_error(&error);
+                            }
                         }
                     }
                 }
