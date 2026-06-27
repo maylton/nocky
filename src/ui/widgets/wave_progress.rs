@@ -16,7 +16,6 @@ const ACTIVE_ALPHA: f64 = 0.96;
 const ACTIVE_TRACK_GAP: f64 = 6.0;
 const STOP_INDICATOR_RADIUS: f64 = 4.0;
 const STOP_INDICATOR_ALPHA: f64 = 0.34;
-const STOP_TRACK_GAP: f64 = 4.0;
 const WAVE_AMPLITUDE: f64 = 2.45;
 const WAVELENGTH: f64 = 20.0;
 const WAVE_STEP: f64 = 1.25;
@@ -255,7 +254,7 @@ fn progress_stop_x(width: f64) -> f64 {
 }
 
 fn inactive_track_end(stop_x: f64) -> f64 {
-    stop_x - STOP_INDICATOR_RADIUS - STOP_TRACK_GAP - TRACK_RADIUS
+    stop_x - TRACK_RADIUS
 }
 
 #[cfg(test)]
@@ -269,7 +268,6 @@ mod tests {
         assert_eq!(TRACK_THICKNESS, 8.0);
         assert_eq!(ACTIVE_TRACK_GAP, 6.0);
         assert_eq!(STOP_INDICATOR_RADIUS, 4.0);
-        assert_eq!(STOP_TRACK_GAP, 4.0);
     }
 
     #[test]
@@ -282,11 +280,10 @@ mod tests {
     }
 
     #[test]
-    fn inactive_track_stops_before_the_stop_indicator() {
+    fn inactive_track_anchors_the_stop_indicator() {
         let stop_x = 180.0;
         let painted_track_end = inactive_track_end(stop_x) + TRACK_RADIUS;
-        let stop_indicator_left = stop_x - STOP_INDICATOR_RADIUS;
 
-        assert_eq!(stop_indicator_left - painted_track_end, STOP_TRACK_GAP);
+        assert_eq!(painted_track_end, stop_x);
     }
 }
