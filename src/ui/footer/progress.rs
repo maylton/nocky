@@ -3,7 +3,7 @@
 //! Position updates, seeking callbacks, theme switching and playback state
 //! remain owned by `AppController`.
 
-use crate::wave_progress::WaveProgress;
+use crate::ui::widgets::WaveProgress;
 use gtk::prelude::*;
 
 // nocky_rust_ui_phase3e_footer_progress_v1

@@ -1,7 +1,6 @@
 //! Application controller data structures.
 
 use crate::{
-    animated_page_switcher::{AnimatedPageSwitcher, TopPage},
     app::sidebar::build_sidebar,
     app::state::{AppState, PlaybackSource, YouTubePlaybackState},
     app::{
@@ -16,12 +15,9 @@ use crate::{
         BrowserEvent, BrowserPlaybackState, BrowserRenderContext, BrowserRoute, LibraryBrowser,
         YouTubeCollectionRoute,
     },
-    compact_volume_motion::{run_compact_volume_spring, CompactVolumeSpring},
     config::{self, AppLanguage, BlurMode, StartupSource, VisualTheme},
-    cover_view::{build_cover, CoverView},
     dialogs,
     dialogs::SettingsEvent,
-    expressive_transport::ExpressiveTransport,
     footer_layout::{
         self, footer_full_artwork_size_for_card_height, footer_mode_plan, AdaptiveFooterTier,
         FOOTER_ARTWORK_SOURCE_SIZE,
@@ -49,9 +45,13 @@ use crate::{
     player_view::{PlayerView, PlayerViewHandle},
     reveal_bounce::RevealBounce,
     settings_page::SettingsPage,
-    theme, visual_theme,
+    theme,
+    ui::widgets::{
+        build_cover, run_compact_volume_spring, AnimatedPageSwitcher, CompactVolumeSpring,
+        CoverView, ExpressiveTransport, TopPage, WaveProgress,
+    },
+    visual_theme,
     visualizer::SpectrumVisualizer,
-    wave_progress::WaveProgress,
     youtube::{
         self, cache_items_for_browser, credited_artists, load_library_cache,
         resolve_youtube_collection_item, youtube_collection_cache_key, youtube_collection_key,

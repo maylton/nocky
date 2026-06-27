@@ -1,10 +1,10 @@
 // playback_resume_preferences_fix_v1
 use crate::{
-    animated_page_switcher::{AnimatedPageSpec, AnimatedPageSwitcher},
     config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme},
     dialogs::SettingsEvent,
     i18n::{self, Message},
     offline_store::OfflineStore,
+    ui::widgets::{AnimatedPageSpec, AnimatedPageSwitcher},
     youtube_diagnostics::{self, DiagnosticCheck, DiagnosticState},
 };
 use adw::prelude::*;

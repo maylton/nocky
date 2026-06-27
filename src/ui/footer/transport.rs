@@ -5,9 +5,9 @@
 
 use crate::{
     config::AppLanguage,
-    expressive_transport::{ExpressiveTransport, TransportVariant},
     i18n::{self, Message},
     mode_toggle,
+    ui::widgets::{ExpressiveTransport, TransportVariant},
 };
 use gtk::prelude::*;
 use std::rc::Rc;
