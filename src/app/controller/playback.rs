@@ -535,4 +535,48 @@ impl AppController {
                 .send(crate::playback::mpris::MprisUpdate::Position(timestamp));
         }
     }
+
+    pub(crate) fn reset_now_playing(&self, message: &str) {
+        let _ = self.player.stop();
+        self.playback_source.set(PlaybackSource::None);
+        self.youtube_state.replace(None);
+        self.playback_queue_v2.borrow_mut().clear();
+        self.queue_v2_pending_entry.set(None);
+        self.reset_youtube_recovery();
+        self.player_view.set_metadata(
+            self.tr(Message::IntegratedMusic),
+            self.tr(Message::NoTrackSelected),
+            message,
+        );
+        self.set_footer_metadata(self.tr(Message::NothingPlaying), "Nocky");
+        self.update_footer_source();
+        self.lyrics.show_state(
+            "As letras aparecerão aqui",
+            Some("Reproduza uma música com letras sincronizadas para acompanhar cada verso."),
+            "As letras aparecerão aqui",
+            Some("Reproduza uma música com letras sincronizadas para ver o contexto."),
+        );
+        self.hero_cover.set_path(None);
+        self.visual_theme_manager.update_artwork(None);
+        self.mini_cover.set_path(None);
+        self.elapsed.set_text("0:00");
+        self.duration.set_text("0:00");
+        self.footer_elapsed.set_text("0:00");
+        self.footer_duration.set_text("0:00");
+        self.progress.set_value(0.0);
+        self.footer_traditional_progress.set_value(0.0);
+        self.home_wave_progress.set_fraction(0.0);
+        self.footer_progress.set_fraction(0.0);
+        self.update_play_icons(false);
+        self.last_mpris_position.set(0);
+        self.mpris
+            .send(crate::playback::mpris::MprisUpdate::ClearMetadata);
+        self.mpris
+            .send(crate::playback::mpris::MprisUpdate::Playback(
+                crate::playback::mpris::MprisPlayback::Stopped,
+            ));
+        self.mpris
+            .send(crate::playback::mpris::MprisUpdate::Position(0));
+        self.publish_mpris_capabilities();
+    }
 }
