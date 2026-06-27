@@ -14,6 +14,7 @@ mod offline;
 mod persistence;
 mod playback;
 mod queue;
+mod queue_presentation;
 mod settings;
 mod youtube;
 
