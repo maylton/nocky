@@ -1,5 +1,18 @@
 //! Application controller data structures.
 
+mod actions;
+mod appearance;
+mod background;
+mod callbacks;
+mod construction;
+mod lyrics;
+mod navigation;
+mod offline;
+mod persistence;
+mod playback;
+mod queue;
+mod youtube;
+
 use crate::{
     app::sidebar::build_sidebar,
     app::state::{AppState, PlaybackSource, YouTubePlaybackState},
@@ -21,7 +34,7 @@ use crate::{
     i18n::{self, Message},
     library,
     listening_history::{self, ListeningHistory, ListeningSource},
-    lyrics::{self, LyricLine, LyricsPresenter},
+    lyrics::{self as lyrics_domain, LyricLine, LyricsPresenter},
     model::{Track, TrackData},
     offline_store::{download_youtube_track, OfflineStore, OFFLINE_STREAM_REJECTED_PREFIX},
     onboarding,
@@ -52,10 +65,11 @@ use crate::{
     visual_theme,
     visualizer::SpectrumVisualizer,
     youtube::{
-        self, cache_items_for_browser, credited_artists, diagnostics as youtube_diagnostics,
-        load_library_cache, resolve_youtube_collection_item, youtube_collection_cache_key,
-        youtube_collection_key, youtube_home_prefetch_candidates, YouTubeBridge, YouTubeItem,
-        YouTubeLibraryCache, YouTubePage, YouTubePageEvent, YouTubeSearchResults, YouTubeStatus,
+        self as youtube_domain, cache_items_for_browser, credited_artists,
+        diagnostics as youtube_diagnostics, load_library_cache, resolve_youtube_collection_item,
+        youtube_collection_cache_key, youtube_collection_key, youtube_home_prefetch_candidates,
+        YouTubeBridge, YouTubeItem, YouTubeLibraryCache, YouTubePage, YouTubePageEvent,
+        YouTubeSearchResults, YouTubeStatus,
     },
     APP_ID, HOME_PLAYER_WIDTH,
 };
@@ -5722,7 +5736,7 @@ impl AppController {
             }
             (
                 track.path.clone(),
-                lyrics::provider::LyricsLookup {
+                lyrics_domain::provider::LyricsLookup {
                     title: track.title.clone(),
                     artist: track.artist.clone(),
                     album: track.album.clone(),
@@ -5743,8 +5757,8 @@ impl AppController {
         }
         let sender = self.background.sender();
         thread::spawn(move || {
-            let result =
-                lyrics::provider::download_to_sidecar(&path, &lookup, force).map(|document| {
+            let result = lyrics_domain::provider::download_to_sidecar(&path, &lookup, force).map(
+                |document| {
                     eprintln!(
                         "Lyrics loaded from {} ({})",
                         document.provider,
@@ -5754,7 +5768,8 @@ impl AppController {
                             "plain fallback"
                         }
                     );
-                });
+                },
+            );
             let _ = sender.send(BackgroundMessage::LyricsDownloaded {
                 path,
                 result,
@@ -5843,7 +5858,7 @@ impl AppController {
         }
 
         library.rebuild_collections();
-        if let Err(error) = youtube::save_library_cache(&library) {
+        if let Err(error) = youtube_domain::save_library_cache(&library) {
             eprintln!("Could not persist YouTube liked songs: {error}");
         }
     }
