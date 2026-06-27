@@ -240,16 +240,16 @@ fn redact_stream_url(message: &str) -> String {
         return message.to_string();
     };
     let url_start = url_marker + "URL: ".len();
-    let tail = &message[url_start..];
+    let tail = message.get(url_start..).unwrap_or_default();
     let url_end = tail
         .find(", Redirect")
         .or_else(|| tail.find(char::is_whitespace))
         .unwrap_or(tail.len());
 
     let mut redacted = String::with_capacity(message.len().min(512));
-    redacted.push_str(&message[..url_start]);
+    redacted.push_str(message.get(..url_start).unwrap_or_default());
     redacted.push_str("<redacted>");
-    redacted.push_str(&tail[url_end..]);
+    redacted.push_str(tail.get(url_end..).unwrap_or_default());
     redacted
 }
 
