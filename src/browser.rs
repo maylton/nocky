@@ -1,52 +1,3 @@
-// cached_artist_profile_lookup_v1
-// local_artist_index_foundation_v3
-// stable_artist_directory_refresh_v1
-// stable_artist_overview_refresh_v1
-// stable_collection_identity_and_deferred_cache_v2
-// compact_artist_load_more_button_v1
-// artist_page_stable_refresh_v1
-// artist_profile_revalidation_v5
-// ranked_artist_unique_artwork_v3
-// track_menu_artist_album_navigation_v1
-// multi_artist_credits_v2
-// artist_featured_track_surface_restore_v1
-// artist_featured_track_fixed_radius_v3
-// youtube_artist_page_highlight_tracks_v2
-// youtube_artist_page_popular_tracks_v1
-// playlist_page_responsive_rows_v2
-// playlist_page_single_scroll_layout_v1
-// compact_artist_outline_spacing_fix_v3
-// compact_artist_card_outline_v2
-// compact_artist_cards_v1
-// unified_album_artist_playlist_layout_v2
-// youtube_artist_discography_header_v1
-// modular_collection_page_headers_v5
-// compact_youtube_mix_page_header_v2
-// rich_youtube_mix_page_header_v1
-// rich_youtube_mix_rows_v1
-// vertical_collection_edge_scroll_spring_v5_home_timing
-// vertical_collection_edge_scroll_spring_v4
-// vertical_collection_edge_scroll_spring_v3
-// vertical_collection_edge_spring_allocation_safe_v2
-// vertical_collection_edge_spring_v1
-// collection_card_entry_spring_v1
-// remove_collection_now_playing_badge_v1
-// richer_collection_cards_phase1_v1
-// collection_context_favorites_and_placeholders_v6
-// shared_collection_card_descriptor_v1
-// hide_youtube_home_sections_in_local_mode_v1
-// recently_added_local_music_v1
-// restore_circular_artist_covers_v2
-// preserve_home_carousel_scroll_v1
-// collection_card_inline_loading_fix_v2
-// collection_card_loading_spinner_v3\n// collection_overflow_icon_label_fix_v2
-// collection_card_overflow_and_play_state_v2
-// contextual_collection_controls_v5
-// smooth_home_crossfade_v1
-// recent_album_cover_resolution_v1
-// recent_activity_exact_fix_v1
-// merge_recent_activity_sources_v1
-// personalized_home_resume_v2
 use crate::{
     artist_index::LocalArtistIndex,
     config::{AppConfig, AppLanguage, StartupSource, VisualTheme},
@@ -469,8 +420,6 @@ impl HomeCard {
         }
     }
 }
-
-// complete_surface_localization_v3
 #[derive(Clone, Copy)]
 struct HomeCopy {
     recent_activity_title: &'static str,
@@ -1313,7 +1262,6 @@ impl LibraryBrowser {
         let home_content = gtk::Box::new(gtk::Orientation::Vertical, 22);
         home_content.set_hexpand(true);
         home_content.set_vexpand(false);
-        // material_expressive_library_cards_v1
         home_content.add_css_class("library-home");
         home_content.add_css_class("expressive-library-home");
         home_stack.add_named(&home_content, Some("home-0"));
@@ -4718,7 +4666,6 @@ fn home_section(
     }
 
     let scroll = gtk::ScrolledWindow::new();
-    // functional_carousel_queue_blur_fix_v1
     // Keep the thin Material position indicator visible whenever the
     // carousel is presented, instead of relying on GTK auto-hide.
     scroll.set_policy(gtk::PolicyType::Always, gtk::PolicyType::Never);
@@ -4727,9 +4674,6 @@ fn home_section(
     scroll.add_css_class("home-carousel-scroll");
     scroll.add_css_class("material-carousel-scroll");
     scroll.set_overlay_scrolling(false);
-
-    // nocky_home_cards_edge_spring_v4
-    // nocky_home_cards_edge_spring_v6
     install_home_carousel_edge_spring(&scroll, &rail, card_effects);
 
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
@@ -4739,7 +4683,7 @@ fn home_section(
     section
 }
 
-// nocky_home_cards_edge_spring_v6: reliable bounded carousel edge spring
+// reliable bounded carousel edge spring
 
 #[derive(Clone)]
 struct HomeCarouselEdgeCard {
@@ -6307,7 +6251,7 @@ fn bind_responsive_collection_artwork(
     artwork: &gtk::Stack,
     cover_path: Option<PathBuf>,
 ) {
-    // expressive_home_card_motion_stability_v1: bounded artwork settling
+    // bounded artwork settling
     //
     // The old implementation kept one tick callback alive for every card for
     // the entire lifetime of the widget. Card hover/click motion could then

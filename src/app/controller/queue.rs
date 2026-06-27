@@ -125,7 +125,6 @@ impl AppController {
         let _ = self.persist_active_queue_to_source("final");
     }
 
-    // queue2_playback_bridge_v1
     pub(crate) fn enqueue_browser_media(&self, media: QueueMedia, play_next: bool) {
         let expected = self.active_queue_source.get();
         if media.source.kind() != expected {

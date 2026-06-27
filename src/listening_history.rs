@@ -1,5 +1,3 @@
-// home_multi_artist_ranking_v1
-// unified_recent_activity_home_v4\n// personalized_home_resume_v2
 use crate::youtube::credited_artists;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -12,8 +10,6 @@ use std::{
 };
 
 const MAX_EVENTS: usize = 20_000;
-
-// expressive_home_card_motion_stability_v1
 // Disk serialization and atomic writes are kept away from GTK's main loop.
 static HISTORY_WRITER: OnceLock<mpsc::Sender<StoredHistory>> = OnceLock::new();
 static HISTORY_WRITE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();

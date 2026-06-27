@@ -70,8 +70,6 @@ impl MaterialPalette {
     pub(crate) fn from_cover(path: &Path) -> Option<Self> {
         dominant_seed(path).map(Self::from_seed)
     }
-
-    // material_palette_transition_animation_v1
     pub(crate) fn interpolate(self, target: Self, amount: f64) -> Self {
         let primary = self.primary.mix(target.primary, amount);
         let primary_container = self.primary_container.mix(target.primary_container, amount);

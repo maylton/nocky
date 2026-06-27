@@ -12,8 +12,6 @@ use crate::{
 use gtk::prelude::*;
 use std::rc::Rc;
 
-// nocky_rust_ui_phase3d_footer_transport_v2
-
 pub(crate) struct FooterTransportParts {
     pub(crate) root: gtk::Box,
     pub(crate) shuffle: gtk::ToggleButton,

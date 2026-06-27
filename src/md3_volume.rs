@@ -1,4 +1,3 @@
-// nocky_custom_md3_volume_canvas_v2
 use gtk::{gdk, glib, prelude::*};
 use std::{cell::Cell, f64::consts::PI, rc::Rc};
 
@@ -7,7 +6,6 @@ pub(crate) struct Md3VolumeSlider {
 }
 
 impl Md3VolumeSlider {
-    // footer_volume_adjustment_model_v2
     pub(crate) fn new(model: &gtk::Adjustment) -> Self {
         let root = gtk::DrawingArea::new();
         root.set_size_request(116, 42);

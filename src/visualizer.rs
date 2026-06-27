@@ -316,8 +316,6 @@ fn draw_spectrum(
     if width <= 0 || height <= 0 || values.is_empty() {
         return;
     }
-
-    // material_visualizer_palette_v1
     // The theme assigns the visualizer semantic color through CSS.
     // Noctalia uses accent_color and Material uses the artwork-derived
     // m3_primary token. Reading the computed color keeps Cairo synced

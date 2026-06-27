@@ -19,7 +19,6 @@ pub(crate) fn build_application(app: &adw::Application) {
     // Keep the controller alive for as long as the application is running.
     let keep_alive = controller.clone();
     app.connect_shutdown(move |_| {
-        // expressive_home_card_motion_stability_v1: flush
         // The regular checkpoints are asynchronous; shutdown performs one
         // serialized final snapshot so the latest playback session is kept.
         keep_alive.listening_history.borrow().flush();
@@ -79,7 +78,6 @@ impl AppController {
             .active(false)
             .tooltip_text(tr(Message::SidebarToggle))
             .build();
-        // material_expressive_navigation_v1
         sidebar_button.add_css_class("header-navigation-button");
         header.pack_start(&sidebar_button);
 
@@ -88,7 +86,6 @@ impl AppController {
         brand.add_css_class("header-brand");
         header.pack_start(&brand);
 
-        // home_player_collapse_and_dialog_fix_v2
         let player_toggle_icon = gtk::Image::from_icon_name("view-grid-symbolic");
         player_toggle_icon.set_pixel_size(18);
         let player_toggle_button = gtk::Button::new();
@@ -282,7 +279,6 @@ impl AppController {
             "audio-input-microphone-symbolic",
         );
 
-        // queue2_dedicated_tablet_page_v1
         // Reuse the popup renderer so both surfaces share rows and actions.
         let queue_page_root = gtk::Box::new(gtk::Orientation::Vertical, 14);
         queue_page_root.set_margin_top(20);
@@ -400,7 +396,6 @@ impl AppController {
         content_stack.add_css_class("application-content-stack");
         body.append(&content_stack);
 
-        // nocky_rust_ui_phase3g_footer_view_assembly_v1
         let mini_cover = build_cover(FOOTER_ARTWORK_SOURCE_SIZE);
         let FooterViewParts {
             root: player_bar,
@@ -437,7 +432,6 @@ impl AppController {
             &mini_cover.stack,
         );
 
-        // nocky_custom_md3_volume_canvas_v2
         {
             let group = right_controls.clone();
             volume_revealer.connect_child_revealed_notify(move |revealer| {
@@ -782,7 +776,6 @@ impl AppController {
         controller.sidebar.set_visible(false);
         controller.sidebar.add_css_class("sidebar-collapsed");
 
-        // home_tab_navigation_v1
         {
             let weak = Rc::downgrade(&controller);
             controller
@@ -991,7 +984,6 @@ impl AppController {
                     return;
                 };
 
-                // nocky_compact_volume_expand_and_flat_modes_v1
                 // Compact mode uses the icon as a disclosure control. Full
                 // mode keeps the familiar mute/unmute behavior.
                 if controller.player_bar.has_css_class("footer-mode-compact") {

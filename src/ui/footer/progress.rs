@@ -6,8 +6,6 @@
 use crate::ui::widgets::WaveProgress;
 use gtk::prelude::*;
 
-// nocky_rust_ui_phase3e_footer_progress_v1
-
 const CLASSIC_PAGE: &str = "classic";
 const MATERIAL_PAGE: &str = "m3";
 const TRANSITION_DURATION_MS: u32 = 160;

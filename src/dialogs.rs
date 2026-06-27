@@ -1,4 +1,3 @@
-// playback_resume_preferences_fix_v1
 use crate::{
     config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme},
     i18n::{self, Message},
@@ -6,8 +5,6 @@ use crate::{
 use adw::prelude::*;
 use gtk::glib;
 use std::{cell::RefCell, rc::Rc, time::Duration};
-
-// material_expressive_remaining_interface_v1
 fn inherit_visual_theme(parent: &adw::ApplicationWindow, widget: &impl IsA<gtk::Widget>) {
     widget.remove_css_class("theme-noctalia");
     widget.remove_css_class("theme-material-expressive");
@@ -86,8 +83,6 @@ pub(crate) fn present_settings<F>(
     content.add_css_class("settings-content");
     scrolled.set_child(Some(&content));
     toolbar.set_content(Some(&scrolled));
-
-    // m3_settings_explicit_shell_fix_v2
     // Style a real child widget instead of relying on AdwDialog's
     // internal presentation nodes, which vary across libadwaita modes.
     toolbar.add_css_class("settings-dialog-surface");
@@ -596,8 +591,6 @@ pub(crate) fn present_startup_source<F>(
 
     dialog.present(Some(parent));
 }
-
-// organized_settings_milestone_v1
 fn settings_group(icon_name: &str, title: &str, description: &str) -> (gtk::Box, gtk::Box) {
     let icon = gtk::Image::from_icon_name(icon_name);
     icon.set_pixel_size(20);

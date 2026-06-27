@@ -1,5 +1,3 @@
-// lyrics_2_v2
-// playback_resume_preferences_fix_v1
 use crate::{
     app::controller::AppController,
     app::media::{is_refreshable_stream_error, mpris_youtube_track_id, redact_stream_url},
@@ -27,8 +25,6 @@ fn youtube_recovery_delay_seconds(next_attempt: u8) -> Option<u64> {
         _ => None,
     }
 }
-
-// queue2_completion_core_v1
 fn matching_youtube_queue_entry(
     queue: &PlaybackQueue,
     preferred: Option<QueueEntryId>,

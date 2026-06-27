@@ -15,7 +15,6 @@ pub(crate) struct CoverView {
     picture: gtk::Picture,
     placeholder: gtk::Box,
     icon: gtk::Image,
-    // nocky_cover_texture_tracks_display_size_v1
     display_size: Rc<Cell<i32>>,
     current_path: Rc<RefCell<Option<PathBuf>>>,
     transition: TransitionClock,

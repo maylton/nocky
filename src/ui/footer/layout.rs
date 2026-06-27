@@ -4,18 +4,10 @@
 //! approved mode resolution, geometry and responsive breakpoints.
 
 use crate::config::FooterMode;
-
-// nocky_rust_ui_phase3b_footer_layout_policy_v1
-
-// nocky_footer_metadata_full_mode_breathing_room_v4
-// nocky_footer_full_metadata_visual_density_v7
-// nocky_footer_metadata_fill_available_height_v8
-// nocky_footer_artwork_tracks_card_height_v11
 pub(crate) const FOOTER_FULL_ARTWORK_SIZE: i32 = 72;
 pub(crate) const FOOTER_ARTWORK_SOURCE_SIZE: i32 = 96;
 const FOOTER_ARTWORK_VERTICAL_PADDING: i32 = 6;
 const FOOTER_COMPACT_ARTWORK_SIZE: i32 = 50;
-// nocky_footer_compact_restores_vertical_air_v12
 pub(crate) const FOOTER_COMPACT_CARD_MARGIN: i32 = 4;
 const FULL_METADATA_SPACING: i32 = 0;
 const COMPACT_METADATA_SPACING: i32 = 0;

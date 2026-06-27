@@ -1,4 +1,3 @@
-// settings_about_and_remove_overflow_v1
 use crate::config::AppLanguage;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

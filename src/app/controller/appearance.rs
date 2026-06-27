@@ -7,7 +7,6 @@ impl AppController {
         i18n::text(self.config.borrow().language, message)
     }
 
-    // nocky_real_metadata_transition_v1
     pub(crate) fn set_footer_metadata(&self, title: &str, artist: &str) {
         if !adw::is_animations_enabled(&self.mini_title) {
             self.mini_title.set_text(title);
@@ -100,7 +99,6 @@ impl AppController {
         self.mute_button.set_tooltip_text(Some(tooltip));
     }
 
-    // nocky_theme_scoped_expressive_effects_v1: Material-only compact volume spring
     pub(crate) fn apply_compact_volume_expansion(&self) {
         let compact = self.player_bar.has_css_class("footer-mode-compact");
         let expanded = compact && self.compact_volume_expanded.get();
@@ -305,7 +303,6 @@ impl AppController {
 
         self.visual_theme_manager.apply(&self.window, visual_theme);
 
-        // material_carousel_indicator_blur_runtime_v2
         let (blur_mode, blur_opacity) = {
             let config = self.config.borrow();
             (config.blur_mode, config.blur_opacity)
@@ -363,8 +360,6 @@ impl AppController {
         self.player_bar.set_visible(true);
         self.footer_now_playing.set_visible(true);
 
-        // nocky_footer_metadata_fill_available_height_v8
-        // nocky_footer_compact_restores_vertical_air_v12
         let card_margin = if plan.full {
             0
         } else {
@@ -379,7 +374,6 @@ impl AppController {
         self.footer_now_playing.set_margin_top(card_margin);
         self.footer_now_playing.set_margin_bottom(card_margin);
 
-        // nocky_footer_metadata_full_mode_breathing_room_v4
         self.mini_cover
             .set_display_size(plan.now_playing_artwork_size);
         self.mini_title.set_margin_bottom(plan.metadata_spacing);
@@ -443,7 +437,6 @@ impl AppController {
                 return glib::ControlFlow::Continue;
             }
 
-            // nocky_footer_artwork_tracks_card_height_v11
             let artwork_size = footer_full_artwork_size_for_card_height(now_playing.height());
             cover.set_display_size(artwork_size);
 
@@ -511,7 +504,6 @@ impl AppController {
         self.apply_visual_theme();
     }
 
-    // themed_about_and_shortcuts_windows_v2
     pub(crate) fn apply_popup_visual_theme<W>(&self, widget: &W)
     where
         W: IsA<gtk::Widget>,
@@ -575,7 +567,6 @@ impl AppController {
         name.add_css_class("title-1");
         name.add_css_class("nocky-about-name");
 
-        // noctalia_about_action_release_polish_v1
         let version_prefix = match language {
             AppLanguage::Portuguese => "Versão",
             AppLanguage::English => "Version",

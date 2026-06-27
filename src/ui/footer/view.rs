@@ -17,8 +17,6 @@ use crate::{
 use gtk::prelude::*;
 use std::rc::Rc;
 
-// nocky_rust_ui_phase3g_footer_view_assembly_v1
-
 const ROOT_HEIGHT: i32 = 88;
 const ROOT_CLASSES: [&str; 3] = ["player-bar", "player-bar-v2", "expressive-footer"];
 

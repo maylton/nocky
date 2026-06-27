@@ -1,5 +1,3 @@
-// personalized_home_privacy_controls_v3
-// playback_resume_preferences_fix_v1
 use gtk::glib;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -87,21 +85,15 @@ impl AppLanguage {
 pub struct AppConfig {
     pub music_directory: Option<PathBuf>,
     pub auto_download_lyrics: bool,
-    // playback_resume_preferences_fix_v1
     pub resume_playback_on_startup: bool,
     pub show_home_visualizer: bool,
     pub show_home_lyrics: bool,
-    // optional_personalized_home_history_v1
     pub show_personalized_home_history: bool,
-    // personalized_home_privacy_controls_v1
     pub collect_listening_history: bool,
-    // home_player_collapse_and_dialog_fix_v2
     pub home_player_collapsed: bool,
     pub visual_theme: VisualTheme,
     pub footer_mode: FooterMode,
-    // pixel_player_expressive_transport_v1
     pub expressive_transport_effects: bool,
-    // expressive_home_card_motion_v1
     pub expressive_home_card_effects: bool,
     pub noctalia_theme_sync: bool,
     pub youtube_auto_sync: bool,

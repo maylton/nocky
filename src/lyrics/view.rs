@@ -1,13 +1,3 @@
-// smooth_centered_lyrics_transition_v1
-// fix_lyrics_viewport_relative_bounds_v1
-// filter_transient_lyrics_timestamp_regressions_v1
-// fix_redundant_lyrics_rebuild_scroll_reset_v1
-// fix_lyrics_transient_top_jump_v4
-// centered_lyrics_follow_with_breath_v2
-// stable_automatic_lyrics_scroll_v3
-// stabilize_clickable_lyrics_seek_scroll_v1
-// clickable_lyrics_seek_v3
-// lyrics_2_v2
 use crate::{
     config::AppLanguage,
     lyrics::{active_index, LyricLine},
@@ -185,8 +175,6 @@ impl LyricsPresenter {
         presenter.show_default_state();
         presenter
     }
-
-    // complete_surface_localization_v3
     pub fn set_language(&self, language: AppLanguage) {
         self.inner.language.set(language);
         if self.inner.lines.borrow().is_empty() {

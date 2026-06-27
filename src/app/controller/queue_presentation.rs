@@ -3,8 +3,6 @@
 use super::*;
 
 impl AppController {
-    // functional_carousel_queue_blur_fix_v1
-    // queue2_interface_v1
     pub(crate) fn rebuild_queue_popover(
         self: &Rc<Self>,
         list: &gtk::Box,
@@ -63,7 +61,6 @@ impl AppController {
         clear_upcoming.set_sensitive(presentation.can_clear_upcoming());
 
         if presentation.items.is_empty() {
-            // queue2_interface_polish_v1: richer empty state
             let empty = gtk::Box::new(gtk::Orientation::Vertical, 7);
             empty.set_margin_top(18);
             empty.set_margin_bottom(18);
@@ -163,7 +160,6 @@ impl AppController {
                 row.add_css_class("active");
             }
 
-            // queue2_drag_indicator_v1
             // Keep the widget that owns GestureDrag parented and intact.
             // A compact accent marker moves through the list to show the
             // destination without duplicating the whole track row.
@@ -171,7 +167,6 @@ impl AppController {
             drag_icon.set_pixel_size(18);
             drag_icon.set_can_target(false);
 
-            // queue2_interface_polish_v1: semantic drag handle with keyboard operation
             let drag_handle = gtk::Button::new();
             drag_handle.set_size_request(34, 34);
             drag_handle.set_halign(gtk::Align::Center);
@@ -411,7 +406,6 @@ impl AppController {
 
             drag_handle.add_controller(drag_gesture);
 
-            // queue2_interface_polish_v1: Alt+Up / Alt+Down mirrors pointer reordering.
             let key_controller = gtk::EventControllerKey::new();
             {
                 let weak = Rc::downgrade(self);
@@ -491,7 +485,6 @@ impl AppController {
             information.set_margin_start(10);
             information.set_margin_end(8);
 
-            // queue2_completion_core_v1: real artwork with fixed natural size.
             let artwork = build_cover(42);
             artwork.stack.add_css_class("queue2-cover");
             artwork.set_path_immediate(entry.media.cover_path.as_deref());
@@ -785,7 +778,6 @@ impl AppController {
         }
 
         if current_index.is_some_and(|position| position.saturating_add(1) >= count) {
-            // queue2_interface_polish_v1: explicit end-of-queue state
             let end_state = gtk::Box::new(gtk::Orientation::Horizontal, 9);
             end_state.set_halign(gtk::Align::Fill);
             end_state.set_valign(gtk::Align::Center);

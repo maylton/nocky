@@ -1,5 +1,3 @@
-// onboarding_recent_activity_copy_v1
-// onboarding_personalized_home_history_v1
 use crate::config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme};
 use adw::prelude::*;
 use std::{cell::Cell, rc::Rc};

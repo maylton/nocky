@@ -132,7 +132,6 @@ impl ThemeBridge {
             &bridge.provider,
             gtk::STYLE_PROVIDER_PRIORITY_USER,
         );
-        // functional_carousel_queue_blur_fix_v1
         // The dynamic Material palette is installed at USER + 80 and
         // paints opaque window/app-shell surfaces. Keep runtime blur above
         // it so Custom/Noctalia transparency is not overwritten later.

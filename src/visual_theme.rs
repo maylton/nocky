@@ -1,4 +1,3 @@
-// material_dynamic_palette_v1
 use crate::{config::VisualTheme, material_palette::MaterialPalette, theme_css};
 use gtk::{gdk, glib, prelude::*};
 use std::{
@@ -127,8 +126,6 @@ impl VisualThemeManager {
             let _ = sender.send((generation, palette));
         });
     }
-
-    // material_palette_transition_animation_v1
     fn transition_to_palette(self: &Rc<Self>, target: MaterialPalette) {
         let start = self.current_palette.get();
         let token = self.palette_animation_generation.get().wrapping_add(1);
