@@ -6,14 +6,14 @@ window.theme-material-expressive .footer-progress-wave {
 }
 
 window.theme-material-expressive scale.footer-progress-track trough {
-  min-height: 5px;
-  border-radius: 3px;
-  background-color: alpha(@m3_on_surface_variant, 0.20);
+  min-height: 8px;
+  border-radius: 999px;
+  background-color: alpha(@m3_on_surface_variant, 0.22);
 }
 
 window.theme-material-expressive scale.footer-progress-track trough highlight {
-  min-height: 5px;
-  border-radius: 3px;
+  min-height: 8px;
+  border-radius: 999px;
   background-color: @m3_primary;
 }
 
@@ -31,16 +31,6 @@ window.theme-material-expressive .footer-utility-action:checked {
   color: @m3_on_primary;
   background-color: @m3_primary;
 }
-
-
-
-
-
-
-
-
-
-/* material_expressive_footer_refinement_v1 */
 
 window.theme-material-expressive .expressive-footer {
   min-height: 78px;
@@ -107,13 +97,13 @@ window.theme-material-expressive .footer-skip-control {
 }
 
 window.theme-material-expressive .footer-progress-row {
-  min-height: 18px;
+  min-height: 24px;
   padding: 0 4px;
 }
 
 window.theme-material-expressive .footer-progress-stack,
 window.theme-material-expressive .footer-progress-wave {
-  min-height: 18px;
+  min-height: 24px;
 }
 
 window.theme-material-expressive .footer-progress-row .time-label {
@@ -197,7 +187,6 @@ window.theme-material-expressive
   border-radius: 22px;
   background-color: @m3_surface_container_high;
 }
-/* material_footer_player_progress_refinement_v1 */
 
 window.theme-material-expressive .expressive-footer.footer-mode-full .footer-center-surface {
   padding-top: 6px;
@@ -211,27 +200,26 @@ window.theme-material-expressive .expressive-footer.footer-mode-full .footer-tra
 
 window.theme-material-expressive .expressive-footer.footer-mode-full .footer-progress-row {
   margin-top: 4px;
-  min-height: 17px;
+  min-height: 24px;
 }
 
 window.theme-material-expressive .expressive-footer.footer-mode-full .footer-progress-stack,
 window.theme-material-expressive .expressive-footer.footer-mode-full .footer-progress-wave {
-  min-height: 17px;
+  min-height: 24px;
 }
 
-/* Main player progress should visually match the wave progress endpoint. */
 window.theme-material-expressive .player-progress-wave {
   color: @m3_primary;
 }
 
 window.theme-material-expressive scale.player-progress-track trough {
-  min-height: 6px;
+  min-height: 8px;
   border-radius: 999px;
   background-color: alpha(@m3_on_surface_variant, 0.22);
 }
 
 window.theme-material-expressive scale.player-progress-track trough highlight {
-  min-height: 6px;
+  min-height: 8px;
   border-radius: 999px;
   background-color: @m3_primary;
 }
@@ -244,9 +232,7 @@ window.theme-material-expressive scale.player-progress-track slider {
   border: 2px solid @m3_surface_container_high;
   box-shadow: none;
 }
-/* material_footer_compact_volume_polish_v1 */
 
-/* Compact transport must share the same visual baseline as both side cards. */
 window.theme-material-expressive
   .footer-mode-compact
   .footer-center-surface {

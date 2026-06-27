@@ -7,6 +7,19 @@ use std::{
 
 type SeekCallback = Box<dyn Fn(f64)>;
 
+const HEIGHT_REQUEST: i32 = 24;
+const EDGE_PADDING: f64 = 6.0;
+const TRACK_THICKNESS: f64 = 8.0;
+const TRACK_ALPHA: f64 = 0.22;
+const ACTIVE_ALPHA: f64 = 0.96;
+const ACTIVE_TRACK_GAP: f64 = 6.0;
+const STOP_INDICATOR_RADIUS: f64 = 4.0;
+const STOP_INDICATOR_ALPHA: f64 = 0.34;
+const WAVE_AMPLITUDE: f64 = 2.45;
+const WAVELENGTH: f64 = 20.0;
+const WAVE_STEP: f64 = 1.25;
+const BRIDGE_STEP: f64 = 0.75;
+
 #[derive(Clone)]
 pub struct WaveProgress {
     area: gtk::DrawingArea,
@@ -19,7 +32,7 @@ impl WaveProgress {
     pub fn new() -> Self {
         let area = gtk::DrawingArea::new();
         area.set_hexpand(true);
-        area.set_height_request(22);
+        area.set_height_request(HEIGHT_REQUEST);
         area.set_cursor_from_name(Some("pointer"));
         area.add_css_class("footer-wave-progress");
 
@@ -122,9 +135,8 @@ fn emit_seek(
     x: f64,
 ) {
     let width = area.width().max(1) as f64;
-    let edge_padding = 5.0;
-    let usable_width = (width - edge_padding * 2.0).max(1.0);
-    let value = ((x - edge_padding) / usable_width).clamp(0.0, 1.0);
+    let usable_width = (width - EDGE_PADDING * 2.0).max(1.0);
+    let value = ((x - EDGE_PADDING) / usable_width).clamp(0.0, 1.0);
     fraction.set(value);
     area.queue_draw();
     for callback in callbacks.borrow().iter() {
@@ -153,51 +165,52 @@ fn draw_wave(
     let middle = height as f64 / 2.0;
     let fraction = fraction.clamp(0.0, 1.0);
 
-    let edge_padding = 5.0;
-    let usable_width = (width - edge_padding * 2.0).max(1.0);
-    let progress_x = edge_padding + usable_width * fraction;
-
-    let amplitude = 2.2;
-    let wavelength = 18.0;
+    let stop_x = width - EDGE_PADDING;
+    let usable_width = (stop_x - EDGE_PADDING).max(1.0);
+    let progress_x = EDGE_PADDING + usable_width * fraction;
     let tau = std::f64::consts::TAU;
 
     context.set_line_cap(cairo::LineCap::Round);
     context.set_line_join(cairo::LineJoin::Round);
 
-    // Unplayed segment.
-    if progress_x < width - edge_padding {
+    let track_start = (progress_x + ACTIVE_TRACK_GAP).min(stop_x);
+    if track_start < stop_x - STOP_INDICATOR_RADIUS {
         context.new_path();
-        context.set_source_rgba(red, green, blue, 0.20);
-        context.set_line_width(4.0);
-        context.move_to(progress_x, middle);
-        context.line_to(width - edge_padding, middle);
+        context.set_source_rgba(red, green, blue, TRACK_ALPHA);
+        context.set_line_width(TRACK_THICKNESS);
+        context.move_to(track_start, middle);
+        context.line_to(stop_x - STOP_INDICATOR_RADIUS, middle);
         let _ = context.stroke();
     }
 
+    if fraction < 0.995 {
+        context.new_path();
+        context.set_source_rgba(red, green, blue, STOP_INDICATOR_ALPHA);
+        context.arc(stop_x, middle, STOP_INDICATOR_RADIUS, 0.0, tau);
+        let _ = context.fill();
+    }
+
     if fraction > 0.0 {
-        // Only the final pixels bridge smoothly into the straight segment.
-        // The rest of the wave keeps its normal amplitude and animation.
-        let bridge_length = 6.0_f64.min(progress_x - edge_padding);
+        let bridge_length = ACTIVE_TRACK_GAP.min(progress_x - EDGE_PADDING);
         let bridge_start = progress_x - bridge_length;
 
         context.new_path();
-        context.set_source_rgba(red, green, blue, 0.96);
-        context.set_line_width(4.2);
+        context.set_source_rgba(red, green, blue, ACTIVE_ALPHA);
+        context.set_line_width(TRACK_THICKNESS);
 
-        let wave_y = |x: f64| middle + ((x / wavelength) * tau + phase).sin() * amplitude;
+        let wave_y = |x: f64| middle + ((x / WAVELENGTH) * tau + phase).sin() * WAVE_AMPLITUDE;
 
         let wave_slope =
-            |x: f64| ((x / wavelength) * tau + phase).cos() * amplitude * tau / wavelength;
+            |x: f64| ((x / WAVELENGTH) * tau + phase).cos() * WAVE_AMPLITUDE * tau / WAVELENGTH;
 
-        let start_y = wave_y(edge_padding);
-        context.move_to(edge_padding, start_y);
+        let start_y = wave_y(EDGE_PADDING);
+        context.move_to(EDGE_PADDING, start_y);
 
-        // Draw the normal wave until the transition begins.
-        let mut x = edge_padding + 1.5;
+        let mut x = EDGE_PADDING + WAVE_STEP;
 
         while x < bridge_start {
             context.line_to(x, wave_y(x));
-            x += 1.5;
+            x += WAVE_STEP;
         }
 
         if bridge_length > 0.01 {
@@ -206,9 +219,7 @@ fn draw_wave(
 
             context.line_to(bridge_start, middle + y0);
 
-            // Cubic Hermite interpolation keeps position and slope continuous
-            // with the sine wave, then lands at the center with zero slope.
-            let mut bridge_x = bridge_start + 0.75;
+            let mut bridge_x = bridge_start + BRIDGE_STEP;
 
             while bridge_x < progress_x {
                 let t = ((bridge_x - bridge_start) / bridge_length).clamp(0.0, 1.0);
@@ -222,17 +233,25 @@ fn draw_wave(
                 let offset = h00 * y0 + h10 * slope0 * bridge_length;
 
                 context.line_to(bridge_x, middle + offset);
-                bridge_x += 0.75;
+                bridge_x += BRIDGE_STEP;
             }
         }
 
         context.line_to(progress_x, middle);
         let _ = context.stroke();
     }
+}
 
-    // Exact position marker.
-    context.new_path();
-    context.set_source_rgba(red, green, blue, 1.0);
-    context.arc(progress_x, middle, 3.4, 0.0, tau);
-    let _ = context.fill();
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expressive_progress_geometry_keeps_material_cues() {
+        assert_eq!(HEIGHT_REQUEST, 24);
+        assert_eq!(EDGE_PADDING, 6.0);
+        assert_eq!(TRACK_THICKNESS, 8.0);
+        assert_eq!(ACTIVE_TRACK_GAP, 6.0);
+        assert_eq!(STOP_INDICATOR_RADIUS, 4.0);
+    }
 }
