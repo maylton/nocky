@@ -980,4 +980,126 @@ impl AppController {
         popover.set_child(Some(&content));
         popover.popup();
     }
+
+    pub(crate) fn queue_source_kind(source: StartupSource) -> QueueSourceKind {
+        match source {
+            StartupSource::Local => QueueSourceKind::Local,
+            StartupSource::YouTube => QueueSourceKind::YouTube,
+        }
+    }
+
+    pub(crate) fn report_queue_recovery(&self, source: QueueSourceKind, discarded_entries: usize) {
+        if discarded_entries == 0 {
+            return;
+        }
+
+        eprintln!(
+            "Queue 2.0 recovery for {source:?} discarded {discarded_entries} unavailable entr{}",
+            if discarded_entries == 1 { "y" } else { "ies" }
+        );
+    }
+
+    pub(crate) fn persist_active_queue_to_source(&self, context: &str) -> bool {
+        let source = self.active_queue_source.get();
+        let snapshot = self.playback_queue_v2.borrow().snapshot();
+
+        match crate::playback::queue::save_for(source, &snapshot) {
+            Ok(()) => {
+                self.queue_last_saved_snapshot.replace(snapshot);
+                true
+            }
+            Err(error) => {
+                eprintln!("Could not save {context} Queue 2.0 state for {source:?}: {error}");
+                false
+            }
+        }
+    }
+
+    pub(crate) fn switch_active_queue_source(&self, source: QueueSourceKind) {
+        if self.active_queue_source.get() == source {
+            return;
+        }
+
+        if !self.persist_active_queue_to_source("outgoing") {
+            self.show_toast("Não foi possível salvar a fila atual antes de trocar de fonte");
+            return;
+        }
+
+        self.persist_playback_session_now();
+        self.maybe_record_listening();
+        let _ = self.player.pause();
+        self.update_play_icons(false);
+        self.playback_source.set(PlaybackSource::None);
+        self.state.borrow_mut().current = None;
+        self.youtube_state.borrow_mut().take();
+        self.queue_v2_pending_entry.set(None);
+        self.queue_dragged_entry.set(None);
+
+        let queue_load = crate::playback::queue::load_for(source);
+        self.report_queue_recovery(source, queue_load.discarded_entries);
+        let snapshot = queue_load.queue.snapshot();
+
+        self.playback_queue_v2.replace(queue_load.queue);
+        self.queue_last_saved_snapshot.replace(snapshot);
+        self.active_queue_source.set(source);
+
+        let restored_session = crate::playback::session::load_for(source);
+        let restored_seconds = restored_session
+            .as_ref()
+            .map(|session| (session.position_us.max(0) as u64) / 1_000_000)
+            .unwrap_or_default();
+        let restored_shuffle = restored_session
+            .as_ref()
+            .is_some_and(|session| session.shuffle_enabled);
+        let restored_repeat = restored_session
+            .as_ref()
+            .is_some_and(|session| session.repeat_enabled);
+        self.restored_playback_session.replace(restored_session);
+        self.playback_session_last_position_seconds
+            .set(restored_seconds);
+        self.playback_session_last_shuffle.set(restored_shuffle);
+        self.playback_session_last_repeat.set(restored_repeat);
+        self.shuffle_enabled.set(false);
+        self.shuffle_button.set_active(false);
+        self.footer_shuffle_button.set_active(false);
+        self.repeat_button.set_active(false);
+        self.footer_repeat_button.set_active(false);
+        self.shuffle_navigation.borrow_mut().clear();
+        self.playback_session_restore_attempts.set(0);
+        self.pending_resume_position_us.set(None);
+        self.startup_restore_autoplay.set(None);
+
+        self.reset_shuffle_navigation(self.shuffle_enabled.get());
+        self.publish_mpris_capabilities();
+        self.update_footer_source();
+        self.try_restore_playback_session();
+    }
+
+    pub(crate) fn initial_queue_entry_id(&self) -> Option<QueueEntryId> {
+        let queue = self.playback_queue_v2.borrow();
+        queue
+            .current_id()
+            .or_else(|| queue.entries().first().map(|entry| entry.id))
+    }
+
+    pub(crate) fn persist_queue_if_changed(&self) {
+        let snapshot = self.playback_queue_v2.borrow().snapshot();
+        if *self.queue_last_saved_snapshot.borrow() == snapshot {
+            return;
+        }
+
+        let source = self.active_queue_source.get();
+        match crate::playback::queue::save_for(source, &snapshot) {
+            Ok(()) => {
+                self.queue_last_saved_snapshot.replace(snapshot);
+            }
+            Err(error) => {
+                eprintln!("Could not save Queue 2.0 state for {source:?}: {error}");
+            }
+        }
+    }
+
+    pub(crate) fn persist_queue_now(&self) {
+        let _ = self.persist_active_queue_to_source("final");
+    }
 }
