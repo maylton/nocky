@@ -1,11 +1,12 @@
 use gtk::{cairo, glib, prelude::*};
 use std::{cell::Cell, f64::consts::TAU, rc::Rc};
 
-const DEFAULT_SIZE: i32 = 18;
-const TRACK_ALPHA: f64 = 0.18;
+const DEFAULT_SIZE: i32 = 22;
+const TRACK_ALPHA: f64 = 0.22;
 const ACTIVE_ALPHA: f64 = 0.96;
-const STROKE_WIDTH: f64 = 3.0;
-const ARC_SWEEP: f64 = TAU * 0.36;
+const STROKE_WIDTH: f64 = 4.0;
+const ACTIVE_ARC_SWEEP: f64 = TAU * 0.34;
+const TRACK_GAP: f64 = TAU * 0.055;
 const ROTATION_STEP: f64 = 0.075;
 
 #[derive(Clone)]
@@ -71,14 +72,18 @@ fn draw_indicator(
     let radius = indicator_radius(size);
     let start = phase - TAU / 4.0;
     let end = start + active_arc_sweep();
+    let track_start = end + TRACK_GAP;
+    let track_end = start + TAU - TRACK_GAP;
 
     context.set_line_cap(cairo::LineCap::Round);
     context.set_line_width(STROKE_WIDTH);
 
-    context.new_path();
-    context.set_source_rgba(red, green, blue, TRACK_ALPHA);
-    context.arc(center_x, center_y, radius, 0.0, TAU);
-    let _ = context.stroke();
+    if track_start < track_end {
+        context.new_path();
+        context.set_source_rgba(red, green, blue, TRACK_ALPHA);
+        context.arc(center_x, center_y, radius, track_start, track_end);
+        let _ = context.stroke();
+    }
 
     context.new_path();
     context.set_source_rgba(red, green, blue, ACTIVE_ALPHA);
@@ -91,7 +96,12 @@ fn indicator_radius(size: f64) -> f64 {
 }
 
 fn active_arc_sweep() -> f64 {
-    ARC_SWEEP
+    ACTIVE_ARC_SWEEP
+}
+
+#[cfg(test)]
+fn painted_arc_gap() -> f64 {
+    TRACK_GAP
 }
 
 #[cfg(test)]
@@ -100,9 +110,9 @@ mod tests {
 
     #[test]
     fn loading_indicator_geometry_fits_compact_buttons() {
-        assert_eq!(DEFAULT_SIZE, 18);
-        assert_eq!(STROKE_WIDTH, 3.0);
-        assert!(indicator_radius(DEFAULT_SIZE as f64) <= 8.0);
+        assert_eq!(DEFAULT_SIZE, 22);
+        assert_eq!(STROKE_WIDTH, 4.0);
+        assert!(indicator_radius(DEFAULT_SIZE as f64) <= 9.0);
     }
 
     #[test]
@@ -111,5 +121,13 @@ mod tests {
 
         assert!(sweep < TAU * 0.5);
         assert!(sweep > TAU * 0.25);
+    }
+
+    #[test]
+    fn loading_indicator_track_keeps_material_gap() {
+        let gap = painted_arc_gap();
+
+        assert!(gap > TAU * 0.04);
+        assert!(gap < TAU * 0.08);
     }
 }
