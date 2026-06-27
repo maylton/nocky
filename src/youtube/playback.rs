@@ -1,6 +1,8 @@
 // lyrics_2_v2
 // playback_resume_preferences_fix_v1
 use crate::{
+    app::controller::AppController,
+    app::state::{PlaybackSource, YouTubePlaybackState},
     background::BackgroundMessage,
     lyrics, lyrics_provider,
     playback::queue::{PlaybackQueue, QueueEntryId, QueueSource},
@@ -15,10 +17,7 @@ use std::{
     thread,
 };
 
-use super::{
-    is_refreshable_stream_error, mpris_youtube_track_id, redact_stream_url, AppController,
-    PlaybackSource, YouTubePlaybackState,
-};
+use super::{is_refreshable_stream_error, mpris_youtube_track_id, redact_stream_url};
 
 const YOUTUBE_RECOVERY_MAX_ATTEMPTS: u8 = 3;
 
@@ -64,7 +63,7 @@ fn matching_youtube_queue_entry(
 }
 
 impl AppController {
-    pub(super) fn resolve_youtube_track(
+    pub(crate) fn resolve_youtube_track(
         &self,
         item: YouTubeItem,
         queue: Vec<YouTubeItem>,
@@ -124,7 +123,7 @@ impl AppController {
         });
     }
 
-    pub(super) fn try_recover_youtube_stream(&self, error: &str) -> bool {
+    pub(crate) fn try_recover_youtube_stream(&self, error: &str) -> bool {
         if self.playback_source.get() != PlaybackSource::YouTube
             || self.youtube_recovery_in_progress.get()
             || self.youtube_recovery_attempted.get()
@@ -172,7 +171,7 @@ impl AppController {
         true
     }
 
-    pub(super) fn schedule_youtube_recovery_retry(
+    pub(crate) fn schedule_youtube_recovery_retry(
         &self,
         queue: Vec<YouTubeItem>,
         index: usize,
@@ -207,7 +206,7 @@ impl AppController {
         true
     }
 
-    pub(super) fn reset_youtube_recovery(&self) {
+    pub(crate) fn reset_youtube_recovery(&self) {
         self.youtube_recovery_in_progress.set(false);
         self.youtube_recovery_attempted.set(false);
         self.youtube_recovery_retry_count.set(0);
@@ -217,7 +216,7 @@ impl AppController {
         self.youtube_recovery_was_playing.set(false);
     }
 
-    pub(super) fn resume_youtube_after_recovery(&self) {
+    pub(crate) fn resume_youtube_after_recovery(&self) {
         let resume_us = self.youtube_recovery_resume_us.replace(0);
         if resume_us <= 0 || self.playback_source.get() != PlaybackSource::YouTube {
             return;
@@ -238,7 +237,7 @@ impl AppController {
             .send(crate::playback::mpris::MprisUpdate::Position(resume_us));
     }
 
-    pub(super) fn apply_youtube_track(
+    pub(crate) fn apply_youtube_track(
         &self,
         queue: Vec<YouTubeItem>,
         index: usize,
@@ -265,7 +264,7 @@ impl AppController {
                             &entry.media.source,
                             QueueSource::YouTube {
                                 video_id: candidate,
-                            } if candidate == &item.video_id
+                            } if candidate == item.video_id.as_str()
                         )
                     })
             })
@@ -464,7 +463,7 @@ impl AppController {
         self.publish_mpris_capabilities();
     }
 
-    pub(super) fn request_youtube_lyrics(&self, item: &YouTubeItem, notify: bool) {
+    pub(crate) fn request_youtube_lyrics(&self, item: &YouTubeItem, notify: bool) {
         if item.video_id.is_empty() {
             return;
         }
