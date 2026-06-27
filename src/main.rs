@@ -24,6 +24,7 @@
 // contextual_collection_controls_v5
 // recent_activity_exact_fix_v1
 // personalized_home_resume_v2
+mod album_aura_bridge;
 mod animated_page_switcher;
 mod artist_index;
 mod background;
@@ -258,6 +259,16 @@ struct AppController {
     views: adw::ViewStack,
     music_page: adw::ViewStackPage,
     lyrics_page: adw::ViewStackPage,
+    queue_page_list: gtk::Box,
+    queue_page_summary: gtk::Label,
+    queue_page_source: gtk::Label,
+    queue_page_upcoming_badge: gtk::Label,
+    queue_page_total_badge: gtk::Label,
+    queue_page_clear_upcoming: gtk::Button,
+    queue_page_clear_all: gtk::Button,
+    queue_page_popover_proxy: gtk::Popover,
+    queue_page_last_snapshot: RefCell<Option<QueueSnapshot>>,
+    queue_page_last_source: Cell<Option<QueueSourceKind>>,
     // animated_top_page_switcher_v2
     page_switcher: Rc<AnimatedPageSwitcher>,
     browser: LibraryBrowser,
@@ -491,8 +502,16 @@ impl AppController {
         player_toggle_button.add_css_class("home-player-toggle-button");
         header.pack_start(&player_toggle_button);
 
-        let page_switcher =
-            AnimatedPageSwitcher::new(tr(Message::MusicTab), tr(Message::LyricsTab));
+        let queue_tab_text = match config.language {
+            AppLanguage::Portuguese => "Fila",
+            AppLanguage::English => "Queue",
+            AppLanguage::Spanish => "Cola",
+        };
+        let page_switcher = AnimatedPageSwitcher::new(
+            tr(Message::MusicTab),
+            tr(Message::LyricsTab),
+            queue_tab_text,
+        );
         header.set_title_widget(Some(page_switcher.root()));
 
         let search_button = gtk::ToggleButton::builder()
@@ -665,6 +684,110 @@ impl AppController {
             Some("lyrics"),
             tr(Message::LyricsTab),
             "audio-input-microphone-symbolic",
+        );
+
+        // queue2_dedicated_tablet_page_v1
+        // Reuse the popup renderer so both surfaces share rows and actions.
+        let queue_page_root = gtk::Box::new(gtk::Orientation::Vertical, 14);
+        queue_page_root.set_margin_top(20);
+        queue_page_root.set_margin_bottom(20);
+        queue_page_root.set_margin_start(24);
+        queue_page_root.set_margin_end(24);
+        queue_page_root.set_vexpand(true);
+        queue_page_root.set_hexpand(true);
+        queue_page_root.add_css_class("queue2-page");
+
+        let queue_page_header = gtk::Box::new(gtk::Orientation::Horizontal, 16);
+        queue_page_header.add_css_class("queue2-page-header");
+
+        let queue_page_titles = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        queue_page_titles.set_hexpand(true);
+
+        let queue_page_title_row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+        queue_page_title_row.add_css_class("queue2-page-title-row");
+
+        let queue_page_icon = gtk::Image::from_icon_name("view-list-symbolic");
+        queue_page_icon.set_pixel_size(18);
+        queue_page_icon.add_css_class("queue2-page-title-icon");
+
+        let queue_page_title = gtk::Label::new(Some(queue_tab_text));
+        queue_page_title.set_xalign(0.0);
+        queue_page_title.add_css_class("title-1");
+        queue_page_title.add_css_class("queue2-page-title");
+
+        let queue_page_summary = gtk::Label::new(None);
+        queue_page_summary.set_visible(false);
+
+        let queue_page_summary_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        queue_page_summary_row.add_css_class("queue2-page-summary-row");
+        queue_page_summary_row.set_halign(gtk::Align::Start);
+
+        let queue_page_source = gtk::Label::new(None);
+        queue_page_source.set_xalign(0.0);
+        queue_page_source.add_css_class("dim-label");
+        queue_page_source.add_css_class("queue2-page-source");
+
+        let queue_page_upcoming_badge = gtk::Label::new(None);
+        queue_page_upcoming_badge.add_css_class("queue2-page-micro-badge");
+
+        let queue_page_total_badge = gtk::Label::new(None);
+        queue_page_total_badge.add_css_class("queue2-page-micro-badge");
+
+        queue_page_title_row.append(&queue_page_icon);
+        queue_page_title_row.append(&queue_page_title);
+        queue_page_summary_row.append(&queue_page_source);
+        queue_page_summary_row.append(&queue_page_upcoming_badge);
+        queue_page_summary_row.append(&queue_page_total_badge);
+        queue_page_titles.append(&queue_page_title_row);
+        queue_page_titles.append(&queue_page_summary_row);
+        queue_page_header.append(&queue_page_titles);
+
+        let queue_page_actions = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+        queue_page_actions.set_valign(gtk::Align::Center);
+        queue_page_actions.set_halign(gtk::Align::End);
+        queue_page_actions.add_css_class("queue2-page-actions");
+
+        let queue_page_clear_upcoming = gtk::Button::with_label(match config.language {
+            AppLanguage::Portuguese => "Limpar próximas",
+            AppLanguage::English => "Clear upcoming",
+            AppLanguage::Spanish => "Limpiar siguientes",
+        });
+        queue_page_clear_upcoming.add_css_class("pill");
+        queue_page_clear_upcoming.add_css_class("queue2-page-action");
+
+        let queue_page_clear_all = gtk::Button::with_label(match config.language {
+            AppLanguage::Portuguese => "Limpar tudo",
+            AppLanguage::English => "Clear all",
+            AppLanguage::Spanish => "Limpiar todo",
+        });
+        queue_page_clear_all.add_css_class("pill");
+        queue_page_clear_all.add_css_class("queue2-page-action");
+        queue_page_clear_all.add_css_class("queue2-page-action-danger");
+
+        queue_page_actions.append(&queue_page_clear_upcoming);
+        queue_page_actions.append(&queue_page_clear_all);
+        queue_page_header.append(&queue_page_actions);
+        queue_page_root.append(&queue_page_header);
+
+        let queue_page_list = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        queue_page_list.add_css_class("queue2-list");
+        queue_page_list.add_css_class("queue2-page-list");
+
+        let queue_page_scroll = gtk::ScrolledWindow::new();
+        queue_page_scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+        queue_page_scroll.set_vexpand(true);
+        queue_page_scroll.set_hexpand(true);
+        queue_page_scroll.set_child(Some(&queue_page_list));
+        queue_page_scroll.add_css_class("queue2-page-scroll");
+        queue_page_root.append(&queue_page_scroll);
+
+        let queue_page_popover_proxy = gtk::Popover::new();
+
+        views.add_titled_with_icon(
+            &queue_page_root,
+            Some("queue"),
+            queue_tab_text,
+            "view-list-symbolic",
         );
 
         let youtube_page = YouTubePage::new();
@@ -850,6 +973,16 @@ impl AppController {
             views,
             music_page,
             lyrics_page,
+            queue_page_list: queue_page_list.clone(),
+            queue_page_summary: queue_page_summary.clone(),
+            queue_page_source: queue_page_source.clone(),
+            queue_page_upcoming_badge: queue_page_upcoming_badge.clone(),
+            queue_page_total_badge: queue_page_total_badge.clone(),
+            queue_page_clear_upcoming: queue_page_clear_upcoming.clone(),
+            queue_page_clear_all: queue_page_clear_all.clone(),
+            queue_page_popover_proxy: queue_page_popover_proxy.clone(),
+            queue_page_last_snapshot: RefCell::new(None),
+            queue_page_last_source: Cell::new(None),
             page_switcher: page_switcher.clone(),
             browser,
             lyrics,
@@ -979,17 +1112,50 @@ impl AppController {
         }
 
         {
+            let weak = Rc::downgrade(&controller);
+            page_switcher.connect_queue_clicked(move || {
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+                controller.close_settings_page();
+                controller.views.set_visible_child_name("queue");
+                controller.refresh_queue_page();
+            });
+        }
+
+        {
             let page_switcher = page_switcher.clone();
             controller
                 .views
                 .connect_visible_child_name_notify(move |stack| {
-                    let page = if stack.visible_child_name().as_deref() == Some("lyrics") {
-                        TopPage::Lyrics
-                    } else {
-                        TopPage::Home
+                    let page = match stack.visible_child_name().as_deref() {
+                        Some("lyrics") => TopPage::Lyrics,
+                        Some("queue") => TopPage::Queue,
+                        _ => TopPage::Home,
                     };
                     page_switcher.set_active_page(page, true);
                 });
+        }
+
+        {
+            let weak = Rc::downgrade(&controller);
+            queue_page_clear_upcoming.connect_clicked(move |_| {
+                if let Some(controller) = weak.upgrade() {
+                    controller.playback_queue_v2.borrow_mut().clear_upcoming();
+                    controller.refresh_queue_page();
+                }
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(&controller);
+            queue_page_clear_all.connect_clicked(move |_| {
+                if let Some(controller) = weak.upgrade() {
+                    controller.playback_queue_v2.borrow_mut().clear();
+                    controller.queue_v2_pending_entry.set(None);
+                    controller.refresh_queue_page();
+                }
+            });
         }
 
         {
@@ -1001,6 +1167,9 @@ impl AppController {
                 controller.persist_queue_if_changed();
                 controller.persist_playback_session_if_changed();
                 controller.try_restore_playback_session();
+                if controller.views.visible_child_name().as_deref() == Some("queue") {
+                    controller.refresh_queue_page();
+                }
                 glib::ControlFlow::Continue
             });
         }
@@ -2126,6 +2295,94 @@ impl AppController {
             }
             row.append(&play_area);
 
+            let move_top = gtk::Button::builder()
+                .icon_name("go-top-symbolic")
+                .tooltip_text(match language {
+                    AppLanguage::Portuguese => "Mover para o topo",
+                    AppLanguage::English => "Move to top",
+                    AppLanguage::Spanish => "Mover al inicio",
+                })
+                .build();
+            move_top.add_css_class("flat");
+            move_top.add_css_class("circular");
+            move_top.set_sensitive(!is_current && position > 0);
+            {
+                let weak = Rc::downgrade(self);
+                let list = list.clone();
+                let summary = summary.clone();
+                let clear_upcoming = clear_upcoming.clone();
+                let queue_popover = popover.clone();
+                let id = entry.id;
+                move_top.connect_clicked(move |_| {
+                    let Some(controller) = weak.upgrade() else {
+                        return;
+                    };
+                    if let Err(error) = controller.playback_queue_v2.borrow_mut().move_entry(id, 0)
+                    {
+                        controller.show_toast(&error.to_string());
+                        return;
+                    }
+                    controller.rebuild_queue_popover(
+                        &list,
+                        &summary,
+                        &clear_upcoming,
+                        &queue_popover,
+                    );
+                });
+            }
+            row.append(&move_top);
+
+            let play_next = gtk::Button::builder()
+                .icon_name("media-skip-forward-symbolic")
+                .tooltip_text(match language {
+                    AppLanguage::Portuguese => "Tocar em seguida",
+                    AppLanguage::English => "Play next",
+                    AppLanguage::Spanish => "Reproducir después",
+                })
+                .build();
+            play_next.add_css_class("flat");
+            play_next.add_css_class("circular");
+            let play_next_target = current_index.map(|index| index + 1).unwrap_or(0);
+            play_next.set_sensitive(
+                !is_current
+                    && item.section == QueueSection::Upcoming
+                    && position != play_next_target,
+            );
+            {
+                let weak = Rc::downgrade(self);
+                let list = list.clone();
+                let summary = summary.clone();
+                let clear_upcoming = clear_upcoming.clone();
+                let queue_popover = popover.clone();
+                let id = entry.id;
+                play_next.connect_clicked(move |_| {
+                    let Some(controller) = weak.upgrade() else {
+                        return;
+                    };
+                    let target = controller
+                        .playback_queue_v2
+                        .borrow()
+                        .current_index()
+                        .map(|index| index + 1)
+                        .unwrap_or(0);
+                    if let Err(error) = controller
+                        .playback_queue_v2
+                        .borrow_mut()
+                        .move_entry(id, target)
+                    {
+                        controller.show_toast(&error.to_string());
+                        return;
+                    }
+                    controller.rebuild_queue_popover(
+                        &list,
+                        &summary,
+                        &clear_upcoming,
+                        &queue_popover,
+                    );
+                });
+            }
+            row.append(&play_next);
+
             let move_up = gtk::Button::builder()
                 .icon_name("go-up-symbolic")
                 .tooltip_text(match language {
@@ -2287,6 +2544,85 @@ impl AppController {
             end_state.append(&label);
             list.append(&end_state);
         }
+    }
+
+    fn refresh_queue_page(self: &Rc<Self>) {
+        self.ensure_active_queue_v2();
+
+        let source = self.active_queue_source.get();
+        let (snapshot, presentation) = {
+            let queue = self.playback_queue_v2.borrow();
+            (
+                queue.snapshot(),
+                QueuePresentation::from_queue(&queue, source),
+            )
+        };
+        let unchanged = self.queue_page_last_source.get() == Some(source)
+            && self.queue_page_last_snapshot.borrow().as_ref() == Some(&snapshot);
+
+        if unchanged {
+            return;
+        }
+
+        self.rebuild_queue_popover(
+            &self.queue_page_list,
+            &self.queue_page_summary,
+            &self.queue_page_clear_upcoming,
+            &self.queue_page_popover_proxy,
+        );
+        self.refresh_queue_page_header_badges(&presentation);
+        self.queue_page_clear_all
+            .set_sensitive(!snapshot.entries.is_empty());
+        self.queue_page_last_source.set(Some(source));
+        self.queue_page_last_snapshot.replace(Some(snapshot));
+    }
+
+    fn refresh_queue_page_header_badges(&self, presentation: &QueuePresentation) {
+        let source_label = match (self.config.borrow().language, presentation.source) {
+            (AppLanguage::Portuguese, QueueSourceKind::Local) => "Biblioteca local",
+            (AppLanguage::Portuguese, QueueSourceKind::YouTube) => "YouTube Music",
+            (AppLanguage::English, QueueSourceKind::Local) => "Local library",
+            (AppLanguage::English, QueueSourceKind::YouTube) => "YouTube Music",
+            (AppLanguage::Spanish, QueueSourceKind::Local) => "Biblioteca local",
+            (AppLanguage::Spanish, QueueSourceKind::YouTube) => "YouTube Music",
+        };
+        let count = presentation.total;
+        let upcoming_text = match self.config.borrow().language {
+            AppLanguage::Portuguese => format!(
+                "{} {}",
+                presentation.upcoming_count,
+                if presentation.upcoming_count == 1 {
+                    "próxima"
+                } else {
+                    "próximas"
+                }
+            ),
+            AppLanguage::English => format!("{} {}", presentation.upcoming_count, "up next"),
+            AppLanguage::Spanish => format!(
+                "{} {}",
+                presentation.upcoming_count,
+                if presentation.upcoming_count == 1 {
+                    "siguiente"
+                } else {
+                    "siguientes"
+                }
+            ),
+        };
+        let total_text = match self.config.borrow().language {
+            AppLanguage::Portuguese => {
+                format!("{count} {}", if count == 1 { "faixa" } else { "faixas" })
+            }
+            AppLanguage::English => {
+                format!("{count} {}", if count == 1 { "track" } else { "tracks" })
+            }
+            AppLanguage::Spanish => {
+                format!("{count} {}", if count == 1 { "pista" } else { "pistas" })
+            }
+        };
+
+        self.queue_page_source.set_text(source_label);
+        self.queue_page_upcoming_badge.set_text(&upcoming_text);
+        self.queue_page_total_badge.set_text(&total_text);
     }
 
     fn show_footer_playback_queue(self: &Rc<Self>) {
@@ -3726,8 +4062,13 @@ impl AppController {
 
         self.music_page.set_title(Some(tr(Message::MusicTab)));
         self.lyrics_page.set_title(Some(tr(Message::LyricsTab)));
+        let queue_label = match self.config.borrow().language {
+            AppLanguage::Portuguese => "Fila",
+            AppLanguage::English => "Queue",
+            AppLanguage::Spanish => "Cola",
+        };
         self.page_switcher
-            .set_labels(tr(Message::MusicTab), tr(Message::LyricsTab));
+            .set_labels(tr(Message::MusicTab), tr(Message::LyricsTab), queue_label);
         self.empty_title.set_text(tr(Message::EmptyLibraryTitle));
         self.empty_text
             .set_text(tr(Message::EmptyLibraryDescription));

@@ -20,6 +20,7 @@ const ANIMATION_MS: u64 = 220;
 pub(crate) enum TopPage {
     Home,
     Lyrics,
+    Queue,
 }
 
 #[derive(Clone, Copy)]
@@ -41,17 +42,23 @@ pub(crate) struct AnimatedPageSwitcher {
 }
 
 impl AnimatedPageSwitcher {
-    pub(crate) fn new(home_text: &str, lyrics_text: &str) -> Rc<Self> {
-        Self::from_specs(&[
+    pub(crate) fn new(home_text: &str, lyrics_text: &str, queue_text: &str) -> Rc<Self> {
+        let switcher = Self::from_specs(&[
+            AnimatedPageSpec {
+                icon_name: "audio-input-microphone-symbolic",
+                label: lyrics_text,
+            },
             AnimatedPageSpec {
                 icon_name: "folder-music-symbolic",
                 label: home_text,
             },
             AnimatedPageSpec {
-                icon_name: "audio-input-microphone-symbolic",
-                label: lyrics_text,
+                icon_name: "view-list-symbolic",
+                label: queue_text,
             },
-        ])
+        ]);
+        switcher.set_active_index(1, false);
+        switcher
     }
 
     pub(crate) fn from_specs(specs: &[AnimatedPageSpec<'_>]) -> Rc<Self> {
@@ -143,7 +150,7 @@ impl AnimatedPageSwitcher {
     where
         F: Fn() + 'static,
     {
-        if let Some(button) = self.buttons.first() {
+        if let Some(button) = self.buttons.get(1) {
             button.connect_clicked(move |_| callback());
         }
     }
@@ -152,14 +159,24 @@ impl AnimatedPageSwitcher {
     where
         F: Fn() + 'static,
     {
-        if let Some(button) = self.buttons.get(1) {
+        if let Some(button) = self.buttons.first() {
             button.connect_clicked(move |_| callback());
         }
     }
 
-    pub(crate) fn set_labels(&self, home: &str, lyrics: &str) {
-        self.set_label(0, home);
-        self.set_label(1, lyrics);
+    pub(crate) fn connect_queue_clicked<F>(&self, callback: F)
+    where
+        F: Fn() + 'static,
+    {
+        if let Some(button) = self.buttons.get(2) {
+            button.connect_clicked(move |_| callback());
+        }
+    }
+
+    pub(crate) fn set_labels(&self, home: &str, lyrics: &str, queue: &str) {
+        self.set_label(0, lyrics);
+        self.set_label(1, home);
+        self.set_label(2, queue);
     }
 
     pub(crate) fn set_label(&self, index: usize, text: &str) {
@@ -174,8 +191,9 @@ impl AnimatedPageSwitcher {
     pub(crate) fn set_active_page(&self, page: TopPage, animate: bool) {
         self.set_active_index(
             match page {
-                TopPage::Home => 0,
-                TopPage::Lyrics => 1,
+                TopPage::Home => 1,
+                TopPage::Lyrics => 0,
+                TopPage::Queue => 2,
             },
             animate,
         );

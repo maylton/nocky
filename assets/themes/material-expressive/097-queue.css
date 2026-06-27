@@ -200,6 +200,148 @@ window.theme-noctalia .queue2-cover {
   background-color: alpha(@window_fg_color, 0.06);
   box-shadow: inset 0 0 0 1px alpha(@window_fg_color, 0.10);
 }
+/* queue2_header_refinement_v2 */
+.queue2-page-header {
+  padding: 16px 18px;
+  border-radius: 24px;
+  margin-bottom: 4px;
+}
+
+.queue2-page-title-row,
+.queue2-page-summary-row {
+  min-width: 0;
+}
+
+.queue2-page-title {
+  margin: 0;
+}
+
+.queue2-page-title-icon {
+  padding: 8px;
+  border-radius: 999px;
+}
+
+.queue2-page-summary-row {
+  margin-top: 1px;
+}
+
+.queue2-page-source {
+  margin-right: 2px;
+}
+
+.queue2-page-micro-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.9em;
+  font-weight: 600;
+}
+
+window.theme-material-expressive .queue2-page-header {
+  background-image: linear-gradient(
+    to bottom,
+    alpha(@m3_surface_container_high, 0.98),
+    alpha(@m3_surface_container, 0.94)
+  );
+  border: 1px solid alpha(@m3_outline, 0.20);
+  box-shadow: inset 0 1px 0 alpha(@m3_on_surface, 0.04);
+}
+
+window.theme-material-expressive .queue2-page-title-icon {
+  color: @m3_primary;
+  background-color: alpha(@m3_primary, 0.14);
+}
+
+window.theme-material-expressive .queue2-page-title {
+  color: @m3_on_surface;
+}
+
+window.theme-material-expressive .queue2-page-source {
+  color: alpha(@m3_on_surface_variant, 0.92);
+}
+
+window.theme-material-expressive .queue2-page-micro-badge {
+  color: @m3_primary;
+  background-color: alpha(@m3_primary, 0.11);
+  border: 1px solid alpha(@m3_primary, 0.12);
+}
+
+window.theme-material-expressive .queue2-page-actions button.queue2-page-action {
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 18px;
+  color: @m3_on_surface;
+  background-color: alpha(@m3_surface_container_highest, 0.88);
+  border: 1px solid alpha(@m3_outline, 0.18);
+  box-shadow: none;
+}
+
+window.theme-material-expressive .queue2-page-actions button.queue2-page-action:hover,
+window.theme-material-expressive .queue2-page-actions button.queue2-page-action:focus-visible {
+  background-color: alpha(@m3_surface_container_highest, 0.98);
+  border-color: alpha(@m3_primary, 0.26);
+}
+
+window.theme-material-expressive .queue2-page-actions button.queue2-page-action-danger {
+  color: @m3_error;
+  background-color: alpha(@m3_error, 0.11);
+  border-color: alpha(@m3_error, 0.10);
+}
+
+window.theme-material-expressive .queue2-page-actions button.queue2-page-action-danger:hover,
+window.theme-material-expressive .queue2-page-actions button.queue2-page-action-danger:focus-visible {
+  background-color: alpha(@m3_error, 0.16);
+  border-color: alpha(@m3_error, 0.18);
+}
+
+window.theme-noctalia .queue2-page-header {
+  background-color: alpha(@window_bg_color, 0.80);
+  border: 1px solid alpha(@borders, 0.30);
+  box-shadow: inset 0 1px 0 alpha(@view_fg_color, 0.04);
+}
+
+window.theme-noctalia .queue2-page-title-icon {
+  color: @accent_color;
+  background-color: alpha(@accent_color, 0.16);
+}
+
+window.theme-noctalia .queue2-page-source {
+  color: alpha(@view_fg_color, 0.74);
+}
+
+window.theme-noctalia .queue2-page-micro-badge {
+  color: @accent_color;
+  background-color: alpha(@accent_color, 0.11);
+  border: 1px solid alpha(@accent_color, 0.12);
+}
+
+window.theme-noctalia .queue2-page-actions button.queue2-page-action {
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 18px;
+  color: @view_fg_color;
+  background-color: alpha(@headerbar_bg_color, 0.84);
+  border: 1px solid alpha(@borders, 0.32);
+  box-shadow: none;
+}
+
+window.theme-noctalia .queue2-page-actions button.queue2-page-action:hover,
+window.theme-noctalia .queue2-page-actions button.queue2-page-action:focus-visible {
+  border-color: alpha(@accent_color, 0.34);
+  background-color: alpha(@headerbar_bg_color, 0.96);
+}
+
+window.theme-noctalia .queue2-page-actions button.queue2-page-action-danger {
+  color: @destructive_color;
+  background-color: alpha(@destructive_color, 0.10);
+  border-color: alpha(@destructive_color, 0.11);
+}
+
+window.theme-noctalia .queue2-page-actions button.queue2-page-action-danger:hover,
+window.theme-noctalia .queue2-page-actions button.queue2-page-action-danger:focus-visible {
+  background-color: alpha(@destructive_color, 0.16);
+  border-color: alpha(@destructive_color, 0.18);
+}
+
 /* queue2_presentation_layer_and_popup_v2 */
 
 .queue2-section-header {
@@ -234,4 +376,40 @@ window.theme-noctalia .queue2-section-header {
 
 window.theme-noctalia .queue2-section-icon {
   color: @accent_color;
+}
+
+
+/* queue2_dedicated_tablet_page_v1 */
+.queue2-page {
+  min-width: 520px;
+}
+
+.queue2-page-header {
+  min-height: 64px;
+  padding: 10px 12px;
+  border-radius: 24px;
+}
+
+.queue2-page-summary {
+  font-size: 0.95rem;
+}
+
+.queue2-page-scroll {
+  border-radius: 28px;
+}
+
+.queue2-page-list {
+  padding: 10px;
+}
+
+window.theme-material-expressive .queue2-page-header,
+window.theme-material-expressive .queue2-page-scroll {
+  background: alpha(@window_fg_color, 0.055);
+  border: 1px solid alpha(@window_fg_color, 0.09);
+}
+
+window.theme-noctalia .queue2-page-header,
+window.theme-noctalia .queue2-page-scroll {
+  background: alpha(@window_fg_color, 0.065);
+  border: 1px solid alpha(@window_fg_color, 0.11);
 }

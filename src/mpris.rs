@@ -1,3 +1,4 @@
+use crate::album_aura_bridge::AlbumAuraBridge;
 use mpris_server::{LoopStatus, Metadata, PlaybackStatus, Player, Time, TrackId};
 use std::{
     sync::mpsc::{self, Receiver, Sender},
@@ -175,13 +176,17 @@ async fn serve(
 
     tokio::task::spawn_local(player.run());
 
+    let mut album_aura = AlbumAuraBridge::discover();
+
     loop {
         let mut shutdown = false;
         while let Ok(update) = updates.try_recv() {
             if matches!(update, MprisUpdate::Shutdown) {
+                album_aura.shutdown();
                 shutdown = true;
                 break;
             }
+            album_aura.apply_mpris_update(&update);
             apply_update(&player, update).await?;
         }
 
