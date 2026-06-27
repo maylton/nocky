@@ -27,7 +27,6 @@
 mod app;
 mod artist_index;
 mod background;
-mod background_handler;
 mod browser;
 mod config;
 mod dialogs;
