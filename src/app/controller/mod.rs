@@ -282,10 +282,6 @@ impl AppController {
         }
     }
 
-    pub(crate) fn set_lyrics_message(&self, message: &str) {
-        self.lyrics.show_message(message, None);
-    }
-
     pub(crate) fn open_settings_page(&self) {
         let initial = self.config.borrow().clone();
         self.settings_page
@@ -910,90 +906,6 @@ impl AppController {
 
         if track.lyrics.is_empty() && self.config.borrow().auto_download_lyrics {
             self.request_lyrics(index, false, false);
-        }
-    }
-
-    pub(crate) fn request_lyrics(&self, index: usize, notify: bool, force: bool) {
-        let (path, lookup) = {
-            let state = self.state.borrow();
-            let Some(track) = state.tracks.get(index) else {
-                return;
-            };
-            if !force && !track.lyrics.is_empty() {
-                return;
-            }
-            (
-                track.path.clone(),
-                lyrics_domain::provider::LyricsLookup {
-                    title: track.title.clone(),
-                    artist: track.artist.clone(),
-                    album: track.album.clone(),
-                    duration_seconds: track.duration_seconds,
-                },
-            )
-        };
-
-        if !self.lyrics_pending.borrow_mut().insert(path.clone()) {
-            if notify {
-                self.show_toast("As letras já estão sendo buscadas");
-            }
-            return;
-        }
-
-        if notify {
-            self.show_toast("Buscando letras sincronizadas...");
-        }
-        let sender = self.background.sender();
-        thread::spawn(move || {
-            let result = lyrics_domain::provider::download_to_sidecar(&path, &lookup, force).map(
-                |document| {
-                    eprintln!(
-                        "Lyrics loaded from {} ({})",
-                        document.provider,
-                        if document.synchronized {
-                            "synchronized"
-                        } else {
-                            "plain fallback"
-                        }
-                    );
-                },
-            );
-            let _ = sender.send(BackgroundMessage::LyricsDownloaded {
-                path,
-                result,
-                notify,
-            });
-        });
-    }
-
-    pub(crate) fn refresh_current_lyrics(&self) {
-        match self.playback_source.get() {
-            PlaybackSource::Local => {
-                let current = self.state.borrow().current;
-                let Some(index) = current else {
-                    self.show_toast("Selecione uma faixa primeiro");
-                    return;
-                };
-                self.request_lyrics(index, true, true);
-            }
-            PlaybackSource::YouTube => {
-                let item = self
-                    .youtube_state
-                    .borrow()
-                    .as_ref()
-                    .map(|state| state.item.clone());
-                let Some(item) = item else {
-                    self.show_toast("Selecione uma faixa primeiro");
-                    return;
-                };
-
-                self.set_lyrics_message("Buscando novamente as letras sincronizadas…");
-                self.show_toast("Buscando letras sincronizadas…");
-                self.request_youtube_lyrics(&item, true);
-            }
-            PlaybackSource::None => {
-                self.show_toast("Selecione uma faixa primeiro");
-            }
         }
     }
 }
