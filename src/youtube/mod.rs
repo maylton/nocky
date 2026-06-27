@@ -2143,10 +2143,8 @@ fn helper_path() -> Option<PathBuf> {
     let source_helper = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("helpers/nocky_youtube.py");
     let mut candidates = Vec::new();
 
-    // Development builds must exercise the helper from the current checkout.
-    // Previously, cargo run preferred an older installed helper under
-    // ~/.local/share/nocky, so helper patches compiled successfully but were
-    // never used at runtime.
+    // Development builds must exercise the helper from the current checkout
+    // before falling back to installed copies.
     if cfg!(debug_assertions) {
         candidates.push(source_helper.clone());
     }

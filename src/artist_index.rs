@@ -31,10 +31,8 @@ impl LocalArtistIndex {
 
                 let candidate = candidates.entry(normalized).or_default();
 
-                // Preserve the former behavior exactly: collaboration tracks
-                // establish artist identity but never supply the ranked card's
-                // local artwork. The first solo track wins, even when it has
-                // no embedded or sidecar cover.
+                // Collaboration tracks establish artist identity, but card
+                // artwork comes from the first solo track only.
                 if credits.len() == 1 && !candidate.first_solo_track_seen {
                     candidate.first_solo_track_seen = true;
                     candidate.first_solo_cover = track.cover_path.clone();

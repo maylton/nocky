@@ -4683,8 +4683,6 @@ fn home_section(
     section
 }
 
-// reliable bounded carousel edge spring
-
 #[derive(Clone)]
 struct HomeCarouselEdgeCard {
     button: gtk::Widget,
@@ -6251,15 +6249,8 @@ fn bind_responsive_collection_artwork(
     artwork: &gtk::Stack,
     cover_path: Option<PathBuf>,
 ) {
-    // bounded artwork settling
-    //
-    // The old implementation kept one tick callback alive for every card for
-    // the entire lifetime of the widget. Card hover/click motion could then
-    // overlap with responsive artwork resizing and texture replacement.
-    //
-    // This callback exists only while the initial allocation settles. It is
-    // invalidated on unmap, uses weak widget references and stops after three
-    // stable frames.
+    // Keep the settling callback short-lived so card motion cannot overlap with
+    // responsive artwork resizing and texture replacement indefinitely.
     let current_size = Rc::new(Cell::new(0_i32));
     let generation = Rc::new(Cell::new(0_u64));
 

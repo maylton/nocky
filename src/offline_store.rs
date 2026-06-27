@@ -1,9 +1,7 @@
 //! Persistent metadata foundation for YouTube Music offline collections.
 //!
-//! Audio downloads are added by the download-manager phase. This store already
-//! owns the stable paths, manifest format, integrity checks and cleanup rules.
-
-#![allow(dead_code)]
+//! This store owns stable paths, manifest format, integrity checks, and cleanup
+//! rules for downloaded audio.
 
 use crate::youtube::{YouTubeItem, YouTubeStream};
 use gtk::glib;
@@ -208,27 +206,6 @@ impl OfflineStore {
         );
         self.manifest.unavailable_tracks.remove(video_id);
         self.save()
-    }
-
-    pub fn remove(&mut self, video_id: &str) -> Result<bool, String> {
-        let Some(track) = self.manifest.tracks.remove(video_id) else {
-            return Ok(false);
-        };
-
-        let path = self.root.join(track.relative_path);
-        match fs::remove_file(&path) {
-            Ok(()) => {}
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-            Err(error) => {
-                return Err(format!(
-                    "Não foi possível remover o arquivo offline '{}': {error}",
-                    path.display()
-                ));
-            }
-        }
-
-        self.save()?;
-        Ok(true)
     }
 
     pub fn track_count(&self) -> usize {

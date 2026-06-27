@@ -305,14 +305,11 @@ window.theme-material-expressive .player-lyrics-surface {{
   background-color: alpha({surface_container_low}, 0.78);
   border-color: alpha({outline}, 0.16);
 }}
-
-/* material_visualizer_palette_v1 */
 window.theme-material-expressive .audio-visualizer {{
   color: {primary};
   background-color: alpha({surface_container_low}, 0.84);
   border-color: alpha({primary}, 0.24);
 }}
-/* material_expressive_footer_v1 */
 window.theme-material-expressive .expressive-footer {{
   background-color: {surface_container_low};
   background-image:
@@ -383,7 +380,6 @@ window.theme-material-expressive scale.footer-volume-control slider {{
 window.theme-material-expressive scale.footer-volume-control slider {{
   border-color: {surface_container_high};
 }}
-/* material_footer_player_progress_refinement_v1 */
 window.theme-material-expressive .player-progress-wave {{
   color: {primary};
 }}
@@ -396,7 +392,6 @@ window.theme-material-expressive scale.player-progress-track slider {{
 window.theme-material-expressive scale.player-progress-track slider {{
   border-color: {surface_container_high};
 }}
-/* material_expressive_navigation_v1 */
 window.theme-material-expressive .expressive-header {{
   background-color: {surface_container};
   border-color: alpha({outline}, 0.24);
@@ -471,13 +466,11 @@ window.theme-material-expressive .expressive-empty-action {{
   background-color: {primary};
   box-shadow: 0 6px 16px alpha({primary}, 0.24);
 }}
-/* material_search_bar_separator_cleanup_v1 */
 window.theme-material-expressive .expressive-search-bar {{
   background-color: transparent;
   border-color: transparent;
   box-shadow: none;
 }}
-/* material_expressive_library_cards_v1 */
 window.theme-material-expressive .home-section,
 window.theme-material-expressive .collection-page,
 window.theme-material-expressive .expressive-library-page {{
@@ -569,7 +562,6 @@ window.theme-material-expressive .playlist-create-action {{
   color: {on_primary};
   background-color: {primary};
 }}
-/* material_search_surfaces_sidebar_collapse_v1 */
 window.theme-material-expressive .search-section-card {{
   background-color: alpha({primary_container}, 0.32);
   background-image:
@@ -615,7 +607,6 @@ window.theme-material-expressive .search-source-badge {{
 window.theme-material-expressive .search-result-arrow {{
   color: {on_surface_variant};
 }}
-/* material_expressive_remaining_interface_v1 */
 .theme-material-expressive .material-dialog-toolbar,
 .theme-material-expressive.settings-dialog,
 .theme-material-expressive.youtube-settings-dialog,
@@ -739,7 +730,6 @@ window.theme-material-expressive .search-result-arrow {{
 .theme-material-expressive scrollbar slider:hover {{
   background-color: alpha({primary}, 0.64);
 }}
-/* organized_settings_milestone_v1 */
 .theme-material-expressive .settings-hero {{
   color: {on_primary_container};
   background-color: {primary_container};
@@ -805,7 +795,6 @@ window.theme-material-expressive .search-result-arrow {{
   background-color: {surface_container_high};
   border-color: alpha({primary}, 0.27);
 }}
-/* material_final_polish_v1 */
 .theme-material-expressive.settings-dialog,
 .theme-material-expressive.youtube-settings-dialog,
 .theme-material-expressive.startup-dialog,
@@ -840,7 +829,6 @@ window.theme-material-expressive .player-visualizer-surface {{
   color: {on_surface};
   background-color: {surface_container_high};
 }}
-/* material_final_polish_v2 */
 .theme-material-expressive.settings-dialog .material-dialog-toolbar,
 .theme-material-expressive.youtube-settings-dialog .material-dialog-toolbar,
 .theme-material-expressive.startup-dialog .material-dialog-toolbar {{
@@ -878,8 +866,6 @@ window.theme-material-expressive .home-carousel-scroll scrollbar.horizontal slid
   color: {on_surface};
   background-color: {surface_container_high};
 }}
-
-/* m3_settings_surface_priority_fix_v1 */
 dialog.settings-dialog.theme-material-expressive,
 dialog.youtube-settings-dialog.theme-material-expressive,
 dialog.startup-dialog.theme-material-expressive,
@@ -916,8 +902,6 @@ dialog.startup-dialog.theme-material-expressive .material-dialog-toolbar headerb
   background-image: none;
   border-color: alpha({outline}, 0.18);
 }}
-
-/* material_carousel_playing_blur_polish_v1 */
 window.theme-material-expressive
   .home-carousel-scroll
   scrollbar.horizontal

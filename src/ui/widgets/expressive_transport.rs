@@ -303,9 +303,8 @@ impl ExpressiveTransport {
 
     fn install_expressive_classes(&self) {
         self.root.add_css_class("expressive-transport-enabled");
-        // The main player's pre-0.3 shell classes contain their own focus and
-        // shadow treatment. Detach them while the fixed-slot Expressive
-        // component owns the surface, preventing the legacy cross-shaped glow.
+        // Detach classic player classes while the fixed-slot Expressive
+        // component owns focus and shadow treatment.
         if self.variant == TransportVariant::Main {
             self.play.remove_css_class("shell-play-button");
             self.play.remove_css_class("player-primary-control");
@@ -358,8 +357,7 @@ impl ExpressiveTransport {
             }
         }
 
-        // Restore the exact classic player classes when the preference is
-        // disabled, preserving the original fallback requested by the user.
+        // Restore the classic player classes when the preference is disabled.
         if self.variant == TransportVariant::Main {
             self.play.add_css_class("shell-play-button");
             self.play.add_css_class("player-primary-control");

@@ -1,4 +1,3 @@
-//
 // Material Expressive CSS is embedded as one explicitly named, ordered
 // manifest. The numeric filename prefix is the cascade order contract.
 

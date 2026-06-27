@@ -164,7 +164,7 @@ fn draw_wave(
     context.set_line_cap(cairo::LineCap::Round);
     context.set_line_join(cairo::LineJoin::Round);
 
-    // Parte ainda não reproduzida.
+    // Unplayed segment.
     if progress_x < width - edge_padding {
         context.new_path();
         context.set_source_rgba(red, green, blue, 0.20);
@@ -175,8 +175,8 @@ fn draw_wave(
     }
 
     if fraction > 0.0 {
-        // Apenas os últimos pixels formam uma ponte suave para a linha reta.
-        // O restante da onda mantém amplitude e animação normais.
+        // Only the final pixels bridge smoothly into the straight segment.
+        // The rest of the wave keeps its normal amplitude and animation.
         let bridge_length = 6.0_f64.min(progress_x - edge_padding);
         let bridge_start = progress_x - bridge_length;
 
@@ -192,7 +192,7 @@ fn draw_wave(
         let start_y = wave_y(edge_padding);
         context.move_to(edge_padding, start_y);
 
-        // Desenha a onda normal até o início da transição.
+        // Draw the normal wave until the transition begins.
         let mut x = edge_padding + 1.5;
 
         while x < bridge_start {
@@ -206,9 +206,8 @@ fn draw_wave(
 
             context.line_to(bridge_start, middle + y0);
 
-            // Interpolação cúbica de Hermite:
-            // começa com posição e inclinação da senoide;
-            // termina no centro com inclinação zero.
+            // Cubic Hermite interpolation keeps position and slope continuous
+            // with the sine wave, then lands at the center with zero slope.
             let mut bridge_x = bridge_start + 0.75;
 
             while bridge_x < progress_x {
@@ -231,7 +230,7 @@ fn draw_wave(
         let _ = context.stroke();
     }
 
-    // Marcador da posição exata.
+    // Exact position marker.
     context.new_path();
     context.set_source_rgba(red, green, blue, 1.0);
     context.arc(progress_x, middle, 3.4, 0.0, tau);
