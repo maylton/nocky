@@ -906,6 +906,17 @@ def _premium_authentication_error(message: str) -> bool:
     )
 
 
+def _session_authentication_error(message: str) -> bool:
+    normalized = message.lower()
+    return (
+        "sign in to confirm you're not a bot" in normalized
+        or "sign in to confirm you’re not a bot" in normalized
+        or "login required" in normalized
+        or "authentication required" in normalized
+        or "use --cookies-from-browser or --cookies" in normalized
+    )
+
+
 def _authenticated_retry_command(
     command: list[str],
     auth_args: list[str],
@@ -1005,6 +1016,7 @@ def _resolve_stream(video_or_url: str, force: bool = False) -> dict[str, Any]:
 
         retry_with_auth = (
             _premium_authentication_error(detail)
+            or _session_authentication_error(detail)
             or "requested format is not available" in detail.lower()
         )
         if retry_with_auth:
@@ -1052,6 +1064,11 @@ def _resolve_stream(video_or_url: str, force: bool = False) -> dict[str, Any]:
                     raise RuntimeError(
                         "YouTube Music Premium rejected the saved browser session. "
                         "Reconnect the account in Nocky and try the download again."
+                    )
+                if _session_authentication_error(retry_detail):
+                    raise RuntimeError(
+                        "YouTube rejected the saved browser session during stream extraction. "
+                        "Reconnect the account in Nocky with a fresh music.youtube.com request."
                     )
                 raise RuntimeError(retry_detail)
         else:
