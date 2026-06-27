@@ -310,6 +310,12 @@ window.theme-material-expressive .audio-visualizer {{
   background-color: alpha({surface_container_low}, 0.84);
   border-color: alpha({primary}, 0.24);
 }}
+window.theme-material-expressive .expressive-loading-indicator {{
+  color: {primary};
+}}
+window.theme-material-expressive button .expressive-loading-indicator {{
+  color: inherit;
+}}
 window.theme-material-expressive .expressive-footer {{
   background-color: {surface_container_low};
   background-image:

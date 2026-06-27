@@ -6,6 +6,7 @@ use crate::{
     model::Track,
     offline_store::OfflineStore,
     search_text::{normalize_search_text, search_matches, search_score},
+    ui::widgets::ExpressiveLoadingIndicator,
     youtube::{
         artist_credit_contains, credited_artists, youtube_cache_visual_state,
         youtube_collection_cache_key, youtube_collection_key, YouTubeCacheVisualState,
@@ -5223,10 +5224,8 @@ fn home_card_button(
         control.add_css_class("collection-card-context-action");
 
         if is_loading {
-            let spinner = gtk::Spinner::new();
-            spinner.set_spinning(true);
-            spinner.set_size_request(18, 18);
-            control.set_child(Some(&spinner));
+            let loading = ExpressiveLoadingIndicator::new();
+            control.set_child(Some(loading.widget()));
             control.set_sensitive(false);
             control.add_css_class("loading");
             control.set_tooltip_text(Some(match language {
@@ -5266,10 +5265,8 @@ fn home_card_button(
             let sender = event_tx.clone();
             control.connect_clicked(move |button| {
                 if inline_loading_on_click {
-                    let spinner = gtk::Spinner::new();
-                    spinner.set_spinning(true);
-                    spinner.set_size_request(18, 18);
-                    button.set_child(Some(&spinner));
+                    let loading = ExpressiveLoadingIndicator::new();
+                    button.set_child(Some(loading.widget()));
                     button.set_sensitive(false);
                     button.add_css_class("loading");
                     button.set_tooltip_text(Some(match language {
@@ -7599,8 +7596,7 @@ fn empty_row(message: &str) -> gtk::ListBoxRow {
 }
 
 fn loading_row(message: &str) -> gtk::ListBoxRow {
-    let spinner = gtk::Spinner::new();
-    spinner.start();
+    let loading = ExpressiveLoadingIndicator::new();
     let label = gtk::Label::new(Some(message));
     label.add_css_class("dim-label");
 
@@ -7608,7 +7604,7 @@ fn loading_row(message: &str) -> gtk::ListBoxRow {
     content.set_halign(gtk::Align::Center);
     content.set_margin_top(30);
     content.set_margin_bottom(30);
-    content.append(&spinner);
+    content.append(loading.widget());
     content.append(&label);
 
     let row = gtk::ListBoxRow::new();

@@ -211,6 +211,14 @@ button.sidebar-row:disabled {
   background-color: shade(@nm_accent, 1.08);
 }
 
+.expressive-loading-indicator {
+  color: @nm_accent;
+}
+
+button .expressive-loading-indicator {
+  color: inherit;
+}
+
 .player-bar {
   min-height: 66px;
   padding: 9px 16px;
