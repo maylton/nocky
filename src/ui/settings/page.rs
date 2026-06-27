@@ -5,7 +5,7 @@ use crate::{
     i18n::{self, Message},
     offline_store::OfflineStore,
     ui::widgets::{AnimatedPageSpec, AnimatedPageSwitcher},
-    youtube_diagnostics::{self, DiagnosticCheck, DiagnosticState},
+    youtube::diagnostics::{self as youtube_diagnostics, DiagnosticCheck, DiagnosticState},
 };
 use adw::prelude::*;
 use gtk::glib;

@@ -1,6 +1,9 @@
 // stable_collection_identity_and_deferred_cache_v2
 // multi_artist_credits_v2
 mod collections;
+pub(crate) mod diagnostics;
+pub(crate) mod error;
+mod playback;
 
 use crate::search_text::{normalize_search_text, search_matches, search_score};
 use gtk::glib;

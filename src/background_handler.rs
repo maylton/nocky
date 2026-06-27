@@ -928,10 +928,11 @@ impl AppController {
                                 .strip_prefix("__NOCKY_STREAM_RECOVERY_FAILED__")
                                 .unwrap_or(&error);
                             let kind =
-                                crate::youtube_error::classify_youtube_playback_error(detail);
+                                crate::youtube::error::classify_youtube_playback_error(detail);
 
                             if recovery_failed
-                                && kind == crate::youtube_error::YouTubePlaybackErrorKind::TemporaryNetwork
+                                && kind
+                                    == crate::youtube::error::YouTubePlaybackErrorKind::TemporaryNetwork
                                 && self.schedule_youtube_recovery_retry(
                                     queue,
                                     index,

@@ -52,12 +52,12 @@ use crate::{
     visual_theme,
     visualizer::SpectrumVisualizer,
     youtube::{
-        self, cache_items_for_browser, credited_artists, load_library_cache,
-        resolve_youtube_collection_item, youtube_collection_cache_key, youtube_collection_key,
-        youtube_home_prefetch_candidates, YouTubeBridge, YouTubeItem, YouTubeLibraryCache,
-        YouTubePage, YouTubePageEvent, YouTubeSearchResults, YouTubeStatus,
+        self, cache_items_for_browser, credited_artists, diagnostics as youtube_diagnostics,
+        load_library_cache, resolve_youtube_collection_item, youtube_collection_cache_key,
+        youtube_collection_key, youtube_home_prefetch_candidates, YouTubeBridge, YouTubeItem,
+        YouTubeLibraryCache, YouTubePage, YouTubePageEvent, YouTubeSearchResults, YouTubeStatus,
     },
-    youtube_diagnostics, APP_ID, HOME_PLAYER_WIDTH,
+    APP_ID, HOME_PLAYER_WIDTH,
 };
 use adw::prelude::*;
 use gtk::prelude::FileExt;

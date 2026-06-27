@@ -53,12 +53,6 @@ mod ui;
 mod visual_theme;
 mod visualizer;
 mod youtube;
-#[path = "youtube/diagnostics.rs"]
-mod youtube_diagnostics;
-#[path = "youtube/error.rs"]
-mod youtube_error;
-#[path = "youtube/playback.rs"]
-mod youtube_playback;
 
 use gtk::glib;
 
