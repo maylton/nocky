@@ -2,6 +2,7 @@
 // playback_resume_preferences_fix_v1
 use crate::{
     app::controller::AppController,
+    app::media::{is_refreshable_stream_error, mpris_youtube_track_id, redact_stream_url},
     app::state::{PlaybackSource, YouTubePlaybackState},
     background::BackgroundMessage,
     lyrics, lyrics_provider,
@@ -16,8 +17,6 @@ use std::{
     path::{Path, PathBuf},
     thread,
 };
-
-use super::{is_refreshable_stream_error, mpris_youtube_track_id, redact_stream_url};
 
 const YOUTUBE_RECOVERY_MAX_ATTEMPTS: u8 = 3;
 

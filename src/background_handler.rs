@@ -948,7 +948,7 @@ impl AppController {
 
                             eprintln!(
                                 "Nocky YouTube track resolution failed ({kind:?}): {}",
-                                crate::redact_stream_url(detail)
+                                crate::app::media::redact_stream_url(detail)
                             );
                             self.album.set_text(message);
                             self.show_toast(message);

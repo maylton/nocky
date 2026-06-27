@@ -4,6 +4,13 @@ use crate::{
     animated_page_switcher::{AnimatedPageSwitcher, TopPage},
     app::sidebar::build_sidebar,
     app::state::{AppState, PlaybackSource, YouTubePlaybackState},
+    app::{
+        library_state::scanned_library_matches,
+        media::{
+            format_time, mpris_track_id, mpris_youtube_track_id, playback_error_message,
+            redact_stream_url,
+        },
+    },
     background::{BackgroundChannel, BackgroundMessage},
     browser::{
         BrowserEvent, BrowserPlaybackState, BrowserRenderContext, BrowserRoute, LibraryBrowser,
@@ -20,7 +27,6 @@ use crate::{
         FOOTER_ARTWORK_SOURCE_SIZE,
     },
     footer_view::{build_footer_view, FooterViewParts},
-    format_time,
     i18n::{self, Message},
     library,
     listening_history::{self, ListeningHistory, ListeningSource},
@@ -28,7 +34,6 @@ use crate::{
     lyrics_provider,
     lyrics_view::LyricsPresenter,
     model::{Track, TrackData},
-    mpris_track_id, mpris_youtube_track_id,
     offline_store::{download_youtube_track, OfflineStore, OFFLINE_STREAM_REJECTED_PREFIX},
     onboarding,
     playback::{
@@ -41,21 +46,19 @@ use crate::{
         transition::TransitionClock,
         PlaybackEngine, PlaybackEvent,
     },
-    playback_error_message,
     player_view::{PlayerView, PlayerViewHandle},
-    redact_stream_url, resolve_youtube_collection_item,
     reveal_bounce::RevealBounce,
-    scanned_library_matches,
     settings_page::SettingsPage,
     theme, visual_theme,
     visualizer::SpectrumVisualizer,
     wave_progress::WaveProgress,
     youtube::{
         self, cache_items_for_browser, credited_artists, load_library_cache,
-        youtube_collection_cache_key, youtube_collection_key, YouTubeBridge, YouTubeItem,
-        YouTubeLibraryCache, YouTubePage, YouTubePageEvent, YouTubeSearchResults, YouTubeStatus,
+        resolve_youtube_collection_item, youtube_collection_cache_key, youtube_collection_key,
+        youtube_home_prefetch_candidates, YouTubeBridge, YouTubeItem, YouTubeLibraryCache,
+        YouTubePage, YouTubePageEvent, YouTubeSearchResults, YouTubeStatus,
     },
-    youtube_diagnostics, youtube_home_prefetch_candidates, APP_ID, HOME_PLAYER_WIDTH,
+    youtube_diagnostics, APP_ID, HOME_PLAYER_WIDTH,
 };
 use adw::prelude::*;
 use gtk::prelude::FileExt;
