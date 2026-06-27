@@ -4,12 +4,14 @@
 //! MPRIS synchronization, compact reveal callbacks and application state remain
 //! owned by `AppController`.
 
+use super::{
+    now_playing::{build_footer_now_playing, FooterNowPlayingParts},
+    progress::{build_footer_progress, FooterProgressParts},
+    transport::{build_footer_transport, FooterTransportParts},
+    utilities::{build_footer_utilities, FooterUtilityParts},
+};
 use crate::{
     config::AppLanguage,
-    footer_now_playing::{build_footer_now_playing, FooterNowPlayingParts},
-    footer_progress::{build_footer_progress, FooterProgressParts},
-    footer_transport::{build_footer_transport, FooterTransportParts},
-    footer_utilities::{build_footer_utilities, FooterUtilityParts},
     ui::widgets::{ExpressiveTransport, WaveProgress},
 };
 use gtk::prelude::*;

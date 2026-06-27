@@ -18,11 +18,6 @@ use crate::{
     config::{self, AppLanguage, BlurMode, StartupSource, VisualTheme},
     dialogs,
     dialogs::SettingsEvent,
-    footer_layout::{
-        self, footer_full_artwork_size_for_card_height, footer_mode_plan, AdaptiveFooterTier,
-        FOOTER_ARTWORK_SOURCE_SIZE,
-    },
-    footer_view::{build_footer_view, FooterViewParts},
     i18n::{self, Message},
     library,
     listening_history::{self, ListeningHistory, ListeningSource},
@@ -46,9 +41,15 @@ use crate::{
     reveal_bounce::RevealBounce,
     settings_page::SettingsPage,
     theme,
-    ui::widgets::{
-        build_cover, run_compact_volume_spring, AnimatedPageSwitcher, CompactVolumeSpring,
-        CoverView, ExpressiveTransport, TopPage, WaveProgress,
+    ui::{
+        footer::{
+            self, build_footer_view, footer_full_artwork_size_for_card_height, footer_mode_plan,
+            AdaptiveFooterTier, FooterViewParts, FOOTER_ARTWORK_SOURCE_SIZE,
+        },
+        widgets::{
+            build_cover, run_compact_volume_spring, AnimatedPageSwitcher, CompactVolumeSpring,
+            CoverView, ExpressiveTransport, TopPage, WaveProgress,
+        },
     },
     visual_theme,
     visualizer::SpectrumVisualizer,
@@ -3995,7 +3996,7 @@ impl AppController {
         let card_margin = if plan.full {
             0
         } else {
-            footer_layout::FOOTER_COMPACT_CARD_MARGIN
+            footer::FOOTER_COMPACT_CARD_MARGIN
         };
         self.footer_now_playing.set_vexpand(plan.full);
         self.footer_now_playing.set_valign(if plan.full {

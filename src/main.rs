@@ -31,18 +31,6 @@ mod background_handler;
 mod browser;
 mod config;
 mod dialogs;
-#[path = "ui/footer/layout.rs"]
-mod footer_layout;
-#[path = "ui/footer/now_playing.rs"]
-mod footer_now_playing;
-#[path = "ui/footer/progress.rs"]
-mod footer_progress;
-#[path = "ui/footer/transport.rs"]
-mod footer_transport;
-#[path = "ui/footer/utilities.rs"]
-mod footer_utilities;
-#[path = "ui/footer/view.rs"]
-mod footer_view;
 mod i18n;
 mod integrations;
 mod library;
