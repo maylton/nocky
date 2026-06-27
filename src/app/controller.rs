@@ -37,15 +37,15 @@ use crate::{
         transition::TransitionClock,
         PlaybackEngine, PlaybackEvent,
     },
-    player_view::{PlayerView, PlayerViewHandle},
     reveal_bounce::RevealBounce,
-    settings_page::SettingsPage,
     theme,
     ui::{
         footer::{
             self, build_footer_view, footer_full_artwork_size_for_card_height, footer_mode_plan,
             AdaptiveFooterTier, FooterViewParts, FOOTER_ARTWORK_SOURCE_SIZE,
         },
+        player::{PlayerView, PlayerViewHandle},
+        settings::SettingsPage,
         widgets::{
             build_cover, run_compact_volume_spring, AnimatedPageSwitcher, CompactVolumeSpring,
             CoverView, ExpressiveTransport, TopPage, WaveProgress,

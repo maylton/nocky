@@ -50,11 +50,7 @@ mod model;
 mod offline_store;
 mod onboarding;
 pub mod playback;
-#[path = "ui/player/view.rs"]
-mod player_view;
 mod reveal_bounce;
-#[path = "ui/settings/page.rs"]
-mod settings_page;
 mod theme;
 mod theme_css;
 mod ui;
