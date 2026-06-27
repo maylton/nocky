@@ -1,5 +1,7 @@
 // stable_collection_identity_and_deferred_cache_v2
 // multi_artist_credits_v2
+mod collections;
+
 use crate::search_text::{normalize_search_text, search_matches, search_score};
 use gtk::glib;
 use gtk::prelude::*;
@@ -21,6 +23,8 @@ use std::{
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+
+pub(crate) use collections::{resolve_youtube_collection_item, youtube_home_prefetch_candidates};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]

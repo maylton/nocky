@@ -9,17 +9,17 @@
 use std::thread;
 
 use crate::{
+    app::controller::AppController,
     background::BackgroundMessage,
     config::StartupSource,
     youtube::{
         cacheable_youtube_playlist, clear_library_cache, queue_library_cache_save,
         youtube_collection_cache_key, youtube_collection_key,
     },
-    AppController,
 };
 
 impl AppController {
-    pub(super) fn handle_background_messages(&self) {
+    pub(crate) fn handle_background_messages(&self) {
         while let Ok(message) = self.background.try_recv() {
             match message {
                 BackgroundMessage::LibraryScanned { root, result } => {
@@ -948,7 +948,7 @@ impl AppController {
 
                             eprintln!(
                                 "Nocky YouTube track resolution failed ({kind:?}): {}",
-                                crate::redact_stream_url(detail)
+                                crate::app::media::redact_stream_url(detail)
                             );
                             self.album.set_text(message);
                             self.show_toast(message);
@@ -967,7 +967,7 @@ impl AppController {
                                                 &entry.media.source,
                                                 crate::playback::queue::QueueSource::YouTube {
                                                     video_id
-                                                } if video_id == &failed_video_id
+                                                } if video_id == failed_video_id.as_str()
                                             )
                                         },
                                     );
