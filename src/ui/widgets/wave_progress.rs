@@ -14,8 +14,6 @@ const TRACK_RADIUS: f64 = TRACK_THICKNESS / 2.0;
 const TRACK_ALPHA: f64 = 0.22;
 const ACTIVE_ALPHA: f64 = 0.96;
 const ACTIVE_TRACK_GAP: f64 = 6.0;
-const STOP_INDICATOR_RADIUS: f64 = 4.0;
-const STOP_INDICATOR_ALPHA: f64 = 0.34;
 const WAVE_AMPLITUDE: f64 = 2.45;
 const WAVELENGTH: f64 = 20.0;
 const WAVE_STEP: f64 = 1.25;
@@ -186,13 +184,6 @@ fn draw_wave(
         let _ = context.stroke();
     }
 
-    if fraction < 0.995 {
-        context.new_path();
-        context.set_source_rgba(red, green, blue, STOP_INDICATOR_ALPHA);
-        context.arc(stop_x, middle, STOP_INDICATOR_RADIUS, 0.0, tau);
-        let _ = context.fill();
-    }
-
     if fraction > 0.0 {
         let bridge_length = ACTIVE_TRACK_GAP.min(progress_x - EDGE_PADDING);
         let bridge_start = progress_x - bridge_length;
@@ -250,11 +241,11 @@ fn inactive_track_start(progress_x: f64) -> f64 {
 }
 
 fn progress_stop_x(width: f64) -> f64 {
-    width - EDGE_PADDING - STOP_INDICATOR_RADIUS
+    width - EDGE_PADDING - TRACK_RADIUS
 }
 
 fn inactive_track_end(stop_x: f64) -> f64 {
-    stop_x - TRACK_RADIUS
+    stop_x
 }
 
 #[cfg(test)]
@@ -267,7 +258,6 @@ mod tests {
         assert_eq!(EDGE_PADDING, 6.0);
         assert_eq!(TRACK_THICKNESS, 8.0);
         assert_eq!(ACTIVE_TRACK_GAP, 6.0);
-        assert_eq!(STOP_INDICATOR_RADIUS, 4.0);
     }
 
     #[test]
@@ -280,10 +270,20 @@ mod tests {
     }
 
     #[test]
-    fn inactive_track_anchors_the_stop_indicator() {
-        let stop_x = 180.0;
+    fn inactive_track_endpoint_stays_inside_the_widget() {
+        let width = 220.0;
+        let stop_x = progress_stop_x(width);
         let painted_track_end = inactive_track_end(stop_x) + TRACK_RADIUS;
 
-        assert_eq!(painted_track_end, stop_x);
+        assert_eq!(painted_track_end, width - EDGE_PADDING);
+    }
+
+    #[test]
+    fn full_active_indicator_endpoint_stays_inside_the_widget() {
+        let width = 220.0;
+        let stop_x = progress_stop_x(width);
+        let painted_active_end = stop_x + TRACK_RADIUS;
+
+        assert_eq!(painted_active_end, width - EDGE_PADDING);
     }
 }
