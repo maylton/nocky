@@ -6,12 +6,11 @@
 
 use crate::{
     config::AppLanguage,
-    expressive_transport::ExpressiveTransport,
     footer_now_playing::{build_footer_now_playing, FooterNowPlayingParts},
     footer_progress::{build_footer_progress, FooterProgressParts},
     footer_transport::{build_footer_transport, FooterTransportParts},
     footer_utilities::{build_footer_utilities, FooterUtilityParts},
-    wave_progress::WaveProgress,
+    ui::widgets::{ExpressiveTransport, WaveProgress},
 };
 use gtk::prelude::*;
 use std::rc::Rc;

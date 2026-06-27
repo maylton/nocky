@@ -24,21 +24,13 @@
 // contextual_collection_controls_v5
 // recent_activity_exact_fix_v1
 // personalized_home_resume_v2
-#[path = "ui/widgets/animated_page_switcher.rs"]
-mod animated_page_switcher;
 mod app;
 mod artist_index;
 mod background;
 mod background_handler;
 mod browser;
-#[path = "ui/widgets/compact_volume_motion.rs"]
-mod compact_volume_motion;
 mod config;
-#[path = "ui/widgets/cover.rs"]
-mod cover_view;
 mod dialogs;
-#[path = "ui/widgets/expressive_transport.rs"]
-mod expressive_transport;
 #[path = "ui/footer/layout.rs"]
 mod footer_layout;
 #[path = "ui/footer/now_playing.rs"]
@@ -77,10 +69,9 @@ mod reveal_bounce;
 mod settings_page;
 mod theme;
 mod theme_css;
+mod ui;
 mod visual_theme;
 mod visualizer;
-#[path = "ui/widgets/wave_progress.rs"]
-mod wave_progress;
 mod youtube;
 #[path = "youtube/diagnostics.rs"]
 mod youtube_diagnostics;

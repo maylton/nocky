@@ -1,13 +1,11 @@
 // clickable_player_artist_album_navigation_v1
 use crate::{
     config::AppLanguage,
-    cover_view::{build_cover, CoverView},
-    expressive_transport::{ExpressiveTransport, TransportVariant},
     i18n::{self, Message},
     lyrics_view::LyricsPresenter,
     playback::transition::TransitionClock,
+    ui::widgets::{build_cover, CoverView, ExpressiveTransport, TransportVariant, WaveProgress},
     visualizer::SpectrumVisualizer,
-    wave_progress::WaveProgress,
 };
 use gtk::prelude::*;
 use std::rc::Rc;
