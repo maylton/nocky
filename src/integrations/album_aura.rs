@@ -1,4 +1,4 @@
-use crate::mpris::{MprisPlayback, MprisTrack, MprisUpdate};
+use crate::playback::mpris::{MprisPlayback, MprisTrack, MprisUpdate};
 use serde_json::{json, Value};
 use std::{
     env, fs,

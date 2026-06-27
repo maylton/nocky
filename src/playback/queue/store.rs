@@ -1,4 +1,4 @@
-use crate::queue_model::{PlaybackQueue, QueueSnapshot, QueueSource, QueueSourceKind};
+use crate::playback::queue::{PlaybackQueue, QueueSnapshot, QueueSource, QueueSourceKind};
 use std::{
     env,
     fs::{self, File},
@@ -266,7 +266,7 @@ fn quarantine_invalid_state(path: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::queue_model::QueueMedia;
+    use crate::playback::queue::QueueMedia;
     use std::{
         env, fs, process,
         time::{SystemTime, UNIX_EPOCH},

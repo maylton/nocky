@@ -24,7 +24,6 @@
 // contextual_collection_controls_v5
 // recent_activity_exact_fix_v1
 // personalized_home_resume_v2
-mod album_aura_bridge;
 mod animated_page_switcher;
 mod artist_index;
 mod background;
@@ -41,6 +40,7 @@ mod footer_transport;
 mod footer_utilities;
 mod footer_view;
 mod i18n;
+mod integrations;
 mod library;
 mod listening_history;
 mod local_mix_cover;
@@ -53,20 +53,14 @@ mod material_palette;
 mod md3_volume;
 mod mode_toggle;
 mod model;
-mod mpris;
 mod offline_store;
 mod onboarding;
-mod playback;
-mod playback_session;
+pub mod playback;
 mod player_view;
-pub mod queue_model;
-mod queue_store;
-mod queue_view;
 mod reveal_bounce;
 mod settings_page;
 mod theme;
 mod theme_css;
-mod track_transition;
 mod visual_theme;
 mod visualizer;
 mod wave_progress;
@@ -75,6 +69,13 @@ mod youtube_diagnostics;
 mod youtube_error;
 mod youtube_playback;
 
+use crate::playback::queue::{
+    queue_end_action, PlaybackQueue, QueueEndAction, QueueEntryId, QueueMedia, QueueSnapshot,
+    QueueSource, QueueSourceKind, ShuffleNavigator,
+};
+use crate::playback::queue::{QueuePresentation, QueueSection};
+use crate::playback::session::PlaybackSession;
+use crate::playback::transition::TransitionClock;
 use adw::prelude::*;
 use animated_page_switcher::{AnimatedPageSwitcher, TopPage};
 use background::{BackgroundChannel, BackgroundMessage};
@@ -100,13 +101,7 @@ use lyrics_view::LyricsPresenter;
 use model::{Track, TrackData};
 use offline_store::{download_youtube_track, OfflineStore, OFFLINE_STREAM_REJECTED_PREFIX};
 use playback::{PlaybackEngine, PlaybackEvent};
-use playback_session::PlaybackSession;
 use player_view::{PlayerView, PlayerViewHandle};
-use queue_model::{
-    queue_end_action, PlaybackQueue, QueueEndAction, QueueEntryId, QueueMedia, QueueSnapshot,
-    QueueSource, QueueSourceKind, ShuffleNavigator,
-};
-use queue_view::{QueuePresentation, QueueSection};
 use reveal_bounce::RevealBounce;
 use settings_page::SettingsPage;
 use std::{
@@ -119,7 +114,6 @@ use std::{
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use track_transition::TransitionClock;
 use visualizer::SpectrumVisualizer;
 use wave_progress::WaveProgress;
 use youtube::{
@@ -206,7 +200,7 @@ struct AppController {
     search_query: RefCell<String>,
     lyrics_pending: RefCell<HashSet<PathBuf>>,
     background: BackgroundChannel,
-    mpris: mpris::MprisBridge,
+    mpris: crate::playback::mpris::MprisBridge,
     last_mpris_position: Cell<i64>,
     playback_source: Cell<PlaybackSource>,
     youtube_state: RefCell<Option<YouTubePlaybackState>>,
@@ -432,7 +426,9 @@ fn build_application(app: &adw::Application) {
         keep_alive.persist_queue_now();
         keep_alive.persist_playback_session_now();
         keep_alive.player.shutdown();
-        keep_alive.mpris.send(mpris::MprisUpdate::Shutdown);
+        keep_alive
+            .mpris
+            .send(crate::playback::mpris::MprisUpdate::Shutdown);
     });
 }
 
@@ -858,7 +854,7 @@ impl AppController {
 
         shell.append(&player_bar);
 
-        let mpris = mpris::MprisBridge::start(config.volume);
+        let mpris = crate::playback::mpris::MprisBridge::start(config.volume);
         let youtube_bridge = YouTubeBridge::discover().ok().map(Arc::new);
 
         let seed = SystemTime::now()
@@ -870,7 +866,7 @@ impl AppController {
             Some(StartupSource::YouTube) => QueueSourceKind::YouTube,
             Some(StartupSource::Local) | None => QueueSourceKind::Local,
         };
-        let queue_load = queue_store::load_for(initial_queue_source);
+        let queue_load = crate::playback::queue::load_for(initial_queue_source);
         if queue_load.discarded_entries > 0 {
             eprintln!(
                 "Queue 2.0 recovery discarded {} unavailable entr{}",
@@ -884,7 +880,7 @@ impl AppController {
         }
         let restored_queue = queue_load.queue;
         let restored_queue_snapshot = restored_queue.snapshot();
-        let restored_playback_session = playback_session::load_for(initial_queue_source);
+        let restored_playback_session = crate::playback::session::load_for(initial_queue_source);
 
         let initial_volume = config.volume.clamp(0.15, 1.0);
         let mut listening_history = ListeningHistory::load();
@@ -1476,7 +1472,9 @@ impl AppController {
                     if controller.footer_repeat_button.is_active() != enabled {
                         controller.footer_repeat_button.set_active(enabled);
                     }
-                    controller.mpris.send(mpris::MprisUpdate::Loop(enabled));
+                    controller
+                        .mpris
+                        .send(crate::playback::mpris::MprisUpdate::Loop(enabled));
                 }
             });
         }
@@ -1502,7 +1500,9 @@ impl AppController {
                     }
                     controller.shuffle_enabled.set(enabled);
                     controller.reset_shuffle_navigation(enabled);
-                    controller.mpris.send(mpris::MprisUpdate::Shuffle(enabled));
+                    controller
+                        .mpris
+                        .send(crate::playback::mpris::MprisUpdate::Shuffle(enabled));
                 }
             });
         }
@@ -1603,12 +1603,16 @@ impl AppController {
     }
 
     fn setup_callbacks(self: &Rc<Self>) {
+        self.mpris.send(crate::playback::mpris::MprisUpdate::Volume(
+            self.volume.value(),
+        ));
+        self.mpris.send(crate::playback::mpris::MprisUpdate::Loop(
+            self.repeat_button.is_active(),
+        ));
         self.mpris
-            .send(mpris::MprisUpdate::Volume(self.volume.value()));
-        self.mpris
-            .send(mpris::MprisUpdate::Loop(self.repeat_button.is_active()));
-        self.mpris
-            .send(mpris::MprisUpdate::Shuffle(self.shuffle_button.is_active()));
+            .send(crate::playback::mpris::MprisUpdate::Shuffle(
+                self.shuffle_button.is_active(),
+            ));
         self.publish_mpris_capabilities();
 
         {
@@ -1628,7 +1632,9 @@ impl AppController {
                         controller.volume_before_mute.set(value);
                     }
                     controller.apply_volume_icon();
-                    controller.mpris.send(mpris::MprisUpdate::Volume(value));
+                    controller
+                        .mpris
+                        .send(crate::playback::mpris::MprisUpdate::Volume(value));
 
                     if let Some(source) = pending_save.borrow_mut().take() {
                         source.remove();
@@ -3534,7 +3540,7 @@ impl AppController {
         let source = self.active_queue_source.get();
         let snapshot = self.playback_queue_v2.borrow().snapshot();
 
-        match queue_store::save_for(source, &snapshot) {
+        match crate::playback::queue::save_for(source, &snapshot) {
             Ok(()) => {
                 self.queue_last_saved_snapshot.replace(snapshot);
                 true
@@ -3566,7 +3572,7 @@ impl AppController {
         self.queue_v2_pending_entry.set(None);
         self.queue_dragged_entry.set(None);
 
-        let queue_load = queue_store::load_for(source);
+        let queue_load = crate::playback::queue::load_for(source);
         self.report_queue_recovery(source, queue_load.discarded_entries);
         let snapshot = queue_load.queue.snapshot();
 
@@ -3574,7 +3580,7 @@ impl AppController {
         self.queue_last_saved_snapshot.replace(snapshot);
         self.active_queue_source.set(source);
 
-        let restored_session = playback_session::load_for(source);
+        let restored_session = crate::playback::session::load_for(source);
         let restored_seconds = restored_session
             .as_ref()
             .map(|session| (session.position_us.max(0) as u64) / 1_000_000)
@@ -5644,7 +5650,7 @@ impl AppController {
         self.playback_session_last_shuffle.set(shuffle);
         self.playback_session_last_repeat.set(repeat);
         let source = self.active_queue_source.get();
-        if let Err(error) = playback_session::save_for(source, &session) {
+        if let Err(error) = crate::playback::session::save_for(source, &session) {
             eprintln!("Could not save playback session for {source:?}: {error}");
         }
     }
@@ -5652,10 +5658,10 @@ impl AppController {
     fn persist_playback_session_now(&self) {
         let source = self.active_queue_source.get();
         if let Some(session) = self.playback_session_snapshot() {
-            if let Err(error) = playback_session::save_for(source, &session) {
+            if let Err(error) = crate::playback::session::save_for(source, &session) {
                 eprintln!("Could not save playback session for {source:?}: {error}");
             }
-        } else if let Err(error) = playback_session::clear_for(source) {
+        } else if let Err(error) = crate::playback::session::clear_for(source) {
             eprintln!("Could not clear playback session for {source:?}: {error}");
         }
     }
@@ -5797,7 +5803,9 @@ impl AppController {
                 self.pending_resume_position_us.set(None);
                 self.last_mpris_position.set(position.max(0));
                 self.mpris
-                    .send(mpris::MprisUpdate::Position(position.max(0)));
+                    .send(crate::playback::mpris::MprisUpdate::Position(
+                        position.max(0),
+                    ));
             }
             Err(error) => {
                 eprintln!("Could not restore playback position: {error}");
@@ -5854,12 +5862,14 @@ impl AppController {
         self.publish_mpris_track(&track);
         self.last_mpris_position.set(0);
         self.update_play_icons(autoplay);
-        self.mpris.send(mpris::MprisUpdate::Position(0));
-        self.mpris.send(mpris::MprisUpdate::Playback(if autoplay {
-            mpris::MprisPlayback::Playing
-        } else {
-            mpris::MprisPlayback::Paused
-        }));
+        self.mpris
+            .send(crate::playback::mpris::MprisUpdate::Position(0));
+        self.mpris
+            .send(crate::playback::mpris::MprisUpdate::Playback(if autoplay {
+                crate::playback::mpris::MprisPlayback::Playing
+            } else {
+                crate::playback::mpris::MprisPlayback::Paused
+            }));
 
         self.browser.select_track(index);
 
@@ -6798,7 +6808,9 @@ impl AppController {
             Ok(()) => {
                 self.update_play_icons(true);
                 self.mpris
-                    .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Playing));
+                    .send(crate::playback::mpris::MprisUpdate::Playback(
+                        crate::playback::mpris::MprisPlayback::Playing,
+                    ));
             }
             Err(error) => self.show_error(&error),
         }
@@ -6811,7 +6823,9 @@ impl AppController {
             Ok(()) => {
                 self.update_play_icons(false);
                 self.mpris
-                    .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Paused));
+                    .send(crate::playback::mpris::MprisUpdate::Playback(
+                        crate::playback::mpris::MprisPlayback::Paused,
+                    ));
             }
             Err(error) => self.show_error(&error),
         }
@@ -6847,7 +6861,9 @@ impl AppController {
                     eprintln!("Nocky playback error: {}", redact_stream_url(&error));
                     self.update_play_icons(false);
                     self.mpris
-                        .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Stopped));
+                        .send(crate::playback::mpris::MprisUpdate::Playback(
+                            crate::playback::mpris::MprisPlayback::Stopped,
+                        ));
                     self.show_error(playback_error_message(&error));
                 }
             }
@@ -6875,7 +6891,9 @@ impl AppController {
                 let _ = self.player.pause();
                 self.update_play_icons(false);
                 self.mpris
-                    .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Stopped));
+                    .send(crate::playback::mpris::MprisUpdate::Playback(
+                        crate::playback::mpris::MprisPlayback::Stopped,
+                    ));
             }
         }
     }
@@ -6883,17 +6901,17 @@ impl AppController {
     fn handle_mpris_commands(&self) {
         while let Ok(command) = self.mpris.commands.try_recv() {
             match command {
-                mpris::MprisCommand::Ready => {}
-                mpris::MprisCommand::Error(error) => {
+                crate::playback::mpris::MprisCommand::Ready => {}
+                crate::playback::mpris::MprisCommand::Error(error) => {
                     eprintln!("Nocky MPRIS bridge error: {error}");
                 }
-                mpris::MprisCommand::Raise => self.window.present(),
-                mpris::MprisCommand::Quit => {
+                crate::playback::mpris::MprisCommand::Raise => self.window.present(),
+                crate::playback::mpris::MprisCommand::Quit => {
                     if let Some(application) = self.window.application() {
                         application.quit();
                     }
                 }
-                mpris::MprisCommand::Play => {
+                crate::playback::mpris::MprisCommand::Play => {
                     if self.playback_source.get() == PlaybackSource::YouTube
                         && self.youtube_state.borrow().is_some()
                     {
@@ -6919,38 +6937,40 @@ impl AppController {
                         self.play_current();
                     }
                 }
-                mpris::MprisCommand::Pause => self.pause_current(),
-                mpris::MprisCommand::PlayPause => self.toggle_playback(),
-                mpris::MprisCommand::Stop => {
+                crate::playback::mpris::MprisCommand::Pause => self.pause_current(),
+                crate::playback::mpris::MprisCommand::PlayPause => self.toggle_playback(),
+                crate::playback::mpris::MprisCommand::Stop => {
                     self.pause_current();
                     self.seek_to(0, true);
                     self.mpris
-                        .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Stopped));
+                        .send(crate::playback::mpris::MprisUpdate::Playback(
+                            crate::playback::mpris::MprisPlayback::Stopped,
+                        ));
                 }
-                mpris::MprisCommand::Next => {
+                crate::playback::mpris::MprisCommand::Next => {
                     self.next_track();
                 }
-                mpris::MprisCommand::Previous => self.previous_track(),
-                mpris::MprisCommand::Seek(offset) => {
+                crate::playback::mpris::MprisCommand::Previous => self.previous_track(),
+                crate::playback::mpris::MprisCommand::Seek(offset) => {
                     let position = self.player.position_us().saturating_add(offset);
                     self.seek_to(position, true);
                 }
-                mpris::MprisCommand::SetPosition { track_id, position } => {
+                crate::playback::mpris::MprisCommand::SetPosition { track_id, position } => {
                     if self.current_mpris_track_id().as_deref() == Some(track_id.as_str()) {
                         self.seek_to(position, true);
                     }
                 }
-                mpris::MprisCommand::SetLoop(enabled) => {
+                crate::playback::mpris::MprisCommand::SetLoop(enabled) => {
                     if self.repeat_button.is_active() != enabled {
                         self.repeat_button.set_active(enabled);
                     }
                 }
-                mpris::MprisCommand::SetShuffle(enabled) => {
+                crate::playback::mpris::MprisCommand::SetShuffle(enabled) => {
                     if self.shuffle_button.is_active() != enabled {
                         self.shuffle_button.set_active(enabled);
                     }
                 }
-                mpris::MprisCommand::SetVolume(value) => {
+                crate::playback::mpris::MprisCommand::SetVolume(value) => {
                     let value = value.clamp(0.0, 1.0);
                     if (self.volume.value() - value).abs() > f64::EPSILON {
                         self.volume.set_value(value);
@@ -6978,9 +6998,11 @@ impl AppController {
         }
         self.last_mpris_position.set(position);
         if announce {
-            self.mpris.send(mpris::MprisUpdate::Seeked(position));
+            self.mpris
+                .send(crate::playback::mpris::MprisUpdate::Seeked(position));
         } else {
-            self.mpris.send(mpris::MprisUpdate::Position(position));
+            self.mpris
+                .send(crate::playback::mpris::MprisUpdate::Position(position));
         }
     }
 
@@ -7011,15 +7033,17 @@ impl AppController {
         let url = Some(track.file.uri().to_string());
 
         self.mpris
-            .send(mpris::MprisUpdate::Metadata(mpris::MprisTrack {
-                track_id: mpris_track_id(&track.path),
-                title: track.title.clone(),
-                artist: track.artist.clone(),
-                album: track.album.clone(),
-                length_us,
-                art_url,
-                url,
-            }));
+            .send(crate::playback::mpris::MprisUpdate::Metadata(
+                crate::playback::mpris::MprisTrack {
+                    track_id: mpris_track_id(&track.path),
+                    title: track.title.clone(),
+                    artist: track.artist.clone(),
+                    album: track.album.clone(),
+                    length_us,
+                    art_url,
+                    url,
+                },
+            ));
         self.publish_mpris_capabilities();
     }
 
@@ -7035,10 +7059,11 @@ impl AppController {
             || self.player.is_seekable();
         drop(state);
 
-        self.mpris.send(mpris::MprisUpdate::Capabilities {
-            has_tracks,
-            can_seek,
-        });
+        self.mpris
+            .send(crate::playback::mpris::MprisUpdate::Capabilities {
+                has_tracks,
+                can_seek,
+            });
     }
 
     fn update_play_icons(&self, playing: bool) {
@@ -7182,7 +7207,8 @@ impl AppController {
         let previous = self.last_mpris_position.get();
         if previous < 0 || (timestamp - previous).abs() >= 500_000 {
             self.last_mpris_position.set(timestamp);
-            self.mpris.send(mpris::MprisUpdate::Position(timestamp));
+            self.mpris
+                .send(crate::playback::mpris::MprisUpdate::Position(timestamp));
         }
     }
 
@@ -7255,10 +7281,14 @@ impl AppController {
         self.footer_progress.set_fraction(0.0);
         self.update_play_icons(false);
         self.last_mpris_position.set(0);
-        self.mpris.send(mpris::MprisUpdate::ClearMetadata);
         self.mpris
-            .send(mpris::MprisUpdate::Playback(mpris::MprisPlayback::Stopped));
-        self.mpris.send(mpris::MprisUpdate::Position(0));
+            .send(crate::playback::mpris::MprisUpdate::ClearMetadata);
+        self.mpris
+            .send(crate::playback::mpris::MprisUpdate::Playback(
+                crate::playback::mpris::MprisPlayback::Stopped,
+            ));
+        self.mpris
+            .send(crate::playback::mpris::MprisUpdate::Position(0));
         self.publish_mpris_capabilities();
     }
 
@@ -7276,7 +7306,7 @@ impl AppController {
         }
 
         let source = self.active_queue_source.get();
-        match queue_store::save_for(source, &snapshot) {
+        match crate::playback::queue::save_for(source, &snapshot) {
             Ok(()) => {
                 self.queue_last_saved_snapshot.replace(snapshot);
             }

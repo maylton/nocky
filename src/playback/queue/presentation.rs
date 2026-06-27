@@ -1,4 +1,4 @@
-use crate::queue_model::{PlaybackQueue, QueueEntry, QueueSourceKind};
+use crate::playback::queue::{PlaybackQueue, QueueEntry, QueueSourceKind};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum QueueSection {
@@ -81,7 +81,7 @@ impl QueuePresentation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::queue_model::QueueMedia;
+    use crate::playback::queue::QueueMedia;
     use std::path::PathBuf;
 
     fn local(number: usize) -> QueueMedia {

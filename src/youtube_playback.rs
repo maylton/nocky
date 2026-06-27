@@ -2,8 +2,8 @@
 // playback_resume_preferences_fix_v1
 use crate::{
     background::BackgroundMessage,
-    lyrics, lyrics_provider, mpris,
-    queue_model::{PlaybackQueue, QueueEntryId, QueueSource},
+    lyrics, lyrics_provider,
+    playback::queue::{PlaybackQueue, QueueEntryId, QueueSource},
     youtube::{download_cover, save_library_cache, YouTubeItem, YouTubeStream},
 };
 use gtk::{
@@ -234,7 +234,8 @@ impl AppController {
         }
 
         self.last_mpris_position.set(resume_us);
-        self.mpris.send(mpris::MprisUpdate::Position(resume_us));
+        self.mpris
+            .send(crate::playback::mpris::MprisUpdate::Position(resume_us));
     }
 
     pub(super) fn apply_youtube_track(
@@ -401,14 +402,16 @@ impl AppController {
         self.update_play_icons(autoplay);
         if !recovering {
             self.last_mpris_position.set(0);
-            self.mpris.send(mpris::MprisUpdate::Position(0));
+            self.mpris
+                .send(crate::playback::mpris::MprisUpdate::Position(0));
         }
         self.publish_mpris_youtube(&item, &stream, cover_path.as_deref());
-        self.mpris.send(mpris::MprisUpdate::Playback(if autoplay {
-            mpris::MprisPlayback::Playing
-        } else {
-            mpris::MprisPlayback::Paused
-        }));
+        self.mpris
+            .send(crate::playback::mpris::MprisUpdate::Playback(if autoplay {
+                crate::playback::mpris::MprisPlayback::Playing
+            } else {
+                crate::playback::mpris::MprisPlayback::Paused
+            }));
         self.prefetch_youtube_queue();
     }
 
@@ -439,23 +442,25 @@ impl AppController {
             .min(i64::MAX as u64) as i64;
         let art_url = cover_path.map(|path| gio::File::for_path(path).uri().to_string());
         self.mpris
-            .send(mpris::MprisUpdate::Metadata(mpris::MprisTrack {
-                track_id: mpris_youtube_track_id(&item.video_id),
-                title: item.title.clone(),
-                artist: if item.artist.is_empty() {
-                    stream.artist.clone()
-                } else {
-                    item.artist.clone()
+            .send(crate::playback::mpris::MprisUpdate::Metadata(
+                crate::playback::mpris::MprisTrack {
+                    track_id: mpris_youtube_track_id(&item.video_id),
+                    title: item.title.clone(),
+                    artist: if item.artist.is_empty() {
+                        stream.artist.clone()
+                    } else {
+                        item.artist.clone()
+                    },
+                    album: if item.album.is_empty() {
+                        stream.album.clone()
+                    } else {
+                        item.album.clone()
+                    },
+                    length_us,
+                    art_url,
+                    url: Some(stream.webpage_url.clone()),
                 },
-                album: if item.album.is_empty() {
-                    stream.album.clone()
-                } else {
-                    item.album.clone()
-                },
-                length_us,
-                art_url,
-                url: Some(stream.webpage_url.clone()),
-            }));
+            ));
         self.publish_mpris_capabilities();
     }
 
@@ -496,7 +501,7 @@ impl AppController {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::queue_model::QueueMedia;
+    use crate::playback::queue::QueueMedia;
 
     #[test]
     fn bounded_recovery_delays_are_explicit() {

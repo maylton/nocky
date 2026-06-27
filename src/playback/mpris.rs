@@ -1,4 +1,4 @@
-use crate::album_aura_bridge::AlbumAuraBridge;
+use crate::integrations::album_aura::AlbumAuraBridge;
 use mpris_server::{LoopStatus, Metadata, PlaybackStatus, Player, Time, TrackId};
 use std::{
     sync::mpsc::{self, Receiver, Sender},

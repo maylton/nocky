@@ -5,7 +5,7 @@ use crate::{
     expressive_transport::{ExpressiveTransport, TransportVariant},
     i18n::{self, Message},
     lyrics_view::LyricsPresenter,
-    track_transition::TransitionClock,
+    playback::transition::TransitionClock,
     visualizer::SpectrumVisualizer,
     wave_progress::WaveProgress,
     CoverView,

@@ -953,9 +953,10 @@ impl AppController {
                             self.album.set_text(message);
                             self.show_toast(message);
                             self.update_play_icons(false);
-                            self.mpris.send(crate::mpris::MprisUpdate::Playback(
-                                crate::mpris::MprisPlayback::Stopped,
-                            ));
+                            self.mpris
+                                .send(crate::playback::mpris::MprisUpdate::Playback(
+                                    crate::playback::mpris::MprisPlayback::Stopped,
+                                ));
 
                             if kind.is_terminal() {
                                 let failed_video_id = item.video_id.clone();
@@ -964,7 +965,7 @@ impl AppController {
                                         |entry| {
                                             matches!(
                                                 &entry.media.source,
-                                                crate::queue_model::QueueSource::YouTube {
+                                                crate::playback::queue::QueueSource::YouTube {
                                                     video_id
                                                 } if video_id == &failed_video_id
                                             )

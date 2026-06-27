@@ -1,4 +1,4 @@
-use crate::queue_model::{QueueSource, QueueSourceKind, ShuffleSnapshot};
+use crate::playback::queue::{QueueSource, QueueSourceKind, ShuffleSnapshot};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
