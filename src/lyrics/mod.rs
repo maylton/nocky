@@ -1,5 +1,10 @@
 use std::{fs, path::Path};
 
+pub(crate) mod provider;
+mod view;
+
+pub(crate) use view::LyricsPresenter;
+
 #[derive(Clone, Debug)]
 pub struct LyricLine {
     pub timestamp_us: i64,

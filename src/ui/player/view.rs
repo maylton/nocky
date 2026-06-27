@@ -2,7 +2,7 @@
 use crate::{
     config::AppLanguage,
     i18n::{self, Message},
-    lyrics_view::LyricsPresenter,
+    lyrics::LyricsPresenter,
     playback::transition::TransitionClock,
     ui::widgets::{build_cover, CoverView, ExpressiveTransport, TransportVariant, WaveProgress},
     visualizer::SpectrumVisualizer,

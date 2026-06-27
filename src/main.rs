@@ -39,10 +39,6 @@ mod local_mix_cover;
 mod search_text;
 // material_dynamic_palette_v1
 mod lyrics;
-#[path = "lyrics/provider.rs"]
-mod lyrics_provider;
-#[path = "lyrics/view.rs"]
-mod lyrics_view;
 mod material_palette;
 mod md3_volume;
 mod mode_toggle;

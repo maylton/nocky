@@ -21,9 +21,7 @@ use crate::{
     i18n::{self, Message},
     library,
     listening_history::{self, ListeningHistory, ListeningSource},
-    lyrics::LyricLine,
-    lyrics_provider,
-    lyrics_view::LyricsPresenter,
+    lyrics::{self, LyricLine, LyricsPresenter},
     model::{Track, TrackData},
     offline_store::{download_youtube_track, OfflineStore, OFFLINE_STREAM_REJECTED_PREFIX},
     onboarding,
@@ -5724,7 +5722,7 @@ impl AppController {
             }
             (
                 track.path.clone(),
-                lyrics_provider::LyricsLookup {
+                lyrics::provider::LyricsLookup {
                     title: track.title.clone(),
                     artist: track.artist.clone(),
                     album: track.album.clone(),
@@ -5746,7 +5744,7 @@ impl AppController {
         let sender = self.background.sender();
         thread::spawn(move || {
             let result =
-                lyrics_provider::download_to_sidecar(&path, &lookup, force).map(|document| {
+                lyrics::provider::download_to_sidecar(&path, &lookup, force).map(|document| {
                     eprintln!(
                         "Lyrics loaded from {} ({})",
                         document.provider,

@@ -5,7 +5,7 @@ use crate::{
     app::media::{is_refreshable_stream_error, mpris_youtube_track_id, redact_stream_url},
     app::state::{PlaybackSource, YouTubePlaybackState},
     background::BackgroundMessage,
-    lyrics, lyrics_provider,
+    lyrics,
     playback::queue::{PlaybackQueue, QueueEntryId, QueueSource},
     youtube::{download_cover, save_library_cache, YouTubeItem, YouTubeStream},
 };
@@ -466,7 +466,7 @@ impl AppController {
         if item.video_id.is_empty() {
             return;
         }
-        let lookup = lyrics_provider::LyricsLookup {
+        let lookup = lyrics::provider::LyricsLookup {
             title: item.title.clone(),
             artist: item.artist.clone(),
             album: item.album.clone(),
@@ -475,7 +475,7 @@ impl AppController {
         let video_id = item.video_id.clone();
         let sender = self.background.sender();
         thread::spawn(move || {
-            let result = lyrics_provider::fetch_lyrics(&lookup, notify).map(|document| {
+            let result = lyrics::provider::fetch_lyrics(&lookup, notify).map(|document| {
                 eprintln!(
                     "YouTube lyrics loaded from {} ({})",
                     document.provider,
