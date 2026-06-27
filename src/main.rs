@@ -47,7 +47,9 @@ mod local_mix_cover;
 mod search_text;
 // material_dynamic_palette_v1
 mod lyrics;
+#[path = "lyrics/provider.rs"]
 mod lyrics_provider;
+#[path = "lyrics/view.rs"]
 mod lyrics_view;
 mod material_palette;
 mod md3_volume;
@@ -65,8 +67,11 @@ mod visual_theme;
 mod visualizer;
 mod wave_progress;
 mod youtube;
+#[path = "youtube/diagnostics.rs"]
 mod youtube_diagnostics;
+#[path = "youtube/error.rs"]
 mod youtube_error;
+#[path = "youtube/playback.rs"]
 mod youtube_playback;
 
 use crate::playback::queue::{
