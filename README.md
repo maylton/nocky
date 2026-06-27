@@ -162,6 +162,31 @@ Nocky loads sidecar `.lrc` files and can automatically search LRCLIB when synchr
 
 The player registers as `org.mpris.MediaPlayer2.Nocky`. Local and YouTube tracks publish title, artist, album, duration, cover and source URL where available.
 
+## Noctalia plugin ecosystem
+
+Nocky integrates with two independent Noctalia plugins maintained by the same
+author:
+
+- **[Album Aura](https://github.com/maylton/album-aura-plugin)** derives a
+  Noctalia palette from the current album and consumes Nocky's native runtime
+  bridge.
+- **[OpenRGB Noctalia](https://github.com/maylton/openrgb-noctalia)** applies
+  the active Noctalia primary color to supported OpenRGB devices.
+
+```text
+Nocky playback and artwork
+          ↓
+     Album Aura
+          ↓
+ Noctalia active palette
+          ↓
+OpenRGB Noctalia (optional)
+```
+
+The projects remain independent: Nocky publishes playback data, Album Aura
+controls the shell palette, and OpenRGB Noctalia controls physical RGB devices.
+See [the complete ecosystem documentation](docs/NOCTALIA-PLUGIN-ECOSYSTEM.md).
+
 ## Noctalia theme integration
 
 Nocky remains an independent project, but it can follow Noctalia's Material color roles. The app watches `~/.config/nocky/theme.css`. Use `assets/nocky.css.template` as a Noctalia template and set its output to that path.
