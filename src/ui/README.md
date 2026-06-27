@@ -1,11 +1,15 @@
 # UI modules
 
-This directory is the transitional home of Nocky's visual modules.
+This directory contains Nocky's native UI module hierarchy.
 
-During phase 3, the files are grouped physically by domain while their Rust
-module identity remains at the crate root through `#[path]` declarations in
-`main.rs`. This keeps the refactor behavior-neutral and preserves existing
-`super::` imports.
+The main groups are:
 
-A later phase can convert these compatibility declarations into a native
-`ui::{footer, player, settings, widgets}` hierarchy.
+- `footer`: responsive footer layout, transport controls, progress, utilities,
+  and now-playing surfaces.
+- `player`: the home player view.
+- `settings`: settings-page widgets.
+- `widgets`: reusable application widgets such as cover art, animated page
+  switching, compact volume motion, transport effects, and wave progress.
+
+Application coordination stays in `app::controller`; these modules should keep
+visual construction and local widget behavior focused.
