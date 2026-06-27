@@ -10,11 +10,13 @@ type SeekCallback = Box<dyn Fn(f64)>;
 const HEIGHT_REQUEST: i32 = 24;
 const EDGE_PADDING: f64 = 6.0;
 const TRACK_THICKNESS: f64 = 8.0;
+const TRACK_RADIUS: f64 = TRACK_THICKNESS / 2.0;
 const TRACK_ALPHA: f64 = 0.22;
 const ACTIVE_ALPHA: f64 = 0.96;
 const ACTIVE_TRACK_GAP: f64 = 6.0;
 const STOP_INDICATOR_RADIUS: f64 = 4.0;
 const STOP_INDICATOR_ALPHA: f64 = 0.34;
+const STOP_TRACK_GAP: f64 = 4.0;
 const WAVE_AMPLITUDE: f64 = 2.45;
 const WAVELENGTH: f64 = 20.0;
 const WAVE_STEP: f64 = 1.25;
@@ -135,7 +137,8 @@ fn emit_seek(
     x: f64,
 ) {
     let width = area.width().max(1) as f64;
-    let usable_width = (width - EDGE_PADDING * 2.0).max(1.0);
+    let stop_x = progress_stop_x(width);
+    let usable_width = (stop_x - EDGE_PADDING).max(1.0);
     let value = ((x - EDGE_PADDING) / usable_width).clamp(0.0, 1.0);
     fraction.set(value);
     area.queue_draw();
@@ -165,7 +168,7 @@ fn draw_wave(
     let middle = height as f64 / 2.0;
     let fraction = fraction.clamp(0.0, 1.0);
 
-    let stop_x = width - EDGE_PADDING;
+    let stop_x = progress_stop_x(width);
     let usable_width = (stop_x - EDGE_PADDING).max(1.0);
     let progress_x = EDGE_PADDING + usable_width * fraction;
     let tau = std::f64::consts::TAU;
@@ -173,13 +176,14 @@ fn draw_wave(
     context.set_line_cap(cairo::LineCap::Round);
     context.set_line_join(cairo::LineJoin::Round);
 
-    let track_start = (progress_x + ACTIVE_TRACK_GAP).min(stop_x);
-    if track_start < stop_x - STOP_INDICATOR_RADIUS {
+    let track_start = inactive_track_start(progress_x);
+    let track_end = inactive_track_end(stop_x);
+    if track_start < track_end {
         context.new_path();
         context.set_source_rgba(red, green, blue, TRACK_ALPHA);
         context.set_line_width(TRACK_THICKNESS);
         context.move_to(track_start, middle);
-        context.line_to(stop_x - STOP_INDICATOR_RADIUS, middle);
+        context.line_to(track_end, middle);
         let _ = context.stroke();
     }
 
@@ -242,6 +246,18 @@ fn draw_wave(
     }
 }
 
+fn inactive_track_start(progress_x: f64) -> f64 {
+    progress_x + ACTIVE_TRACK_GAP + TRACK_RADIUS * 2.0
+}
+
+fn progress_stop_x(width: f64) -> f64 {
+    width - EDGE_PADDING - STOP_INDICATOR_RADIUS
+}
+
+fn inactive_track_end(stop_x: f64) -> f64 {
+    stop_x - STOP_INDICATOR_RADIUS - STOP_TRACK_GAP - TRACK_RADIUS
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,5 +269,24 @@ mod tests {
         assert_eq!(TRACK_THICKNESS, 8.0);
         assert_eq!(ACTIVE_TRACK_GAP, 6.0);
         assert_eq!(STOP_INDICATOR_RADIUS, 4.0);
+        assert_eq!(STOP_TRACK_GAP, 4.0);
+    }
+
+    #[test]
+    fn inactive_track_gap_accounts_for_round_caps() {
+        let progress_x = 48.0;
+        let painted_active_end = progress_x + TRACK_RADIUS;
+        let painted_track_start = inactive_track_start(progress_x) - TRACK_RADIUS;
+
+        assert_eq!(painted_track_start - painted_active_end, ACTIVE_TRACK_GAP);
+    }
+
+    #[test]
+    fn inactive_track_stops_before_the_stop_indicator() {
+        let stop_x = 180.0;
+        let painted_track_end = inactive_track_end(stop_x) + TRACK_RADIUS;
+        let stop_indicator_left = stop_x - STOP_INDICATOR_RADIUS;
+
+        assert_eq!(stop_indicator_left - painted_track_end, STOP_TRACK_GAP);
     }
 }
