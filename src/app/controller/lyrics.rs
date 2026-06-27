@@ -1,6 +1,13 @@
 //! Lyrics controller methods for `AppController`.
 
-use super::*;
+use super::AppController;
+use crate::{
+    app::state::PlaybackSource,
+    background::BackgroundMessage,
+    lyrics::{self as lyrics_domain, LyricLine},
+    model::Track,
+};
+use std::thread;
 
 impl AppController {
     pub(crate) fn rebuild_lyrics(&self, track: &Track) {

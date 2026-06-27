@@ -1,6 +1,8 @@
 //! GTK signal and timer callbacks for `AppController`.
 
-use super::*;
+use super::AppController;
+use gtk::{glib, prelude::*};
+use std::{cell::RefCell, rc::Rc, time::Duration};
 
 impl AppController {
     pub(crate) fn setup_callbacks(self: &Rc<Self>) {

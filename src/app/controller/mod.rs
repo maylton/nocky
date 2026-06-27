@@ -21,76 +21,36 @@ mod youtube;
 pub(crate) use construction::build_application;
 
 use crate::{
-    app::sidebar::build_sidebar,
     app::state::{AppState, PlaybackSource, YouTubePlaybackState},
-    app::{
-        library_state::scanned_library_matches,
-        media::{
-            format_time, mpris_track_id, mpris_youtube_track_id, playback_error_message,
-            redact_stream_url,
-        },
-    },
-    background::{BackgroundChannel, BackgroundMessage},
-    browser::{
-        BrowserEvent, BrowserPlaybackState, BrowserRenderContext, BrowserRoute, LibraryBrowser,
-        YouTubeCollectionRoute,
-    },
-    config::{self, AppLanguage, BlurMode, StartupSource, VisualTheme},
-    dialogs,
-    dialogs::SettingsEvent,
-    i18n::{self, Message},
-    library,
-    listening_history::{self, ListeningHistory, ListeningSource},
-    lyrics::{self as lyrics_domain, LyricLine, LyricsPresenter},
-    model::{Track, TrackData},
-    offline_store::{download_youtube_track, OfflineStore, OFFLINE_STREAM_REJECTED_PREFIX},
-    onboarding,
+    background::BackgroundChannel,
+    browser::LibraryBrowser,
+    config,
+    listening_history::{self, ListeningHistory},
+    lyrics::LyricsPresenter,
+    offline_store::OfflineStore,
     playback::{
-        queue::{
-            queue_end_action, PlaybackQueue, QueueEndAction, QueueEntryId, QueueMedia,
-            QueuePresentation, QueueSection, QueueSnapshot, QueueSource, QueueSourceKind,
-            ShuffleNavigator,
-        },
+        queue::{PlaybackQueue, QueueEntryId, QueueSnapshot, QueueSourceKind, ShuffleNavigator},
         session::PlaybackSession,
         transition::TransitionClock,
-        PlaybackEngine, PlaybackEvent,
+        PlaybackEngine,
     },
     reveal_bounce::RevealBounce,
     theme,
     ui::{
-        footer::{
-            self, build_footer_view, footer_full_artwork_size_for_card_height, footer_mode_plan,
-            AdaptiveFooterTier, FooterViewParts, FOOTER_ARTWORK_SOURCE_SIZE,
-        },
-        player::{PlayerView, PlayerViewHandle},
+        player::PlayerViewHandle,
         settings::SettingsPage,
-        widgets::{
-            build_cover, run_compact_volume_spring, AnimatedPageSwitcher, CompactVolumeSpring,
-            CoverView, ExpressiveTransport, TopPage, WaveProgress,
-        },
+        widgets::{AnimatedPageSwitcher, CoverView, ExpressiveTransport, WaveProgress},
     },
     visual_theme,
     visualizer::SpectrumVisualizer,
-    youtube::{
-        self as youtube_domain, cache_items_for_browser, credited_artists,
-        diagnostics as youtube_diagnostics, load_library_cache, resolve_youtube_collection_item,
-        youtube_collection_cache_key, youtube_collection_key, youtube_home_prefetch_candidates,
-        YouTubeBridge, YouTubeItem, YouTubeLibraryCache, YouTubePage, YouTubePageEvent,
-        YouTubeSearchResults, YouTubeStatus,
-    },
-    APP_ID, HOME_PLAYER_WIDTH,
+    youtube::{YouTubeBridge, YouTubeItem, YouTubeLibraryCache, YouTubePage},
 };
-use adw::prelude::*;
-use gtk::prelude::FileExt;
-use gtk::{gdk, gio, glib};
 use std::{
     cell::{Cell, RefCell},
-    collections::{HashMap, HashSet, VecDeque},
-    path::{Path, PathBuf},
+    collections::{HashMap, HashSet},
+    path::PathBuf,
     rc::Rc,
-    sync::{mpsc, Arc, Mutex},
-    thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    sync::Arc,
 };
 
 pub(crate) struct AppController {

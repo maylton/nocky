@@ -1,6 +1,7 @@
 //! User feedback helpers for `AppController`.
 
-use super::*;
+use super::AppController;
+use crate::app::media::redact_stream_url;
 
 impl AppController {
     pub(crate) fn show_toast(&self, message: &str) {

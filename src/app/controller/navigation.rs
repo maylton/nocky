@@ -1,6 +1,17 @@
 //! Navigation controller methods for `AppController`.
 
-use super::*;
+use super::AppController;
+use crate::{
+    app::state::PlaybackSource,
+    browser::{BrowserEvent, BrowserPlaybackState, BrowserRenderContext, BrowserRoute},
+    config::{AppLanguage, StartupSource},
+    i18n::Message,
+    listening_history,
+    model::Track,
+    youtube::{credited_artists, YouTubeItem},
+};
+use gtk::prelude::*;
+use std::{collections::HashSet, rc::Rc};
 
 impl AppController {
     pub(crate) fn browser_playback_state(&self) -> BrowserPlaybackState {

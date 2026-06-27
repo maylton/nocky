@@ -1,6 +1,21 @@
 //! Visual update helpers for `AppController`.
 
-use super::*;
+use super::AppController;
+use crate::{
+    app::state::PlaybackSource,
+    config::{AppLanguage, BlurMode, VisualTheme},
+    i18n::{self, Message},
+    ui::{
+        footer::{
+            self, footer_full_artwork_size_for_card_height, footer_mode_plan, AdaptiveFooterTier,
+        },
+        widgets::{run_compact_volume_spring, CompactVolumeSpring},
+    },
+    APP_ID,
+};
+use adw::prelude::*;
+use gtk::glib;
+use std::{cell::Cell, rc::Rc, time::Duration};
 
 impl AppController {
     pub(crate) fn tr(&self, message: Message) -> &'static str {

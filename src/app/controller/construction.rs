@@ -1,6 +1,46 @@
 //! Construction helpers for `AppController`.
 
-use super::*;
+use super::AppController;
+use crate::{
+    app::{
+        sidebar::build_sidebar,
+        state::{AppState, PlaybackSource},
+    },
+    background::BackgroundChannel,
+    browser::{BrowserRoute, LibraryBrowser},
+    config::{self, AppLanguage, StartupSource, VisualTheme},
+    i18n::{self, Message},
+    listening_history::{self, ListeningHistory},
+    offline_store::OfflineStore,
+    playback::{
+        queue::{QueueSourceKind, ShuffleNavigator},
+        transition::TransitionClock,
+        PlaybackEngine,
+    },
+    reveal_bounce::RevealBounce,
+    theme,
+    ui::{
+        footer::{build_footer_view, FooterViewParts, FOOTER_ARTWORK_SOURCE_SIZE},
+        player::PlayerView,
+        settings::SettingsPage,
+        widgets::{build_cover, AnimatedPageSwitcher, TopPage},
+    },
+    visual_theme,
+    youtube::{
+        diagnostics as youtube_diagnostics, load_library_cache, YouTubeBridge, YouTubePage,
+        YouTubeSearchResults,
+    },
+    APP_ID, HOME_PLAYER_WIDTH,
+};
+use adw::prelude::*;
+use gtk::glib;
+use std::{
+    cell::{Cell, RefCell},
+    collections::{HashMap, HashSet},
+    rc::Rc,
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 pub(crate) fn build_application(app: &adw::Application) {
     youtube_diagnostics::start_background_checks();

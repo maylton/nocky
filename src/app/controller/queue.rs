@@ -1,6 +1,17 @@
 //! Queue controller methods for `AppController`.
 
-use super::*;
+use super::AppController;
+use crate::{
+    app::state::PlaybackSource,
+    background::BackgroundMessage,
+    browser::BrowserRoute,
+    config::{AppLanguage, StartupSource},
+    model::Track,
+    playback::queue::{QueueEntryId, QueueMedia, QueueSource, QueueSourceKind},
+    youtube::{cache_items_for_browser, youtube_collection_key, YouTubeItem},
+};
+use gtk::prelude::*;
+use std::{path::Path, thread};
 
 impl AppController {
     pub(crate) fn queue_source_kind(source: StartupSource) -> QueueSourceKind {

@@ -1,6 +1,12 @@
 //! Offline download controller methods for `AppController`.
 
-use super::*;
+use super::AppController;
+use crate::{
+    background::BackgroundMessage,
+    offline_store::{download_youtube_track, OfflineStore, OFFLINE_STREAM_REJECTED_PREFIX},
+    youtube::{youtube_collection_cache_key, YouTubeItem},
+};
+use std::thread;
 
 impl AppController {
     pub(crate) fn download_youtube_collection(&self, item: YouTubeItem, playlist: bool) {

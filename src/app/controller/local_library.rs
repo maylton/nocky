@@ -1,6 +1,17 @@
 //! Local library scanning controller methods for `AppController`.
 
-use super::*;
+use super::AppController;
+use crate::{
+    app::{library_state::scanned_library_matches, state::PlaybackSource},
+    background::BackgroundMessage,
+    config::StartupSource,
+    i18n::Message,
+    library,
+    model::{Track, TrackData},
+};
+use adw::prelude::*;
+use gtk::gio;
+use std::{rc::Rc, thread};
 
 impl AppController {
     pub(crate) fn load_saved_library(self: &Rc<Self>) {

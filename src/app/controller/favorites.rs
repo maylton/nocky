@@ -1,6 +1,8 @@
 //! Favorite state helpers for `AppController`.
 
-use super::*;
+use super::AppController;
+use crate::{app::state::PlaybackSource, i18n::Message};
+use gtk::prelude::*;
 
 impl AppController {
     pub(crate) fn toggle_favorite(&self) {

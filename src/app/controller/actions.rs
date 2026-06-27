@@ -1,6 +1,10 @@
 //! Application action wiring for `AppController`.
 
-use super::*;
+use super::AppController;
+use crate::i18n::Message;
+use adw::prelude::*;
+use gtk::gio;
+use std::rc::Rc;
 
 impl AppController {
     pub(crate) fn install_actions(self: &Rc<Self>, app: &adw::Application) {

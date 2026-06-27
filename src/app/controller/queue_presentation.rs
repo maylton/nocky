@@ -1,6 +1,18 @@
 //! Queue presentation controller methods for `AppController`.
 
-use super::*;
+use super::AppController;
+use crate::{
+    config::AppLanguage,
+    playback::queue::{QueuePresentation, QueueSection, QueueSource, QueueSourceKind},
+    ui::widgets::build_cover,
+};
+use adw::prelude::*;
+use gtk::{gdk, glib};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+    time::Duration,
+};
 
 impl AppController {
     pub(crate) fn rebuild_queue_popover(

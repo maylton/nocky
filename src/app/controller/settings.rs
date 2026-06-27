@@ -1,6 +1,14 @@
 //! Settings and onboarding controller methods for `AppController`.
 
-use super::*;
+use super::AppController;
+use crate::{
+    config::{BlurMode, StartupSource},
+    dialogs::{self, SettingsEvent},
+    onboarding,
+};
+use adw::prelude::*;
+use gtk::{gio, glib};
+use std::rc::Rc;
 
 impl AppController {
     pub(crate) fn open_settings_page(&self) {

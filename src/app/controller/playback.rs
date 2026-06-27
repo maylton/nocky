@@ -1,6 +1,30 @@
 //! Playback controller methods for `AppController`.
 
-use super::*;
+use super::AppController;
+use crate::{
+    app::{
+        media::{
+            format_time, mpris_track_id, mpris_youtube_track_id, playback_error_message,
+            redact_stream_url,
+        },
+        state::PlaybackSource,
+    },
+    browser::BrowserRoute,
+    config::VisualTheme,
+    i18n::Message,
+    listening_history::ListeningSource,
+    model::Track,
+    playback::{
+        queue::{queue_end_action, QueueEndAction, QueueEntryId, QueueSource},
+        PlaybackEvent,
+    },
+    youtube::YouTubeItem,
+};
+use gtk::{gio, prelude::*};
+use std::{
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 impl AppController {
     pub(crate) fn play_queue_entry(&self, id: QueueEntryId, autoplay: bool) {

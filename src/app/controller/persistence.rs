@@ -1,6 +1,13 @@
 //! Persistence and history helpers for `AppController`.
 
-use super::*;
+use super::AppController;
+use crate::{
+    listening_history,
+    playback::{queue::QueueSource, session::PlaybackSession},
+    youtube::YouTubeItem,
+};
+use gtk::prelude::*;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 impl AppController {
     pub(crate) fn save_config(&self) {

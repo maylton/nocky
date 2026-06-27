@@ -1,6 +1,23 @@
 //! YouTube controller methods for `AppController`.
 
-use super::*;
+use super::AppController;
+use crate::{
+    background::BackgroundMessage,
+    browser::{BrowserRoute, YouTubeCollectionRoute},
+    config::StartupSource,
+    listening_history,
+    youtube::{
+        self as youtube_domain, cache_items_for_browser, resolve_youtube_collection_item,
+        youtube_collection_cache_key, youtube_collection_key, youtube_home_prefetch_candidates,
+        YouTubeItem, YouTubePageEvent, YouTubeSearchResults, YouTubeStatus,
+    },
+};
+use gtk::prelude::*;
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    sync::{mpsc, Arc, Mutex},
+    thread,
+};
 
 impl AppController {
     pub(crate) fn refresh_youtube_status(&self) {
