@@ -615,4 +615,214 @@ impl AppController {
             }
         }
     }
+
+    pub(crate) fn load_youtube_collection_for_playback(&self, item: YouTubeItem, playlist: bool) {
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            self.show_toast("As dependências do YouTube Music não estão instaladas");
+            return;
+        };
+
+        let request_id = self
+            .youtube_collection_play_request_id
+            .get()
+            .wrapping_add(1);
+        self.youtube_collection_play_request_id.set(request_id);
+
+        if playlist {
+            if !item.browse_id.trim().is_empty() {
+                self.youtube_library
+                    .borrow_mut()
+                    .playlist_loading
+                    .insert(item.browse_id.clone());
+            }
+        } else {
+            self.youtube_library
+                .borrow_mut()
+                .collection_loading
+                .insert(youtube_collection_key("album", &item.title));
+        }
+
+        self.show_toast(if playlist {
+            "Carregando playlist do YouTube Music…"
+        } else {
+            "Carregando álbum do YouTube Music…"
+        });
+
+        let sender = self.background.sender();
+        thread::spawn(move || {
+            let result = if playlist {
+                bridge.playlist(&item)
+            } else {
+                bridge.collection(&item)
+            }
+            .map(|mut items| {
+                cache_items_for_browser(&mut items);
+                items
+            });
+
+            let _ = sender.send(BackgroundMessage::YouTubeCollectionPlaybackLoaded {
+                request_id,
+                item,
+                playlist,
+                result,
+            });
+        });
+    }
+
+    pub(crate) fn play_youtube_collection(&self, item: YouTubeItem, playlist: bool) {
+        let kind = if playlist { "playlist" } else { "album" };
+        let id = if item.browse_id.trim().is_empty() {
+            item.title.to_lowercase()
+        } else {
+            item.browse_id.clone()
+        };
+
+        let items = {
+            let library = self.youtube_library.borrow();
+            if playlist {
+                library
+                    .playlist_tracks
+                    .get(&item.browse_id)
+                    .cloned()
+                    .unwrap_or_default()
+            } else {
+                let key = youtube_collection_key("album", &item.title);
+                library
+                    .collection_tracks
+                    .get(&key)
+                    .cloned()
+                    .unwrap_or_default()
+            }
+        };
+
+        if items.is_empty() {
+            self.load_youtube_collection_for_playback(item, playlist);
+            return;
+        }
+
+        self.listening_history_context
+            .replace(listening_history::PlaybackHistoryContext {
+                kind: kind.to_string(),
+                id,
+                title: item.title.clone(),
+            });
+        self.pending_resume_position_us.set(None);
+        self.resolve_youtube_track(items[0].clone(), items, 0, false);
+    }
+
+    pub(crate) fn set_youtube_favorite_visual_state(&self, active: bool) {
+        self.favorite_icon
+            .set_icon_name(Some("emblem-favorite-symbolic"));
+        self.favorite_icon
+            .set_opacity(if active { 0.98 } else { 0.28 });
+        self.footer_favorite_icon
+            .set_icon_name(Some("emblem-favorite-symbolic"));
+        self.footer_favorite_icon
+            .set_opacity(if active { 0.98 } else { 0.28 });
+
+        for button in [&self.favorite_button, &self.footer_favorite_button] {
+            if active {
+                button.add_css_class("active");
+            } else {
+                button.remove_css_class("active");
+            }
+        }
+    }
+
+    pub(crate) fn current_youtube_item(&self) -> Option<YouTubeItem> {
+        self.youtube_state
+            .borrow()
+            .as_ref()
+            .map(|state| state.item.clone())
+    }
+
+    pub(crate) fn youtube_item_is_liked(&self, video_id: &str) -> bool {
+        self.youtube_library
+            .borrow()
+            .liked
+            .iter()
+            .any(|item| item.video_id == video_id)
+    }
+
+    pub(crate) fn apply_youtube_like_cache(&self, item: &YouTubeItem, liked: bool) {
+        let mut library = self.youtube_library.borrow_mut();
+        library
+            .liked
+            .retain(|candidate| candidate.video_id != item.video_id);
+
+        if liked {
+            let mut stored = item.clone();
+            if stored.result_type.is_empty() {
+                stored.result_type = "song".to_string();
+            }
+            library.liked.insert(0, stored);
+        }
+
+        library.rebuild_collections();
+        if let Err(error) = youtube_domain::save_library_cache(&library) {
+            eprintln!("Could not persist YouTube liked songs: {error}");
+        }
+    }
+
+    pub(crate) fn toggle_youtube_favorite(&self) {
+        let Some(item) = self.current_youtube_item() else {
+            self.show_toast("Nenhuma música do YouTube Music está selecionada");
+            return;
+        };
+        self.toggle_youtube_item_favorite(item);
+    }
+
+    pub(crate) fn toggle_youtube_item_favorite(&self, item: YouTubeItem) {
+        if item.video_id.trim().is_empty() {
+            self.show_toast("Esta música não possui um identificador válido do YouTube");
+            return;
+        }
+
+        if !self.youtube_library.borrow().connected {
+            self.show_toast("Conecte sua conta do YouTube Music para curtir músicas");
+            return;
+        }
+
+        if self
+            .youtube_like_pending
+            .borrow()
+            .contains_key(&item.video_id)
+        {
+            self.show_toast("Aguarde a confirmação da curtida anterior");
+            return;
+        }
+
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            self.show_toast("As dependências do YouTube Music não estão instaladas");
+            return;
+        };
+
+        let request_id = self.youtube_like_request_id.get().wrapping_add(1);
+        self.youtube_like_request_id.set(request_id);
+        self.youtube_like_pending
+            .borrow_mut()
+            .insert(item.video_id.clone(), request_id);
+
+        let liked = !self.youtube_item_is_liked(&item.video_id);
+        self.apply_youtube_like_cache(&item, liked);
+
+        if self
+            .current_youtube_item()
+            .is_some_and(|current| current.video_id == item.video_id)
+        {
+            self.set_youtube_favorite_visual_state(liked);
+        }
+        self.refresh_browser();
+
+        let sender = self.background.sender();
+        thread::spawn(move || {
+            let result = bridge.rate(&item.video_id, liked);
+            let _ = sender.send(BackgroundMessage::YouTubeRatingChanged {
+                request_id,
+                item,
+                liked,
+                result,
+            });
+        });
+    }
 }
