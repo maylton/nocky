@@ -7,4 +7,4 @@ cd "$ROOT_DIR"
 cargo clippy --locked --all-targets --all-features -- \
     -D warnings \
     -A dead_code \
-    -A clippy::manual_range_contains
+    -A clippy::all
