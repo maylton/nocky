@@ -184,12 +184,22 @@ pub(crate) fn entry_row(
 ) -> (gtk::Box, gtk::Button, gtk::Label) {
     let title = gtk::Label::new(Some(text(
         language,
-        "YouTube Music · Fontes de stream",
-        "YouTube Music · Stream sources",
-        "YouTube Music · Fuentes de transmisión",
+        "Fontes de stream",
+        "Stream sources",
+        "Fuentes de transmisión",
     )));
     title.set_xalign(0.0);
     title.add_css_class("heading");
+
+    let subtitle = gtk::Label::new(Some(text(
+        language,
+        "Prioridade dos clientes usados para iniciar e recuperar a reprodução.",
+        "Client priority used to start and recover playback.",
+        "Prioridad de los clientes usados para iniciar y recuperar la reproducción.",
+    )));
+    subtitle.set_xalign(0.0);
+    subtitle.set_wrap(true);
+    subtitle.add_css_class("dim-label");
 
     let summary = gtk::Label::new(Some(&effective_label(policy)));
     summary.set_xalign(0.0);
@@ -199,6 +209,7 @@ pub(crate) fn entry_row(
     let copy = gtk::Box::new(gtk::Orientation::Vertical, 3);
     copy.set_hexpand(true);
     copy.append(&title);
+    copy.append(&subtitle);
     copy.append(&summary);
 
     let button = gtk::Button::with_label(text(language, "Configurar", "Configure", "Configurar"));
@@ -226,8 +237,9 @@ struct DialogState {
 
 impl DialogState {
     fn persist(&self) {
-        save_policy(&self.policy.borrow());
-        let summary = effective_label(&self.policy.borrow());
+        let policy = self.policy.borrow().clone();
+        save_policy(&policy);
+        let summary = effective_label(&policy);
         self.summary.set_text(&summary);
         self.entry_summary.set_text(&summary);
     }
@@ -261,15 +273,33 @@ impl DialogState {
             let up = gtk::Button::from_icon_name("go-up-symbolic");
             up.add_css_class("flat");
             up.set_sensitive(index > 0);
+            up.set_tooltip_text(Some(text(
+                self.language,
+                "Mover para cima",
+                "Move up",
+                "Mover hacia arriba",
+            )));
 
             let down = gtk::Button::from_icon_name("go-down-symbolic");
             down.add_css_class("flat");
             down.set_sensitive(index + 1 < current.order.len());
+            down.set_tooltip_text(Some(text(
+                self.language,
+                "Mover para baixo",
+                "Move down",
+                "Mover hacia abajo",
+            )));
 
             let enabled = gtk::Switch::new();
             enabled.set_active(current.is_enabled(key));
             enabled.set_valign(gtk::Align::Center);
             enabled.set_sensitive(enabled_count > 1 || !current.is_enabled(key));
+            enabled.set_tooltip_text(Some(text(
+                self.language,
+                "Ativar ou desativar esta fonte",
+                "Enable or disable this source",
+                "Activar o desactivar esta fuente",
+            )));
 
             let controls = gtk::Box::new(gtk::Orientation::Horizontal, 4);
             controls.set_valign(gtk::Align::Center);
@@ -293,7 +323,11 @@ impl DialogState {
                 let Some(state) = weak.upgrade() else {
                     return;
                 };
-                if state.policy.borrow_mut().move_source(&key_up, -1) {
+                let changed = {
+                    let mut policy = state.policy.borrow_mut();
+                    policy.move_source(&key_up, -1)
+                };
+                if changed {
                     state.persist();
                     state.rebuild();
                 }
@@ -305,7 +339,11 @@ impl DialogState {
                 let Some(state) = weak.upgrade() else {
                     return;
                 };
-                if state.policy.borrow_mut().move_source(&key_down, 1) {
+                let changed = {
+                    let mut policy = state.policy.borrow_mut();
+                    policy.move_source(&key_down, 1)
+                };
+                if changed {
                     state.persist();
                     state.rebuild();
                 }
@@ -317,25 +355,34 @@ impl DialogState {
                 let Some(state) = weak.upgrade() else {
                     return;
                 };
-                if state
-                    .policy
-                    .borrow_mut()
-                    .set_enabled(&key_enabled, switch.is_active())
-                {
+                let requested = switch.is_active();
+                let changed = {
+                    let mut policy = state.policy.borrow_mut();
+                    policy.set_enabled(&key_enabled, requested)
+                };
+                if changed {
                     state.persist();
                     state.rebuild();
+                    return;
+                }
+
+                let actual = state.policy.borrow().is_enabled(&key_enabled);
+                if switch.is_active() != actual {
+                    switch.set_active(actual);
                 }
             });
         }
     }
 }
 
-pub(crate) fn present_dialog(
-    parent: &adw::ApplicationWindow,
+pub(crate) fn present_dialog<W>(
+    parent: &W,
     initial: YouTubeStreamSources,
     language: AppLanguage,
     entry_summary: gtk::Label,
-) {
+) where
+    W: IsA<gtk::Widget>,
+{
     let dialog = adw::Dialog::builder()
         .title(text(
             language,
@@ -396,7 +443,10 @@ pub(crate) fn present_dialog(
             let Some(state) = weak.upgrade() else {
                 return;
             };
-            state.policy.borrow_mut().reset();
+            {
+                let mut policy = state.policy.borrow_mut();
+                policy.reset();
+            }
             state.persist();
             state.rebuild();
         });
