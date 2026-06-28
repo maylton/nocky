@@ -1,13 +1,22 @@
 # YouTube Music integration roadmap
 
-This roadmap isolates the YouTube Music experience from Nocky's local Home. The local Home, local cards, local routes and offline/local playback model remain unchanged.
+This roadmap isolates the YouTube Music experience from Nocky's local Home. The
+local Home, local cards, local routes and offline/local playback model remain
+unchanged. When the user selects YouTube Music as the Home source, the Home
+route should follow the Android fork's online Home model: chips and section
+headers come from the structured YouTube Music feed.
 
 ## Guardrails
 
 - New work is developed in small stacked branches and draft pull requests.
 - The existing flat `home` helper command remains available for the current synchronization path.
-- Structured YouTube Music content is consumed only by the dedicated **YouTube Music** page.
-- `src/browser.rs` Home composition and local-library routes remain untouched.
+- Structured YouTube Music content is consumed by source-aware YouTube surfaces:
+  YouTube Home, Library, Liked songs and Search.
+- Local-library routes remain untouched unless a phase explicitly targets the
+  local Home.
+- Do not add arbitrary local filters, time-window chips or local history
+  groupings to the YouTube Home. YouTube feed chips are the primary tab/filter
+  model for that surface.
 - Authentication stays browser-session based until an assisted login flow is proven safe and optional.
 - Every network-facing addition requires a cache/fallback path, redacted diagnostics and fixture-based tests.
 - A phase is complete only after its acceptance criteria and validation gate have passed.
@@ -25,10 +34,39 @@ This roadmap isolates the YouTube Music experience from Nocky's local Home. The 
 | 7. Stream-client fallback policy | Complete; authenticated recovery rotation validated | PR #41 / PR #42 |
 | 8. Integration hardening and real-account validation | Complete | PR #42 |
 | 9. Native stream-source preferences | Complete and manually validated | PR #43 |
-| 10. Assisted browser login | Planned, optional | after Phase 9 |
-| 11. Remote library mutations and account profiles | Planned | later |
-| 12. Native InnerTube backend | Research track | later |
-| 13. Release hardening and observability | Planned | before stable release |
+| 10. Android-parity YouTube Home organization | Planned | after Phase 9 |
+| 11. Assisted browser login | Planned, optional | later |
+| 12. Remote library mutations and account profiles | Planned | later |
+| 13. Native InnerTube backend | Research track | later |
+| 14. Release hardening and observability | Planned | before stable release |
+
+## Source and page model
+
+Nocky has one **Home** route, but its content is source-aware:
+
+- **Local Home** uses local library, local listening history, local playlists,
+  local mixes and local privacy controls.
+- **YouTube Music Home** uses the structured YouTube feed contract. It should
+  expose feed chips, then render each returned section with the YouTube title,
+  label, thumbnail, endpoint and continuation semantics.
+- **Library** is for account/library inventory such as playlists, albums,
+  artists and liked content. It should not replace the feed-oriented Home.
+- **Search** is query-driven and can keep category groups, pagination and
+  cached fallback states.
+- **Queue** and **Lyrics** remain playback/task surfaces, not feed tabs.
+
+The Android fork reference is:
+
+- `HomeViewModel.homePage` stores the current structured `HomePage`.
+- `selectedChip` swaps the visible feed by calling the YouTube Home endpoint
+  with the selected chip params.
+- `HomeScreen` renders `ChipsRow(homePage.chips)` first.
+- `HomeScreen` then appends `HomePageSection(index)` for each
+  `homePage.sections` entry and renders `NavigationTitle` from the section's
+  own title, label, thumbnail and endpoint.
+
+Desktop Nocky should translate that model into GTK rather than inventing a
+parallel taxonomy.
 
 ## Phase 1 — Versioned feed contract
 
@@ -198,7 +236,33 @@ Manual validation completed:
 
 The automatic default policy remains reliable without user configuration.
 
-## Phase 10 — Assisted browser login
+## Phase 10 — Android-parity YouTube Home organization
+
+**Goal:** make the desktop YouTube Home feel structurally aligned with the
+Android fork while preserving GTK conventions.
+
+Planned deliverables:
+
+- Render YouTube feed chips at the top of the YouTube Home.
+- Selecting a chip loads the corresponding feed params and preserves the chip
+  list from the root feed.
+- Render each YouTube section using the returned header title, optional label,
+  thumbnail shape hint and endpoint.
+- Keep section continuation/load-more behavior tied to the YouTube endpoint.
+- Treat Quick Picks as a feed/pinned online section, not as a local history
+  filter.
+- Keep Local Home personalized sections separate from the YouTube Home.
+- Add fixture tests for chip selection, section order and header preservation.
+
+Acceptance criteria:
+
+- YouTube Home section headings match the structured feed.
+- Chip selection replaces only the feed sections and can return to the root feed.
+- Local Home history controls do not appear in YouTube Home.
+- Albums, artists, playlists and playable rows keep existing native routing.
+- Narrow-window horizontal usability and keyboard activation remain intact.
+
+## Phase 11 — Assisted browser login
 
 **Goal:** reduce manual cookie-copy friction without turning Nocky into a web wrapper.
 
@@ -212,7 +276,7 @@ Planned deliverables:
 
 This phase requires a separate privacy and packaging review before implementation.
 
-## Phase 11 — Remote library mutations and account profiles
+## Phase 12 — Remote library mutations and account profiles
 
 Planned capabilities:
 
@@ -221,11 +285,11 @@ Planned capabilities:
 - Add/remove playlist tracks with optimistic UI and rollback.
 - Account/channel profile selection and clear active-profile indication.
 
-## Phase 12 — Native InnerTube backend research
+## Phase 13 — Native InnerTube backend research
 
 A direct Rust InnerTube backend remains a research track rather than a forced rewrite. The backend trait is the migration seam. Playback continues to use `yt-dlp + Deno + GStreamer` until signature, `n` and PO-token parity is demonstrated. Endpoints should migrate individually behind fixture-based contract tests while ytmusicapi remains available as fallback.
 
-## Phase 13 — Release hardening and observability
+## Phase 14 — Release hardening and observability
 
 Before a stable release:
 

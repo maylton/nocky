@@ -8,7 +8,7 @@
 
 > Last updated: 2026-06-26  
 > Status legend: ✅ completed · 🟡 in progress · ⬜ planned  
-> Current development priority: **Personalized Home — privacy and recently added**
+> Current development priority: **YouTube Music Home — Android-parity feed sections**
 
 Nocky is a modern Linux music player built with Rust, GTK4 and Libadwaita,
 combining Material 3 Expressive ideas with close integration with the Noctalia
@@ -30,6 +30,8 @@ implemented areas list only the work still required.
 - Keep the compact footer focused on track information and utilities.
 - Respect reduced-motion preferences throughout the application.
 - Keep local-library and YouTube Music behavior clearly separated.
+- Use the Android fork's Home screen as the reference for the YouTube Music
+  Home: chips and section headers come from the structured YouTube feed.
 - Never reserve invisible layout space for collapsed controls.
 - Prevent stale asynchronous results after rapid navigation or track changes.
 - Validate implementation changes with:
@@ -131,10 +133,12 @@ implemented areas list only the work still required.
 
 # Active development
 
-## 1. 🟡 Personalized Home
+## 1. 🟡 Source-aware Home
 
-Listening history and personalized ranking are already implemented. This phase
-now focuses on completing the user-facing history experience.
+Local personalized history is implemented. The active focus is aligning the
+YouTube Music Home with the Android fork: the online Home should be driven by
+YouTube-provided chips, headers, labels, thumbnails and endpoints rather than
+locally invented category filters.
 
 ### Implemented
 
@@ -159,9 +163,16 @@ now focuses on completing the user-facing history experience.
 - ✅ Recently added local albums ordered by filesystem creation/modification time.
 - ✅ Clear-history action.
 - ✅ History privacy controls.
-- Per-section empty states.
+- ✅ Per-section empty states.
 - Better deduplication when metadata differs only slightly.
-- Optional time-window filters such as recent week or recent month.
+- Optional time-window filters for local personalized history, outside the
+  primary YouTube feed.
+- YouTube Music Home should render feed chips from `home_v2`.
+- YouTube Music Home should preserve YouTube section titles, labels,
+  thumbnails and continuation endpoints.
+- YouTube Music Home ordering should follow the feed contract, with only small
+  Nocky-specific pinned sections when they are clearly source-aware.
+- Avoid adding artificial history-window chips to the YouTube Home.
 
 ---
 
