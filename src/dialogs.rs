@@ -7,11 +7,16 @@ use std::rc::Rc;
 fn inherit_visual_theme(parent: &adw::ApplicationWindow, widget: &impl IsA<gtk::Widget>) {
     widget.remove_css_class("theme-noctalia");
     widget.remove_css_class("theme-material-expressive");
-    widget.add_css_class(if parent.has_css_class("theme-material-expressive") {
-        "theme-material-expressive"
+    widget.remove_css_class("theme-frosted-glass");
+
+    if parent.has_css_class("theme-frosted-glass") {
+        widget.add_css_class("theme-material-expressive");
+        widget.add_css_class("theme-frosted-glass");
+    } else if parent.has_css_class("theme-material-expressive") {
+        widget.add_css_class("theme-material-expressive");
     } else {
-        "theme-noctalia"
-    });
+        widget.add_css_class("theme-noctalia");
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

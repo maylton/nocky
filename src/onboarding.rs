@@ -101,7 +101,7 @@ fn copy(language: AppLanguage) -> Copy {
             player_title: "Player",
             player_body: "Escolha o tema visual e o comportamento do footer.",
             progress_title: "Tema visual",
-            progress_body: "Escolha entre a integração visual do Noctalia e o estilo Material 3 Expressive.",
+            progress_body: "Escolha entre a integração visual do Noctalia, o Material 3 Expressive e o tema Frosted Glass.",
             footer_title: "Comportamento do footer",
             footer_body: "O modo Automático evita controles duplicados enquanto o player da Home estiver visível.",
             footer_automatic: "Automático — recomendado",
@@ -154,7 +154,7 @@ fn copy(language: AppLanguage) -> Copy {
             player_title: "Player",
             player_body: "Choose the visual theme and footer behavior.",
             progress_title: "Visual theme",
-            progress_body: "Choose between Noctalia integration and the Material 3 Expressive style.",
+            progress_body: "Choose between Noctalia integration, Material 3 Expressive, and the Frosted Glass theme.",
             footer_title: "Footer behavior",
             footer_body: "Automatic mode avoids duplicate controls while the Home player is visible.",
             footer_automatic: "Automatic — recommended",
@@ -207,7 +207,7 @@ fn copy(language: AppLanguage) -> Copy {
             player_title: "Reproductor",
             player_body: "Elige el tema visual y el comportamiento del footer.",
             progress_title: "Tema visual",
-            progress_body: "Elige entre la integración visual de Noctalia y el estilo Material 3 Expressive.",
+            progress_body: "Elige entre la integración visual de Noctalia, Material 3 Expressive y el tema Frosted Glass.",
             footer_title: "Comportamiento del footer",
             footer_body: "El modo Automático evita controles duplicados mientras el reproductor de Home está visible.",
             footer_automatic: "Automático — recomendado",
@@ -319,6 +319,14 @@ pub fn present<F>(
         .build();
     dialog.set_can_close(false);
     dialog.add_css_class("onboarding-dialog");
+    if parent.has_css_class("theme-frosted-glass") {
+        dialog.add_css_class("theme-material-expressive");
+        dialog.add_css_class("theme-frosted-glass");
+    } else if parent.has_css_class("theme-material-expressive") {
+        dialog.add_css_class("theme-material-expressive");
+    } else {
+        dialog.add_css_class("theme-noctalia");
+    }
 
     let shell = gtk::Box::new(gtk::Orientation::Vertical, 0);
     shell.set_vexpand(true);
@@ -515,10 +523,12 @@ pub fn present<F>(
     stack.add_named(&appearance_page, Some("appearance"));
     let (player_page, player_content) = page_shell(text.player_title, text.player_body);
 
-    let visual_theme = gtk::DropDown::from_strings(&["Noctalia", "Material 3 Expressive"]);
+    let visual_theme =
+        gtk::DropDown::from_strings(&["Noctalia", "Material 3 Expressive", "Frosted Glass"]);
     visual_theme.set_selected(match initial.visual_theme {
         VisualTheme::Noctalia => 0,
         VisualTheme::MaterialExpressive => 1,
+        VisualTheme::FrostedGlass => 2,
     });
     player_content.append(&option_card(
         text.progress_title,
@@ -649,10 +659,10 @@ pub fn present<F>(
                 } else {
                     text.no
                 });
-                summary_progress.set_text(if visual_theme.selected() == 1 {
-                    "Material 3 Expressive"
-                } else {
-                    "Noctalia"
+                summary_progress.set_text(match visual_theme.selected() {
+                    1 => "Material 3 Expressive",
+                    2 => "Frosted Glass",
+                    _ => "Noctalia",
                 });
                 summary_footer.set_text(match footer.selected() {
                     1 => text.footer_full,
@@ -713,10 +723,10 @@ pub fn present<F>(
                     3 => FooterMode::Hidden,
                     _ => FooterMode::Automatic,
                 },
-                visual_theme: if visual_theme.selected() == 1 {
-                    VisualTheme::MaterialExpressive
-                } else {
-                    VisualTheme::Noctalia
+                visual_theme: match visual_theme.selected() {
+                    1 => VisualTheme::MaterialExpressive,
+                    2 => VisualTheme::FrostedGlass,
+                    _ => VisualTheme::Noctalia,
                 },
                 noctalia_theme_sync: noctalia_available && palette_switch.is_active(),
             };

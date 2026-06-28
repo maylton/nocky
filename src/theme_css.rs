@@ -2,6 +2,7 @@
 // manifest. The numeric filename prefix is the cascade order contract.
 
 const NOCTALIA_CSS: &str = include_str!("../assets/themes/noctalia.css");
+const FROSTED_GLASS_CSS: &str = include_str!("../assets/themes/frosted-glass.css");
 
 const MATERIAL_EXPRESSIVE_MODULES: &[(&str, &str)] = &[
     (
@@ -62,6 +63,10 @@ const MATERIAL_EXPRESSIVE_MODULES: &[(&str, &str)] = &[
     ),
 ];
 
+pub(crate) fn frosted_glass_css() -> &'static str {
+    FROSTED_GLASS_CSS
+}
+
 pub(crate) fn combined_theme_css() -> String {
     let material_len = MATERIAL_EXPRESSIVE_MODULES
         .iter()
@@ -108,6 +113,22 @@ mod tests {
         assert!(MATERIAL_EXPRESSIVE_MODULES
             .iter()
             .all(|(_, css)| !css.trim().is_empty()));
+    }
+
+    #[test]
+    fn frosted_glass_keeps_its_overlay_contract() {
+        for required in [
+            ".theme-frosted-glass",
+            ".expressive-header",
+            ".expressive-player-card",
+            ".expressive-footer",
+            ".settings-group",
+        ] {
+            assert!(
+                FROSTED_GLASS_CSS.contains(required),
+                "missing Frosted Glass selector: {required}"
+            );
+        }
     }
 
     #[test]

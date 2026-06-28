@@ -1,6 +1,6 @@
 use crate::{
     artist_index::LocalArtistIndex,
-    config::{AppConfig, AppLanguage, StartupSource, VisualTheme},
+    config::{AppConfig, AppLanguage, StartupSource},
     listening_history::{HistoryActivity, ListeningHistory, ListeningSource, ListeningStats},
     local_mix_cover,
     model::Track,
@@ -2608,8 +2608,8 @@ impl LibraryBrowser {
     ) {
         let language = config.language;
         let copy = home_copy(language);
-        let card_effects = config.visual_theme == VisualTheme::MaterialExpressive
-            && config.expressive_home_card_effects;
+        let card_effects =
+            config.visual_theme.is_expressive() && config.expressive_home_card_effects;
 
         let next_home = gtk::Box::new(gtk::Orientation::Vertical, 22);
         next_home.set_hexpand(true);

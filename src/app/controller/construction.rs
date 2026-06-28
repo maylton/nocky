@@ -232,8 +232,7 @@ impl AppController {
             lyrics,
         } = PlayerView::new(
             config.language,
-            config.expressive_transport_effects
-                && config.visual_theme == VisualTheme::MaterialExpressive,
+            config.expressive_transport_effects && config.visual_theme.is_expressive(),
         );
 
         // A viewport is a hard width constraint; size-request alone is only
@@ -467,8 +466,7 @@ impl AppController {
         } = build_footer_view(
             config.language,
             config.volume,
-            config.expressive_transport_effects
-                && config.visual_theme == VisualTheme::MaterialExpressive,
+            config.expressive_transport_effects && config.visual_theme.is_expressive(),
             &mini_cover.stack,
         );
 
@@ -782,11 +780,11 @@ impl AppController {
         {
             let weak = Rc::downgrade(&controller);
             queue_page_clear_all.connect_clicked(move |_| {
-                if let Some(controller) = weak.upgrade() {
-                    controller.playback_queue_v2.borrow_mut().clear();
-                    controller.queue_v2_pending_entry.set(None);
-                    controller.refresh_queue_page();
-                }
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+                controller.clear_playback_queue();
+                controller.refresh_queue_page();
             });
         }
 

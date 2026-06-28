@@ -16,6 +16,7 @@ PREFIX=""
 INSTALL_DEPS=false
 INSTALL_YOUTUBE=true
 BUILD_ONLY=false
+VERIFY_ONLY=false
 ASSUME_YES=false
 
 usage() {
@@ -32,6 +33,7 @@ Options:
   --system            Install system-wide under /usr/local (requires sudo)
   --prefix PATH       Install under a custom prefix
   --build-only        Build without copying application files
+  --verify            Validate release metadata and assets, then exit
   -y, --yes           Use non-interactive package-manager confirmation
   --version           Show the Nocky version
   -h, --help          Show this help
@@ -61,6 +63,7 @@ while [[ $# -gt 0 ]]; do
       PREFIX="$1"
       ;;
     --build-only) BUILD_ONLY=true ;;
+    --verify) VERIFY_ONLY=true ;;
     -y|--yes) ASSUME_YES=true ;;
     --version) printf "%s %s\n" "$APP_NAME" "$VERSION"; exit 0 ;;
     -h|--help) usage; exit 0 ;;
@@ -74,6 +77,11 @@ case "$MODE" in
   system) PREFIX="/usr/local" ;;
   custom) : ;;
 esac
+
+if $VERIFY_ONLY; then
+  exec "$ROOT_DIR/scripts/verify-release.sh"
+fi
+
 
 run_root() {
   if [[ ${EUID} -eq 0 ]]; then
@@ -223,6 +231,7 @@ APP_DIR="${DATA_DIR}/applications"
 ICON_DIR="${DATA_DIR}/icons/hicolor"
 METAINFO_DIR="${DATA_DIR}/metainfo"
 NOCKY_DATA_DIR="${DATA_DIR}/nocky"
+DOC_DIR="${DATA_DIR}/doc/nocky"
 HELPER_DIR="${NOCKY_DATA_DIR}/helpers"
 RUNTIME_DIR="${NOCKY_DATA_DIR}/runtime"
 
@@ -265,6 +274,9 @@ sed \
   "data/${APP_ID}.desktop" > "$tmp_desktop"
 install_file 0644 "$tmp_desktop" "${APP_DIR}/${APP_ID}.desktop"
 install_file 0644 "data/${APP_ID}.metainfo.xml" "${METAINFO_DIR}/${APP_ID}.metainfo.xml"
+install_file 0644 "README.md" "${DOC_DIR}/README.md"
+install_file 0644 "CHANGELOG.md" "${DOC_DIR}/CHANGELOG.md"
+install_file 0644 "docs/FROSTED_GLASS.md" "${DOC_DIR}/FROSTED_GLASS.md"
 
 icon_count=0
 while IFS= read -r -d '' icon; do
@@ -272,6 +284,12 @@ while IFS= read -r -d '' icon; do
   install_file 0644 "$icon" "${ICON_DIR}/${size_dir}/apps/${APP_ID}.png"
   icon_count=$((icon_count + 1))
 done < <(find "data/icons/hicolor" -type f -path "*/apps/${APP_ID}.png" -print0 | sort -z)
+
+if ((icon_count == 0)); then
+  echo "No application icons were found under data/icons/hicolor." >&2
+  exit 1
+fi
+
 
 if $INSTALL_YOUTUBE; then
   for command_name in python3 curl unzip; do
@@ -327,6 +345,7 @@ ${APP_NAME} ${VERSION} installed successfully.
 Executable: ${BIN_DIR}/${BIN_NAME}
 Desktop entry: ${APP_DIR}/${APP_ID}.desktop
 Icons installed: ${icon_count}
+Documentation: ${DOC_DIR}
 YouTube helper: ${HELPER_DIR}/nocky_youtube.py
 YouTube runtime: $($INSTALL_YOUTUBE && echo installed || echo not-installed)
 

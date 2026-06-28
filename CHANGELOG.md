@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.5.0] - 2026-06-27
+
+### Added
+
+- Frosted Glass as a third visual theme alongside Noctalia and Material Expressive.
+- Floating glass surfaces, matte controls and artwork-derived ambient lighting.
+- Dedicated Frosted Glass documentation covering blur, opacity and compositor behavior.
+- Installer release verification through `./install.sh --verify`.
+- Installed release documentation under `share/doc/nocky`.
+
+### Changed
+
+- Refined header, footer, cards, settings, queue popover and inactive-window states.
+- Kept album-art palette extraction while making Frosted Glass less saturated than Material Expressive.
+- Made Lyrics and Volume footer controls use restrained tonal active states.
+- Updated the GitHub README to display the current 1024 px Nocky branding icon.
+- Synchronized Cargo, Cargo.lock, AppStream, README and installer version metadata.
+
+### Fixed
+
+- Prevented the Home / Lyrics / Queue switcher from inheriting unintended matte borders.
+- Fixed **Clear all** rebuilding the active queue immediately after it was cleared.
+- Prevented the selected Settings action from becoming an opaque black button.
+
+### Known issue
+
+- A tiny contour cusp can remain on the lower border of the main Frosted Glass player card on some GTK/compositor combinations. The unsuccessful experimental overrides were removed and the issue is deferred for a focused rendering fix.
+
 All notable public changes to Nocky are documented here.
 
 ## 0.2.7 — 2026-06-23

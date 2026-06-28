@@ -117,8 +117,7 @@ impl AppController {
     pub(crate) fn apply_compact_volume_expansion(&self) {
         let compact = self.player_bar.has_css_class("footer-mode-compact");
         let expanded = compact && self.compact_volume_expanded.get();
-        let material_expressive =
-            self.config.borrow().visual_theme == VisualTheme::MaterialExpressive;
+        let material_expressive = self.config.borrow().visual_theme.is_expressive();
 
         self.footer_right_controls
             .remove_css_class("volume-expanded");
@@ -199,8 +198,7 @@ impl AppController {
     pub(crate) fn apply_expressive_transport_effects(&self) {
         let enabled = {
             let config = self.config.borrow();
-            config.expressive_transport_effects
-                && config.visual_theme == VisualTheme::MaterialExpressive
+            config.expressive_transport_effects && config.visual_theme.is_expressive()
         };
 
         self.main_transport_motion.set_effects_enabled(enabled);
@@ -208,7 +206,7 @@ impl AppController {
     }
 
     pub(crate) fn apply_progress_style(&self) {
-        let use_m3 = self.config.borrow().visual_theme == VisualTheme::MaterialExpressive;
+        let use_m3 = self.config.borrow().visual_theme.is_expressive();
         let child = if use_m3 { "m3" } else { "classic" };
         self.home_progress_stack.set_visible_child_name(child);
         self.footer_progress_stack.set_visible_child_name(child);
@@ -326,8 +324,7 @@ impl AppController {
 
         self.window.remove_css_class("material-blur-enabled");
         self.window.remove_css_class("material-blur-disabled");
-        let material_blur_enabled =
-            visual_theme == VisualTheme::MaterialExpressive && blur_mode != BlurMode::Off;
+        let material_blur_enabled = visual_theme.is_expressive() && blur_mode != BlurMode::Off;
         self.window.add_css_class(if material_blur_enabled {
             "material-blur-enabled"
         } else {

@@ -23,6 +23,25 @@
   <url type="homepage">https://github.com/maylton/nocky</url>
   <url type="bugtracker">https://github.com/maylton/nocky/issues</url>
   <releases>
+    <release version="0.5.0" date="2026-06-27">
+      <description>
+        <ul>
+          <li>Introduces the Frosted Glass visual theme with floating translucent surfaces, matte controls and artwork-aware ambient colors.</li>
+          <li>Refines focused and inactive window states, queue popovers, footer utilities, settings and cards.</li>
+          <li>Fixes complete queue clearing so playback state and persisted sessions cannot rebuild the queue.</li>
+          <li>Updates release documentation, installer verification and current Nocky branding.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.4.0" date="2026-06-26">
+      <description>
+        <ul>
+          <li>Adds offline YouTube Music collections, resumable downloads and automatic library synchronization.</li>
+          <li>Completes Queue 2.0 playback-state preservation across Local Library and YouTube Music.</li>
+          <li>Improves search, cache freshness, diagnostics, recovery and modular application architecture.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.1" date="2026-06-25">
       <description>
         <ul>

@@ -25,6 +25,17 @@ pub enum VisualTheme {
     #[default]
     Noctalia,
     MaterialExpressive,
+    FrostedGlass,
+}
+
+impl VisualTheme {
+    pub fn is_expressive(self) -> bool {
+        matches!(self, Self::MaterialExpressive | Self::FrostedGlass)
+    }
+
+    pub fn uses_dynamic_palette(self) -> bool {
+        self.is_expressive()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]

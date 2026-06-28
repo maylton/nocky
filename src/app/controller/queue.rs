@@ -136,6 +136,51 @@ impl AppController {
         let _ = self.persist_active_queue_to_source("final");
     }
 
+    // queue-clear-all-fix-v1
+    //
+    // refresh_queue_page() calls ensure_active_queue_v2(). If Local or YouTube
+    // playback remains active after clear(), the queue is rebuilt immediately.
+    // "Clear all" therefore performs a full stop and invalidates restoration
+    // state before refreshing the queue UI.
+    pub(crate) fn clear_playback_queue(&self) {
+        self.maybe_record_listening();
+
+        let _ = self.player.pause();
+        if self.player.is_seekable() {
+            let _ = self.player.seek(0);
+        }
+        self.update_play_icons(false);
+
+        self.playback_source.set(PlaybackSource::None);
+        {
+            let mut state = self.state.borrow_mut();
+            state.current = None;
+            state.playback_queue.clear();
+        }
+        self.youtube_state.borrow_mut().take();
+
+        self.queue_v2_pending_entry.set(None);
+        self.queue_dragged_entry.set(None);
+        self.playback_queue_v2.borrow_mut().clear();
+        self.shuffle_navigation.borrow_mut().clear();
+
+        self.restored_playback_session.replace(None);
+        self.playback_session_restore_attempts.set(0);
+        self.pending_resume_position_us.set(None);
+        self.startup_restore_autoplay.set(None);
+
+        self.mpris
+            .send(crate::playback::mpris::MprisUpdate::Playback(
+                crate::playback::mpris::MprisPlayback::Stopped,
+            ));
+        self.publish_mpris_capabilities();
+
+        // Persist immediately so the checkpoint timer and the next startup
+        // cannot restore the cleared queue or playback session.
+        self.persist_queue_now();
+        self.persist_playback_session_now();
+    }
+
     pub(crate) fn enqueue_browser_media(&self, media: QueueMedia, play_next: bool) {
         let expected = self.active_queue_source.get();
         if media.source.kind() != expected {
