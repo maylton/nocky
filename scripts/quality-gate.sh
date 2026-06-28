@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 section() {
-    printf '\n033[1;34m==> %s\033[0m\n' "$1"
+    printf '\n\033[1;34m==> %s\033[0m\n' "$1"
 }
 
 section "Toolchain"
