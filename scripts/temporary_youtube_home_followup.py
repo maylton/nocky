@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 
+# Applied after the main deterministic patch so Clippy sees the final signature.
 path = Path("src/browser.rs")
 text = path.read_text(encoding="utf-8")
 old = "    fn rebuild_home(\n"
