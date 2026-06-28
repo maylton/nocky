@@ -1,0 +1,834 @@
+/* frosted-glass-distinct-v2
+ *
+ * Frosted Glass keeps Material Expressive motion, responsive geometry,
+ * wavy progress and album-aware palette extraction, but deliberately changes
+ * the visual composition:
+ *
+ * - Material Expressive: solid tonal surfaces and connected planes.
+ * - Frosted Glass: floating translucent islands, refractive edges and album
+ *   colors used as ambient light.
+ *
+ * Real blur is supplied by the compositor. Opaque fallback rules are provided
+ * for Blur Off so transparency never produces an unreadable window.
+ */
+
+/* -------------------------------------------------------------------------
+ * Ambient album aura
+ * ---------------------------------------------------------------------- */
+
+window.theme-frosted-glass .app-shell,
+window.theme-frosted-glass .app-shell:backdrop {
+  background-image:
+    radial-gradient(circle at 8% -8%, alpha(@m3_primary, 0.22), transparent 48%),
+    radial-gradient(circle at 96% 112%, alpha(@m3_tertiary, 0.13), transparent 44%),
+    linear-gradient(145deg, alpha(@m3_surface, 0.08), transparent 58%);
+}
+
+window.theme-frosted-glass .expressive-body,
+window.theme-frosted-glass .expressive-dashboard,
+window.theme-frosted-glass .navigation-rail-revealer {
+  background-color: transparent;
+  background-image: none;
+}
+
+/* -------------------------------------------------------------------------
+ * Floating chrome: visually detached from the window edges
+ * ---------------------------------------------------------------------- */
+
+window.theme-frosted-glass .expressive-header,
+window.theme-frosted-glass .noctalia-header {
+  margin: 12px 14px 8px;
+  min-height: 54px;
+  border-radius: 24px;
+  border: 1px solid alpha(@m3_outline_variant, 0.34);
+  background-image:
+    linear-gradient(to bottom, alpha(@m3_on_surface, 0.095), transparent 40%),
+    radial-gradient(circle at 14% -30%, alpha(@m3_primary, 0.20), transparent 58%);
+  box-shadow:
+    inset 0 1px alpha(@m3_on_surface, 0.09),
+    0 12px 32px alpha(black, 0.18);
+}
+
+window.theme-frosted-glass.material-blur-enabled .expressive-header,
+window.theme-frosted-glass.material-blur-enabled .noctalia-header {
+  background-color: alpha(@m3_surface_container, 0.38);
+}
+
+window.theme-frosted-glass.material-blur-disabled .expressive-header,
+window.theme-frosted-glass.material-blur-disabled .noctalia-header {
+  background-color: @m3_surface_container;
+}
+
+window.theme-frosted-glass searchbar,
+window.theme-frosted-glass .expressive-search-bar {
+  margin: 0 14px 10px;
+  border-radius: 22px;
+  border: 1px solid alpha(@m3_outline_variant, 0.28);
+  background-image:
+    linear-gradient(to bottom, alpha(@m3_on_surface, 0.055), transparent 44%),
+    radial-gradient(circle at 12% -16%, alpha(@m3_primary, 0.14), transparent 54%);
+  box-shadow: 0 8px 24px alpha(black, 0.12);
+}
+
+window.theme-frosted-glass.material-blur-enabled searchbar,
+window.theme-frosted-glass.material-blur-enabled .expressive-search-bar {
+  background-color: alpha(@m3_surface_container_low, 0.30);
+}
+
+window.theme-frosted-glass.material-blur-disabled searchbar,
+window.theme-frosted-glass.material-blur-disabled .expressive-search-bar {
+  background-color: @m3_surface_container_low;
+}
+
+/* -------------------------------------------------------------------------
+ * Main glass islands
+ * ---------------------------------------------------------------------- */
+
+window.theme-frosted-glass .sidebar {
+  margin: 0 0 12px 14px;
+  border-radius: 28px;
+}
+
+window.theme-frosted-glass .library-panel,
+window.theme-frosted-glass .home-section,
+window.theme-frosted-glass .search-section-card,
+window.theme-frosted-glass .collection-page,
+window.theme-frosted-glass .queue2-page {
+  margin: 0 14px 12px;
+  border-radius: 30px;
+}
+
+window.theme-frosted-glass .sidebar,
+window.theme-frosted-glass .library-panel,
+window.theme-frosted-glass .home-section,
+window.theme-frosted-glass .search-section-card,
+window.theme-frosted-glass .collection-page,
+window.theme-frosted-glass .queue2-page {
+  border: 1px solid alpha(@m3_outline_variant, 0.25);
+  background-image:
+    linear-gradient(to bottom, alpha(@m3_on_surface, 0.050), transparent 34%),
+    radial-gradient(circle at 10% -8%, alpha(@m3_primary, 0.10), transparent 52%);
+  box-shadow:
+    inset 0 1px alpha(@m3_on_surface, 0.045),
+    0 12px 32px alpha(black, 0.13);
+}
+
+window.theme-frosted-glass.material-blur-enabled .sidebar,
+window.theme-frosted-glass.material-blur-enabled .library-panel,
+window.theme-frosted-glass.material-blur-enabled .home-section,
+window.theme-frosted-glass.material-blur-enabled .search-section-card,
+window.theme-frosted-glass.material-blur-enabled .collection-page,
+window.theme-frosted-glass.material-blur-enabled .queue2-page {
+  background-color: alpha(@m3_surface_container_low, 0.24);
+}
+
+window.theme-frosted-glass.material-blur-disabled .sidebar,
+window.theme-frosted-glass.material-blur-disabled .library-panel,
+window.theme-frosted-glass.material-blur-disabled .home-section,
+window.theme-frosted-glass.material-blur-disabled .search-section-card,
+window.theme-frosted-glass.material-blur-disabled .collection-page,
+window.theme-frosted-glass.material-blur-disabled .queue2-page {
+  background-color: @m3_surface_container_low;
+}
+
+/* -------------------------------------------------------------------------
+ * Player and content cards
+ * ---------------------------------------------------------------------- */
+
+window.theme-frosted-glass .now-playing-card,
+window.theme-frosted-glass .expressive-player-card {
+  border-radius: 34px;
+  border: 1px solid alpha(@m3_primary, 0.30);
+  background-image:
+    linear-gradient(to bottom, alpha(@m3_on_surface, 0.11), transparent 28%),
+    radial-gradient(circle at 16% -8%, alpha(@m3_primary, 0.22), transparent 52%),
+    radial-gradient(circle at 90% 112%, alpha(@m3_tertiary, 0.11), transparent 46%);
+  box-shadow:
+    inset 0 1px alpha(@m3_on_surface, 0.10),
+    0 18px 42px alpha(black, 0.22);
+}
+
+window.theme-frosted-glass.material-blur-enabled .now-playing-card,
+window.theme-frosted-glass.material-blur-enabled .expressive-player-card {
+  background-color: alpha(@m3_surface_container, 0.42);
+}
+
+window.theme-frosted-glass.material-blur-disabled .now-playing-card,
+window.theme-frosted-glass.material-blur-disabled .expressive-player-card {
+  background-color: @m3_surface_container;
+}
+
+window.theme-frosted-glass .collection-card {
+  border-radius: 24px;
+  border: 1px solid alpha(@m3_outline_variant, 0.22);
+  background-image:
+    linear-gradient(to bottom, alpha(@m3_on_surface, 0.065), transparent 32%),
+    radial-gradient(circle at 12% -12%, alpha(@m3_primary, 0.12), transparent 54%);
+  box-shadow:
+    inset 0 1px alpha(@m3_on_surface, 0.055),
+    0 10px 26px alpha(black, 0.14);
+}
+
+window.theme-frosted-glass.material-blur-enabled .collection-card {
+  background-color: alpha(@m3_surface_container_high, 0.25);
+}
+
+window.theme-frosted-glass.material-blur-disabled .collection-card {
+  background-color: @m3_surface_container_high;
+}
+
+window.theme-frosted-glass .collection-card:hover {
+  border-color: alpha(@m3_primary, 0.38);
+  background-image:
+    linear-gradient(to bottom, alpha(@m3_on_surface, 0.09), transparent 32%),
+    radial-gradient(circle at 12% -12%, alpha(@m3_primary, 0.21), transparent 56%);
+  box-shadow:
+    inset 0 1px alpha(@m3_on_surface, 0.08),
+    0 14px 32px alpha(black, 0.18);
+}
+
+/* -------------------------------------------------------------------------
+ * Floating footer instead of Material's connected bottom shelf
+ * ---------------------------------------------------------------------- */
+
+window.theme-frosted-glass .player-bar,
+window.theme-frosted-glass .expressive-footer {
+  margin: 0 14px 14px;
+  border-radius: 26px;
+  border: 1px solid alpha(@m3_outline_variant, 0.31);
+  background-image:
+    linear-gradient(to top, alpha(@m3_on_surface, 0.070), transparent 46%),
+    radial-gradient(circle at 50% 132%, alpha(@m3_primary, 0.18), transparent 58%);
+  box-shadow:
+    inset 0 1px alpha(@m3_on_surface, 0.07),
+    0 14px 36px alpha(black, 0.18);
+}
+
+window.theme-frosted-glass.material-blur-enabled .player-bar,
+window.theme-frosted-glass.material-blur-enabled .expressive-footer {
+  background-color: alpha(@m3_surface_container_low, 0.40);
+}
+
+window.theme-frosted-glass.material-blur-disabled .player-bar,
+window.theme-frosted-glass.material-blur-disabled .expressive-footer {
+  background-color: @m3_surface_container_low;
+}
+
+/* -------------------------------------------------------------------------
+ * Glass controls: outlined and translucent instead of solid tonal buttons
+ * ---------------------------------------------------------------------- */
+
+window.theme-frosted-glass .header-action-button,
+window.theme-frosted-glass .source-choice-button,
+window.theme-frosted-glass .settings-row-action,
+window.theme-frosted-glass .queue2-page-action,
+window.theme-frosted-glass .home-player-toggle-button {
+  border-radius: 18px;
+  color: @m3_on_surface;
+  background-color: alpha(@m3_surface_container_high, 0.24);
+  background-image:
+    linear-gradient(to bottom, alpha(@m3_on_surface, 0.065), transparent 44%);
+  border: 1px solid alpha(@m3_outline_variant, 0.24);
+  box-shadow:
+    inset 0 1px alpha(@m3_on_surface, 0.055),
+    0 5px 16px alpha(black, 0.09);
+}
+
+window.theme-frosted-glass .header-action-button:hover,
+window.theme-frosted-glass .source-choice-button:hover,
+window.theme-frosted-glass .settings-row-action:hover,
+window.theme-frosted-glass .queue2-page-action:hover,
+window.theme-frosted-glass .home-player-toggle-button:hover {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.50);
+  border-color: alpha(@m3_primary, 0.40);
+  box-shadow:
+    inset 0 1px alpha(@m3_on_primary_container, 0.08),
+    0 8px 22px alpha(black, 0.13);
+}
+
+/* Selected Settings button: album-toned glass, never solid black. */
+window.theme-frosted-glass button.settings-navigation-button:checked,
+window.theme-frosted-glass button.settings-navigation-button:checked:hover,
+window.theme-frosted-glass button.settings-navigation-button:checked:focus,
+window.theme-frosted-glass button.settings-navigation-button:active {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.70);
+  background-image:
+    linear-gradient(to bottom, alpha(@m3_on_primary_container, 0.11), transparent 44%),
+    radial-gradient(circle at 28% 0%, alpha(@m3_primary, 0.24), transparent 66%);
+  border-color: alpha(@m3_primary, 0.46);
+  box-shadow:
+    inset 0 1px alpha(@m3_on_primary_container, 0.10),
+    0 7px 20px alpha(black, 0.13);
+}
+
+/* -------------------------------------------------------------------------
+ * Settings, onboarding and rows
+ * ---------------------------------------------------------------------- */
+
+window.theme-frosted-glass .settings-hero,
+window.theme-frosted-glass .settings-group,
+window.theme-frosted-glass .onboarding-option-card,
+window.theme-frosted-glass .onboarding-warning {
+  border-radius: 28px;
+  border: 1px solid alpha(@m3_outline_variant, 0.27);
+  background-image:
+    linear-gradient(to bottom, alpha(@m3_on_surface, 0.075), transparent 30%),
+    radial-gradient(circle at 10% -10%, alpha(@m3_primary, 0.14), transparent 52%);
+  box-shadow:
+    inset 0 1px alpha(@m3_on_surface, 0.065),
+    0 12px 30px alpha(black, 0.15);
+}
+
+window.theme-frosted-glass.material-blur-enabled .settings-hero,
+window.theme-frosted-glass.material-blur-enabled .settings-group,
+window.theme-frosted-glass.material-blur-enabled .onboarding-option-card,
+window.theme-frosted-glass.material-blur-enabled .onboarding-warning {
+  background-color: alpha(@m3_surface_container, 0.44);
+}
+
+window.theme-frosted-glass.material-blur-disabled .settings-hero,
+window.theme-frosted-glass.material-blur-disabled .settings-group,
+window.theme-frosted-glass.material-blur-disabled .onboarding-option-card,
+window.theme-frosted-glass.material-blur-disabled .onboarding-warning {
+  background-color: @m3_surface_container;
+}
+
+window.theme-frosted-glass .settings-row,
+window.theme-frosted-glass .queue2-row,
+window.theme-frosted-glass .track-row {
+  border-radius: 18px;
+  background-color: alpha(@m3_surface_container_high, 0.22);
+  border: 1px solid alpha(@m3_outline_variant, 0.17);
+}
+
+window.theme-frosted-glass .settings-row:hover,
+window.theme-frosted-glass .queue2-row:hover,
+window.theme-frosted-glass .track-row:hover {
+  background-color: alpha(@m3_primary_container, 0.34);
+  border-color: alpha(@m3_primary, 0.28);
+}
+
+/* -------------------------------------------------------------------------
+ * Floating surfaces
+ * ---------------------------------------------------------------------- */
+
+window.theme-frosted-glass popover.queue-popover > contents,
+popover.queue-popover.theme-frosted-glass > contents,
+window.theme-frosted-glass popover.queue-popover > arrow,
+popover.queue-popover.theme-frosted-glass > arrow {
+  background-color: alpha(@m3_surface_container_high, 0.88);
+  background-image:
+    linear-gradient(to bottom, alpha(@m3_on_surface, 0.085), transparent 32%),
+    radial-gradient(circle at 12% -8%, alpha(@m3_primary, 0.18), transparent 54%);
+  border: 1px solid alpha(@m3_outline_variant, 0.36);
+  box-shadow: 0 20px 48px alpha(black, 0.30);
+}
+
+.settings-dialog.theme-frosted-glass,
+.youtube-settings-dialog.theme-frosted-glass,
+.startup-dialog.theme-frosted-glass,
+.onboarding-dialog.theme-frosted-glass,
+.settings-dialog-shell.theme-frosted-glass {
+  background-color: alpha(@m3_surface_container, 0.90);
+  background-image:
+    linear-gradient(to bottom, alpha(@m3_on_surface, 0.075), transparent 30%),
+    radial-gradient(circle at 10% -6%, alpha(@m3_primary, 0.18), transparent 52%);
+  border: 1px solid alpha(@m3_outline_variant, 0.34);
+  border-radius: 32px;
+  box-shadow: 0 24px 58px alpha(black, 0.32);
+}
+
+/* -------------------------------------------------------------------------
+ * Typography and inactive state
+ * ---------------------------------------------------------------------- */
+
+window.theme-frosted-glass .dim-label {
+  color: alpha(@m3_on_surface, 0.80);
+}
+
+window.theme-frosted-glass:backdrop .expressive-header,
+window.theme-frosted-glass:backdrop .noctalia-header,
+window.theme-frosted-glass:backdrop .sidebar,
+window.theme-frosted-glass:backdrop .library-panel,
+window.theme-frosted-glass:backdrop .home-section,
+window.theme-frosted-glass:backdrop .now-playing-card,
+window.theme-frosted-glass:backdrop .expressive-player-card,
+window.theme-frosted-glass:backdrop .collection-card,
+window.theme-frosted-glass:backdrop .player-bar,
+window.theme-frosted-glass:backdrop .expressive-footer {
+  background-image: none;
+  border-color: alpha(@m3_outline_variant, 0.14);
+  box-shadow: none;
+}
+
+window.theme-frosted-glass button.settings-navigation-button:checked:backdrop {
+  color: alpha(@m3_on_primary_container, 0.84);
+  background-color: alpha(@m3_primary_container, 0.50);
+  background-image: none;
+  border-color: alpha(@m3_primary, 0.25);
+  box-shadow: none;
+}
+
+/* frosted-glass-matte-cards-v1
+ *
+ * Removes the top specular sheen from card surfaces and makes them slightly
+ * less translucent. Album colors remain as soft ambient radial lighting.
+ */
+
+/* Main player cards */
+window.theme-frosted-glass .now-playing-card,
+window.theme-frosted-glass .expressive-player-card {
+  background-image:
+    radial-gradient(circle at 16% -8%, alpha(@m3_primary, 0.18), transparent 54%),
+    radial-gradient(circle at 90% 112%, alpha(@m3_tertiary, 0.09), transparent 48%);
+}
+
+window.theme-frosted-glass.material-blur-enabled .now-playing-card,
+window.theme-frosted-glass.material-blur-enabled .expressive-player-card {
+  background-color: alpha(@m3_surface_container, 0.50);
+}
+
+/* Collection and media cards */
+window.theme-frosted-glass .collection-card {
+  background-image:
+    radial-gradient(circle at 12% -12%, alpha(@m3_primary, 0.10), transparent 56%);
+}
+
+window.theme-frosted-glass.material-blur-enabled .collection-card {
+  background-color: alpha(@m3_surface_container_high, 0.34);
+}
+
+window.theme-frosted-glass .collection-card:hover {
+  background-image:
+    radial-gradient(circle at 12% -12%, alpha(@m3_primary, 0.17), transparent 58%);
+}
+
+/* Settings and onboarding cards */
+window.theme-frosted-glass .settings-hero,
+window.theme-frosted-glass .settings-group,
+window.theme-frosted-glass .onboarding-option-card,
+window.theme-frosted-glass .onboarding-warning {
+  background-image:
+    radial-gradient(circle at 10% -10%, alpha(@m3_primary, 0.11), transparent 54%);
+}
+
+window.theme-frosted-glass.material-blur-enabled .settings-hero,
+window.theme-frosted-glass.material-blur-enabled .settings-group,
+window.theme-frosted-glass.material-blur-enabled .onboarding-option-card,
+window.theme-frosted-glass.material-blur-enabled .onboarding-warning {
+  background-color: alpha(@m3_surface_container, 0.52);
+}
+
+/* Smaller rows and list cards */
+window.theme-frosted-glass .settings-row,
+window.theme-frosted-glass .queue2-row,
+window.theme-frosted-glass .track-row {
+  background-color: alpha(@m3_surface_container_high, 0.30);
+  background-image: none;
+}
+
+window.theme-frosted-glass .settings-row:hover,
+window.theme-frosted-glass .queue2-row:hover,
+window.theme-frosted-glass .track-row:hover {
+  background-color: alpha(@m3_primary_container, 0.40);
+  background-image: none;
+}
+
+/* frosted-glass-focus-matte-controls-v1
+ *
+ * Keeps the inactive window recognizably Frosted Glass instead of removing
+ * album aura, borders and depth entirely. Controls use flatter matte fills
+ * with no top specular sheen.
+ */
+
+/* -------------------------------------------------------------------------
+ * Inactive window: preserve atmosphere, only reduce intensity
+ * ---------------------------------------------------------------------- */
+
+window.theme-frosted-glass:backdrop .app-shell {
+  background-image:
+    radial-gradient(circle at 8% -8%, alpha(@m3_primary, 0.13), transparent 50%),
+    radial-gradient(circle at 96% 112%, alpha(@m3_tertiary, 0.075), transparent 46%);
+}
+
+window.theme-frosted-glass:backdrop .expressive-header,
+window.theme-frosted-glass:backdrop .noctalia-header,
+window.theme-frosted-glass:backdrop searchbar,
+window.theme-frosted-glass:backdrop .expressive-search-bar {
+  background-image:
+    radial-gradient(circle at 14% -24%, alpha(@m3_primary, 0.10), transparent 60%);
+  border-color: alpha(@m3_outline_variant, 0.23);
+  box-shadow: 0 7px 20px alpha(black, 0.09);
+}
+
+window.theme-frosted-glass:backdrop .sidebar,
+window.theme-frosted-glass:backdrop .library-panel,
+window.theme-frosted-glass:backdrop .home-section,
+window.theme-frosted-glass:backdrop .search-section-card,
+window.theme-frosted-glass:backdrop .collection-page,
+window.theme-frosted-glass:backdrop .queue2-page {
+  background-image:
+    radial-gradient(circle at 10% -8%, alpha(@m3_primary, 0.065), transparent 56%);
+  border-color: alpha(@m3_outline_variant, 0.19);
+  box-shadow: 0 7px 22px alpha(black, 0.075);
+}
+
+window.theme-frosted-glass:backdrop .now-playing-card,
+window.theme-frosted-glass:backdrop .expressive-player-card {
+  background-image:
+    radial-gradient(circle at 16% -8%, alpha(@m3_primary, 0.12), transparent 56%),
+    radial-gradient(circle at 90% 112%, alpha(@m3_tertiary, 0.055), transparent 50%);
+  border-color: alpha(@m3_primary, 0.21);
+  box-shadow: 0 9px 26px alpha(black, 0.10);
+}
+
+window.theme-frosted-glass:backdrop .collection-card,
+window.theme-frosted-glass:backdrop .settings-hero,
+window.theme-frosted-glass:backdrop .settings-group,
+window.theme-frosted-glass:backdrop .onboarding-option-card,
+window.theme-frosted-glass:backdrop .onboarding-warning {
+  background-image:
+    radial-gradient(circle at 12% -10%, alpha(@m3_primary, 0.065), transparent 58%);
+  border-color: alpha(@m3_outline_variant, 0.18);
+  box-shadow: 0 6px 18px alpha(black, 0.065);
+}
+
+window.theme-frosted-glass:backdrop .player-bar,
+window.theme-frosted-glass:backdrop .expressive-footer {
+  background-image:
+    radial-gradient(circle at 50% 132%, alpha(@m3_primary, 0.10), transparent 60%);
+  border-color: alpha(@m3_outline_variant, 0.21);
+  box-shadow: 0 8px 24px alpha(black, 0.085);
+}
+
+/* -------------------------------------------------------------------------
+ * Matte controls: no reflective gradients and softer elevation
+ * ---------------------------------------------------------------------- */
+
+window.theme-frosted-glass button,
+.settings-dialog.theme-frosted-glass button,
+.youtube-settings-dialog.theme-frosted-glass button,
+.startup-dialog.theme-frosted-glass button,
+.onboarding-dialog.theme-frosted-glass button {
+  background-image: none;
+  box-shadow:
+    inset 0 0 0 1px alpha(@m3_on_surface, 0.018),
+    0 3px 10px alpha(black, 0.055);
+}
+
+window.theme-frosted-glass .header-action-button,
+window.theme-frosted-glass .header-navigation-button,
+window.theme-frosted-glass .source-choice-button,
+window.theme-frosted-glass .settings-row-action,
+window.theme-frosted-glass .settings-primary-action,
+window.theme-frosted-glass .queue2-page-action,
+window.theme-frosted-glass .home-player-toggle-button,
+window.theme-frosted-glass button.pill {
+  color: @m3_on_surface;
+  background-color: alpha(@m3_surface_container_high, 0.34);
+  background-image: none;
+  border-color: alpha(@m3_outline_variant, 0.22);
+  box-shadow: 0 3px 10px alpha(black, 0.055);
+}
+
+window.theme-frosted-glass .header-action-button:hover,
+window.theme-frosted-glass .header-navigation-button:hover,
+window.theme-frosted-glass .source-choice-button:hover,
+window.theme-frosted-glass .settings-row-action:hover,
+window.theme-frosted-glass .settings-primary-action:hover,
+window.theme-frosted-glass .queue2-page-action:hover,
+window.theme-frosted-glass .home-player-toggle-button:hover,
+window.theme-frosted-glass button.pill:hover {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.45);
+  background-image: none;
+  border-color: alpha(@m3_primary, 0.31);
+  box-shadow: 0 4px 12px alpha(black, 0.07);
+}
+
+window.theme-frosted-glass .header-action-button:active,
+window.theme-frosted-glass .header-navigation-button:active,
+window.theme-frosted-glass .source-choice-button:active,
+window.theme-frosted-glass .settings-row-action:active,
+window.theme-frosted-glass .settings-primary-action:active,
+window.theme-frosted-glass .queue2-page-action:active,
+window.theme-frosted-glass .home-player-toggle-button:active,
+window.theme-frosted-glass button.pill:active {
+  background-color: alpha(@m3_primary_container, 0.54);
+  background-image: none;
+  border-color: alpha(@m3_primary, 0.34);
+  box-shadow: inset 0 1px 3px alpha(black, 0.10);
+}
+
+/* Selected settings control remains visible but fully matte. */
+window.theme-frosted-glass button.settings-navigation-button:checked,
+window.theme-frosted-glass button.settings-navigation-button:checked:hover,
+window.theme-frosted-glass button.settings-navigation-button:checked:focus,
+window.theme-frosted-glass button.settings-navigation-button:active {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.62);
+  background-image: none;
+  border-color: alpha(@m3_primary, 0.36);
+  box-shadow: 0 4px 13px alpha(black, 0.075);
+}
+
+/* Suggested actions retain hierarchy through color, not gloss. */
+window.theme-frosted-glass button.suggested-action,
+.settings-dialog.theme-frosted-glass button.suggested-action,
+.youtube-settings-dialog.theme-frosted-glass button.suggested-action,
+.startup-dialog.theme-frosted-glass button.suggested-action,
+.onboarding-dialog.theme-frosted-glass button.suggested-action {
+  color: @m3_on_primary;
+  background-color: alpha(@m3_primary, 0.78);
+  background-image: none;
+  border-color: alpha(@m3_primary, 0.34);
+  box-shadow: 0 4px 13px alpha(black, 0.08);
+}
+
+window.theme-frosted-glass button.suggested-action:hover,
+.settings-dialog.theme-frosted-glass button.suggested-action:hover,
+.youtube-settings-dialog.theme-frosted-glass button.suggested-action:hover,
+.startup-dialog.theme-frosted-glass button.suggested-action:hover,
+.onboarding-dialog.theme-frosted-glass button.suggested-action:hover {
+  background-color: alpha(@m3_primary, 0.86);
+  background-image: none;
+  box-shadow: 0 5px 15px alpha(black, 0.095);
+}
+
+/* Inactive controls keep their shape instead of going visually flat. */
+window.theme-frosted-glass:backdrop button,
+.settings-dialog.theme-frosted-glass:backdrop button,
+.youtube-settings-dialog.theme-frosted-glass:backdrop button,
+.startup-dialog.theme-frosted-glass:backdrop button,
+.onboarding-dialog.theme-frosted-glass:backdrop button {
+  background-image: none;
+  border-color: alpha(@m3_outline_variant, 0.16);
+  box-shadow: 0 2px 7px alpha(black, 0.035);
+}
+
+window.theme-frosted-glass:backdrop button.settings-navigation-button:checked {
+  color: alpha(@m3_on_primary_container, 0.88);
+  background-color: alpha(@m3_primary_container, 0.48);
+  background-image: none;
+  border-color: alpha(@m3_primary, 0.24);
+  box-shadow: 0 2px 8px alpha(black, 0.04);
+}
+
+/* frosted-glass-switcher-footer-controls-v1
+ *
+ * The previous broad matte-button rule also styled the navigation segments
+ * inside Home / Lyrics / Queue. Restore those segments to transparent hit
+ * targets: only the animated indicator should draw the selected surface.
+ *
+ * Footer Lyrics and Volume remain matte, but gain the same album-toned visual
+ * hierarchy used by Settings and the YouTube resync action.
+ */
+
+/* -------------------------------------------------------------------------
+ * Home / Lyrics / Queue switcher
+ * ---------------------------------------------------------------------- */
+
+window.theme-frosted-glass .animated-page-switcher-button,
+window.theme-frosted-glass .animated-page-switcher-button:hover,
+window.theme-frosted-glass .animated-page-switcher-button:active,
+window.theme-frosted-glass .animated-page-switcher-button.active,
+window.theme-frosted-glass:backdrop .animated-page-switcher-button,
+window.theme-frosted-glass:backdrop .animated-page-switcher-button:hover,
+window.theme-frosted-glass:backdrop .animated-page-switcher-button:active,
+window.theme-frosted-glass:backdrop .animated-page-switcher-button.active {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+window.theme-frosted-glass .animated-page-switcher-button {
+  color: alpha(@m3_on_surface_variant, 0.84);
+}
+
+window.theme-frosted-glass .animated-page-switcher-button:hover {
+  color: @m3_on_surface;
+}
+
+window.theme-frosted-glass .animated-page-switcher-button.active {
+  color: @m3_on_primary_container;
+  font-weight: 720;
+}
+
+window.theme-frosted-glass:backdrop .animated-page-switcher-button {
+  color: alpha(@m3_on_surface_variant, 0.70);
+}
+
+window.theme-frosted-glass:backdrop .animated-page-switcher-button.active {
+  color: alpha(@m3_on_primary_container, 0.78);
+}
+
+/* Preserve an accessibility cue only for actual keyboard focus. */
+window.theme-frosted-glass .animated-page-switcher-button:focus-visible {
+  border: none;
+  outline: none;
+  box-shadow: 0 0 0 2px alpha(@m3_primary, 0.26);
+}
+
+/* -------------------------------------------------------------------------
+ * Footer utility group
+ * ---------------------------------------------------------------------- */
+
+window.theme-frosted-glass .footer-utility-group {
+  background-color: alpha(@m3_surface_container_high, 0.20);
+  background-image: none;
+  border-color: alpha(@m3_outline_variant, 0.16);
+  box-shadow: none;
+}
+
+window.theme-frosted-glass .footer-utility-action,
+window.theme-frosted-glass .footer-lyrics-button {
+  color: alpha(@m3_on_surface_variant, 0.92);
+  background-color: alpha(@m3_surface_container_high, 0.34);
+  background-image: none;
+  border: 1px solid alpha(@m3_outline_variant, 0.20);
+  box-shadow: none;
+}
+
+window.theme-frosted-glass .footer-utility-action:hover,
+window.theme-frosted-glass .footer-lyrics-button:hover {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.46);
+  background-image: none;
+  border-color: alpha(@m3_primary, 0.30);
+  box-shadow: 0 3px 10px alpha(black, 0.055);
+}
+
+window.theme-frosted-glass .footer-utility-action:active,
+window.theme-frosted-glass .footer-lyrics-button:active {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.54);
+  background-image: none;
+  border-color: alpha(@m3_primary, 0.34);
+  box-shadow: inset 0 1px 3px alpha(black, 0.09);
+}
+
+/* Lyrics selected and compact-volume panel open share one tonal active state. */
+window.theme-frosted-glass .footer-lyrics-button:checked,
+window.theme-frosted-glass .footer-lyrics-button:checked:hover,
+window.theme-frosted-glass .footer-utility-action.volume-panel-open,
+window.theme-frosted-glass .footer-utility-action.volume-panel-open:hover {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.62);
+  background-image: none;
+  border-color: alpha(@m3_primary, 0.38);
+  box-shadow: 0 4px 13px alpha(black, 0.075);
+}
+
+/* Keep both utility buttons identifiable when the window loses focus. */
+window.theme-frosted-glass:backdrop .footer-utility-action,
+window.theme-frosted-glass:backdrop .footer-lyrics-button {
+  color: alpha(@m3_on_surface_variant, 0.76);
+  background-color: alpha(@m3_surface_container_high, 0.27);
+  background-image: none;
+  border-color: alpha(@m3_outline_variant, 0.13);
+  box-shadow: none;
+}
+
+window.theme-frosted-glass:backdrop .footer-lyrics-button:checked,
+window.theme-frosted-glass:backdrop .footer-utility-action.volume-panel-open {
+  color: alpha(@m3_on_primary_container, 0.84);
+  background-color: alpha(@m3_primary_container, 0.46);
+  background-image: none;
+  border-color: alpha(@m3_primary, 0.24);
+  box-shadow: none;
+}
+
+/* frosted-glass-queue-popup-density-v1
+ *
+ * Makes the queue popover denser, darker and less album-saturated while
+ * preserving a restrained dynamic-color cue for the active track.
+ */
+
+/* Popup shell and arrow */
+window.theme-frosted-glass popover.queue-popover > contents,
+popover.queue-popover.theme-frosted-glass > contents,
+window.theme-frosted-glass popover.queue-popover > arrow,
+popover.queue-popover.theme-frosted-glass > arrow {
+  color: @m3_on_surface;
+  background-color: alpha(@m3_surface, 0.96);
+  background-image:
+    radial-gradient(circle at 12% -8%, alpha(@m3_primary, 0.035), transparent 62%);
+  border: 1px solid alpha(@m3_outline_variant, 0.26);
+  box-shadow: 0 20px 46px alpha(black, 0.34);
+}
+
+/* Keep internal scroll surfaces visually transparent over the denser shell. */
+window.theme-frosted-glass popover.queue-popover scrolledwindow,
+window.theme-frosted-glass popover.queue-popover viewport,
+popover.queue-popover.theme-frosted-glass scrolledwindow,
+popover.queue-popover.theme-frosted-glass viewport {
+  background-color: transparent;
+  background-image: none;
+}
+
+/* Queue rows: darker, calmer and less saturated. */
+window.theme-frosted-glass popover.queue-popover .queue2-row,
+popover.queue-popover.theme-frosted-glass .queue2-row {
+  color: @m3_on_surface;
+  background-color: alpha(@m3_surface_container_high, 0.78);
+  background-image: none;
+  border-color: alpha(@m3_outline_variant, 0.22);
+  box-shadow: none;
+}
+
+window.theme-frosted-glass popover.queue-popover .queue2-row:hover,
+popover.queue-popover.theme-frosted-glass .queue2-row:hover {
+  background-color: alpha(@m3_surface_container_highest, 0.88);
+  background-image: none;
+  border-color: alpha(@m3_outline_variant, 0.30);
+}
+
+window.theme-frosted-glass popover.queue-popover .queue2-row.active,
+popover.queue-popover.theme-frosted-glass .queue2-row.active {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.42);
+  background-image: none;
+  border-color: alpha(@m3_primary, 0.24);
+}
+
+/* Neutral empty/end states inside the pop-up. */
+window.theme-frosted-glass popover.queue-popover .queue2-state,
+window.theme-frosted-glass popover.queue-popover .queue2-end-state,
+popover.queue-popover.theme-frosted-glass .queue2-state,
+popover.queue-popover.theme-frosted-glass .queue2-end-state {
+  color: alpha(@m3_on_surface_variant, 0.86);
+  background-color: alpha(@m3_surface_container_high, 0.74);
+  background-image: none;
+  border-color: alpha(@m3_outline_variant, 0.24);
+}
+
+/* Slightly calmer drag handles and secondary actions. */
+window.theme-frosted-glass popover.queue-popover button.queue2-drag-handle,
+popover.queue-popover.theme-frosted-glass button.queue2-drag-handle {
+  color: alpha(@m3_on_surface_variant, 0.74);
+  background-color: transparent;
+  background-image: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+window.theme-frosted-glass popover.queue-popover button.queue2-drag-handle:hover,
+popover.queue-popover.theme-frosted-glass button.queue2-drag-handle:hover {
+  color: @m3_on_surface;
+  background-color: alpha(@m3_on_surface_variant, 0.08);
+  background-image: none;
+}
+
+/* Losing focus should not make the pop-up translucent again. */
+window.theme-frosted-glass:backdrop popover.queue-popover > contents,
+popover.queue-popover.theme-frosted-glass:backdrop > contents,
+window.theme-frosted-glass:backdrop popover.queue-popover > arrow,
+popover.queue-popover.theme-frosted-glass:backdrop > arrow {
+  background-color: alpha(@m3_surface, 0.94);
+  background-image: none;
+  border-color: alpha(@m3_outline_variant, 0.20);
+  box-shadow: 0 14px 34px alpha(black, 0.24);
+}

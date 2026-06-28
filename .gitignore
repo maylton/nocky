@@ -19,3 +19,5 @@ stream-cache.json
 .nocky-runtime/
 
 .patch-backups/
+
+.nocky-patch-backups/

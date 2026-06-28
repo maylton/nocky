@@ -17,6 +17,7 @@ const PALETTE_FRAME_MS: u64 = 32;
 
 pub struct VisualThemeManager {
     _provider: gtk::CssProvider,
+    _frosted_provider: gtk::CssProvider,
     palette_provider: gtk::CssProvider,
     current: Cell<VisualTheme>,
     artwork: RefCell<Option<PathBuf>>,
@@ -45,12 +46,23 @@ impl VisualThemeManager {
             gtk::STYLE_PROVIDER_PRIORITY_USER + 80,
         );
 
+        // The frosted layer only paints glass highlights, borders, and depth.
+        // Runtime blur remains authoritative for surface alpha at USER + 96.
+        let frosted_provider = gtk::CssProvider::new();
+        frosted_provider.load_from_string(theme_css::frosted_glass_css());
+        gtk::style_context_add_provider_for_display(
+            &display,
+            &frosted_provider,
+            gtk::STYLE_PROVIDER_PRIORITY_USER + 104,
+        );
+
         let (palette_tx, palette_rx) = mpsc::channel();
         let generation = Arc::new(AtomicU64::new(0));
         let fallback = MaterialPalette::fallback();
 
         let manager = Rc::new(Self {
             _provider: provider,
+            _frosted_provider: frosted_provider,
             palette_provider,
             current: Cell::new(VisualTheme::Noctalia),
             artwork: RefCell::new(None),
@@ -70,8 +82,7 @@ impl VisualThemeManager {
 
             while let Ok((generation, palette)) = palette_rx.try_recv() {
                 let latest = manager.generation.load(Ordering::Acquire);
-                if generation == latest && manager.current.get() == VisualTheme::MaterialExpressive
-                {
+                if generation == latest && manager.current.get().uses_dynamic_palette() {
                     manager.transition_to_palette(palette);
                 }
             }
@@ -88,15 +99,25 @@ impl VisualThemeManager {
     {
         root.remove_css_class("theme-noctalia");
         root.remove_css_class("theme-material-expressive");
-        root.add_css_class(match theme {
-            VisualTheme::Noctalia => "theme-noctalia",
-            VisualTheme::MaterialExpressive => "theme-material-expressive",
-        });
+        root.remove_css_class("theme-frosted-glass");
+
+        match theme {
+            VisualTheme::Noctalia => root.add_css_class("theme-noctalia"),
+            VisualTheme::MaterialExpressive => {
+                root.add_css_class("theme-material-expressive");
+            }
+            VisualTheme::FrostedGlass => {
+                // Frosted Glass intentionally reuses Material geometry, motion,
+                // dynamic album colors, and then adds its own glass overlay.
+                root.add_css_class("theme-material-expressive");
+                root.add_css_class("theme-frosted-glass");
+            }
+        }
         self.current.set(theme);
         self.animations_enabled
             .set(adw::is_animations_enabled(root));
 
-        if theme == VisualTheme::MaterialExpressive {
+        if theme.uses_dynamic_palette() {
             self.request_palette();
         } else {
             self.generation.fetch_add(1, Ordering::AcqRel);
@@ -108,7 +129,7 @@ impl VisualThemeManager {
     pub fn update_artwork(&self, path: Option<&Path>) {
         self.artwork.replace(path.map(Path::to_path_buf));
 
-        if self.current.get() == VisualTheme::MaterialExpressive {
+        if self.current.get().uses_dynamic_palette() {
             self.request_palette();
         }
     }
@@ -150,7 +171,7 @@ impl VisualThemeManager {
             };
 
             if manager.palette_animation_generation.get() != token
-                || manager.current.get() != VisualTheme::MaterialExpressive
+                || !manager.current.get().uses_dynamic_palette()
             {
                 return glib::ControlFlow::Break;
             }

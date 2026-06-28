@@ -356,10 +356,12 @@ fn build_content(
     blur_opacity_row.set_visible(initial.blur_mode == BlurMode::Custom);
     appearance_rows.append(&blur_opacity_row);
 
-    let visual_theme = gtk::DropDown::from_strings(&["Noctalia", "Material 3 Expressive"]);
+    let visual_theme =
+        gtk::DropDown::from_strings(&["Noctalia", "Material 3 Expressive", "Frosted Glass"]);
     visual_theme.set_selected(match initial.visual_theme {
         VisualTheme::Noctalia => 0,
         VisualTheme::MaterialExpressive => 1,
+        VisualTheme::FrostedGlass => 2,
     });
     appearance_rows.append(&dropdown_row(
         tr(Message::M3Progress),
@@ -377,9 +379,8 @@ fn build_content(
     noctalia_row.set_sensitive(noctalia_available);
     appearance_rows.append(&noctalia_row);
 
-    // Expressive controls belong to Appearance
-    // Expressive controls are Material-only
-    let material_expressive = initial.visual_theme == VisualTheme::MaterialExpressive;
+    // Both expressive themes share motion and interaction controls.
+    let expressive_theme = initial.visual_theme.is_expressive();
 
     let expressive_transport = settings_switch(initial.expressive_transport_effects);
     let expressive_transport_row = switch_row(
@@ -395,7 +396,7 @@ fn build_content(
         ),
         &expressive_transport,
     );
-    expressive_transport_row.set_visible(material_expressive);
+    expressive_transport_row.set_visible(expressive_theme);
     appearance_rows.append(&expressive_transport_row);
 
     let expressive_home_cards = settings_switch(initial.expressive_home_card_effects);
@@ -412,7 +413,7 @@ fn build_content(
         ),
         &expressive_home_cards,
     );
-    expressive_home_cards_row.set_visible(material_expressive);
+    expressive_home_cards_row.set_visible(expressive_theme);
     appearance_rows.append(&expressive_home_cards_row);
 
     let resume_playback = settings_switch(initial.resume_playback_on_startup);
@@ -827,15 +828,15 @@ fn build_content(
         let expressive_home_cards_row = expressive_home_cards_row.clone();
 
         visual_theme.connect_selected_notify(move |dropdown| {
-            let material_expressive = dropdown.selected() == 1;
-            expressive_transport_row.set_visible(material_expressive);
-            expressive_home_cards_row.set_visible(material_expressive);
-
-            emit(SettingsEvent::VisualTheme(if material_expressive {
-                VisualTheme::MaterialExpressive
-            } else {
-                VisualTheme::Noctalia
-            }));
+            let theme = match dropdown.selected() {
+                1 => VisualTheme::MaterialExpressive,
+                2 => VisualTheme::FrostedGlass,
+                _ => VisualTheme::Noctalia,
+            };
+            let expressive = theme.is_expressive();
+            expressive_transport_row.set_visible(expressive);
+            expressive_home_cards_row.set_visible(expressive);
+            emit(SettingsEvent::VisualTheme(theme));
         });
     }
 

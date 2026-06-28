@@ -4,7 +4,7 @@
 
 This app is vibe-coded and any improvement suggestion is welcomed, but don't expect much as it's just a free time hobby project =)
 
-> **Status:** Nocky 0.4.0 is a beta release. It consolidates Queue 2.0, synchronized-lyrics and playback-resume improvements, modular UI/theme refactors, localization audits and GTK scrollbar geometry fixes.
+> **Status:** Nocky 0.5.0 is a beta release. It introduces the Frosted Glass visual theme, preserves artwork-aware dynamic colors, refines matte controls and queue surfaces, and fixes complete queue clearing.
 
 <!-- noctalia-inspiration:start -->
 > [!NOTE]
@@ -15,11 +15,15 @@ This app is vibe-coded and any improvement suggestion is welcomed, but don't exp
 > Nocky is an independent, unofficial hobby project. It is not affiliated with, endorsed by, maintained by, or officially connected to the Noctalia project or its development team.
 <!-- noctalia-inspiration:end -->
 <p align="center">
-  <img src="assets/nocky-icon.png" alt="Nocky owl icon" width="180" />
+  <img src="assets/branding/nocky-icon-1024.png" alt="Nocky owl icon" width="180" />
 </p>
 
 ## Highlights
 
+- Frosted Glass theme with floating translucent surfaces and matte controls
+- Three visual identities: Noctalia, Material Expressive and Frosted Glass
+- Artwork-aware dynamic color transitions shared by the expressive themes
+- Independent blur source and glass-opacity controls for Niri and Hyprland
 - Native Rust, GTK4 and libadwaita interface
 - Recursive local music-library scanning
 - Unified local and YouTube Music albums, artists, playlists and liked songs
@@ -32,7 +36,20 @@ This app is vibe-coded and any improvement suggestion is welcomed, but don't exp
 - Automatic LRCLIB lookup
 - MPRIS support for media keys, `playerctl` and desktop shells
 - Optional Noctalia palette integration with live CSS reload
+- Frosted Glass visual theme with compositor-backed blur and album-aware accents
 - Optional YouTube Music catalogue search and automatic account-library synchronization
+
+## Visual themes
+
+Nocky 0.5.0 includes three visual identities:
+
+- **Noctalia** follows the desktop palette and keeps the original shell-oriented appearance.
+- **Material Expressive** uses solid tonal surfaces, expressive motion and colors derived from the current artwork.
+- **Frosted Glass** uses floating translucent islands, matte controls, restrained borders and artwork colors as ambient lighting.
+
+The blur provider is selected independently from the visual theme: custom compositor blur, Noctalia-managed blur or no blur. Nocky never writes compositor configuration. Niri or Hyprland supplies the real blur while Nocky controls GTK surface opacity.
+
+See [the complete Frosted Glass documentation](docs/FROSTED_GLASS.md).
 
 ## YouTube Music integration
 
@@ -191,6 +208,10 @@ See [the complete ecosystem documentation](docs/NOCTALIA-PLUGIN-ECOSYSTEM.md).
 
 Nocky remains an independent project, but it can follow Noctalia's Material color roles. The app watches `~/.config/nocky/theme.css`. Use `assets/nocky.css.template` as a Noctalia template and set its output to that path.
 
+## Frosted Glass theme
+
+Frosted Glass is available as a third visual theme. It reuses the Material 3 Expressive interaction model and dynamic album palette while adding translucent surfaces, highlights, borders and depth. Real blur is supplied by the compositor; Nocky only controls GTK surface transparency. See [docs/FROSTED_GLASS.md](docs/FROSTED_GLASS.md).
+
 ## Project structure
 
 ```text
@@ -229,6 +250,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
 ## Current beta limitations
 
+- A tiny lower-border rasterization artifact may appear on the main Frosted Glass player card with some GTK/compositor combinations.
 - YouTube Music uses an unofficial browser-session integration and can require updates when the service changes.
 - YouTube stream URLs are temporary, although Nocky automatically refreshes rejected or expired streams.
 - YouTube Music mutations are reconciled asynchronously and may be confirmed again during the next library synchronization when remote verification is unavailable.

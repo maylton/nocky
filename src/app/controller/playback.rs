@@ -10,7 +10,6 @@ use crate::{
         state::PlaybackSource,
     },
     browser::BrowserRoute,
-    config::VisualTheme,
     i18n::Message,
     listening_history::ListeningSource,
     model::Track,
@@ -425,8 +424,7 @@ impl AppController {
         self.hero_play_icon.set_icon_name(Some(icon));
         self.player_view
             .set_visualizer_active(playing && self.visualizer.widget().is_visible());
-        let animate_m3 =
-            playing && self.config.borrow().visual_theme == VisualTheme::MaterialExpressive;
+        let animate_m3 = playing && self.config.borrow().visual_theme.is_expressive();
         self.home_wave_progress.set_playing(animate_m3);
         self.footer_progress.set_playing(animate_m3);
 

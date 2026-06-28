@@ -55,4 +55,7 @@ done < <(
         -type f -name '*.sh' -print0
 )
 
+section "Release metadata"
+./scripts/verify-release.sh
+
 section "Quality gate passed"
