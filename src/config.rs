@@ -94,9 +94,6 @@ impl AppLanguage {
 pub const YOUTUBE_STREAM_SOURCE_KEYS: [&str; 6] =
     ["web_music", "web_creator", "tv", "android_vr", "web", "ios"];
 
-pub const YOUTUBE_DEFAULT_STREAM_SOURCE_ORDER: [&str; 5] =
-    ["web_music", "web_creator", "tv", "android_vr", "web"];
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct YouTubeStreamSources {
@@ -161,10 +158,6 @@ impl YouTubeStreamSources {
             .filter(|key| !self.disabled.contains(key))
             .cloned()
             .collect()
-    }
-
-    pub fn effective_order_csv(&self) -> String {
-        self.effective_order().join(",")
     }
 
     pub fn is_enabled(&self, key: &str) -> bool {
@@ -455,7 +448,7 @@ mod tests {
         let sources = YouTubeStreamSources::default();
         assert_eq!(
             sources.effective_order(),
-            YOUTUBE_DEFAULT_STREAM_SOURCE_ORDER
+            ["web_music", "web_creator", "tv", "android_vr", "web"]
                 .into_iter()
                 .map(str::to_string)
                 .collect::<Vec<_>>()
@@ -510,7 +503,7 @@ mod tests {
 
         assert_eq!(
             config.youtube_stream_sources.effective_order(),
-            YOUTUBE_DEFAULT_STREAM_SOURCE_ORDER
+            ["web_music", "web_creator", "tv", "android_vr", "web"]
                 .into_iter()
                 .map(str::to_string)
                 .collect::<Vec<_>>()
