@@ -91,22 +91,11 @@ impl AppLanguage {
     }
 }
 
-pub const YOUTUBE_STREAM_SOURCE_KEYS: [&str; 6] = [
-    "web_music",
-    "web_creator",
-    "tv",
-    "android_vr",
-    "web",
-    "ios",
-];
+pub const YOUTUBE_STREAM_SOURCE_KEYS: [&str; 6] =
+    ["web_music", "web_creator", "tv", "android_vr", "web", "ios"];
 
-pub const YOUTUBE_DEFAULT_STREAM_SOURCE_ORDER: [&str; 5] = [
-    "web_music",
-    "web_creator",
-    "tv",
-    "android_vr",
-    "web",
-];
+pub const YOUTUBE_DEFAULT_STREAM_SOURCE_ORDER: [&str; 5] =
+    ["web_music", "web_creator", "tv", "android_vr", "web"];
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
@@ -483,11 +472,7 @@ mod tests {
                 "tv".to_string(),
                 "ios".to_string(),
             ],
-            disabled: vec![
-                "unknown".to_string(),
-                "web".to_string(),
-                "web".to_string(),
-            ],
+            disabled: vec!["unknown".to_string(), "web".to_string(), "web".to_string()],
         };
 
         assert!(sources.normalize());
