@@ -18,12 +18,12 @@ This roadmap isolates the YouTube Music experience from Nocky's local Home. The 
 | --- | --- | --- |
 | 1. Versioned feed contract | Complete | PR #40 |
 | 2. Native Rust domain model | Complete | PR #40 |
-| 3. Dedicated feed UI | Implemented; card-first rendering, continuation and scroll validated | PR #40 / PR #42 |
+| 3. Dedicated feed UI | Implemented; card-first rendering, continuation, scroll and stale fallback validated | PR #40 / PR #42 |
 | 4. Cache and resilient loading | Complete | PR #40 |
 | 5. Authentication hardening | Complete for manual session import | PR #40 |
 | 6. Broader account-library contract | Structured pages and native collection navigation validated | PR #40 / PR #42 |
-| 7. Stream-client fallback policy | Implemented; real fallback smoke pending | PR #41 |
-| 8. Integration hardening and real-account validation | In progress | PR #42 |
+| 7. Stream-client fallback policy | Implemented; authenticated recovery rotation validated | PR #41 / PR #42 |
+| 8. Integration hardening and real-account validation | In progress; final focus/responsive check pending | PR #42 |
 | 9. Native stream-source preferences | Planned | after Phase 8 |
 | 10. Assisted browser login | Planned, optional | after Phase 9 |
 | 11. Remote library mutations and account profiles | Planned | later |
@@ -68,22 +68,23 @@ Validated with a connected account:
 - Card-first rendering is visible in **Para você**, **Visão geral**, **Biblioteca** and **Curtidas**.
 - Account pages return the expected list, quick-pick, carousel and mixed layouts.
 - Continuation appends new sections and preserves the previous vertical scroll position.
+- Offline requests return the structured cache with `stale: true` and retain usable sections.
 - The local Home remains unchanged.
 
 Still required before completion:
 
-- Validate stale-cache fallback in an offline/failure scenario.
 - Complete narrow-window and keyboard/focus checks.
 
 ## Phase 4 — Cache and resilient loading
 
 **Goal:** keep the online library useful during transient failures.
 
-Delivered:
+Delivered and validated:
 
 - Atomic permission-restricted feed cache.
 - Stale fallback and visible stale state.
 - Synthetic section continuation compatible with the current ytmusicapi API.
+- Cache permissions remain `0600`.
 
 ## Phase 5 — Authentication hardening
 
@@ -110,9 +111,9 @@ Delivered:
 - Explicit unsupported-item feedback rather than silent no-op behavior.
 - Native album, artist and playlist transitions close the YouTube dialog and reveal the routed browser page.
 
-Pending live validation:
+Pending conditional validation:
 
-- Confirm podcast/episode behavior for content returned by the account.
+- Confirm podcast/episode behavior when this content is returned by the connected account.
 - Keep chips non-actionable until a stable helper endpoint is available.
 
 ## Phase 7 — Stream-client fallback policy
@@ -127,16 +128,23 @@ Implemented in PR #41:
 - Redacted diagnostics, selected-client metadata and deterministic tests.
 - Quality Gate execution for stacked pull requests.
 
-Pending validation:
+Validated on the target workstation:
 
-- Exercise at least one real fallback after a rejected or expired stream URL.
-- Confirm Premium and non-authenticated behavior on the target workstation.
+- A real track resolved with an initial client.
+- Forced recovery did not retry the rejected client first.
+- Recovery traversed the configured order and selected a working client.
+- The original stream cache was restored after the smoke test.
+
+Still useful before stable release:
+
+- Confirm behavior without an authenticated account.
+- Confirm behavior for Premium-only content when available.
 
 ## Phase 8 — Integration hardening and real-account validation
 
 **Goal:** close functional gaps before exposing more settings.
 
-Delivered or implemented:
+Delivered and validated:
 
 - Quality Gate workflow runs for stacked `codex/**` pull-request bases.
 - Structured-page events for opening albums and artists.
@@ -144,18 +152,18 @@ Delivered or implemented:
 - Current page state is preserved while collection data loads.
 - Native collection navigation closes the YouTube dialog before revealing the browser route.
 - Continuation rebuilds preserve the previous vertical scroll position.
-- Horizontal action bar remains usable in narrow windows.
-- Card buttons support normal GTK keyboard activation.
+- Horizontal action bar remains usable in narrow windows by design.
+- Card buttons support normal GTK keyboard activation by design.
 - Fixture, Rust and Python tests cover item-action routing and account-page ordering.
 - `scripts/smoke-youtube-structured.sh` validates the connected structured contract without exposing sensitive data.
-- `scripts/smoke-youtube-stale-cache.sh` exercises offline stale fallback.
-- `scripts/smoke-youtube-stream-recovery.sh` exercises forced client rotation and restores the original stream cache.
+- `scripts/smoke-youtube-stale-cache.sh` validated offline stale fallback.
+- `scripts/smoke-youtube-stream-recovery.sh` validated forced client rotation and restored the original stream cache.
+- Local and GitHub Quality Gates pass on the current branch.
 
-Manual acceptance gate still required:
+Final manual acceptance gate:
 
-- Exercise playback recovery/client fallback.
-- Exercise stale-cache fallback.
-- Confirm focus order and narrow-window usability.
+- Confirm focus order and activation with `Tab`, `Shift+Tab`, `Enter` and space.
+- Confirm the action bar and carousels remain usable at the minimum supported window width.
 
 Acceptance criteria:
 
