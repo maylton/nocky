@@ -1,7 +1,19 @@
 use super::{page::SettingsPage as BaseSettingsPage, stream_sources};
-use crate::{config::AppConfig, dialogs::SettingsEvent};
+use crate::{
+    config::{AppConfig, YOUTUBE_DEFAULT_STREAM_SOURCE_ORDER},
+    dialogs::SettingsEvent,
+};
 use adw::prelude::*;
 use std::rc::Rc;
+
+fn effective_summary(config: &AppConfig) -> String {
+    let summary = config.youtube_stream_sources.effective_order_csv();
+    if summary.is_empty() {
+        YOUTUBE_DEFAULT_STREAM_SOURCE_ORDER.join(",")
+    } else {
+        summary
+    }
+}
 
 pub(crate) struct SettingsPage {
     root: gtk::Box,
@@ -16,6 +28,7 @@ impl SettingsPage {
             &initial.youtube_stream_sources,
             initial.language,
         );
+        stream_summary.set_text(&effective_summary(initial));
 
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
         root.set_vexpand(true);
@@ -63,8 +76,7 @@ impl SettingsPage {
     }
 
     pub(crate) fn rebuild(&self, initial: &AppConfig, noctalia_available: bool) {
-        self.stream_summary
-            .set_text(&initial.youtube_stream_sources.effective_order_csv());
+        self.stream_summary.set_text(&effective_summary(initial));
         self.base.rebuild(initial, noctalia_available);
     }
 }
