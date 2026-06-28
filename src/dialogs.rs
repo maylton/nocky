@@ -65,10 +65,8 @@ where
     toolbar.add_top_bar(&adw::HeaderBar::new());
 
     let config = AppConfig::load();
-    let (stream_entry, stream_button, stream_summary) = stream_sources::entry_row(
-        &config.youtube_stream_sources,
-        config.language,
-    );
+    let (stream_entry, stream_button, stream_summary) =
+        stream_sources::entry_row(&config.youtube_stream_sources, config.language);
 
     let host = gtk::Box::new(gtk::Orientation::Vertical, 0);
     host.add_css_class("youtube-settings-host");
