@@ -1390,8 +1390,14 @@ def command_home(payload: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     return _home_suggestions(client, limit)
 
 
-def _feed_cache_key(kind: str, continuation: str = "", section_limit: int = 0) -> str:
-    return f"{kind}:{continuation or '0'}:{section_limit}"
+def _feed_cache_key(
+    kind: str,
+    continuation: str = "",
+    section_limit: int = 0,
+    params: str = "",
+) -> str:
+    params_key = hashlib.sha1(params.encode("utf-8")).hexdigest()[:12] if params else "root"
+    return f"{kind}:{params_key}:{continuation or '0'}:{section_limit}"
 
 
 def _library_method(client: Any, name: str, limit: int, **kwargs: Any) -> Any:
@@ -1414,25 +1420,46 @@ def command_home_v2(payload: dict[str, Any]) -> dict[str, Any]:
     if not _load_session().get("headers"):
         raise RuntimeError("Connect a YouTube Music browser session first")
     continuation = str(payload.get("continuation") or "").strip()
+    params = _text(payload.get("params"))
     try:
         offset = max(0, int(continuation or 0))
     except ValueError as error:
         raise RuntimeError("Invalid YouTube Music feed continuation") from error
     section_limit = max(1, min(12, int(payload.get("section_limit") or 6)))
-    cache_key = _feed_cache_key("home", continuation, section_limit)
+    cache_key = _feed_cache_key("home", continuation, section_limit, params)
     client = _create_client(authenticated=True)
 
     try:
         fetch_limit = max(12, min(36, offset + section_limit + 1))
-        try:
-            rows = client.get_home(limit=fetch_limit)
-        except TypeError:
-            rows = client.get_home()
+        if params:
+            try:
+                rows = client.get_home(limit=fetch_limit, params=params)
+            except TypeError:
+                try:
+                    rows = client.get_home(params=params)
+                except TypeError as error:
+                    raise RuntimeError(
+                        "The installed ytmusicapi version does not support YouTube Home chip params"
+                    ) from error
+        else:
+            try:
+                rows = client.get_home(limit=fetch_limit)
+            except TypeError:
+                rows = client.get_home()
         page = build_structured_home(
             rows,
             offset=offset,
             section_limit=section_limit,
+            selected_chip_params=params,
         )
+        if params and not page.get("chips"):
+            root = load_cached_page(
+                _home_feed_cache_path(),
+                _feed_cache_key("home", "", section_limit, ""),
+                allow_stale=True,
+            )
+            if root is not None:
+                page["chips"] = root.get("chips") or []
         save_cached_page(_home_feed_cache_path(), cache_key, page)
         return page
     except Exception as error:

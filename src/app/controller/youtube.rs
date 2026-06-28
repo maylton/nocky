@@ -534,17 +534,20 @@ impl AppController {
         });
     }
 
-    pub(crate) fn load_youtube_home_page(&self, continuation: String) {
+    pub(crate) fn load_youtube_home_page(&self, continuation: String, params: String) {
         let Some(bridge) = self.youtube_bridge.clone() else {
             self.youtube_page
                 .show_error("YouTube Music runtime is missing. Reinstall with --install-youtube.");
             return;
         };
         let append = !continuation.is_empty();
+        let filtered = !params.is_empty();
         self.youtube_page.set_loading(
             true,
             if append {
                 "Carregando mais recomendações..."
+            } else if filtered {
+                "Carregando seleção do YouTube Music..."
             } else {
                 "Carregando seu feed do YouTube Music..."
             },
@@ -552,7 +555,10 @@ impl AppController {
         let sender = self.background.sender();
         thread::spawn(move || {
             let result = bridge
-                .home_page((!continuation.is_empty()).then_some(continuation.as_str()))
+                .home_page(
+                    (!continuation.is_empty()).then_some(continuation.as_str()),
+                    (!params.is_empty()).then_some(params.as_str()),
+                )
                 .map(|mut page| {
                     cache_home_page_covers(&mut page);
                     page
@@ -603,8 +609,11 @@ impl AppController {
             };
 
             match event {
-                YouTubePageEvent::LoadHome { continuation } => {
-                    self.load_youtube_home_page(continuation);
+                YouTubePageEvent::LoadHome {
+                    continuation,
+                    params,
+                } => {
+                    self.load_youtube_home_page(continuation, params);
                 }
                 YouTubePageEvent::LoadLibraryOverview => {
                     self.load_youtube_library_overview();

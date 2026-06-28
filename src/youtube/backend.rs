@@ -7,7 +7,11 @@ use super::{YouTubeBridge, YouTubeHomePage, YouTubeItem, YouTubeLibrarySnapshot,
 /// trait allows a future native InnerTube backend without changing page logic.
 pub trait YouTubeMusicBackend {
     fn status(&self) -> Result<YouTubeStatus, String>;
-    fn home_page(&self, continuation: Option<&str>) -> Result<YouTubeHomePage, String>;
+    fn home_page(
+        &self,
+        continuation: Option<&str>,
+        params: Option<&str>,
+    ) -> Result<YouTubeHomePage, String>;
     fn library_overview(&self) -> Result<YouTubeHomePage, String>;
     fn sync_library(&self) -> Result<YouTubeLibrarySnapshot, String>;
     fn search(&self, query: &str, filter: &str) -> Result<Vec<YouTubeItem>, String>;
@@ -20,8 +24,12 @@ impl YouTubeMusicBackend for YouTubeBridge {
         YouTubeBridge::status(self)
     }
 
-    fn home_page(&self, continuation: Option<&str>) -> Result<YouTubeHomePage, String> {
-        YouTubeBridge::home_page(self, continuation)
+    fn home_page(
+        &self,
+        continuation: Option<&str>,
+        params: Option<&str>,
+    ) -> Result<YouTubeHomePage, String> {
+        YouTubeBridge::home_page(self, continuation, params)
     }
 
     fn library_overview(&self) -> Result<YouTubeHomePage, String> {

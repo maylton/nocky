@@ -35,6 +35,7 @@ pub struct YouTubeHomePage {
     pub version: u32,
     pub generated_at: u64,
     pub stale: bool,
+    pub selected_chip_params: String,
     pub chips: Vec<YouTubeHomeChip>,
     pub sections: Vec<YouTubeHomeSection>,
     pub continuation: String,
@@ -57,6 +58,9 @@ impl YouTubeHomePage {
         self.stale |= incoming.stale;
         if self.chips.is_empty() {
             self.chips = incoming.chips;
+        }
+        if self.selected_chip_params.is_empty() {
+            self.selected_chip_params = incoming.selected_chip_params;
         }
 
         for mut section in incoming.sections {
@@ -130,6 +134,7 @@ mod tests {
             r#"{
                 "version": 2,
                 "stale": true,
+                "selected_chip_params": "mood-energy",
                 "sections": [{
                     "id": "albums",
                     "title": "Albums",
@@ -142,6 +147,7 @@ mod tests {
 
         assert_eq!(page.version, 2);
         assert!(page.stale);
+        assert_eq!(page.selected_chip_params, "mood-energy");
         assert_eq!(page.item_count(), 1);
     }
 }

@@ -31,7 +31,7 @@ use std::{
 };
 
 pub(crate) use collections::{resolve_youtube_collection_item, youtube_home_prefetch_candidates};
-pub(crate) use feed::YouTubeHomePage;
+pub(crate) use feed::{YouTubeHomeChip, YouTubeHomePage};
 pub(crate) use routing::{youtube_item_action, YouTubeItemAction};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -866,6 +866,7 @@ pub enum YouTubePageEvent {
     LoadPlaylists,
     LoadHome {
         continuation: String,
+        params: String,
     },
     LoadLibraryOverview,
     Activate {
@@ -936,11 +937,16 @@ impl YouTubeBridge {
         self.run("home", json!({ "limit": 8 }))
     }
 
-    pub fn home_page(&self, continuation: Option<&str>) -> Result<YouTubeHomePage, String> {
+    pub fn home_page(
+        &self,
+        continuation: Option<&str>,
+        params: Option<&str>,
+    ) -> Result<YouTubeHomePage, String> {
         self.run(
             "home_v2",
             json!({
                 "continuation": continuation.unwrap_or_default(),
+                "params": params.unwrap_or_default(),
                 "section_limit": 6,
             }),
         )
@@ -1368,6 +1374,7 @@ impl YouTubePage {
             home_button.connect_clicked(move |_| {
                 let _ = sender.send(YouTubePageEvent::LoadHome {
                     continuation: String::new(),
+                    params: String::new(),
                 });
             });
         }
@@ -1410,6 +1417,7 @@ impl YouTubePage {
                     YouTubeItemAction::Continue => {
                         let _ = page.event_tx.send(YouTubePageEvent::LoadHome {
                             continuation: item.params.clone(),
+                            params: item.browse_id.clone(),
                         });
                     }
                     YouTubeItemAction::Play => {
@@ -1504,7 +1512,16 @@ impl YouTubePage {
             if append {
                 current.merge_page(page);
             } else {
-                *current = page;
+                if page.chips.is_empty()
+                    && !page.selected_chip_params.is_empty()
+                    && !current.chips.is_empty()
+                {
+                    let mut page = page;
+                    page.chips = current.chips.clone();
+                    *current = page;
+                } else {
+                    *current = page;
+                }
             }
         }
         let snapshot = self.structured_page.borrow().clone();
@@ -1531,15 +1548,14 @@ impl YouTubePage {
         if !snapshot.chips.is_empty() {
             let chip_summary = YouTubeItem {
                 result_type: "chips".to_string(),
-                title: snapshot
-                    .chips
-                    .iter()
-                    .map(|chip| chip.title.as_str())
-                    .collect::<Vec<_>>()
-                    .join("  •  "),
+                title: "YouTube Music filters".to_string(),
                 ..YouTubeItem::default()
             };
-            self.results.append(&youtube_row(&chip_summary));
+            self.results.append(&youtube_chip_row(
+                &snapshot.chips,
+                &snapshot.selected_chip_params,
+                self.event_tx.clone(),
+            ));
             rows.push(chip_summary);
         }
 
@@ -1578,6 +1594,7 @@ impl YouTubePage {
                 result_type: "continuation".to_string(),
                 title: "Carregar mais recomendações".to_string(),
                 subtitle: "Continuar o feed do YouTube Music".to_string(),
+                browse_id: snapshot.selected_chip_params.clone(),
                 params: snapshot.continuation.clone(),
                 ..YouTubeItem::default()
             };
@@ -1652,9 +1669,6 @@ fn youtube_row(item: &YouTubeItem) -> gtk::ListBoxRow {
     if item.result_type == "section" {
         return youtube_section_row(item);
     }
-    if item.result_type == "chips" {
-        return youtube_chip_summary_row(item);
-    }
     let icon_name = match item.result_type.as_str() {
         "playlist" => "view-list-symbolic",
         "album" => "media-optical-symbolic",
@@ -1728,18 +1742,59 @@ fn youtube_section_row(item: &YouTubeItem) -> gtk::ListBoxRow {
     row
 }
 
-fn youtube_chip_summary_row(item: &YouTubeItem) -> gtk::ListBoxRow {
-    let label = gtk::Label::new(Some(&item.title));
-    label.set_xalign(0.0);
-    label.set_wrap(true);
-    label.set_margin_top(8);
-    label.set_margin_bottom(8);
-    label.set_margin_start(12);
-    label.set_margin_end(12);
-    label.add_css_class("dim-label");
+fn youtube_chip_row(
+    chips: &[YouTubeHomeChip],
+    selected_params: &str,
+    event_tx: Sender<YouTubePageEvent>,
+) -> gtk::ListBoxRow {
+    let rail = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    rail.set_margin_top(8);
+    rail.set_margin_bottom(8);
+    rail.set_margin_start(12);
+    rail.set_margin_end(12);
+    rail.add_css_class("youtube-chip-row");
+
+    let root = gtk::Button::with_label("Tudo");
+    root.add_css_class("pill");
+    if selected_params.trim().is_empty() {
+        root.add_css_class("suggested-action");
+    }
+    {
+        let event_tx = event_tx.clone();
+        root.connect_clicked(move |_| {
+            let _ = event_tx.send(YouTubePageEvent::LoadHome {
+                continuation: String::new(),
+                params: String::new(),
+            });
+        });
+    }
+    rail.append(&root);
+
+    for chip in chips {
+        let button = gtk::Button::with_label(&chip.title);
+        button.add_css_class("pill");
+        if !chip.params.is_empty() && chip.params == selected_params {
+            button.add_css_class("suggested-action");
+        }
+        let params = chip.params.clone();
+        let event_tx = event_tx.clone();
+        button.connect_clicked(move |_| {
+            let _ = event_tx.send(YouTubePageEvent::LoadHome {
+                continuation: String::new(),
+                params: params.clone(),
+            });
+        });
+        rail.append(&button);
+    }
+
+    let scroll = gtk::ScrolledWindow::new();
+    scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Never);
+    scroll.set_overlay_scrolling(true);
+    scroll.set_child(Some(&rail));
+
     let row = gtk::ListBoxRow::new();
     row.set_activatable(false);
-    row.set_child(Some(&label));
+    row.set_child(Some(&scroll));
     row
 }
 

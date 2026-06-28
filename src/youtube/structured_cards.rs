@@ -139,6 +139,7 @@ fn dispatch_item_action(
         YouTubeItemAction::Continue => {
             let _ = event_tx.send(YouTubePageEvent::LoadHome {
                 continuation: item.params.clone(),
+                params: item.browse_id.clone(),
             });
         }
         YouTubeItemAction::Play => {

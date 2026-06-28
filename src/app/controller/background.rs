@@ -120,7 +120,7 @@ impl AppController {
                                 self.prefetch_youtube_playlist_cache();
                                 self.prefetch_home_artist_profiles(false);
                             }
-                            self.load_youtube_home_page(String::new());
+                            self.load_youtube_home_page(String::new(), String::new());
                         } else {
                             self.youtube_library.borrow_mut().clear();
                             clear_library_cache();
@@ -140,7 +140,7 @@ impl AppController {
                             library.synced = false;
                         }
                         let _ = self.sync_youtube_library(true, false);
-                        self.load_youtube_home_page(String::new());
+                        self.load_youtube_home_page(String::new(), String::new());
                         self.show_toast("Conta do YouTube Music conectada");
                     }
                     Err(error) => {
