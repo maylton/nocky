@@ -36,7 +36,6 @@
   background-color: @m3_primary;
   border-color: @m3_primary;
 }
-/* organized_settings_milestone_v1 */
 
 .theme-material-expressive .settings-content {
   padding: 4px 6px 12px 6px;
@@ -45,7 +44,7 @@
 .theme-material-expressive .settings-hero {
   min-height: 96px;
   padding: 16px 18px;
-  border-radius: 30px;
+  border-radius: 32px;
   color: @m3_on_primary_container;
   background-color: @m3_primary_container;
   background-image:
@@ -82,7 +81,7 @@
 .theme-material-expressive .settings-version-badge {
   min-height: 30px;
   padding: 0 11px;
-  border-radius: 15px;
+  border-radius: 16px;
   color: @m3_on_tertiary_container;
   background-color: @m3_tertiary_container;
   border: 1px solid alpha(@m3_tertiary, 0.22);
@@ -107,7 +106,7 @@
 .theme-material-expressive .settings-group-icon-container {
   min-width: 44px;
   min-height: 44px;
-  border-radius: 17px;
+  border-radius: 16px;
   color: @m3_on_secondary_container;
   background-color: @m3_secondary_container;
 }
@@ -142,17 +141,16 @@
   min-height: 68px;
   margin: 2px 0;
   padding: 10px 12px;
-  border-radius: 19px;
+  border-radius: 20px;
   background-color: @m3_surface_container;
   border-color: alpha(@m3_outline, 0.13);
 }
 
 .theme-material-expressive .settings-group .settings-surface-row:hover {
-  border-radius: 23px;
+  border-radius: 24px;
   background-color: @m3_surface_container_high;
   border-color: alpha(@m3_primary, 0.25);
 }
-/* material_final_polish_v1 */
 
 /* Settings/dialog backdrop: use a tonal scrim instead of a plain black field. */
 .theme-material-expressive.settings-dialog,
@@ -187,7 +185,7 @@ window.theme-material-expressive.startup-dialog {
   box-shadow: none;
 }
 
-/* Thin down the card stroke/spacing a touch. */
+/* Compact card treatment used by secondary collection contexts. */
 window.theme-material-expressive .collection-card {
   padding: 7px;
   border-radius: 22px;
@@ -202,7 +200,7 @@ window.theme-material-expressive .collection-card-button:hover .collection-card 
 
 window.theme-material-expressive .collection-artwork,
 window.theme-material-expressive .expressive-artwork {
-  border-radius: 17px;
+  border-radius: 16px;
   box-shadow: 0 4px 10px alpha(black, 0.15);
 }
 
@@ -253,9 +251,8 @@ window.theme-material-expressive .expressive-search-bar revealer {
   background-color: @m3_surface_container_high;
   background-image: none;
 }
-/* material_final_polish_v2 */
 
-/* Keep cards exactly as they were before the mistaken card-thinning patch. */
+/* Primary collection cards keep a roomier hierarchy. */
 window.theme-material-expressive .collection-card {
   padding: 9px;
   border-radius: 24px;
@@ -270,7 +267,7 @@ window.theme-material-expressive .collection-card-button:hover .collection-card 
 
 window.theme-material-expressive .collection-artwork,
 window.theme-material-expressive .expressive-artwork {
-  border-radius: 19px;
+  border-radius: 20px;
   box-shadow: 0 5px 14px alpha(black, 0.18);
 }
 
@@ -289,7 +286,7 @@ window.theme-material-expressive.startup-dialog {
 .theme-material-expressive.settings-dialog .material-dialog-toolbar,
 .theme-material-expressive.youtube-settings-dialog .material-dialog-toolbar,
 .theme-material-expressive.startup-dialog .material-dialog-toolbar {
-  border-radius: 30px;
+  border-radius: 32px;
   color: @m3_on_surface;
   background-color: @m3_surface;
   border: 1px solid alpha(@m3_outline, 0.20);
@@ -385,7 +382,6 @@ window.theme-material-expressive .expressive-search-bar box {
   border: none;
   box-shadow: none;
 }
-/* material_visualizer_single_outline_v1 */
 
 /* Keep only one contour around the visualizer card. */
 window.theme-material-expressive .player-visualizer-surface {

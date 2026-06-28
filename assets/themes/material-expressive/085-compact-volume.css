@@ -1,5 +1,3 @@
-/* nocky_css_compact_volume_module_phase2f_v2 */
-
 /*
  * Compact footer volume component
  * -------------------------------
@@ -33,18 +31,14 @@ window.theme-material-expressive
   button.footer-utility-action.volume-panel-open {
   color: @m3_primary;
   background-color: alpha(@m3_primary, 0.14);
-  border-radius: 21px;
+  border-radius: 20px;
 }
-
-/* footer_volume_adjustment_model_v2: GtkAdjustment has no CSS gadget. */
 
 window.theme-material-expressive
   .footer-volume-revealer {
   min-width: 0;
   padding: 0;
 }
-
-/* nocky_md3_volume_slider_right_v1 */
 
 /*
  * Material 3 compact volume control:
@@ -69,8 +63,6 @@ window.theme-material-expressive
   padding-right: 8px;
 }
 
-/* nocky_compact_volume_light_spring_v1 */
-
 /*
  * The geometry spring is driven frame-by-frame in Rust. CSS only adds a
  * subtle tonal response while the utility card overshoots and settles.
@@ -84,19 +76,16 @@ window.theme-material-expressive
     0 0 0 2px alpha(@m3_primary, 0.09);
 }
 
-/* nocky_compact_volume_capsule_geometry_v2 */
-
 /*
  * Keep only the outer capsule geometry.
  *
- * Button dimensions are intentionally left to the previous compact-volume
- * implementation. Forcing them to 42×42 px widened the collapsed card and
- * recreated the empty space that had already been fixed.
+ * Button dimensions stay with the fixed layout code so the collapsed card
+ * keeps its compact width.
  */
 window.theme-material-expressive
   .footer-mode-compact
   .footer-utility-group {
-  border-radius: 26px;
+  border-radius: 28px;
   background-clip: padding-box;
 }
 
@@ -106,10 +95,8 @@ window.theme-material-expressive
 window.theme-material-expressive
   .footer-mode-compact
   .footer-utility-group.volume-spring-active {
-  border-radius: 26px;
+  border-radius: 28px;
 }
-
-/* nocky_custom_md3_volume_canvas_v2 */
 
 /*
  * The visible MD3 volume control is custom-drawn. GtkAdjustment stores the
@@ -129,10 +116,8 @@ window.theme-material-expressive
 window.theme-material-expressive
   .footer-volume-md3-canvas:hover {
   background-color: alpha(@m3_primary, 0.035);
-  border-radius: 21px;
+  border-radius: 20px;
 }
-
-/* nocky_compact_volume_optical_edge_alignment_v1 */
 
 /*
  * Optical alignment for the collapsed compact utility card.

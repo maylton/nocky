@@ -262,9 +262,6 @@ window.theme-material-expressive
   padding: 0;
 }
 
-/* footer_volume_adjustment_model_v2: visible volume is custom-drawn. */
-/* remove_compact_footer_transport_v1 */
-
 window.theme-material-expressive
   .footer-mode-compact
   .footer-utility-group {
@@ -280,7 +277,6 @@ window.theme-material-expressive
   padding: 0;
   margin: 0;
 }
-/* material_expressive_navigation_v1 */
 
 window.theme-material-expressive .expressive-header {
   min-height: 58px;
@@ -315,8 +311,6 @@ window.theme-material-expressive .header-action-button {
     border-radius 180ms ease,
     background-color 180ms ease;
 }
-
-/* nocky_footer_full_metadata_visual_density_v7 */
 
 /*
  * Full mode intentionally uses a roomier information hierarchy.

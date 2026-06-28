@@ -140,7 +140,6 @@ window.theme-material-expressive .expressive-empty-action {
   background-color: @m3_primary;
   box-shadow: 0 6px 16px alpha(@m3_primary, 0.22);
 }
-/* material_search_bar_separator_cleanup_v1 */
 
 /*
  * Keep the collapsed SearchBar dimensionless. The previous container border
@@ -159,7 +158,6 @@ window.theme-material-expressive .expressive-search-bar {
 window.theme-material-expressive .expressive-search-entry {
   margin: 6px 12px 0 12px;
 }
-/* material_expressive_library_cards_v1 */
 
 /* Section hierarchy */
 window.theme-material-expressive .home-section {
@@ -423,7 +421,6 @@ window.theme-material-expressive .playlist-create-action {
   color: @m3_on_primary;
   background-color: @m3_primary;
 }
-/* material_search_surfaces_sidebar_collapse_v1 */
 
 /* A collapsed navigation rail must be dimensionless. */
 window.theme-material-expressive

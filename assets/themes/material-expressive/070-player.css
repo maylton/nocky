@@ -1,13 +1,10 @@
-/* nocky_css_transport_consolidation_phase2a_v1 */
 
 /*
  * Expressive transport component
  * ------------------------------
  *
- * This replaces the historical corrective layers that accumulated while the
- * PixelPlayer-inspired controls were being tuned. Rust owns button geometry
- * and click animation inside fixed slots. CSS owns only the stable visual
- * states.
+ * Rust owns button geometry and click animation inside fixed slots. CSS owns
+ * only the stable visual states.
  */
 
 /* Shared reset: fixed-slot animation must never affect outer allocation. */
@@ -203,8 +200,6 @@ window.theme-material-expressive
     0 5px 14px alpha(black, 0.15),
     0 0 0 2px alpha(@m3_primary, 0.30);
 }
-
-/* nocky_player_transport_icon_compatibility_phase2e_v1 */
 
 window.theme-material-expressive
   .expressive-transport-enabled.expressive-transport-main

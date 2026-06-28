@@ -1,6 +1,6 @@
 /*
  * Material 3 Expressive foundation.
- * Dynamic artwork colors and the complete player redesign come next.
+ * Core color roles and player hierarchy shared by the theme modules.
  */
 
 @define-color m3_primary #b9c3ff;
@@ -93,7 +93,6 @@ window.theme-material-expressive .hero-artist,
 window.theme-material-expressive .time-label {
   color: @m3_on_surface_variant;
 }
-/* material_expressive_player_v1 */
 
 @define-color m3_primary_container #303969;
 @define-color m3_on_primary_container #dce1ff;
@@ -288,7 +287,6 @@ window.theme-material-expressive .player-lyrics-surface {
 window.theme-material-expressive .player-visualizer-surface {
   padding: 2px 6px;
 }
-/* material_expressive_footer_v1 */
 
 window.theme-material-expressive .expressive-footer {
   border: 1px solid alpha(@m3_outline, 0.24);
@@ -366,5 +364,3 @@ window.theme-material-expressive .footer-skip-control {
   color: @m3_on_secondary_container;
   background-color: @m3_secondary_container;
 }
-
-/* nocky_css_footer_cascade_cleanup_phase2d_v4: dead footer declarations pruned */

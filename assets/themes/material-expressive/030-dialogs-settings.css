@@ -102,7 +102,6 @@ window.theme-material-expressive
   background-color: @m3_surface_container_highest;
   border-color: alpha(@m3_primary, 0.34);
 }
-/* material_expressive_remaining_interface_v1 */
 
 /* Dialog surfaces */
 .theme-material-expressive.settings-dialog,
@@ -179,7 +178,7 @@ window.theme-material-expressive
 .theme-material-expressive dropdown.settings-dropdown > button,
 .theme-material-expressive .settings-row-action {
   min-height: 42px;
-  border-radius: 19px;
+  border-radius: 20px;
   color: @m3_on_surface;
   background-color: @m3_surface_container_high;
   border: 1px solid alpha(@m3_outline, 0.19);
@@ -256,7 +255,7 @@ window.theme-material-expressive
 /* Startup choice dialog */
 .theme-material-expressive .startup-choice-group {
   padding: 8px;
-  border-radius: 26px;
+  border-radius: 28px;
   background-color: @m3_surface_container_low;
   border: 1px solid alpha(@m3_outline, 0.16);
 }
@@ -272,7 +271,7 @@ window.theme-material-expressive
 }
 
 .theme-material-expressive .source-choice-button:hover {
-  border-radius: 27px;
+  border-radius: 28px;
   background-color: @m3_surface_container_highest;
   border-color: alpha(@m3_primary, 0.32);
 }
@@ -333,7 +332,7 @@ window.theme-material-expressive
 .theme-material-expressive dropdown > button,
 .theme-material-expressive combobox > button {
   min-height: 42px;
-  border-radius: 19px;
+  border-radius: 20px;
   color: @m3_on_surface;
   background-color: @m3_surface_container_high;
   border: 1px solid alpha(@m3_outline, 0.18);
@@ -352,7 +351,7 @@ window.theme-material-expressive
 .theme-material-expressive textview,
 .theme-material-expressive textview text {
   min-height: 42px;
-  border-radius: 19px;
+  border-radius: 20px;
   color: @m3_on_surface;
   caret-color: @m3_primary;
   background-color: @m3_surface_container_high;
