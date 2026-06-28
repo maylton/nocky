@@ -97,10 +97,24 @@ jobs:
       - name: Run complete quality gate
         if: steps.pending.outputs.apply == 'true'
         shell: bash
-        run: bash ./scripts/quality-gate.sh
+        run: |
+          set +e
+          bash ./scripts/quality-gate.sh > quality-gate.log 2>&1
+          status=$?
+          tail -n 160 quality-gate.log
+          exit "$status"
+
+      - name: Upload quality gate log
+        if: always() && steps.pending.outputs.apply == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr46-quality-gate-log
+          path: quality-gate.log
+          if-no-files-found: ignore
+          retention-days: 1
 
       - name: Commit validated hardening
-        if: steps.pending.outputs.apply == 'true'
+        if: steps.pending.outputs.apply == 'true' && success()
         shell: bash
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
