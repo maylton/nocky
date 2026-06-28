@@ -2,16 +2,14 @@ use crate::config::{AppConfig, AppLanguage, YouTubeStreamSources};
 use adw::prelude::*;
 use std::{cell::RefCell, rc::Rc};
 
-const KEYS: [&str; 6] = [
-    "web_music",
-    "web_creator",
-    "tv",
-    "android_vr",
-    "web",
-    "ios",
-];
+const KEYS: [&str; 6] = ["web_music", "web_creator", "tv", "android_vr", "web", "ios"];
 
-fn text(language: AppLanguage, pt: &'static str, en: &'static str, es: &'static str) -> &'static str {
+fn text(
+    language: AppLanguage,
+    pt: &'static str,
+    en: &'static str,
+    es: &'static str,
+) -> &'static str {
     match language {
         AppLanguage::Portuguese => pt,
         AppLanguage::English => en,
@@ -112,12 +110,7 @@ pub(crate) fn entry_row(
     copy.append(&title);
     copy.append(&summary);
 
-    let button = gtk::Button::with_label(text(
-        language,
-        "Configurar",
-        "Configure",
-        "Configurar",
-    ));
+    let button = gtk::Button::with_label(text(language, "Configurar", "Configure", "Configurar"));
     button.add_css_class("suggested-action");
     button.set_valign(gtk::Align::Center);
 
