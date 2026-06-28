@@ -1,12 +1,11 @@
 use super::{page::SettingsPage as BaseSettingsPage, stream_sources};
 use crate::{config::AppConfig, dialogs::SettingsEvent};
 use adw::prelude::*;
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
 pub(crate) struct SettingsPage {
     root: gtk::Box,
     base: Rc<BaseSettingsPage>,
-    config: RefCell<AppConfig>,
     stream_summary: gtk::Label,
 }
 
@@ -27,7 +26,6 @@ impl SettingsPage {
         let page = Rc::new(Self {
             root,
             base,
-            config: RefCell::new(initial.clone()),
             stream_summary,
         });
 
@@ -44,7 +42,6 @@ impl SettingsPage {
                     return;
                 };
                 let config = AppConfig::load();
-                page.config.replace(config.clone());
                 stream_sources::present_dialog(
                     &parent,
                     config.youtube_stream_sources,
@@ -66,7 +63,6 @@ impl SettingsPage {
     }
 
     pub(crate) fn rebuild(&self, initial: &AppConfig, noctalia_available: bool) {
-        self.config.replace(initial.clone());
         self.stream_summary
             .set_text(&initial.youtube_stream_sources.effective_order_csv());
         self.base.rebuild(initial, noctalia_available);
