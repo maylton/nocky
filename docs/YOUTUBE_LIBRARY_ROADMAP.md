@@ -34,7 +34,7 @@ headers come from the structured YouTube Music feed.
 | 7. Stream-client fallback policy | Complete; authenticated recovery rotation validated | PR #41 / PR #42 |
 | 8. Integration hardening and real-account validation | Complete | PR #42 |
 | 9. Native stream-source preferences | Complete and manually validated | PR #43 |
-| 10. Android-parity YouTube Home organization | Planned | after Phase 9 |
+| 10. Android-parity YouTube Home organization | Implemented; real-chip manual validation pending | PR #46 |
 | 11. Assisted browser login | Planned, optional | later |
 | 12. Remote library mutations and account profiles | Planned | later |
 | 13. Native InnerTube backend | Research track | later |
@@ -241,18 +241,29 @@ The automatic default policy remains reliable without user configuration.
 **Goal:** make the desktop YouTube Home feel structurally aligned with the
 Android fork while preserving GTK conventions.
 
-Planned deliverables:
+Implemented in PR #46:
 
 - Render YouTube feed chips at the top of the YouTube Home.
-- Selecting a chip loads the corresponding feed params and preserves the chip
-  list from the root feed.
+- Extract localized chip titles and browse params from the Web InnerTube Home
+  response before `ytmusicapi` flattens the page into section rows.
+- Selecting a chip loads the corresponding `FEmusic_home` browse params and
+  preserves the chip list from the root feed.
 - Render each YouTube section using the returned header title, optional label,
   thumbnail shape hint and endpoint.
-- Keep section continuation/load-more behavior tied to the YouTube endpoint.
+- Keep section continuation/load-more behavior tied to the selected YouTube
+  Home params.
 - Treat Quick Picks as a feed/pinned online section, not as a local history
   filter.
 - Keep Local Home personalized sections separate from the YouTube Home.
-- Add fixture tests for chip selection, section order and header preservation.
+- Add fixture tests for chip extraction, selection request bodies,
+  continuation params, section order and header preservation.
+
+Manual validation pending:
+
+- Confirm the connected account returns more than the root **Tudo** chip.
+- Select every returned chip and confirm the section feed changes.
+- Return to **Tudo** and confirm the root feed and chip list are restored.
+- Confirm filtered load-more requests remain on the selected chip.
 
 Acceptance criteria:
 

@@ -250,6 +250,87 @@ def _endpoint(section: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def _walk_dicts(value: Any):
+    if isinstance(value, dict):
+        yield value
+        for child in value.values():
+            yield from _walk_dicts(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _walk_dicts(child)
+
+
+def find_inner_tube_home_section_list(source: Any) -> dict[str, Any]:
+    candidates: list[tuple[int, dict[str, Any]]] = []
+    for node in _walk_dicts(source):
+        renderer = node.get("sectionListRenderer")
+        if not isinstance(renderer, dict):
+            continue
+        header = renderer.get("header") if isinstance(renderer.get("header"), dict) else {}
+        chip_cloud = (
+            header.get("chipCloudRenderer")
+            if isinstance(header.get("chipCloudRenderer"), dict)
+            else {}
+        )
+        chips = chip_cloud.get("chips") if isinstance(chip_cloud.get("chips"), list) else []
+        contents = renderer.get("contents") if isinstance(renderer.get("contents"), list) else []
+        score = (1000 if chips else 0) + len(contents)
+        candidates.append((score, renderer))
+    return max(candidates, key=lambda candidate: candidate[0])[1] if candidates else {}
+
+
+def _chip_browse_endpoint(renderer: dict[str, Any]) -> dict[str, Any]:
+    for key in ("navigationEndpoint", "onSelectedCommand", "serviceEndpoint"):
+        endpoint = renderer.get(key)
+        if not isinstance(endpoint, dict):
+            continue
+        for endpoint_key in ("browseEndpoint", "browseSectionListReloadEndpoint"):
+            browse = endpoint.get(endpoint_key)
+            if isinstance(browse, dict):
+                return browse
+    return {}
+
+
+def extract_inner_tube_home_chips(source: Any) -> list[dict[str, str]]:
+    section_list = find_inner_tube_home_section_list(source)
+    header = section_list.get("header") if isinstance(section_list.get("header"), dict) else {}
+    chip_cloud = (
+        header.get("chipCloudRenderer")
+        if isinstance(header.get("chipCloudRenderer"), dict)
+        else {}
+    )
+    candidates = chip_cloud.get("chips") if isinstance(chip_cloud.get("chips"), list) else []
+    if not candidates:
+        candidates = [
+            node
+            for node in _walk_dicts(source)
+            if isinstance(node.get("chipCloudChipRenderer"), dict)
+        ]
+
+    output: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        renderer = candidate.get("chipCloudChipRenderer")
+        if not isinstance(renderer, dict):
+            continue
+        title = _text(renderer.get("text") or renderer.get("title"))
+        endpoint = _chip_browse_endpoint(renderer)
+        params = _text(endpoint.get("params"))
+        if not title or not params or params in seen:
+            continue
+        seen.add(params)
+        output.append(
+            {
+                "title": title,
+                "browse_id": _text(endpoint.get("browseId") or endpoint.get("browse_id")),
+                "params": params,
+            }
+        )
+    return output
+
+
 def _chips(source: Any) -> list[dict[str, str]]:
     candidates: Any = []
     if isinstance(source, dict):

@@ -1,0 +1,102 @@
+from __future__ import annotations
+
+import sys
+import unittest
+from pathlib import Path
+from unittest import mock
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "helpers"))
+
+import nocky_youtube as helper
+
+
+class FakeClient:
+    def __init__(self, response):
+        self.response = response
+        self.calls = []
+
+    def _send_request(self, endpoint, body, additional_params=None):
+        self.calls.append((endpoint, dict(body), additional_params))
+        return self.response
+
+
+class YouTubeHomeChipTests(unittest.TestCase):
+    def test_filtered_home_uses_web_browse_params_and_parser(self):
+        response = {
+            "contents": {
+                "singleColumnBrowseResultsRenderer": {
+                    "tabs": [
+                        {
+                            "tabRenderer": {
+                                "content": {
+                                    "sectionListRenderer": {
+                                        "contents": [{"musicCarouselShelfRenderer": {}}]
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+        client = FakeClient(response)
+        parsed = [{"title": "Energy", "contents": [{"title": "Song"}]}]
+        with (
+            mock.patch.object(helper, "ytmusic_parse_mixed_content", return_value=parsed),
+            mock.patch.object(helper, "ytmusic_get_continuations", None),
+        ):
+            rows, raw = helper._inner_tube_home_rows(client, "mood-energy", 6)
+
+        self.assertEqual(rows, parsed)
+        self.assertIs(raw, response)
+        self.assertEqual(client.calls[0][0], "browse")
+        self.assertEqual(
+            client.calls[0][1],
+            {"browseId": "FEmusic_home", "params": "mood-energy"},
+        )
+
+    def test_filtered_home_continuation_reuses_the_same_params(self):
+        response = {
+            "contents": {
+                "singleColumnBrowseResultsRenderer": {
+                    "tabs": [
+                        {
+                            "tabRenderer": {
+                                "content": {
+                                    "sectionListRenderer": {
+                                        "contents": [{"musicCarouselShelfRenderer": {}}],
+                                        "continuations": [{"nextContinuationData": {"continuation": "next"}}],
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+        client = FakeClient(response)
+
+        def continuations(section_list, key, remaining, request_func, parser):
+            request_func({"continuation": "next"})
+            self.assertEqual(key, "sectionListContinuation")
+            self.assertEqual(remaining, 5)
+            return [{"title": "More", "contents": []}]
+
+        with (
+            mock.patch.object(
+                helper,
+                "ytmusic_parse_mixed_content",
+                return_value=[{"title": "First", "contents": []}],
+            ),
+            mock.patch.object(helper, "ytmusic_get_continuations", side_effect=continuations),
+        ):
+            rows, _raw = helper._inner_tube_home_rows(client, "mood-relax", 6)
+
+        self.assertEqual([row["title"] for row in rows], ["First", "More"])
+        self.assertEqual(client.calls[1][1]["params"], "mood-relax")
+        self.assertEqual(client.calls[1][2], {"continuation": "next"})
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -13,6 +13,8 @@ sys.path.insert(0, str(ROOT / "helpers"))
 from nocky_youtube_feed import (  # noqa: E402
     build_library_overview,
     build_structured_home,
+    extract_inner_tube_home_chips,
+    find_inner_tube_home_section_list,
     load_cached_page,
     save_cached_page,
 )
@@ -39,6 +41,72 @@ class StructuredHomeTests(unittest.TestCase):
             "Your shows",
         ])
         self.assertEqual([chip["title"] for chip in page["chips"]], ["Energize", "Relax"])
+
+    def test_extracts_real_inner_tube_chip_cloud(self) -> None:
+        response = {
+            "contents": {
+                "singleColumnBrowseResultsRenderer": {
+                    "tabs": [
+                        {
+                            "tabRenderer": {
+                                "content": {
+                                    "sectionListRenderer": {
+                                        "header": {
+                                            "chipCloudRenderer": {
+                                                "chips": [
+                                                    {
+                                                        "chipCloudChipRenderer": {
+                                                            "isSelected": True,
+                                                            "text": {"runs": [{"text": "All"}]},
+                                                            "navigationEndpoint": {
+                                                                "browseEndpoint": {
+                                                                    "browseId": "FEmusic_home"
+                                                                }
+                                                            },
+                                                        }
+                                                    },
+                                                    {
+                                                        "chipCloudChipRenderer": {
+                                                            "isSelected": False,
+                                                            "text": {"runs": [{"text": "Energize"}]},
+                                                            "navigationEndpoint": {
+                                                                "browseEndpoint": {
+                                                                    "browseId": "FEmusic_home",
+                                                                    "params": "mood-energy",
+                                                                }
+                                                            },
+                                                        }
+                                                    },
+                                                    {
+                                                        "chipCloudChipRenderer": {
+                                                            "isSelected": False,
+                                                            "text": {"runs": [{"text": "Relax"}]},
+                                                            "navigationEndpoint": {
+                                                                "browseEndpoint": {
+                                                                    "browseId": "FEmusic_home",
+                                                                    "params": "mood-relax",
+                                                                }
+                                                            },
+                                                        }
+                                                    },
+                                                ]
+                                            }
+                                        },
+                                        "contents": [{"musicCarouselShelfRenderer": {}}],
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+        section_list = find_inner_tube_home_section_list(response)
+        self.assertIn("header", section_list)
+        chips = extract_inner_tube_home_chips(response)
+        self.assertEqual([chip["title"] for chip in chips], ["Energize", "Relax"])
+        self.assertEqual([chip["params"] for chip in chips], ["mood-energy", "mood-relax"])
+        self.assertEqual(chips[0]["browse_id"], "FEmusic_home")
 
     def test_deduplicates_items_without_flattening_sections(self) -> None:
         page = build_structured_home(self.fixture, section_limit=10)
