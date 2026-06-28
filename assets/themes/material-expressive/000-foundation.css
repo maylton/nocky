@@ -1,6 +1,6 @@
 /*
  * Material 3 Expressive foundation.
- * Dynamic artwork colors and the complete player redesign come next.
+ * Core color roles and player hierarchy shared by the theme modules.
  */
 
 @define-color m3_primary #b9c3ff;
@@ -13,6 +13,8 @@
 @define-color m3_on_surface #e3e2e9;
 @define-color m3_on_surface_variant #c6c5d0;
 @define-color m3_outline #90909b;
+@define-color m3_outline_variant #46464f;
+@define-color m3_error #ffb4ab;
 
 window.theme-material-expressive,
 window.theme-material-expressive > toastoverlay,
@@ -58,7 +60,7 @@ window.theme-material-expressive .media-control,
 window.theme-material-expressive .card-icon-button,
 window.theme-material-expressive .footer-control {
   border-radius: 18px;
-  transition: background-color 180ms ease;
+  transition: background-color 180ms ease-out;
 }
 
 window.theme-material-expressive .media-control:hover,
@@ -91,7 +93,6 @@ window.theme-material-expressive .hero-artist,
 window.theme-material-expressive .time-label {
   color: @m3_on_surface_variant;
 }
-/* material_expressive_player_v1 */
 
 @define-color m3_primary_container #303969;
 @define-color m3_on_primary_container #dce1ff;
@@ -135,7 +136,7 @@ window.theme-material-expressive .player-eyebrow {
 
 window.theme-material-expressive .player-header-actions {
   padding: 2px;
-  border-radius: 19px;
+  border-radius: 20px;
   background-color: alpha(@m3_surface, 0.30);
 }
 
@@ -181,14 +182,14 @@ window.theme-material-expressive .player-artwork {
 window.theme-material-expressive .player-metadata-surface {
   min-height: 92px;
   padding: 13px 15px;
-  border-radius: 26px;
+  border-radius: 28px;
   border: 1px solid alpha(@m3_primary, 0.24);
 }
 
 window.theme-material-expressive .player-track-title {
   font-size: 1.32rem;
   font-weight: 850;
-  letter-spacing: -0.35px;
+  letter-spacing: 0;
 }
 
 window.theme-material-expressive .player-artist {
@@ -205,7 +206,7 @@ window.theme-material-expressive .player-album {
 window.theme-material-expressive .player-favorite-action {
   min-width: 38px;
   min-height: 38px;
-  border-radius: 19px;
+  border-radius: 20px;
 }
 
 
@@ -238,18 +239,18 @@ window.theme-material-expressive .player-transport-controls {
 window.theme-material-expressive .player-primary-control {
   min-width: 68px;
   min-height: 68px;
-  border-radius: 23px;
+  border-radius: 24px;
   color: @m3_on_primary;
   background-color: @m3_primary;
   box-shadow: 0 8px 22px alpha(@m3_primary, 0.26);
   transition:
-    border-radius 180ms ease,
-    background-color 180ms ease,
-    box-shadow 180ms ease;
+    border-radius 220ms ease-out,
+    background-color 180ms ease-out,
+    box-shadow 220ms ease-out;
 }
 
 window.theme-material-expressive .player-primary-control:hover {
-  border-radius: 34px;
+  border-radius: 32px;
   background-color: shade(@m3_primary, 1.06);
   box-shadow: 0 10px 26px alpha(@m3_primary, 0.34);
 }
@@ -286,7 +287,6 @@ window.theme-material-expressive .player-lyrics-surface {
 window.theme-material-expressive .player-visualizer-surface {
   padding: 2px 6px;
 }
-/* material_expressive_footer_v1 */
 
 window.theme-material-expressive .expressive-footer {
   border: 1px solid alpha(@m3_outline, 0.24);
@@ -317,7 +317,7 @@ window.theme-material-expressive .footer-metadata {
 
 window.theme-material-expressive .footer-track-title {
   font-weight: 820;
-  letter-spacing: -0.16px;
+  letter-spacing: 0;
 }
 
 window.theme-material-expressive .footer-track-artist {
@@ -328,7 +328,7 @@ window.theme-material-expressive .footer-track-artist {
 window.theme-material-expressive .footer-favorite-action {
   min-width: 30px;
   min-height: 30px;
-  border-radius: 15px;
+  border-radius: 16px;
 }
 
 
@@ -356,7 +356,7 @@ window.theme-material-expressive .footer-primary-control:hover {
 }
 
 window.theme-material-expressive .footer-primary-control:active {
-  border-radius: 15px;
+  border-radius: 16px;
   background-color: shade(@m3_primary, 0.94);
 }
 
@@ -364,5 +364,3 @@ window.theme-material-expressive .footer-skip-control {
   color: @m3_on_secondary_container;
   background-color: @m3_secondary_container;
 }
-
-/* nocky_css_footer_cascade_cleanup_phase2d_v4: dead footer declarations pruned */

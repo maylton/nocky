@@ -7,7 +7,10 @@ use std::{
 };
 
 const FRAME_TIME: Duration = Duration::from_millis(16);
-const MOTION_TIME_MS: f64 = 245.0;
+const MOTION_TIME_MS: f64 = 280.0;
+const REVEAL_OFFSET: f64 = 10.0;
+const DISMISS_OVERSHOOT: f64 = 4.0;
+
 pub(crate) struct RevealBounce {
     source: Rc<RefCell<Option<glib::SourceId>>>,
     revealed: Cell<bool>,
@@ -59,7 +62,7 @@ impl RevealBounce {
 
         if reveal {
             revealer.set_visible(true);
-            motion.move_(&child, -9.0, 0.0);
+            motion.move_(&child, -REVEAL_OFFSET, 0.0);
             child.set_opacity(0.94);
             revealer.set_reveal_child(true);
         } else {
@@ -81,13 +84,13 @@ impl RevealBounce {
                 let overshoot = 1.10;
                 let shifted = progress - 1.0;
                 let eased = 1.0 + (overshoot + 1.0) * shifted.powi(3) + overshoot * shifted.powi(2);
-                let x = -9.0 + 9.0 * eased;
+                let x = -REVEAL_OFFSET + REVEAL_OFFSET * eased;
                 motion.move_(&child, x, 0.0);
                 child.set_opacity(0.94 + 0.06 * progress);
             } else {
                 if progress < 0.20 {
                     let local = progress / 0.20;
-                    let x = 3.5 * (local * std::f64::consts::FRAC_PI_2).sin();
+                    let x = DISMISS_OVERSHOOT * (local * std::f64::consts::FRAC_PI_2).sin();
                     motion.move_(&child, x, 0.0);
                 } else {
                     if !close_started.replace(true) {
@@ -95,7 +98,7 @@ impl RevealBounce {
                     }
 
                     let local = ((progress - 0.20) / 0.80).clamp(0.0, 1.0);
-                    let x = 3.5 - 8.0 * local;
+                    let x = DISMISS_OVERSHOOT - (REVEAL_OFFSET + DISMISS_OVERSHOOT) * local;
                     motion.move_(&child, x, 0.0);
                     child.set_opacity(1.0 - 0.05 * local);
                 }

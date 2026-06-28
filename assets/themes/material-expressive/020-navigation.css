@@ -1,14 +1,14 @@
 
 window.theme-material-expressive .header-navigation-button:hover,
 window.theme-material-expressive .header-action-button:hover {
-  border-radius: 21px;
+  border-radius: 20px;
   color: @m3_on_surface;
   background-color: @m3_surface_container_high;
 }
 
 window.theme-material-expressive .header-navigation-button:checked,
 window.theme-material-expressive .header-action-button:checked {
-  border-radius: 21px;
+  border-radius: 20px;
   color: @m3_on_primary;
   background-color: @m3_primary;
 }
@@ -16,7 +16,7 @@ window.theme-material-expressive .header-action-button:checked {
 window.theme-material-expressive .header-view-switcher {
   min-height: 42px;
   padding: 3px;
-  border-radius: 21px;
+  border-radius: 20px;
   background-color: @m3_surface_container_high;
   border: 1px solid alpha(@m3_outline, 0.16);
 }
@@ -42,14 +42,14 @@ window.theme-material-expressive .header-view-switcher button:checked {
 window.theme-material-expressive .expressive-search-bar {
   margin: 6px 12px 0 12px;
   padding: 5px 8px;
-  border-radius: 22px;
+  border-radius: 24px;
   background-color: @m3_surface_container_low;
   border: 1px solid alpha(@m3_outline, 0.16);
 }
 
 window.theme-material-expressive .expressive-search-entry {
   min-height: 42px;
-  border-radius: 21px;
+  border-radius: 20px;
   color: @m3_on_surface;
   background-color: @m3_surface_container_high;
   border: 1px solid alpha(@m3_outline, 0.18);
@@ -88,8 +88,8 @@ window.theme-material-expressive button.sidebar-row {
   box-shadow: none;
   font-weight: 620;
   transition:
-    border-radius 180ms ease,
-    background-color 180ms ease;
+    border-radius 220ms ease-out,
+    background-color 180ms ease-out;
 }
 
 window.theme-material-expressive button.sidebar-row:hover {
@@ -116,7 +116,7 @@ window.theme-material-expressive .sidebar .sidebar-section-label {
 }
 
 window.theme-material-expressive .expressive-dashboard {
-  border-radius: 30px;
+  border-radius: 32px;
 }
 
 window.theme-material-expressive .expressive-empty-state {
@@ -135,12 +135,11 @@ window.theme-material-expressive .expressive-empty-state .empty-icon {
 window.theme-material-expressive .expressive-empty-action {
   min-height: 46px;
   padding: 0 20px;
-  border-radius: 23px;
+  border-radius: 24px;
   color: @m3_on_primary;
   background-color: @m3_primary;
   box-shadow: 0 6px 16px alpha(@m3_primary, 0.22);
 }
-/* material_search_bar_separator_cleanup_v1 */
 
 /*
  * Keep the collapsed SearchBar dimensionless. The previous container border
@@ -159,7 +158,6 @@ window.theme-material-expressive .expressive-search-bar {
 window.theme-material-expressive .expressive-search-entry {
   margin: 6px 12px 0 12px;
 }
-/* material_expressive_library_cards_v1 */
 
 /* Section hierarchy */
 window.theme-material-expressive .home-section {
@@ -178,7 +176,7 @@ window.theme-material-expressive .home-section-title,
 window.theme-material-expressive .collection-page-title {
   color: @m3_on_surface;
   font-weight: 820;
-  letter-spacing: -0.28px;
+  letter-spacing: 0;
 }
 
 window.theme-material-expressive .home-carousel-scroll,
@@ -190,7 +188,7 @@ window.theme-material-expressive .home-carousel {
 window.theme-material-expressive .home-card-button,
 window.theme-material-expressive .collection-card-button {
   padding: 0;
-  border-radius: 26px;
+  border-radius: 28px;
   background-color: transparent;
   box-shadow: none;
 }
@@ -208,9 +206,9 @@ window.theme-material-expressive .collection-card {
   border: 1px solid alpha(@m3_outline, 0.18);
   box-shadow: 0 5px 16px alpha(black, 0.13);
   transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease;
+    background-color 180ms ease-out,
+    border-color 180ms ease-out,
+    box-shadow 220ms ease-out;
 }
 
 window.theme-material-expressive .home-card-button:hover .collection-card,
@@ -233,7 +231,7 @@ window.theme-material-expressive .youtube-collection-card {
 
 window.theme-material-expressive .collection-artwork,
 window.theme-material-expressive .expressive-artwork {
-  border-radius: 19px;
+  border-radius: 20px;
   background-color: @m3_surface_container_high;
   border: 1px solid alpha(@m3_outline, 0.18);
   box-shadow: 0 5px 14px alpha(black, 0.18);
@@ -257,7 +255,7 @@ window.theme-material-expressive .collection-page,
 window.theme-material-expressive .expressive-library-page {
   margin: 10px 12px 12px 12px;
   padding: 16px;
-  border-radius: 30px;
+  border-radius: 32px;
   background-color: @m3_surface_container_low;
   border: 1px solid alpha(@m3_outline, 0.16);
 }
@@ -283,7 +281,7 @@ window.theme-material-expressive .collection-page-icon {
 window.theme-material-expressive .artist-list-button {
   min-height: 50px;
   margin: 3px 0;
-  border-radius: 19px;
+  border-radius: 20px;
   color: @m3_on_surface;
   background-color: @m3_surface_container;
   border: 1px solid alpha(@m3_outline, 0.14);
@@ -291,7 +289,7 @@ window.theme-material-expressive .artist-list-button {
 }
 
 window.theme-material-expressive .artist-list-button:hover {
-  border-radius: 25px;
+  border-radius: 24px;
   background-color: @m3_surface_container_high;
   border-color: alpha(@m3_primary, 0.28);
 }
@@ -311,8 +309,8 @@ window.theme-material-expressive .playlist-list row.playlist-card-row {
   background-color: @m3_surface_container;
   border: 1px solid alpha(@m3_outline, 0.13);
   transition:
-    border-radius 180ms ease,
-    background-color 180ms ease;
+    border-radius 220ms ease-out,
+    background-color 180ms ease-out;
 }
 
 window.theme-material-expressive .queue-list row.media-list-row:hover,
@@ -381,7 +379,7 @@ window.theme-material-expressive row.list-section-row .section-title {
 window.theme-material-expressive .search-result-button {
   margin: 3px 0;
   padding: 5px 8px;
-  border-radius: 19px;
+  border-radius: 20px;
   color: @m3_on_surface;
   background-color: @m3_surface_container;
   border: 1px solid alpha(@m3_outline, 0.14);
@@ -389,13 +387,13 @@ window.theme-material-expressive .search-result-button {
 }
 
 window.theme-material-expressive .search-result-button:hover {
-  border-radius: 25px;
+  border-radius: 24px;
   background-color: @m3_surface_container_high;
   border-color: alpha(@m3_primary, 0.28);
 }
 
 window.theme-material-expressive .search-result-button .collection-artwork {
-  border-radius: 15px;
+  border-radius: 16px;
 }
 
 /* Playlist management controls */
@@ -416,14 +414,13 @@ window.theme-material-expressive .playlist-editor-dropdown {
 
 window.theme-material-expressive .playlist-editor-action {
   min-height: 42px;
-  border-radius: 19px;
+  border-radius: 20px;
 }
 
 window.theme-material-expressive .playlist-create-action {
   color: @m3_on_primary;
   background-color: @m3_primary;
 }
-/* material_search_surfaces_sidebar_collapse_v1 */
 
 /* A collapsed navigation rail must be dimensionless. */
 window.theme-material-expressive

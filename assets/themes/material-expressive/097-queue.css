@@ -1,12 +1,10 @@
-/* queue2_interface_polish_v1 */
-
 .queue2-row {
   border-radius: 18px;
   opacity: 1;
   transition:
-    opacity 150ms ease,
-    background-color 160ms ease,
-    border-color 160ms ease;
+    opacity 150ms ease-out,
+    background-color 160ms ease-out,
+    border-color 160ms ease-out;
 }
 
 .queue2-row.queue2-row-entering,
@@ -22,7 +20,7 @@ button.queue2-drag-handle {
   min-width: 34px;
   min-height: 34px;
   padding: 0;
-  border-radius: 17px;
+  border-radius: 16px;
   background-color: transparent;
   box-shadow: none;
 }
@@ -50,8 +48,8 @@ progressbar.queue2-drop-indicator-line trough progress {
   min-height: 3px;
   border-radius: 999px;
   transition:
-    background-color 220ms ease,
-    box-shadow 220ms ease;
+    background-color 220ms ease-out,
+    box-shadow 220ms ease-out;
 }
 
 .queue2-state {
@@ -78,7 +76,7 @@ progressbar.queue2-drop-indicator-line trough progress {
 window.theme-material-expressive .queue2-row {
   color: @m3_on_surface;
   background-color: alpha(@m3_surface_container, 0.72);
-  border: 1px solid alpha(@m3_outline, 0.12);
+  border: 1px solid alpha(@m3_outline_variant, 0.34);
 }
 
 window.theme-material-expressive .queue2-row:hover {
@@ -120,7 +118,7 @@ window.theme-material-expressive .queue2-state,
 window.theme-material-expressive .queue2-end-state {
   color: @m3_on_surface_variant;
   background-color: alpha(@m3_surface_container_high, 0.68);
-  border: 1px solid alpha(@m3_outline, 0.14);
+  border: 1px solid alpha(@m3_outline_variant, 0.38);
 }
 
 window.theme-material-expressive .queue2-state-icon,
@@ -178,8 +176,6 @@ window.theme-noctalia .queue2-state-icon,
 window.theme-noctalia .queue2-end-icon {
   color: @accent_color;
 }
-
-/* queue2_completion_core_v1 */
 .queue2-cover,
 .queue2-cover .cover-picture {
   min-width: 42px;
@@ -193,14 +189,13 @@ window.theme-noctalia .queue2-end-icon {
 
 window.theme-material-expressive .queue2-cover {
   background-color: @m3_surface_container_highest;
-  box-shadow: inset 0 0 0 1px alpha(@m3_outline, 0.14);
+  box-shadow: inset 0 0 0 1px alpha(@m3_outline_variant, 0.36);
 }
 
 window.theme-noctalia .queue2-cover {
   background-color: alpha(@window_fg_color, 0.06);
   box-shadow: inset 0 0 0 1px alpha(@window_fg_color, 0.10);
 }
-/* queue2_header_refinement_v2 */
 .queue2-page-header {
   padding: 16px 18px;
   border-radius: 24px;
@@ -242,7 +237,7 @@ window.theme-material-expressive .queue2-page-header {
     alpha(@m3_surface_container_high, 0.98),
     alpha(@m3_surface_container, 0.94)
   );
-  border: 1px solid alpha(@m3_outline, 0.20);
+  border: 1px solid alpha(@m3_outline_variant, 0.44);
   box-shadow: inset 0 1px 0 alpha(@m3_on_surface, 0.04);
 }
 
@@ -268,17 +263,22 @@ window.theme-material-expressive .queue2-page-micro-badge {
 window.theme-material-expressive .queue2-page-actions button.queue2-page-action {
   min-height: 42px;
   padding: 0 16px;
-  border-radius: 18px;
+  border-radius: 20px;
   color: @m3_on_surface;
   background-color: alpha(@m3_surface_container_highest, 0.88);
-  border: 1px solid alpha(@m3_outline, 0.18);
+  border: 1px solid alpha(@m3_outline_variant, 0.42);
   box-shadow: none;
+  transition:
+    background-color 180ms ease-out,
+    border-color 180ms ease-out,
+    box-shadow 220ms ease-out;
 }
 
 window.theme-material-expressive .queue2-page-actions button.queue2-page-action:hover,
 window.theme-material-expressive .queue2-page-actions button.queue2-page-action:focus-visible {
   background-color: alpha(@m3_surface_container_highest, 0.98);
   border-color: alpha(@m3_primary, 0.26);
+  box-shadow: 0 0 0 2px alpha(@m3_primary, 0.10);
 }
 
 window.theme-material-expressive .queue2-page-actions button.queue2-page-action-danger {
@@ -342,8 +342,6 @@ window.theme-noctalia .queue2-page-actions button.queue2-page-action-danger:focu
   border-color: alpha(@destructive_color, 0.18);
 }
 
-/* queue2_presentation_layer_and_popup_v2 */
-
 .queue2-section-header {
   min-height: 28px;
   padding: 2px 8px;
@@ -377,9 +375,6 @@ window.theme-noctalia .queue2-section-header {
 window.theme-noctalia .queue2-section-icon {
   color: @accent_color;
 }
-
-
-/* queue2_dedicated_tablet_page_v1 */
 .queue2-page {
   min-width: 520px;
 }

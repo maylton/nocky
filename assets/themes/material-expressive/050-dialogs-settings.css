@@ -1,4 +1,3 @@
-/* material_visualizer_full_width_v1 */
 
 /*
  * Metadata and transport end up near 414 px after their Material padding.
@@ -18,7 +17,6 @@ window.theme-material-expressive
   margin-left: 15px;
   margin-right: 15px;
 }
-/* material_settings_corner_bleed_fix_v1 */
 
 /* Prevent the old Noctalia blue from bleeding through the rounded top corners. */
 window.theme-material-expressive.settings-dialog,
@@ -77,7 +75,6 @@ window.theme-material-expressive.startup-dialog > *,
   background-color: transparent;
   background-image: none;
 }
-/* material_lyrics_full_width_v1 */
 
 /*
  * Match the visual width used by the other Material player surfaces.
@@ -94,7 +91,6 @@ window.theme-material-expressive .player-lyrics-surface scrolledwindow {
   margin-left: 15px;
   margin-right: 15px;
 }
-/* material_settings_opaque_surface_v1 */
 
 /*
  * Settings is a separate window, not an in-window overlay. A transparent root
@@ -163,7 +159,6 @@ window.startup-dialog.theme-material-expressive > *,
 .settings-dialog.theme-material-expressive .settings-hero {
   background-clip: padding-box;
 }
-/* material_carousel_playing_blur_polish_v1 */
 
 /* Material carousel thumb: visible, tactile and slightly thinner. */
 window.theme-material-expressive
@@ -224,7 +219,6 @@ window.theme-material-expressive .now-playing-indicator {
   border-radius: 999px;
   -gtk-icon-shadow: 0 0 10px alpha(@m3_primary, 0.28);
 }
-/* material_carousel_indicator_blur_runtime_v2 */
 
 window.theme-material-expressive
   .home-carousel-scroll.material-carousel-scroll
@@ -295,7 +289,6 @@ window.theme-material-expressive.material-blur-enabled > toastoverlay {
   background-color: transparent;
   background-image: none;
 }
-/* functional_carousel_queue_blur_fix_v1 */
 
 /* Actual icon used by the active entry in the playback queue popover. */
 window.theme-material-expressive .queue-playing-indicator {
@@ -313,7 +306,6 @@ window.theme-material-expressive .queue-popover-row.active {
   background-color: alpha(@m3_primary_container, 0.72);
   border-color: alpha(@m3_primary, 0.30);
 }
-/* material_queue_thumb_blur_final_v2 */
 
 /* Match the queue scrollbar language, but keep the horizontal thumb slimmer. */
 window.theme-material-expressive
@@ -363,7 +355,6 @@ popover.queue-popover.theme-material-expressive > arrow {
   background-image: none;
   border-color: alpha(@m3_outline, 0.22);
 }
-/* material_settings_and_local_player_dimensions_v1 */
 window.settings-dialog.theme-material-expressive,
 window.youtube-settings-dialog.theme-material-expressive,
 window.startup-dialog.theme-material-expressive,
@@ -404,7 +395,6 @@ window.theme-material-expressive .player-visualizer-surface,
 window.theme-material-expressive .player-lyrics-surface {
   min-width: 414px;
 }
-/* m3_settings_surface_priority_fix_v1 */
 
 dialog.settings-dialog.theme-material-expressive,
 dialog.youtube-settings-dialog.theme-material-expressive,
@@ -428,7 +418,7 @@ dialog.startup-dialog.theme-material-expressive .material-dialog-toolbar,
   background-color: @m3_surface_container_low;
   background-image:
     radial-gradient(circle at 12% 0%, alpha(@m3_primary, 0.08), transparent 48%);
-  border-radius: 30px;
+  border-radius: 32px;
   border: 1px solid alpha(@m3_outline, 0.20);
   box-shadow: 0 18px 46px alpha(black, 0.34);
 }
