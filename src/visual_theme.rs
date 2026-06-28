@@ -13,7 +13,7 @@ use std::{
 };
 
 const PALETTE_TRANSITION_MS: u64 = 520;
-const PALETTE_FRAME_MS: u64 = 16;
+const PALETTE_FRAME_MS: u64 = 32;
 
 pub struct VisualThemeManager {
     _provider: gtk::CssProvider,
@@ -157,15 +157,19 @@ impl VisualThemeManager {
 
             let progress =
                 (started.elapsed().as_secs_f64() / duration.as_secs_f64()).clamp(0.0, 1.0);
-            let eased = emphasized_decelerate(progress);
-            let palette = start.interpolate(target, eased);
+            let finished = progress >= 1.0;
+            let palette = if finished {
+                target
+            } else {
+                start.interpolate(target, emphasized_decelerate(progress))
+            };
 
-            manager.current_palette.set(palette);
-            manager.apply_palette(palette);
+            if manager.current_palette.get() != palette {
+                manager.current_palette.set(palette);
+                manager.apply_palette(palette);
+            }
 
-            if progress >= 1.0 {
-                manager.current_palette.set(target);
-                manager.apply_palette(target);
+            if finished {
                 glib::ControlFlow::Break
             } else {
                 glib::ControlFlow::Continue

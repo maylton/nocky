@@ -83,16 +83,24 @@ pub(crate) fn combined_theme_css() -> String {
 mod tests {
     use super::*;
 
-    const EXPECTED_MATERIAL_EXPRESSIVE_BYTES: usize = 117472;
-
     #[test]
-    fn material_modules_keep_expected_size() {
-        let actual = MATERIAL_EXPRESSIVE_MODULES
+    fn material_modules_keep_required_tokens_and_surfaces() {
+        let css = MATERIAL_EXPRESSIVE_MODULES
             .iter()
-            .map(|(_, css)| css.len())
-            .sum::<usize>();
+            .map(|(_, css)| *css)
+            .collect::<String>();
 
-        assert_eq!(actual, EXPECTED_MATERIAL_EXPRESSIVE_BYTES);
+        for required in [
+            "@define-color m3_primary",
+            "@define-color m3_error",
+            "@define-color m3_outline_variant",
+            ".expressive-footer",
+            ".expressive-player-card",
+            ".header-view-switcher",
+            ".queue2-page",
+        ] {
+            assert!(css.contains(required), "missing required CSS: {required}");
+        }
     }
 
     #[test]

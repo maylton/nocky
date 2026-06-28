@@ -53,10 +53,7 @@ use std::{
     sync::Arc,
 };
 
-pub(crate) struct AppController {
-    pub(crate) window: adw::ApplicationWindow,
-    pub(crate) toast_overlay: adw::ToastOverlay,
-    pub(crate) player: PlaybackEngine,
+pub(crate) struct ControllerRuntime {
     pub(crate) state: RefCell<AppState>,
     pub(crate) playback_queue_v2: RefCell<PlaybackQueue>,
     pub(crate) active_queue_source: Cell<QueueSourceKind>,
@@ -108,6 +105,13 @@ pub(crate) struct AppController {
     pub(crate) offline_download_pending: RefCell<HashSet<String>>,
     pub(crate) youtube_like_request_id: Cell<u64>,
     pub(crate) youtube_like_pending: RefCell<HashMap<String, u64>>,
+}
+
+pub(crate) struct AppController {
+    pub(crate) window: adw::ApplicationWindow,
+    pub(crate) toast_overlay: adw::ToastOverlay,
+    pub(crate) player: PlaybackEngine,
+    runtime: ControllerRuntime,
     pub(crate) sidebar: gtk::Revealer,
     pub(crate) sidebar_motion: gtk::Fixed,
     pub(crate) sidebar_content: gtk::Box,
@@ -210,4 +214,15 @@ pub(crate) struct AppController {
     pub(crate) visualizer: SpectrumVisualizer,
     pub(crate) visual_theme_manager: Rc<visual_theme::VisualThemeManager>,
     pub(crate) _theme: Rc<theme::ThemeBridge>,
+}
+
+// Transitional compatibility layer: controller modules can keep using
+// `self.state`, `self.config`, and related field access while runtime state is
+// progressively split into explicit domain contexts.
+impl std::ops::Deref for AppController {
+    type Target = ControllerRuntime;
+
+    fn deref(&self) -> &Self::Target {
+        &self.runtime
+    }
 }

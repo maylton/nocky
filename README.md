@@ -4,7 +4,7 @@
 
 This app is vibe-coded and any improvement suggestion is welcomed, but don't expect much as it's just a free time hobby project =)
 
-> **Status:** Nocky 0.3.1 is a beta release. It consolidates Queue 2.0, synchronized-lyrics and playback-resume improvements, modular UI/theme refactors, localization audits and GTK scrollbar geometry fixes.
+> **Status:** Nocky 0.4.0 is a beta release. It consolidates Queue 2.0, synchronized-lyrics and playback-resume improvements, modular UI/theme refactors, localization audits and GTK scrollbar geometry fixes.
 
 <!-- noctalia-inspiration:start -->
 > [!NOTE]
@@ -195,18 +195,21 @@ Nocky remains an independent project, but it can follow Noctalia's Material colo
 
 ```text
 src/
-├── main.rs             GTK UI and application controller
-├── youtube.rs          native YouTube Music page and helper bridge
-├── browser.rs          unified local/YouTube library browser and queues
-├── playback.rs         GStreamer playback and HTTP stream headers
-├── visualizer.rs       theme-aware spectrum visualizer
-├── mpris.rs            MPRIS service and command bridge
-├── model.rs            metadata, artwork and track model
+├── main.rs             process entry point and module declarations
+├── app/                application startup, state, sidebar and controller
+│   └── controller/     playback, queue, YouTube, offline and UI coordination
+├── ui/                 footer, player, settings and reusable GTK widgets
+├── playback/           GStreamer engine, queue, MPRIS and session state
+├── youtube/            YouTube page, library/cache and playback bridge
+├── lyrics/             lyrics presenter and full/inline views
+├── integrations/       external runtime bridges such as Album Aura
+├── browser.rs          unified local/YouTube library browser and routes
+├── config.rs           persistent settings and migrations
 ├── library.rs          recursive local-library scanner
-├── lyrics.rs           local LRC parser
-├── lyrics_provider.rs  LRCLIB client
-├── config.rs           persistent settings and migration
-└── theme.rs            GTK/Noctalia theme bridge
+├── material_palette.rs dynamic Material palette generation
+├── offline_store.rs    offline collection metadata and persistence
+├── visual_theme.rs     visual-theme and artwork-palette coordination
+└── visualizer.rs       theme-aware spectrum visualizer
 
 helpers/
 └── nocky_youtube.py    ytmusicapi/yt-dlp sidecar
@@ -228,7 +231,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
 - YouTube Music uses an unofficial browser-session integration and can require updates when the service changes.
 - YouTube stream URLs are temporary, although Nocky automatically refreshes rejected or expired streams.
-- YouTube Music account write actions such as liking and unliking are not included yet.
+- YouTube Music mutations are reconciled asynchronously and may be confirmed again during the next library synchronization when remote verification is unavailable.
 - A minor Home-player layout shift may occur while inline lyrics change from loading to synchronized content.
 - Gapless playback is disabled; the pipeline is reset between tracks for reliability.
 - Flatpak packaging is planned but not included in this release.
