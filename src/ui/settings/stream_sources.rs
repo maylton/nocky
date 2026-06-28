@@ -1,9 +1,8 @@
-use crate::{
-    config::{AppLanguage, YouTubeStreamSources, YOUTUBE_STREAM_SOURCE_KEYS},
-    dialogs::SettingsEvent,
+use crate::config::{
+    AppConfig, AppLanguage, YouTubeStreamSources, YOUTUBE_STREAM_SOURCE_KEYS,
 };
 use adw::prelude::*;
-use std::{cell::RefCell, rc::Rc, sync::mpsc::Sender};
+use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone, Copy)]
 struct SourceCopy {
@@ -75,33 +74,45 @@ fn source_copy(key: &str) -> SourceCopy {
         .unwrap_or(SOURCES[0])
 }
 
+fn effective_label(policy: &YouTubeStreamSources) -> String {
+    policy
+        .effective_order()
+        .iter()
+        .map(|key| source_copy(key).label)
+        .collect::<Vec<_>>()
+        .join(" → ")
+}
+
+fn persist_policy(policy: &YouTubeStreamSources) {
+    let mut normalized = policy.clone();
+    normalized.normalize();
+    let mut config = AppConfig::load();
+    config.youtube_stream_sources = normalized;
+    if let Err(error) = config.save() {
+        eprintln!("Could not save YouTube stream-source preferences: {error}");
+    }
+}
+
 fn clear_box(container: &gtk::Box) {
     while let Some(child) = container.first_child() {
         container.remove(&child);
     }
 }
 
-fn emit_policy(sender: &Sender<SettingsEvent>, policy: &YouTubeStreamSources) {
-    let _ = sender.send(SettingsEvent::YouTubeStreamSources(policy.clone()));
-}
-
 fn populate_rows(
     rows: &gtk::Box,
     summary: &gtk::Label,
+    entry_summary: &gtk::Label,
     policy: Rc<RefCell<YouTubeStreamSources>>,
-    sender: Sender<SettingsEvent>,
     language: AppLanguage,
 ) {
     clear_box(rows);
 
     let current = policy.borrow().clone();
-    let effective = current
-        .effective_order()
-        .iter()
-        .map(|key| source_copy(key).label)
-        .collect::<Vec<_>>()
-        .join(" → ");
+    let effective = effective_label(&current);
     summary.set_text(&effective);
+    entry_summary.set_text(&effective);
+    let enabled_count = current.effective_order().len();
 
     for (index, key) in current.order.iter().enumerate() {
         if !YOUTUBE_STREAM_SOURCE_KEYS.contains(&key.as_str()) {
@@ -160,7 +171,7 @@ fn populate_rows(
             "Enable or disable this source",
             "Activar o desactivar esta fuente",
         )));
-        if current.effective_order().len() <= 1 && current.is_enabled(key) {
+        if enabled_count <= 1 && current.is_enabled(key) {
             enabled.set_sensitive(false);
         }
 
@@ -184,16 +195,16 @@ fn populate_rows(
         {
             let rows = rows.clone();
             let summary = summary.clone();
+            let entry_summary = entry_summary.clone();
             let policy = policy.clone();
-            let sender = sender.clone();
             move_up.connect_clicked(move |_| {
                 if policy.borrow_mut().move_source(source.key, -1) {
-                    emit_policy(&sender, &policy.borrow());
+                    persist_policy(&policy.borrow());
                     populate_rows(
                         &rows,
                         &summary,
+                        &entry_summary,
                         policy.clone(),
-                        sender.clone(),
                         language,
                     );
                 }
@@ -203,16 +214,16 @@ fn populate_rows(
         {
             let rows = rows.clone();
             let summary = summary.clone();
+            let entry_summary = entry_summary.clone();
             let policy = policy.clone();
-            let sender = sender.clone();
             move_down.connect_clicked(move |_| {
                 if policy.borrow_mut().move_source(source.key, 1) {
-                    emit_policy(&sender, &policy.borrow());
+                    persist_policy(&policy.borrow());
                     populate_rows(
                         &rows,
                         &summary,
+                        &entry_summary,
                         policy.clone(),
-                        sender.clone(),
                         language,
                     );
                 }
@@ -222,17 +233,17 @@ fn populate_rows(
         {
             let rows = rows.clone();
             let summary = summary.clone();
+            let entry_summary = entry_summary.clone();
             let policy = policy.clone();
-            let sender = sender.clone();
             enabled.connect_active_notify(move |switch| {
                 let requested = switch.is_active();
                 if policy.borrow_mut().set_enabled(source.key, requested) {
-                    emit_policy(&sender, &policy.borrow());
+                    persist_policy(&policy.borrow());
                     populate_rows(
                         &rows,
                         &summary,
+                        &entry_summary,
                         policy.clone(),
-                        sender.clone(),
                         language,
                     );
                 } else if policy.borrow().is_enabled(source.key) != requested {
@@ -266,14 +277,7 @@ pub(crate) fn entry_row(
     subtitle.set_wrap(true);
     subtitle.add_css_class("dim-label");
 
-    let summary = gtk::Label::new(Some(
-        &policy
-            .effective_order()
-            .iter()
-            .map(|key| source_copy(key).label)
-            .collect::<Vec<_>>()
-            .join(" → "),
-    ));
+    let summary = gtk::Label::new(Some(&effective_label(policy)));
     summary.set_xalign(0.0);
     summary.set_wrap(true);
     summary.add_css_class("dim-label");
@@ -309,7 +313,7 @@ pub(crate) fn present_dialog(
     parent: &adw::ApplicationWindow,
     initial: YouTubeStreamSources,
     language: AppLanguage,
-    sender: Sender<SettingsEvent>,
+    entry_summary: gtk::Label,
 ) {
     let dialog = adw::Dialog::builder()
         .title(text(
@@ -362,8 +366,8 @@ pub(crate) fn present_dialog(
     populate_rows(
         &rows,
         &summary,
+        &entry_summary,
         policy.clone(),
-        sender.clone(),
         language,
     );
 
@@ -378,16 +382,16 @@ pub(crate) fn present_dialog(
     {
         let rows = rows.clone();
         let summary = summary.clone();
+        let entry_summary = entry_summary.clone();
         let policy = policy.clone();
-        let sender = sender.clone();
         reset.connect_clicked(move |_| {
             policy.borrow_mut().reset();
-            emit_policy(&sender, &policy.borrow());
+            persist_policy(&policy.borrow());
             populate_rows(
                 &rows,
                 &summary,
+                &entry_summary,
                 policy.clone(),
-                sender.clone(),
                 language,
             );
         });
