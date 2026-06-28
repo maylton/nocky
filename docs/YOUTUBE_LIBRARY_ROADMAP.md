@@ -18,13 +18,13 @@ This roadmap isolates the YouTube Music experience from Nocky's local Home. The 
 | --- | --- | --- |
 | 1. Versioned feed contract | Complete | PR #40 |
 | 2. Native Rust domain model | Complete | PR #40 |
-| 3. Dedicated feed UI | Implemented; card-first rendering, continuation, scroll and stale fallback validated | PR #40 / PR #42 |
-| 4. Cache and resilient loading | Complete | PR #40 |
+| 3. Dedicated feed UI | Complete and validated | PR #40 / PR #42 |
+| 4. Cache and resilient loading | Complete and validated | PR #40 / PR #42 |
 | 5. Authentication hardening | Complete for manual session import | PR #40 |
-| 6. Broader account-library contract | Structured pages and native collection navigation validated | PR #40 / PR #42 |
-| 7. Stream-client fallback policy | Implemented; authenticated recovery rotation validated | PR #41 / PR #42 |
-| 8. Integration hardening and real-account validation | In progress; final focus/responsive check pending | PR #42 |
-| 9. Native stream-source preferences | Planned | after Phase 8 |
+| 6. Broader account-library contract | Complete for currently returned account content | PR #40 / PR #42 |
+| 7. Stream-client fallback policy | Complete; authenticated recovery rotation validated | PR #41 / PR #42 |
+| 8. Integration hardening and real-account validation | Complete | PR #42 |
+| 9. Native stream-source preferences | In progress | next stacked PR |
 | 10. Assisted browser login | Planned, optional | after Phase 9 |
 | 11. Remote library mutations and account profiles | Planned | later |
 | 12. Native InnerTube backend | Research track | later |
@@ -56,24 +56,16 @@ Delivered:
 
 **Goal:** render the online library/feed without touching local Home.
 
-Implemented:
+Delivered and validated:
 
 - **Para você** and **Visão geral** actions.
 - Structured section headers, playable rows, collection carousels and continuation rows.
 - Quick picks and collection sections render as cards before long song lists.
 - Automatic load after a valid session is detected.
-
-Validated with a connected account:
-
-- Card-first rendering is visible in **Para você**, **Visão geral**, **Biblioteca** and **Curtidas**.
-- Account pages return the expected list, quick-pick, carousel and mixed layouts.
-- Continuation appends new sections and preserves the previous vertical scroll position.
-- Offline requests return the structured cache with `stale: true` and retain usable sections.
+- Card-first rendering in **Para você**, **Visão geral**, **Biblioteca** and **Curtidas**.
+- Continuation append with preserved vertical scroll position.
+- Keyboard activation and narrow-window horizontal usability.
 - The local Home remains unchanged.
-
-Still required before completion:
-
-- Complete narrow-window and keyboard/focus checks.
 
 ## Phase 4 — Cache and resilient loading
 
@@ -84,6 +76,7 @@ Delivered and validated:
 - Atomic permission-restricted feed cache.
 - Stale fallback and visible stale state.
 - Synthetic section continuation compatible with the current ytmusicapi API.
+- Offline requests return cached structured sections with `stale: true`.
 - Cache permissions remain `0600`.
 
 ## Phase 5 — Authentication hardening
@@ -101,7 +94,7 @@ Delivered:
 
 **Goal:** support the full set of useful YouTube Music collection types.
 
-Delivered:
+Delivered and validated:
 
 - Recently added songs, likes, playlists, albums and artists in structured account pages.
 - Card-first **Visão geral**, **Biblioteca** and **Curtidas** layouts.
@@ -109,9 +102,9 @@ Delivered:
 - Podcast and episode-compatible data contract.
 - Parser tests in the quality gate and complete helper installation.
 - Explicit unsupported-item feedback rather than silent no-op behavior.
-- Native album, artist and playlist transitions close the YouTube dialog and reveal the routed browser page.
+- Native album, artist and playlist transitions from the YouTube dialog into routed browser pages.
 
-Pending conditional validation:
+Conditional follow-up:
 
 - Confirm podcast/episode behavior when this content is returned by the connected account.
 - Keep chips non-actionable until a stable helper endpoint is available.
@@ -120,22 +113,18 @@ Pending conditional validation:
 
 **Goal:** avoid repeatedly resolving a rejected URL with the same YouTube client identity.
 
-Implemented in PR #41:
+Delivered and validated:
 
 - Ordered client policy using supported yt-dlp clients.
 - Client rotation after recoverable GStreamer/CDN failures.
 - Terminal availability-error detection.
 - Redacted diagnostics, selected-client metadata and deterministic tests.
-- Quality Gate execution for stacked pull requests.
-
-Validated on the target workstation:
-
-- A real track resolved with an initial client.
+- A real authenticated track resolved with an initial client.
 - Forced recovery did not retry the rejected client first.
 - Recovery traversed the configured order and selected a working client.
 - The original stream cache was restored after the smoke test.
 
-Still useful before stable release:
+Useful before stable release:
 
 - Confirm behavior without an authenticated account.
 - Confirm behavior for Premium-only content when available.
@@ -144,40 +133,35 @@ Still useful before stable release:
 
 **Goal:** close functional gaps before exposing more settings.
 
-Delivered and validated:
+Completed and validated:
 
 - Quality Gate workflow runs for stacked `codex/**` pull-request bases.
-- Structured-page events for opening albums and artists.
+- Structured-page routing for albums, artists, playlists and playable items.
 - Podcast and episode activation behavior with explicit unsupported feedback.
-- Current page state is preserved while collection data loads.
+- Current page state preserved while collection data loads.
 - Native collection navigation closes the YouTube dialog before revealing the browser route.
 - Continuation rebuilds preserve the previous vertical scroll position.
-- Horizontal action bar remains usable in narrow windows by design.
-- Card buttons support normal GTK keyboard activation by design.
+- Horizontal action bar and carousels remain usable at the minimum window width.
+- Card buttons activate through mouse, `Enter` and space; focus traversal works with `Tab` and `Shift+Tab`.
 - Fixture, Rust and Python tests cover item-action routing and account-page ordering.
 - `scripts/smoke-youtube-structured.sh` validates the connected structured contract without exposing sensitive data.
-- `scripts/smoke-youtube-stale-cache.sh` validated offline stale fallback.
-- `scripts/smoke-youtube-stream-recovery.sh` validated forced client rotation and restored the original stream cache.
-- Local and GitHub Quality Gates pass on the current branch.
+- `scripts/smoke-youtube-stale-cache.sh` validates offline stale fallback.
+- `scripts/smoke-youtube-stream-recovery.sh` validates forced client rotation and restores the original stream cache.
+- Local and GitHub Quality Gates pass.
 
-Final manual acceptance gate:
-
-- Confirm focus order and activation with `Tab`, `Shift+Tab`, `Enter` and space.
-- Confirm the action bar and carousels remain usable at the minimum supported window width.
-
-Acceptance criteria:
+Acceptance criteria met:
 
 - No structured item silently does nothing.
-- Album, artist and playlist rows navigate to the correct native view.
-- Podcast/episode rows either work or show an explicit supported-state message.
-- Stacked PRs receive an automated quality-gate result.
-- The local Home remains byte-for-byte outside the implementation diff.
+- Album, artist and playlist items navigate to the correct native view.
+- Unsupported podcast/episode states produce explicit feedback.
+- Stacked PRs receive automated quality-gate results.
+- The local Home remains outside the implementation diff.
 
 ## Phase 9 — Native stream-source preferences
 
 **Goal:** expose the fallback policy without requiring environment variables.
 
-Deliverables:
+Planned deliverables:
 
 - Native **Fontes de stream** page within YouTube Music settings.
 - Enabled/disabled state and ordered priority persisted in Nocky's configuration.
@@ -191,7 +175,7 @@ The automatic default policy must remain reliable without user configuration.
 
 **Goal:** reduce manual cookie-copy friction without turning Nocky into a web wrapper.
 
-Deliverables:
+Planned deliverables:
 
 - Optional isolated WebKitGTK login window.
 - Strict navigation allowlist for Google Accounts and YouTube Music.
