@@ -73,4 +73,15 @@ jobs:
 
       - name: Run quality gate
         shell: bash
-        run: bash ./scripts/quality-gate.sh
+        run: |
+          set -o pipefail
+          bash ./scripts/quality-gate.sh 2>&1 | tee /tmp/nocky-quality-gate.log
+
+      - name: Upload quality gate log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-gate-log
+          path: /tmp/nocky-quality-gate.log
+          if-no-files-found: error
+          retention-days: 3
