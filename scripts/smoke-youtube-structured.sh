@@ -185,13 +185,12 @@ PY
 
 "${PYTHON}" - "${CACHE_ROOT}" <<'PY'
 import json
-import os
 import pathlib
 import stat
 import sys
 
 root = pathlib.Path(sys.argv[1])
-feed = root / "home-feed-cache.json"
+feed = root / "home-feed-v2.json"
 if not feed.is_file():
     raise SystemExit("Structured feed cache was not created")
 mode = stat.S_IMODE(feed.stat().st_mode)
