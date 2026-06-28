@@ -1,6 +1,7 @@
 use crate::config::{AppConfig, AppLanguage, YouTubeStreamSources};
 use adw::prelude::*;
-use std::{cell::RefCell, rc::Rc};
+use gtk::glib;
+use std::{cell::RefCell, fs, rc::Rc};
 
 const KEYS: [&str; 6] = ["web_music", "web_creator", "tv", "android_vr", "web", "ios"];
 
@@ -77,6 +78,93 @@ fn effective_label(policy: &YouTubeStreamSources) -> String {
         .map(|key| label(key))
         .collect::<Vec<_>>()
         .join(" → ")
+}
+
+fn last_stream_diagnostic(language: AppLanguage) -> String {
+    let path = glib::user_cache_dir()
+        .join("nocky")
+        .join("youtube")
+        .join("stream-cache.json");
+    let unavailable = || {
+        text(
+            language,
+            "Nenhum stream foi resolvido recentemente.",
+            "No stream has been resolved recently.",
+            "No se ha resuelto ningún stream recientemente.",
+        )
+        .to_string()
+    };
+
+    let Ok(contents) = fs::read_to_string(path) else {
+        return unavailable();
+    };
+    let Ok(payload) = serde_json::from_str::<serde_json::Value>(&contents) else {
+        return unavailable();
+    };
+    let Some(streams) = payload.get("streams").and_then(serde_json::Value::as_object) else {
+        return unavailable();
+    };
+    let Some((_expires_at, stream)) = streams
+        .values()
+        .filter_map(|stream| {
+            stream
+                .get("expires_at")
+                .and_then(serde_json::Value::as_f64)
+                .map(|expires_at| (expires_at, stream))
+        })
+        .max_by(|left, right| left.0.total_cmp(&right.0))
+    else {
+        return unavailable();
+    };
+
+    let value = |key: &str| {
+        stream
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .trim()
+    };
+    let client = {
+        let client_label = value("stream_client_label");
+        if client_label.is_empty() {
+            value("stream_client")
+        } else {
+            client_label
+        }
+    };
+    if client.is_empty() {
+        return unavailable();
+    }
+
+    let technical = [
+        value("format_id"),
+        value("protocol"),
+        value("container"),
+        value("audio_codec"),
+    ]
+    .into_iter()
+    .filter(|value| !value.is_empty())
+    .collect::<Vec<_>>()
+    .join(" · ");
+    let fallback_used = stream
+        .get("fallback_used")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let fallback = match (language, fallback_used) {
+        (AppLanguage::Portuguese, true) => "fallback usado",
+        (AppLanguage::Portuguese, false) => "sem fallback",
+        (AppLanguage::English, true) => "fallback used",
+        (AppLanguage::English, false) => "no fallback",
+        (AppLanguage::Spanish, true) => "alternativa utilizada",
+        (AppLanguage::Spanish, false) => "sin alternativa",
+    };
+    let prefix = text(language, "Último stream", "Last stream", "Último stream");
+
+    if technical.is_empty() {
+        format!("{prefix}: {client} · {fallback}")
+    } else {
+        format!("{prefix}: {client} · {technical} · {fallback}")
+    }
 }
 
 fn save_policy(policy: &YouTubeStreamSources) {
@@ -270,6 +358,17 @@ pub(crate) fn present_dialog(
     summary.set_wrap(true);
     summary.add_css_class("dim-label");
 
+    let diagnostic = gtk::Label::new(Some(&last_stream_diagnostic(language)));
+    diagnostic.set_xalign(0.0);
+    diagnostic.set_wrap(true);
+    diagnostic.add_css_class("dim-label");
+    diagnostic.set_tooltip_text(Some(text(
+        language,
+        "Mostra apenas cliente e formato. URLs, cookies e cabeçalhos nunca são exibidos.",
+        "Shows only client and format. URLs, cookies, and headers are never displayed.",
+        "Muestra solo cliente y formato. Nunca se muestran URLs, cookies ni cabeceras.",
+    )));
+
     let rows = gtk::Box::new(gtk::Orientation::Vertical, 0);
     let state = Rc::new(DialogState {
         language,
@@ -301,6 +400,7 @@ pub(crate) fn present_dialog(
     }
 
     content.append(&summary);
+    content.append(&diagnostic);
     content.append(&rows);
     content.append(&reset);
 
