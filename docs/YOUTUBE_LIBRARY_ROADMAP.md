@@ -18,10 +18,10 @@ This roadmap isolates the YouTube Music experience from Nocky's local Home. The 
 | --- | --- | --- |
 | 1. Versioned feed contract | Complete | PR #40 |
 | 2. Native Rust domain model | Complete | PR #40 |
-| 3. Dedicated feed UI | Implemented; card-first rendering validated | PR #40 / PR #42 |
+| 3. Dedicated feed UI | Implemented; card-first rendering, continuation and scroll validated | PR #40 / PR #42 |
 | 4. Cache and resilient loading | Complete | PR #40 |
 | 5. Authentication hardening | Complete for manual session import | PR #40 |
-| 6. Broader account-library contract | Structured pages visually validated; navigation smoke pending | PR #40 / PR #42 |
+| 6. Broader account-library contract | Structured pages and native collection navigation validated | PR #40 / PR #42 |
 | 7. Stream-client fallback policy | Implemented; real fallback smoke pending | PR #41 |
 | 8. Integration hardening and real-account validation | In progress | PR #42 |
 | 9. Native stream-source preferences | Planned | after Phase 8 |
@@ -67,11 +67,11 @@ Validated with a connected account:
 
 - Card-first rendering is visible in **Para você**, **Visão geral**, **Biblioteca** and **Curtidas**.
 - Account pages return the expected list, quick-pick, carousel and mixed layouts.
+- Continuation appends new sections and preserves the previous vertical scroll position.
 - The local Home remains unchanged.
 
 Still required before completion:
 
-- Validate preserved scroll position after continuation append.
 - Validate stale-cache fallback in an offline/failure scenario.
 - Complete narrow-window and keyboard/focus checks.
 
@@ -108,10 +108,10 @@ Delivered:
 - Podcast and episode-compatible data contract.
 - Parser tests in the quality gate and complete helper installation.
 - Explicit unsupported-item feedback rather than silent no-op behavior.
+- Native album, artist and playlist transitions close the YouTube dialog and reveal the routed browser page.
 
 Pending live validation:
 
-- Native album, artist and playlist transitions now close the YouTube dialog and reveal the routed browser page; live validation pending.
 - Confirm podcast/episode behavior for content returned by the account.
 - Keep chips non-actionable until a stable helper endpoint is available.
 
@@ -148,11 +148,11 @@ Delivered or implemented:
 - Card buttons support normal GTK keyboard activation.
 - Fixture, Rust and Python tests cover item-action routing and account-page ordering.
 - `scripts/smoke-youtube-structured.sh` validates the connected structured contract without exposing sensitive data.
+- `scripts/smoke-youtube-stale-cache.sh` exercises offline stale fallback.
+- `scripts/smoke-youtube-stream-recovery.sh` exercises forced client rotation and restores the original stream cache.
 
 Manual acceptance gate still required:
 
-- Validate preserved scroll after feed continuation.
-- Validate album, artist and playlist transitions into the native browser.
 - Exercise playback recovery/client fallback.
 - Exercise stale-cache fallback.
 - Confirm focus order and narrow-window usability.
