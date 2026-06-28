@@ -1,9 +1,11 @@
 use crate::{
-    config::{AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme},
+    config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme},
     i18n::{self, Message},
+    ui::settings::stream_sources,
 };
 use adw::prelude::*;
 use std::rc::Rc;
+
 fn inherit_visual_theme(parent: &adw::ApplicationWindow, widget: &impl IsA<gtk::Widget>) {
     widget.remove_css_class("theme-noctalia");
     widget.remove_css_class("theme-material-expressive");
@@ -62,11 +64,31 @@ where
     toolbar.add_css_class("material-dialog-toolbar");
     toolbar.add_top_bar(&adw::HeaderBar::new());
 
+    let config = AppConfig::load();
+    let (stream_entry, stream_button, stream_summary) = stream_sources::entry_row(
+        &config.youtube_stream_sources,
+        config.language,
+    );
+
     let host = gtk::Box::new(gtk::Orientation::Vertical, 0);
     host.add_css_class("youtube-settings-host");
+    host.append(&stream_entry);
     host.append(root);
     toolbar.set_content(Some(&host));
     dialog.set_child(Some(&toolbar));
+
+    {
+        let stream_parent = dialog.clone();
+        stream_button.connect_clicked(move |_| {
+            let config = AppConfig::load();
+            stream_sources::present_dialog(
+                &stream_parent,
+                config.youtube_stream_sources,
+                config.language,
+                stream_summary.clone(),
+            );
+        });
+    }
 
     let youtube_root = root.clone();
     dialog.connect_closed(move |_| {
