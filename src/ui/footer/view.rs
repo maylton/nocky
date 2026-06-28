@@ -4,19 +4,18 @@
 //! MPRIS synchronization, compact reveal callbacks and application state remain
 //! owned by `AppController`.
 
+use super::{
+    now_playing::{build_footer_now_playing, FooterNowPlayingParts},
+    progress::{build_footer_progress, FooterProgressParts},
+    transport::{build_footer_transport, FooterTransportParts},
+    utilities::{build_footer_utilities, FooterUtilityParts},
+};
 use crate::{
     config::AppLanguage,
-    expressive_transport::ExpressiveTransport,
-    footer_now_playing::{build_footer_now_playing, FooterNowPlayingParts},
-    footer_progress::{build_footer_progress, FooterProgressParts},
-    footer_transport::{build_footer_transport, FooterTransportParts},
-    footer_utilities::{build_footer_utilities, FooterUtilityParts},
-    wave_progress::WaveProgress,
+    ui::widgets::{ExpressiveTransport, WaveProgress},
 };
 use gtk::prelude::*;
 use std::rc::Rc;
-
-// nocky_rust_ui_phase3g_footer_view_assembly_v1
 
 const ROOT_HEIGHT: i32 = 88;
 const ROOT_CLASSES: [&str; 3] = ["player-bar", "player-bar-v2", "expressive-footer"];

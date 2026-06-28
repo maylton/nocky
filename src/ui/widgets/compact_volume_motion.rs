@@ -6,9 +6,6 @@
 use gtk::glib;
 use gtk::prelude::*;
 use std::{cell::Cell, rc::Rc, time::Duration};
-
-// nocky_rust_ui_phase3a_compact_volume_motion_v2
-// nocky_compact_volume_light_spring_v1
 pub(crate) struct CompactVolumeSpring {
     pub(crate) group: gtk::Box,
     pub(crate) generation: Rc<Cell<u64>>,

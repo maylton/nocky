@@ -443,8 +443,6 @@ impl PlaybackQueue {
         QueueEntry { id, media }
     }
 }
-
-// queue2_completion_core_v1
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum QueueEndAction {
     RepeatCurrent,

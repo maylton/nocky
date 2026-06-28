@@ -1,5 +1,3 @@
-// onboarding_recent_activity_copy_v1
-// onboarding_personalized_home_history_v1
 use crate::config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme};
 use adw::prelude::*;
 use std::{cell::Cell, rc::Rc};
@@ -350,8 +348,6 @@ pub fn present<F>(
     stack.set_transition_type(gtk::StackTransitionType::SlideLeftRight);
     stack.set_transition_duration(220);
     shell.append(&stack);
-
-    // Welcome
     let (welcome_page, welcome_content) = page_shell(text.welcome_title, text.welcome_body);
     let welcome_icon = gtk::Image::from_icon_name("io.github.maylton.Nocky");
     welcome_icon.set_pixel_size(128);
@@ -369,8 +365,6 @@ pub fn present<F>(
     welcome_content.append(&welcome_icon);
     welcome_content.append(&welcome_note);
     stack.add_named(&welcome_page, Some("welcome"));
-
-    // Source
     let (source_page, source_content) = page_shell(text.source_title, text.source_body);
 
     let local_choice = gtk::CheckButton::with_label(text.local_title);
@@ -418,8 +412,6 @@ pub fn present<F>(
     }
 
     stack.add_named(&source_page, Some("source"));
-
-    // Personalized Home
     let (learning_page, learning_content) = page_shell(text.learning_title, text.learning_body);
 
     let personalized_history = gtk::Switch::new();
@@ -450,8 +442,6 @@ pub fn present<F>(
     learning_content.append(&privacy_note);
 
     stack.add_named(&learning_page, Some("learning"));
-
-    // Appearance
     let (appearance_page, appearance_content) =
         page_shell(text.appearance_title, text.appearance_body);
 
@@ -523,8 +513,6 @@ pub fn present<F>(
     }
 
     stack.add_named(&appearance_page, Some("appearance"));
-
-    // Player
     let (player_page, player_content) = page_shell(text.player_title, text.player_body);
 
     let visual_theme = gtk::DropDown::from_strings(&["Noctalia", "Material 3 Expressive"]);
@@ -553,8 +541,6 @@ pub fn present<F>(
     player_content.append(&option_card(text.footer_title, text.footer_body, &footer));
 
     stack.add_named(&player_page, Some("player"));
-
-    // Summary
     let (summary_page, summary_content) = page_shell(text.summary_title, text.summary_body);
 
     let summary_source = gtk::Label::new(None);

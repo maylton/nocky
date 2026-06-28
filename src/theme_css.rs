@@ -1,5 +1,3 @@
-// nocky_css_architecture_closure_phase2i_v1
-//
 // Material Expressive CSS is embedded as one explicitly named, ordered
 // manifest. The numeric filename prefix is the cascade order contract.
 
@@ -85,7 +83,7 @@ pub(crate) fn combined_theme_css() -> String {
 mod tests {
     use super::*;
 
-    const EXPECTED_MATERIAL_EXPRESSIVE_BYTES: usize = 119764;
+    const EXPECTED_MATERIAL_EXPRESSIVE_BYTES: usize = 119639;
 
     #[test]
     fn material_modules_keep_expected_size() {

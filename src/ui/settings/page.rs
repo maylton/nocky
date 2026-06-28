@@ -1,11 +1,10 @@
-// playback_resume_preferences_fix_v1
 use crate::{
-    animated_page_switcher::{AnimatedPageSpec, AnimatedPageSwitcher},
     config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme},
     dialogs::SettingsEvent,
     i18n::{self, Message},
     offline_store::OfflineStore,
-    youtube_diagnostics::{self, DiagnosticCheck, DiagnosticState},
+    ui::widgets::{AnimatedPageSpec, AnimatedPageSwitcher},
+    youtube::diagnostics::{self as youtube_diagnostics, DiagnosticCheck, DiagnosticState},
 };
 use adw::prelude::*;
 use gtk::glib;
@@ -15,8 +14,6 @@ use std::{
     sync::mpsc::{self, Receiver, Sender},
     time::Duration,
 };
-
-// navigable_settings_page_v1
 pub(crate) struct SettingsPage {
     root: gtk::ScrolledWindow,
     sender: Sender<SettingsEvent>,
@@ -177,8 +174,6 @@ fn build_content(
             "Sincronización, cuenta y biblioteca en línea",
         ),
     );
-
-    // settings_about_and_remove_overflow_v1
     let (about_group, about_rows) = settings_group(
         "help-about-symbolic",
         group_text("Sobre", "About", "Acerca de"),
@@ -382,8 +377,8 @@ fn build_content(
     noctalia_row.set_sensitive(noctalia_available);
     appearance_rows.append(&noctalia_row);
 
-    // nocky_expressive_settings_in_appearance_v1: Expressive controls belong to Appearance
-    // nocky_theme_scoped_expressive_effects_v1: Expressive controls are Material-only
+    // Expressive controls belong to Appearance
+    // Expressive controls are Material-only
     let material_expressive = initial.visual_theme == VisualTheme::MaterialExpressive;
 
     let expressive_transport = settings_switch(initial.expressive_transport_effects);
@@ -735,7 +730,6 @@ fn build_content(
         "Ver información",
     ));
     about_button.set_action_name(Some("app.about"));
-    // noctalia_about_action_release_polish_v1
     about_button.add_css_class("settings-primary-action");
     about_button.add_css_class("settings-row-action");
     about_button.add_css_class("settings-about-action");

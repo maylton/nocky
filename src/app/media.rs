@@ -1,6 +1,6 @@
 //! Media formatting and playback helper utilities.
 
-use crate::{config, youtube_error};
+use crate::{config, youtube::error};
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
@@ -33,8 +33,7 @@ pub(crate) fn is_refreshable_stream_error(message: &str) -> bool {
 }
 
 pub(crate) fn playback_error_message(message: &str) -> &'static str {
-    youtube_error::classify_youtube_playback_error(message)
-        .message(config::AppConfig::load().language)
+    error::classify_youtube_playback_error(message).message(config::AppConfig::load().language)
 }
 
 pub(crate) fn redact_stream_url(message: &str) -> String {

@@ -8,8 +8,6 @@ use std::{
 
 const FRAME_TIME: Duration = Duration::from_millis(16);
 const MOTION_TIME_MS: f64 = 245.0;
-
-// reveal_bounce_motion_v1
 pub(crate) struct RevealBounce {
     source: Rc<RefCell<Option<glib::SourceId>>>,
     revealed: Cell<bool>,

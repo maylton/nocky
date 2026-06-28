@@ -46,6 +46,14 @@ window.theme-material-expressive .shell-play-button {
   color: @m3_on_primary;
 }
 
+window.theme-material-expressive .expressive-loading-indicator {
+  color: @m3_primary;
+}
+
+window.theme-material-expressive button .expressive-loading-indicator {
+  color: inherit;
+}
+
 window.theme-material-expressive .media-control,
 window.theme-material-expressive .card-icon-button,
 window.theme-material-expressive .footer-control {

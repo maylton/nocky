@@ -5,14 +5,12 @@
 
 use crate::{
     config::AppLanguage,
-    expressive_transport::{ExpressiveTransport, TransportVariant},
     i18n::{self, Message},
     mode_toggle,
+    ui::widgets::{ExpressiveTransport, TransportVariant},
 };
 use gtk::prelude::*;
 use std::rc::Rc;
-
-// nocky_rust_ui_phase3d_footer_transport_v2
 
 pub(crate) struct FooterTransportParts {
     pub(crate) root: gtk::Box,

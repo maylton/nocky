@@ -9,10 +9,6 @@ use crate::{
     md3_volume::Md3VolumeSlider,
 };
 use gtk::prelude::*;
-
-// nocky_rust_ui_phase3f_footer_utilities_v1
-
-// footer_volume_adjustment_model_v2
 const VOLUME_STEP: f64 = 0.01;
 const VOLUME_PAGE_STEP: f64 = 0.05;
 const SLOT_WIDTH: i32 = 124;
@@ -22,7 +18,6 @@ const CANVAS_HEIGHT: i32 = 42;
 const CANVAS_X: f64 = 4.0;
 const REVEAL_DURATION_MS: u32 = 280;
 const GROUP_SPACING: i32 = 6;
-// nocky_footer_optical_alignment_metadata_width_v1
 const GROUP_MARGIN_TOP: i32 = 0;
 const GROUP_WIDTH: i32 = 220;
 const GROUP_HEIGHT: i32 = 56;
@@ -60,8 +55,6 @@ pub(crate) fn build_footer_utilities(
     mute_button.add_css_class("footer-utility-action");
     mute_button.set_valign(gtk::Align::Center);
     mute_button.set_tooltip_text(Some(tr(Message::Mute)));
-
-    // footer_volume_adjustment_model_v2
     // The visible control is custom-drawn. Use a non-widget Adjustment as its
     // shared value model so GTK never measures an invisible Scale gadget.
     let volume = gtk::Adjustment::new(
@@ -72,23 +65,17 @@ pub(crate) fn build_footer_utilities(
         VOLUME_PAGE_STEP,
         0.0,
     );
-
-    // nocky_compact_volume_expand_and_flat_modes_v1
     let volume_slot = gtk::Fixed::new();
     volume_slot.set_size_request(SLOT_WIDTH, SLOT_HEIGHT);
     volume_slot.set_hexpand(false);
     volume_slot.set_vexpand(false);
     volume_slot.set_overflow(gtk::Overflow::Hidden);
     volume_slot.add_css_class("footer-volume-fixed-slot");
-
-    // nocky_compact_volume_fixed_slot_reveal_v1
     let md3_volume = Md3VolumeSlider::new(&volume);
     md3_volume
         .widget()
         .set_size_request(CANVAS_WIDTH, CANVAS_HEIGHT);
     volume_slot.put(md3_volume.widget(), CANVAS_X, 0.0);
-
-    // nocky_md3_volume_slider_right_v1
     let volume_revealer = gtk::Revealer::new();
     volume_revealer.set_transition_type(gtk::RevealerTransitionType::SlideRight);
     volume_revealer.set_transition_duration(REVEAL_DURATION_MS);

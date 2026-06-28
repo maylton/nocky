@@ -1,13 +1,10 @@
-// clickable_player_artist_album_navigation_v1
 use crate::{
     config::AppLanguage,
-    cover_view::{build_cover, CoverView},
-    expressive_transport::{ExpressiveTransport, TransportVariant},
     i18n::{self, Message},
-    lyrics_view::LyricsPresenter,
+    lyrics::LyricsPresenter,
     playback::transition::TransitionClock,
+    ui::widgets::{build_cover, CoverView, ExpressiveTransport, TransportVariant, WaveProgress},
     visualizer::SpectrumVisualizer,
-    wave_progress::WaveProgress,
 };
 use gtk::prelude::*;
 use std::rc::Rc;
@@ -127,13 +124,9 @@ pub(crate) struct PlayerView {
     pub(crate) visualizer: SpectrumVisualizer,
     pub(crate) lyrics: LyricsPresenter,
 }
-
-// material_settings_and_local_player_dimensions_v1
 const PLAYER_INNER_WIDTH: i32 = 384;
 const PLAYER_SURFACE_WIDTH: i32 = 414;
 const PLAYER_CARD_WIDTH: i32 = 454;
-
-// material_expressive_player_v1
 impl PlayerView {
     pub(crate) fn new(language: AppLanguage, expressive_transport_effects: bool) -> Self {
         let tr = |message: Message| i18n::text(language, message);
@@ -282,8 +275,6 @@ impl PlayerView {
 
         let home_wave_progress = WaveProgress::new();
 
-        // material_footer_player_progress_refinement_v1
-
         home_wave_progress
             .widget()
             .add_css_class("player-progress-wave");
@@ -356,9 +347,6 @@ impl PlayerView {
 
         let visualizer = SpectrumVisualizer::new();
         let lyrics = LyricsPresenter::new(language);
-
-        // stable_home_player_layout_v1
-        // stable_standby_slots_v1
         let visualizer_widget = visualizer.widget().clone();
         visualizer_widget.set_size_request(PLAYER_INNER_WIDTH, 74);
         visualizer_widget.set_hexpand(false);

@@ -13,6 +13,7 @@ pub struct AlbumAuraBridge {
     path: Option<PathBuf>,
     track: Option<MprisTrack>,
     playback: MprisPlayback,
+    position_us: i64,
     revision: u64,
 }
 
@@ -27,6 +28,7 @@ impl AlbumAuraBridge {
             path,
             track: None,
             playback: MprisPlayback::Stopped,
+            position_us: 0,
             revision: 0,
         }
     }
@@ -35,10 +37,12 @@ impl AlbumAuraBridge {
         match update {
             MprisUpdate::Metadata(track) => {
                 self.track = Some(track.clone());
+                self.position_us = 0;
                 self.publish();
             }
             MprisUpdate::ClearMetadata => {
                 self.track = None;
+                self.position_us = 0;
                 self.publish_inactive();
             }
             MprisUpdate::Playback(playback) => {
@@ -49,6 +53,10 @@ impl AlbumAuraBridge {
                     self.publish();
                 }
             }
+            MprisUpdate::Position(position) | MprisUpdate::Seeked(position) => {
+                self.position_us = (*position).max(0);
+                self.publish();
+            }
             MprisUpdate::Shutdown => self.shutdown(),
             _ => {}
         }
@@ -56,6 +64,7 @@ impl AlbumAuraBridge {
 
     pub fn shutdown(&mut self) {
         self.playback = MprisPlayback::Stopped;
+        self.position_us = 0;
         self.publish_inactive();
     }
 
@@ -82,6 +91,7 @@ impl AlbumAuraBridge {
             "album": track.album,
             "source": source_name(track),
             "playback_status": playback_name(self.playback),
+            "position_us": self.position_us.max(0),
             "scheme": BRIDGE_SCHEME,
             "revision": self.revision,
             "updated_at": unix_timestamp(),
@@ -105,6 +115,7 @@ impl AlbumAuraBridge {
             "active": false,
             "player": "Nocky",
             "playback_status": "Stopped",
+            "position_us": 0,
             "revision": self.revision,
             "updated_at": unix_timestamp(),
         });
@@ -239,6 +250,46 @@ mod tests {
                 .expect("bridge JSON must be valid");
 
         assert_eq!(stored["active"], true);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn republishes_active_payload_on_position_updates() {
+        let root = env::temp_dir().join(format!(
+            "nocky-album-aura-position-test-{}-{}",
+            std::process::id(),
+            unix_timestamp()
+        ));
+        let path = root.join("nocky").join("album-aura.json");
+        let mut bridge = AlbumAuraBridge {
+            path: Some(path.clone()),
+            track: None,
+            playback: MprisPlayback::Stopped,
+            position_us: 0,
+            revision: 0,
+        };
+
+        bridge.apply_mpris_update(&MprisUpdate::Metadata(MprisTrack {
+            track_id: "/io/github/maylton/Nocky/track/test".into(),
+            title: "Title".into(),
+            artist: "Artist".into(),
+            album: "Album".into(),
+            length_us: 180_000_000,
+            art_url: None,
+            url: Some("file:///home/user/Music/Track.flac".into()),
+        }));
+        bridge.apply_mpris_update(&MprisUpdate::Playback(MprisPlayback::Playing));
+        bridge.apply_mpris_update(&MprisUpdate::Position(42_000_000));
+
+        let stored: Value =
+            serde_json::from_slice(&fs::read(&path).expect("bridge file must exist"))
+                .expect("bridge JSON must be valid");
+
+        assert_eq!(stored["active"], true);
+        assert_eq!(stored["playback_status"], "Playing");
+        assert_eq!(stored["position_us"], 42_000_000);
+        assert_eq!(stored["title"], "Title");
+
         let _ = fs::remove_dir_all(root);
     }
 }

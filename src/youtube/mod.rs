@@ -1,8 +1,10 @@
-// stable_collection_identity_and_deferred_cache_v2
-// multi_artist_credits_v2
 mod collections;
+pub(crate) mod diagnostics;
+pub(crate) mod error;
+mod playback;
 
 use crate::search_text::{normalize_search_text, search_matches, search_score};
+use crate::ui::widgets::ExpressiveLoadingIndicator;
 use gtk::glib;
 use gtk::prelude::*;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -1052,7 +1054,7 @@ pub struct YouTubePage {
     search_entry: gtk::SearchEntry,
     filter: gtk::DropDown,
     heading: gtk::Label,
-    spinner: gtk::Spinner,
+    loading: ExpressiveLoadingIndicator,
     results: gtk::ListBox,
     items: RefCell<Vec<YouTubeItem>>,
     event_tx: Sender<YouTubePageEvent>,
@@ -1170,10 +1172,11 @@ impl YouTubePage {
         heading.set_xalign(0.0);
         heading.set_hexpand(true);
         heading.add_css_class("title-3");
-        let spinner = gtk::Spinner::new();
+        let loading = ExpressiveLoadingIndicator::new();
+        loading.widget().set_visible(false);
         let results_header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         results_header.append(&heading);
-        results_header.append(&spinner);
+        results_header.append(loading.widget());
 
         let results = gtk::ListBox::new();
         results.set_selection_mode(gtk::SelectionMode::None);
@@ -1204,7 +1207,7 @@ impl YouTubePage {
             search_entry,
             filter,
             heading,
-            spinner,
+            loading,
             results,
             items: RefCell::new(Vec::new()),
             event_tx,
@@ -1365,17 +1368,13 @@ impl YouTubePage {
 
     pub fn set_loading(&self, loading: bool, title: &str) {
         self.heading.set_text(title);
-        if loading {
-            self.spinner.start();
-        } else {
-            self.spinner.stop();
-        }
+        self.loading.widget().set_visible(loading);
     }
 
     pub fn show_items(&self, title: &str, items: Vec<YouTubeItem>) {
         clear_list_box(&self.results);
         self.heading.set_text(title);
-        self.spinner.stop();
+        self.loading.widget().set_visible(false);
         for item in &items {
             self.results.append(&youtube_row(item));
         }
@@ -1387,7 +1386,7 @@ impl YouTubePage {
     }
 
     pub fn show_error(&self, message: &str) {
-        self.spinner.stop();
+        self.loading.widget().set_visible(false);
         self.heading.set_text("Erro no YouTube Music");
         clear_list_box(&self.results);
         self.results.append(&empty_row(message));
@@ -2142,10 +2141,8 @@ fn helper_path() -> Option<PathBuf> {
     let source_helper = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("helpers/nocky_youtube.py");
     let mut candidates = Vec::new();
 
-    // Development builds must exercise the helper from the current checkout.
-    // Previously, cargo run preferred an older installed helper under
-    // ~/.local/share/nocky, so helper patches compiled successfully but were
-    // never used at runtime.
+    // Development builds must exercise the helper from the current checkout
+    // before falling back to installed copies.
     if cfg!(debug_assertions) {
         candidates.push(source_helper.clone());
     }

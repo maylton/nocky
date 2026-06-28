@@ -4,8 +4,6 @@ use std::{
     rc::Rc,
     time::{Duration, Instant},
 };
-
-// pixel_player_transport_one_second_v3
 const EXPAND_MS: u64 = 360;
 const HOLD_MS: u64 = 160;
 const RETURN_MS: u64 = 480;
@@ -129,8 +127,6 @@ impl ExpressiveTransport {
         effects_enabled: bool,
     ) -> Rc<Self> {
         let spec = variant.spec();
-
-        // pixel_player_transport_remove_cross_glow_v5
         // Mouse clicks must not leave GTK's generic focus halo on the
         // animated surfaces. Keyboard navigation remains available.
         for button in [previous, play, next] {
@@ -307,11 +303,8 @@ impl ExpressiveTransport {
 
     fn install_expressive_classes(&self) {
         self.root.add_css_class("expressive-transport-enabled");
-
-        // pixel_player_transport_detach_legacy_main_glow_v7
-        // The main player's pre-0.3 shell classes contain their own focus and
-        // shadow treatment. Detach them while the fixed-slot Expressive
-        // component owns the surface, preventing the legacy cross-shaped glow.
+        // Detach classic player classes while the fixed-slot Expressive
+        // component owns focus and shadow treatment.
         if self.variant == TransportVariant::Main {
             self.play.remove_css_class("shell-play-button");
             self.play.remove_css_class("player-primary-control");
@@ -364,8 +357,7 @@ impl ExpressiveTransport {
             }
         }
 
-        // Restore the exact classic player classes when the preference is
-        // disabled, preserving the original fallback requested by the user.
+        // Restore the classic player classes when the preference is disabled.
         if self.variant == TransportVariant::Main {
             self.play.add_css_class("shell-play-button");
             self.play.add_css_class("player-primary-control");
@@ -409,8 +401,6 @@ impl ExpressiveTransport {
             gaps: [spec.gap, spec.gap],
         }
     }
-
-    // pixel_player_transport_click_only_v6
     // Hover never changes geometry. The only size/position animation is the
     // coordinated PixelPlayer-style response triggered by an actual click.
     fn rest_geometry(&self) -> Geometry {

@@ -132,7 +132,6 @@ impl ThemeBridge {
             &bridge.provider,
             gtk::STYLE_PROVIDER_PRIORITY_USER,
         );
-        // functional_carousel_queue_blur_fix_v1
         // The dynamic Material palette is installed at USER + 80 and
         // paints opaque window/app-shell surfaces. Keep runtime blur above
         // it so Custom/Noctalia transparency is not overwritten later.
@@ -229,8 +228,6 @@ popover.queue-popover > arrow {
   background-color: @nm_surface_alt;
   background-image: none;
 }
-
-/* material_carousel_playing_blur_polish_v1: opaque Material mode */
 window.background.noctalia-window.theme-material-expressive,
 window.background.noctalia-window.theme-material-expressive:backdrop,
 window.noctalia-window.theme-material-expressive,
@@ -248,8 +245,6 @@ window.theme-material-expressive .app-shell:backdrop {
   background-color: @m3_surface;
   background-image: none;
 }
-
-/* material_queue_thumb_blur_final_v2 */
 popover.queue-popover.theme-material-expressive > contents,
 popover.queue-popover.theme-material-expressive > arrow {
   color: @m3_on_surface;
@@ -257,8 +252,6 @@ popover.queue-popover.theme-material-expressive > arrow {
   background-image: none;
   border-color: alpha(@m3_outline, 0.22);
 }
-
-/* m3_settings_surface_priority_fix_v1 */
 dialog.settings-dialog.theme-material-expressive,
 dialog.youtube-settings-dialog.theme-material-expressive,
 dialog.startup-dialog.theme-material-expressive,
@@ -293,8 +286,6 @@ dialog.startup-dialog.theme-material-expressive .material-dialog-toolbar headerb
   background-color: @m3_surface_container;
   background-image: none;
 }
-
-/* m3_settings_explicit_shell_fix_v2 */
 dialog.settings-dialog.theme-material-expressive {
   padding: 0;
   border: none;
@@ -397,8 +388,6 @@ window.noctalia-window searchbar,
 window.noctalia-window searchbar:backdrop {{
   background-color: alpha(@nm_surface_alt, {header:.3});
 }}
-
-/* material_carousel_playing_blur_polish_v1: translucent Material mode */
 window.background.noctalia-window.theme-material-expressive,
 window.background.noctalia-window.theme-material-expressive:backdrop,
 window.noctalia-window.theme-material-expressive,
@@ -468,8 +457,6 @@ window.theme-material-expressive searchbar,
 window.theme-material-expressive searchbar:backdrop {{
   background-color: alpha(@m3_surface_container, {header:.3});
 }}
-
-/* material_carousel_indicator_blur_runtime_v2 */
 window.theme-material-expressive.material-blur-enabled,
 window.theme-material-expressive.material-blur-enabled:backdrop,
 window.background.noctalia-window.theme-material-expressive.material-blur-enabled,
@@ -521,8 +508,6 @@ window.theme-material-expressive.material-blur-enabled viewport {{
   background-color: transparent;
   background-image: none;
 }}
-
-/* material_queue_thumb_blur_final_v2 */
 window.theme-material-expressive.material-blur-enabled .expressive-body,
 window.theme-material-expressive.material-blur-enabled .expressive-dashboard,
 window.theme-material-expressive.material-blur-enabled .navigation-rail-revealer,
@@ -538,8 +523,6 @@ popover.queue-popover.theme-material-expressive > arrow {{
   background-image: none;
   border-color: alpha(@m3_outline, 0.22);
 }}
-
-/* m3_settings_surface_priority_fix_v1 */
 dialog.settings-dialog.theme-material-expressive,
 dialog.youtube-settings-dialog.theme-material-expressive,
 dialog.startup-dialog.theme-material-expressive,
@@ -574,8 +557,6 @@ dialog.startup-dialog.theme-material-expressive .material-dialog-toolbar headerb
   background-color: @m3_surface_container;
   background-image: none;
 }}
-
-/* m3_settings_explicit_shell_fix_v2 */
 dialog.settings-dialog.theme-material-expressive {{
   padding: 0;
   border: none;
