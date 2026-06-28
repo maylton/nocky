@@ -33,6 +33,15 @@ from nocky_youtube_feed import (
     save_cached_page,
 )
 
+from nocky_stream_clients import (
+    build_attempt_command,
+    concise_process_error,
+    error_category,
+    ordered_profiles,
+    policy_snapshot,
+    should_try_next_client,
+)
+
 try:
     import requests
     from ytmusicapi import YTMusic
@@ -956,45 +965,85 @@ def _session_authentication_error(message: str) -> bool:
     )
 
 
-def _authenticated_retry_command(
-    command: list[str],
-    auth_args: list[str],
-) -> list[str]:
-    if not command:
-        return command
+def _select_audio_stream(payload: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    selected_format = payload
+    stream_url = str(payload.get("url") or "").strip()
+    if stream_url:
+        return selected_format, stream_url
 
-    executable = command[:-1]
-    webpage_url = command[-1]
-    filtered: list[str] = []
-    index = 0
-
-    while index < len(executable):
-        argument = executable[index]
-        if argument == "--check-formats":
-            index += 1
-            continue
-        if argument in ("--format", "-f") and index + 1 < len(executable):
-            index += 2
-            continue
-        filtered.append(argument)
-        index += 1
-
-    filtered += auth_args
-    filtered += [
-        "--extractor-args",
-        "youtube:player_client=web_music,web",
+    formats = [
+        item
+        for item in (payload.get("formats") or [])
+        if isinstance(item, dict)
+        and str(item.get("url") or "").strip()
+        and str(item.get("acodec") or "none") != "none"
     ]
-    filtered.append(webpage_url)
-    return filtered
+    audio_only = [
+        item for item in formats if str(item.get("vcodec") or "none") == "none"
+    ]
+    candidates = audio_only or formats
+    if not candidates:
+        return selected_format, ""
+
+    selected_format = max(
+        candidates,
+        key=lambda item: (
+            float(item.get("abr") or 0),
+            float(item.get("tbr") or 0),
+            int(item.get("filesize") or item.get("filesize_approx") or 0),
+        ),
+    )
+    return selected_format, str(selected_format.get("url") or "").strip()
+
+
+def _stream_resolution_error(
+    errors: list[tuple[str, str]],
+    *,
+    has_auth: bool,
+) -> RuntimeError:
+    details = [detail for _client, detail in errors]
+    categories = [error_category(detail) for detail in details]
+    terminal = next(
+        (detail for detail, category in zip(details, categories) if category == "terminal"),
+        "",
+    )
+    if terminal:
+        return RuntimeError(terminal)
+
+    if not has_auth and any(category == "authentication" for category in categories):
+        return RuntimeError(
+            "This track requires a connected YouTube Music browser session. "
+            "Connect the account in Nocky and try again."
+        )
+
+    if has_auth and details and all(
+        "requested format is not available" in detail.lower()
+        or "no playable audio stream" in detail.lower()
+        for detail in details
+    ):
+        return RuntimeError(
+            "__NOCKY_PREMIUM_STREAM_UNAVAILABLE__"
+            "The configured YouTube clients did not expose a compatible audio stream."
+        )
+
+    if has_auth and any(_session_authentication_error(detail) for detail in details):
+        return RuntimeError(
+            "YouTube rejected the saved browser session during stream extraction. "
+            "Reconnect the account in Nocky with a fresh music.youtube.com request."
+        )
+
+    summary = " | ".join(f"{client}: {detail}" for client, detail in errors)
+    return RuntimeError(f"All configured YouTube stream clients failed: {summary}")
 
 
 def _resolve_stream(video_or_url: str, force: bool = False) -> dict[str, Any]:
     video_id = _extract_video_id(video_or_url)
     cache = _load_stream_cache()
     cached = cache.get(video_id)
+    failed_client = ""
     if force and isinstance(cached, dict):
-        # Overwrite the cached entry with an expired marker so _save_stream_cache
-        # removes a URL that the CDN has already rejected.
+        failed_client = str(cached.get("stream_client") or "").strip()
+        # Expire a URL already rejected by the CDN before trying another client.
         cache[video_id] = {"expires_at": 0}
         _save_stream_cache(cache)
         cache.pop(video_id, None)
@@ -1036,115 +1085,75 @@ def _resolve_stream(video_or_url: str, force: bool = False) -> dict[str, Any]:
         f"deno:{deno}",
         webpage_url,
     ]
-    process = subprocess.run(
-        command,
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
+
+    auth_args, cookie_file = _yt_dlp_auth_args()
+    attempts = ordered_profiles(
+        has_auth=bool(auth_args),
+        failed_client=failed_client,
     )
+    if not attempts:
+        raise RuntimeError("No compatible YouTube stream client is enabled")
 
-    used_authenticated_retry = False
-    if process.returncode != 0:
-        lines = [
-            line.strip()
-            for line in (process.stderr or process.stdout).splitlines()
-            if line.strip()
-        ]
-        detail = "\n".join(lines[-6:]) or "yt-dlp could not resolve this track"
+    attempted_clients: list[str] = []
+    errors: list[tuple[str, str]] = []
+    selected_profile = None
+    selected_format: dict[str, Any] = {}
+    payload: dict[str, Any] = {}
+    stream_url = ""
 
-        retry_with_auth = (
-            _premium_authentication_error(detail)
-            or _session_authentication_error(detail)
-            or "requested format is not available" in detail.lower()
-        )
-        if retry_with_auth:
-            auth_args, cookie_file = _yt_dlp_auth_args()
-            if not auth_args:
-                raise RuntimeError(
-                    "This track requires YouTube Music Premium. "
-                    "Connect a Premium browser session in Nocky and try again."
-                )
-
-            authenticated_command = _authenticated_retry_command(command, auth_args)
+    try:
+        for profile in attempts:
+            attempted_clients.append(profile.key)
+            attempt_command = build_attempt_command(
+                command,
+                webpage_url,
+                profile,
+                auth_args,
+            )
             try:
                 process = subprocess.run(
-                    authenticated_command,
+                    attempt_command,
                     capture_output=True,
                     text=True,
                     timeout=60,
                     check=False,
                 )
-                used_authenticated_retry = process.returncode == 0
-            finally:
-                if cookie_file is not None:
-                    try:
-                        cookie_file.unlink(missing_ok=True)
-                    except OSError:
-                        pass
+            except subprocess.TimeoutExpired:
+                detail = "The YouTube stream resolver timed out"
+                errors.append((profile.key, detail))
+                continue
 
             if process.returncode != 0:
-                retry_lines = [
-                    line.strip()
-                    for line in (process.stderr or process.stdout).splitlines()
-                    if line.strip()
-                ]
-                retry_detail = (
-                    "\n".join(retry_lines[-6:])
-                    or "yt-dlp could not resolve this Premium track"
-                )
-                retry_normalized = retry_detail.lower()
-                if "requested format is not available" in retry_normalized:
-                    raise RuntimeError(
-                        "__NOCKY_PREMIUM_STREAM_UNAVAILABLE__"
-                        "This Premium track did not expose a compatible audio stream."
-                    )
-                if _premium_authentication_error(retry_detail):
-                    raise RuntimeError(
-                        "YouTube Music Premium rejected the saved browser session. "
-                        "Reconnect the account in Nocky and try the download again."
-                    )
-                if _session_authentication_error(retry_detail):
-                    raise RuntimeError(
-                        "YouTube rejected the saved browser session during stream extraction. "
-                        "Reconnect the account in Nocky with a fresh music.youtube.com request."
-                    )
-                raise RuntimeError(retry_detail)
-        else:
-            raise RuntimeError(detail)
-    payload = json.loads(process.stdout)
-    if used_authenticated_retry:
-        payload["_nocky_authenticated_retry"] = True
+                detail = concise_process_error(process.stderr, process.stdout)
+                errors.append((profile.key, detail))
+                if not should_try_next_client(detail):
+                    break
+                continue
 
-    selected_format = payload
-    stream_url = str(payload.get("url") or "").strip()
-    if not stream_url:
-        formats = [
-            item
-            for item in (payload.get("formats") or [])
-            if isinstance(item, dict)
-            and str(item.get("url") or "").strip()
-            and str(item.get("acodec") or "none") != "none"
-        ]
-        audio_only = [
-            item
-            for item in formats
-            if str(item.get("vcodec") or "none") == "none"
-        ]
-        candidates = audio_only or formats
-        if candidates:
-            selected_format = max(
-                candidates,
-                key=lambda item: (
-                    float(item.get("abr") or 0),
-                    float(item.get("tbr") or 0),
-                    int(item.get("filesize") or item.get("filesize_approx") or 0),
-                ),
-            )
-            stream_url = str(selected_format.get("url") or "").strip()
+            try:
+                payload = json.loads(process.stdout)
+            except json.JSONDecodeError as error:
+                detail = f"yt-dlp returned invalid JSON: {error}"
+                errors.append((profile.key, detail))
+                continue
 
-    if not stream_url:
-        raise RuntimeError("yt-dlp returned no playable audio stream URL")
+            selected_format, stream_url = _select_audio_stream(payload)
+            if not stream_url:
+                detail = "yt-dlp returned no playable audio stream URL"
+                errors.append((profile.key, detail))
+                continue
+
+            selected_profile = profile
+            break
+    finally:
+        if cookie_file is not None:
+            try:
+                cookie_file.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    if selected_profile is None or not stream_url:
+        raise _stream_resolution_error(errors, has_auth=bool(auth_args))
 
     headers = {
         str(key): str(value)
@@ -1159,6 +1168,7 @@ def _resolve_stream(video_or_url: str, force: bool = False) -> dict[str, Any]:
     thumbnails = payload.get("thumbnails") or []
     if thumbnails:
         thumbnail = _best_thumbnail(thumbnails) or thumbnail
+
     result = {
         "video_id": video_id,
         "stream_url": stream_url,
@@ -1173,11 +1183,20 @@ def _resolve_stream(video_or_url: str, force: bool = False) -> dict[str, Any]:
         "protocol": str(selected_format.get("protocol") or ""),
         "container": str(selected_format.get("ext") or ""),
         "audio_codec": str(selected_format.get("acodec") or ""),
+        "stream_client": selected_profile.key,
+        "stream_client_label": selected_profile.label,
+        "attempted_clients": attempted_clients,
+        "fallback_used": len(attempted_clients) > 1,
         "expires_at": time.time() + STREAM_CACHE_TTL,
     }
     cache[video_id] = result
     _save_stream_cache(cache)
     return result
+
+
+def command_stream_clients(_payload: dict[str, Any]) -> dict[str, object]:
+    session = _load_session()
+    return policy_snapshot(has_auth=bool(session.get("headers")))
 
 
 def command_status(_payload: dict[str, Any]) -> dict[str, Any]:
@@ -1663,6 +1682,7 @@ def command_resolve(payload: dict[str, Any]) -> dict[str, Any]:
 
 COMMANDS = {
     "status": command_status,
+    "stream_clients": command_stream_clients,
     "connect": command_connect,
     "disconnect": command_disconnect,
     "search": command_search,
@@ -1683,7 +1703,7 @@ COMMANDS = {
 def main() -> int:
     try:
         if len(sys.argv) != 2 or sys.argv[1] not in COMMANDS:
-            raise RuntimeError("Usage: nocky_youtube.py <status|connect|disconnect|search|library|library_v2|liked|rate|home|home_v2|playlists|playlist|collection|artist|resolve>")
+            raise RuntimeError("Usage: nocky_youtube.py <status|stream_clients|connect|disconnect|search|library|library_v2|liked|rate|home|home_v2|playlists|playlist|collection|artist|resolve>")
         payload = _read_input()
         result = COMMANDS[sys.argv[1]](payload)
         _emit({"ok": True, "result": result})

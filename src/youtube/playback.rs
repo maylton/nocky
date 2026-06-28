@@ -81,6 +81,7 @@ impl AppController {
                     thumbnail_url: item.thumbnail_url.clone(),
                     http_headers: Default::default(),
                     expires_at: 0.0,
+                    ..YouTubeStream::default()
                 };
                 let cover = item.cached_cover().map(Path::to_path_buf);
                 self.apply_youtube_track(queue, index, item, stream, cover);
@@ -307,6 +308,22 @@ impl AppController {
         } else {
             self.startup_restore_autoplay.replace(None).unwrap_or(true)
         };
+        if !stream.stream_client.is_empty() {
+            let label = if stream.stream_client_label.is_empty() {
+                stream.stream_client.as_str()
+            } else {
+                stream.stream_client_label.as_str()
+            };
+            eprintln!(
+                "Nocky YouTube stream resolved with {label}; fallback={}, attempts=[{}], format={}, protocol={}, codec={}",
+                stream.fallback_used,
+                stream.attempted_clients.join(", "),
+                stream.format_id,
+                stream.protocol,
+                stream.audio_codec,
+            );
+        }
+
         if let Err(error) =
             self.player
                 .load_with_headers(&stream.stream_url, autoplay, stream.http_headers.clone())

@@ -699,6 +699,14 @@ pub struct YouTubeStream {
     pub duration_seconds: u64,
     pub thumbnail_url: String,
     pub http_headers: HashMap<String, String>,
+    pub format_id: String,
+    pub protocol: String,
+    pub container: String,
+    pub audio_codec: String,
+    pub stream_client: String,
+    pub stream_client_label: String,
+    pub attempted_clients: Vec<String>,
+    pub fallback_used: bool,
     pub expires_at: f64,
 }
 
