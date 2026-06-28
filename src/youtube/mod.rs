@@ -946,7 +946,15 @@ impl YouTubeBridge {
     }
 
     pub fn library_overview(&self) -> Result<YouTubeHomePage, String> {
-        self.run("library_v2", json!({ "limit": 80 }))
+        self.run("library_v2", json!({ "limit": 120 }))
+    }
+
+    pub fn library_page(&self) -> Result<YouTubeHomePage, String> {
+        self.run("library_page_v2", json!({ "limit": 160 }))
+    }
+
+    pub fn liked_page(&self) -> Result<YouTubeHomePage, String> {
+        self.run("liked_v2", json!({ "limit": 160 }))
     }
 
     pub fn sync_library(&self) -> Result<YouTubeLibrarySnapshot, String> {

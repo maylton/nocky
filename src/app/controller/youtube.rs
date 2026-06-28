@@ -634,23 +634,25 @@ impl AppController {
                 }
                 YouTubePageEvent::LoadLibrary => {
                     self.youtube_page
-                        .set_loading(true, "Carregando sua biblioteca...");
+                        .set_loading(true, "Montando sua biblioteca...");
                     let sender = self.background.sender();
                     thread::spawn(move || {
-                        let _ = sender.send(BackgroundMessage::YouTubeItems {
+                        let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
                             title: "Sua biblioteca do YouTube Music".to_string(),
-                            result: bridge.library(),
+                            append: false,
+                            result: bridge.library_page(),
                         });
                     });
                 }
                 YouTubePageEvent::LoadLiked => {
                     self.youtube_page
-                        .set_loading(true, "Carregando músicas curtidas...");
+                        .set_loading(true, "Montando suas curtidas...");
                     let sender = self.background.sender();
                     thread::spawn(move || {
-                        let _ = sender.send(BackgroundMessage::YouTubeItems {
-                            title: "Músicas curtidas".to_string(),
-                            result: bridge.liked(),
+                        let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
+                            title: "Suas curtidas no YouTube Music".to_string(),
+                            append: false,
+                            result: bridge.liked_page(),
                         });
                     });
                 }

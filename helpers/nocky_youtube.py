@@ -661,6 +661,101 @@ def _artist_item(result: dict[str, Any], source: str = "") -> dict[str, Any] | N
     }
 
 
+def _song_collection_items(
+    results: Any,
+    source: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Derive album and artist collection rows from song metadata.
+
+    YouTube Music often returns a populated song library while the dedicated
+    library-albums/library-artists endpoints are empty. Title-only rows remain
+    useful because the native collection loader can resolve them through search.
+    """
+
+    albums: list[dict[str, Any]] = []
+    artists: list[dict[str, Any]] = []
+
+    for result in results or []:
+        if not isinstance(result, dict):
+            continue
+
+        album_data = result.get("album") or {}
+        if isinstance(album_data, dict):
+            album_title = _text(
+                album_data.get("name")
+                or album_data.get("title")
+                or album_data.get("text")
+            )
+            album_id = _text(
+                album_data.get("id")
+                or album_data.get("browseId")
+                or album_data.get("browse_id")
+            )
+        else:
+            album_title = _text(album_data)
+            album_id = ""
+
+        song_artists = _names(result.get("artists") or result.get("artist"))
+        thumbnail_url = _best_thumbnail(_thumbnails(result))
+        if album_title:
+            albums.append(
+                {
+                    "result_type": "album",
+                    "title": album_title,
+                    "subtitle": " • ".join(
+                        value for value in (song_artists, source) if value
+                    ),
+                    "video_id": "",
+                    "browse_id": album_id,
+                    "album": album_title,
+                    "artist": song_artists,
+                    "playlist_kind": "",
+                    "params": "",
+                    "duration_seconds": 0,
+                    "thumbnail_url": thumbnail_url,
+                }
+            )
+
+        artist_values = result.get("artists") or result.get("artist") or []
+        if not isinstance(artist_values, list):
+            artist_values = [artist_values]
+        for artist_data in artist_values:
+            if isinstance(artist_data, dict):
+                artist_title = _text(
+                    artist_data.get("name")
+                    or artist_data.get("title")
+                    or artist_data.get("artist")
+                )
+                artist_id = _text(
+                    artist_data.get("id")
+                    or artist_data.get("browseId")
+                    or artist_data.get("browse_id")
+                    or artist_data.get("channelId")
+                )
+            else:
+                artist_title = _text(artist_data)
+                artist_id = ""
+            if not artist_title:
+                continue
+            artists.append(
+                {
+                    "result_type": "artist",
+                    "title": artist_title,
+                    "subtitle": source,
+                    "video_id": "",
+                    "browse_id": artist_id,
+                    "album": "",
+                    "artist": artist_title,
+                    "playlist_kind": "",
+                    "params": "",
+                    "duration_seconds": 0,
+                    "thumbnail_url": thumbnail_url,
+                }
+            )
+
+    return _dedupe(albums), _dedupe(artists)
+
+
 def _search_item(result: dict[str, Any]) -> dict[str, Any] | None:
     result_type = str(result.get("resultType") or "").strip().lower()
     if result_type in {"song", "video"}:
@@ -1352,70 +1447,132 @@ def command_home_v2(payload: dict[str, Any]) -> dict[str, Any]:
         raise
 
 
-def command_library_v2(payload: dict[str, Any]) -> dict[str, Any]:
-    if not _load_session().get("headers"):
-        raise RuntimeError("Connect a YouTube Music browser session first")
-    limit = max(12, min(200, int(payload.get("limit") or 80)))
-    cache_key = _feed_cache_key("library", "", limit)
-    client = _create_client(authenticated=True)
+def _account_library_page(
+    client: Any,
+    limit: int,
+    mode: str,
+) -> dict[str, Any]:
+    if mode not in {"overview", "library", "liked"}:
+        raise RuntimeError("Invalid YouTube Music account-page mode")
 
-    try:
+    songs_data: Any = []
+    liked_results: Any = []
+    playlists_data: Any = []
+    albums_data: Any = []
+    artists_data: Any = []
+
+    if mode in {"overview", "library"}:
         songs_data = _library_method(
             client,
             "get_library_songs",
             limit,
             order="recently_added",
         )
+        playlists_data = _library_method(client, "get_library_playlists", limit)
+        albums_data = _library_method(client, "get_library_albums", limit)
+        artists_data = _library_method(client, "get_library_artists", limit)
+
+    if mode in {"overview", "liked"}:
         liked_data = _library_method(client, "get_liked_songs", limit)
         liked_results = (
             liked_data.get("tracks") or []
             if isinstance(liked_data, dict)
             else liked_data or []
         )
-        playlists_data = _library_method(client, "get_library_playlists", limit)
-        albums_data = _library_method(client, "get_library_albums", limit)
-        artists_data = _library_method(client, "get_library_artists", limit)
 
-        songs = [
+    songs = _dedupe(
+        [
             item
             for result in songs_data or []
             if isinstance(result, dict)
             if (item := _song_item(result))
         ]
-        liked = [
+    )
+    liked = _dedupe(
+        [
             item
             for result in liked_results or []
             if isinstance(result, dict)
             if (item := _song_item(result))
         ]
-        playlists = [
+    )
+    playlists = _dedupe(
+        [
             item
             for result in playlists_data or []
             if isinstance(result, dict)
             if (item := _playlist_item(result, "Library playlist"))
         ]
-        albums = [
+    )
+    explicit_albums = _dedupe(
+        [
             item
             for result in albums_data or []
             if isinstance(result, dict)
-            if (item := _album_item(result, "Library album"))
+            if (item := _album_item(result, "Álbum salvo"))
         ]
-        artists = [
+    )
+    explicit_artists = _dedupe(
+        [
             item
             for result in artists_data or []
             if isinstance(result, dict)
-            if (item := _artist_item(result, "Library artist"))
+            if (item := _artist_item(result, "Artista salvo"))
+        ]
+    )
+
+    library_albums, library_artists = _song_collection_items(
+        songs_data,
+        "Na biblioteca",
+    )
+    liked_albums, liked_artists = _song_collection_items(
+        liked_results,
+        "Nas curtidas",
+    )
+
+    if mode == "overview":
+        albums = _dedupe(explicit_albums + library_albums + liked_albums)
+        artists = _dedupe(explicit_artists + library_artists + liked_artists)
+        sections = [
+            ("Adicionadas recentemente", "list", songs[:60]),
+            ("Músicas curtidas", "list", liked[:60]),
+            ("Suas playlists", "carousel", playlists[:24]),
+            ("Álbuns", "carousel", albums[:36]),
+            ("Artistas", "carousel", artists[:36]),
+        ]
+    elif mode == "library":
+        albums = _dedupe(explicit_albums + library_albums)
+        artists = _dedupe(explicit_artists + library_artists)
+        sections = [
+            ("Músicas da biblioteca", "list", songs[:120]),
+            ("Playlists", "carousel", playlists[:36]),
+            ("Álbuns", "carousel", albums[:36]),
+            ("Artistas", "carousel", artists[:36]),
+        ]
+    else:
+        sections = [
+            ("Músicas curtidas", "list", liked[:120]),
+            ("Álbuns das curtidas", "carousel", liked_albums[:36]),
+            ("Artistas das curtidas", "carousel", liked_artists[:36]),
         ]
 
-        page = build_library_overview(
-            [
-                ("Adicionadas recentemente", "list", _dedupe(songs)),
-                ("Músicas curtidas", "list", _dedupe(liked)),
-                ("Suas playlists", "carousel", _dedupe(playlists)),
-                ("Álbuns da biblioteca", "carousel", _dedupe(albums)),
-                ("Artistas da biblioteca", "carousel", _dedupe(artists)),
-            ]
-        )
+    return build_library_overview(sections)
+
+
+def _cached_account_page(
+    payload: dict[str, Any],
+    mode: str,
+) -> dict[str, Any]:
+    if not _load_session().get("headers"):
+        raise RuntimeError("Connect a YouTube Music browser session first")
+
+    limit = max(12, min(250, int(payload.get("limit") or 120)))
+    # v3 keys deliberately bypass incomplete v2 caches that contained songs only.
+    cache_key = _feed_cache_key(f"{mode}_v3", "", limit)
+    client = _create_client(authenticated=True)
+
+    try:
+        page = _account_library_page(client, limit, mode)
         save_cached_page(_home_feed_cache_path(), cache_key, page)
         return page
     except Exception as error:
@@ -1425,9 +1582,24 @@ def command_library_v2(payload: dict[str, Any]) -> dict[str, Any]:
             allow_stale=True,
         )
         if cached is not None:
-            print(f"Nocky YouTube library v2 using cached data: {error}", file=sys.stderr)
+            print(
+                f"Nocky YouTube {mode} page using cached data: {error}",
+                file=sys.stderr,
+            )
             return cached
         raise
+
+
+def command_library_v2(payload: dict[str, Any]) -> dict[str, Any]:
+    return _cached_account_page(payload, "overview")
+
+
+def command_library_page_v2(payload: dict[str, Any]) -> dict[str, Any]:
+    return _cached_account_page(payload, "library")
+
+
+def command_liked_v2(payload: dict[str, Any]) -> dict[str, Any]:
+    return _cached_account_page(payload, "liked")
 
 
 def command_playlist(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1692,6 +1864,8 @@ COMMANDS = {
     "home": command_home,
     "home_v2": command_home_v2,
     "library_v2": command_library_v2,
+    "library_page_v2": command_library_page_v2,
+    "liked_v2": command_liked_v2,
     "playlists": command_playlists,
     "playlist": command_playlist,
     "collection": command_collection,
@@ -1703,7 +1877,7 @@ COMMANDS = {
 def main() -> int:
     try:
         if len(sys.argv) != 2 or sys.argv[1] not in COMMANDS:
-            raise RuntimeError("Usage: nocky_youtube.py <status|stream_clients|connect|disconnect|search|library|library_v2|liked|rate|home|home_v2|playlists|playlist|collection|artist|resolve>")
+            raise RuntimeError("Usage: nocky_youtube.py <status|stream_clients|connect|disconnect|search|library|library_v2|library_page_v2|liked|liked_v2|rate|home|home_v2|playlists|playlist|collection|artist|resolve>")
         payload = _read_input()
         result = COMMANDS[sys.argv[1]](payload)
         _emit({"ok": True, "result": result})
