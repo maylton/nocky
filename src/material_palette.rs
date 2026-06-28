@@ -60,6 +60,8 @@ pub(crate) struct MaterialPalette {
     on_surface: Rgb,
     on_surface_variant: Rgb,
     outline: Rgb,
+    outline_variant: Rgb,
+    error: Rgb,
 }
 
 impl MaterialPalette {
@@ -108,6 +110,8 @@ impl MaterialPalette {
                 .on_surface_variant
                 .mix(target.on_surface_variant, amount),
             outline: self.outline.mix(target.outline, amount),
+            outline_variant: self.outline_variant.mix(target.outline_variant, amount),
+            error: self.error.mix(target.error, amount),
         }
     }
 
@@ -167,6 +171,8 @@ impl MaterialPalette {
             on_surface: readable_on(surface),
             on_surface_variant: hsl_to_rgb(hue, 0.10, 0.78),
             outline: hsl_to_rgb(hue, 0.08, 0.58),
+            outline_variant: hsl_to_rgb(hue, 0.08, 0.38),
+            error: Rgb::new(255, 180, 171),
         }
     }
 
@@ -188,6 +194,8 @@ impl MaterialPalette {
         let on_surface = self.on_surface.hex();
         let on_surface_variant = self.on_surface_variant.hex();
         let outline = self.outline.hex();
+        let outline_variant = self.outline_variant.hex();
+        let error = self.error.hex();
 
         format!(
             r#"
@@ -208,6 +216,8 @@ impl MaterialPalette {
 @define-color m3_on_surface {on_surface};
 @define-color m3_on_surface_variant {on_surface_variant};
 @define-color m3_outline {outline};
+@define-color m3_outline_variant {outline_variant};
+@define-color m3_error {error};
 
 window.theme-material-expressive,
 window.theme-material-expressive > toastoverlay,
@@ -1157,6 +1167,14 @@ mod tests {
         assert_accessible(palette.secondary_container, palette.on_secondary_container);
         assert_accessible(palette.tertiary_container, palette.on_tertiary_container);
         assert_accessible(palette.surface, palette.on_surface);
+    }
+
+    #[test]
+    fn dynamic_css_exports_extended_material_roles() {
+        let css = MaterialPalette::fallback().to_css();
+
+        assert!(css.contains("@define-color m3_outline_variant"));
+        assert!(css.contains("@define-color m3_error"));
     }
 
     #[test]

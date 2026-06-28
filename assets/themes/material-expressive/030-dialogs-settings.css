@@ -137,7 +137,7 @@ window.theme-material-expressive
 .theme-material-expressive .startup-dialog-title {
   color: @m3_on_surface;
   font-weight: 850;
-  letter-spacing: -0.3px;
+  letter-spacing: 0;
 }
 
 .theme-material-expressive .settings-description,

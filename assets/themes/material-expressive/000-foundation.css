@@ -13,6 +13,8 @@
 @define-color m3_on_surface #e3e2e9;
 @define-color m3_on_surface_variant #c6c5d0;
 @define-color m3_outline #90909b;
+@define-color m3_outline_variant #46464f;
+@define-color m3_error #ffb4ab;
 
 window.theme-material-expressive,
 window.theme-material-expressive > toastoverlay,
@@ -188,7 +190,7 @@ window.theme-material-expressive .player-metadata-surface {
 window.theme-material-expressive .player-track-title {
   font-size: 1.32rem;
   font-weight: 850;
-  letter-spacing: -0.35px;
+  letter-spacing: 0;
 }
 
 window.theme-material-expressive .player-artist {
@@ -317,7 +319,7 @@ window.theme-material-expressive .footer-metadata {
 
 window.theme-material-expressive .footer-track-title {
   font-weight: 820;
-  letter-spacing: -0.16px;
+  letter-spacing: 0;
 }
 
 window.theme-material-expressive .footer-track-artist {

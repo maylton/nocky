@@ -178,7 +178,7 @@ window.theme-material-expressive .home-section-title,
 window.theme-material-expressive .collection-page-title {
   color: @m3_on_surface;
   font-weight: 820;
-  letter-spacing: -0.28px;
+  letter-spacing: 0;
 }
 
 window.theme-material-expressive .home-carousel-scroll,

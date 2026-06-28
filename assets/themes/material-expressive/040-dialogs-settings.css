@@ -124,7 +124,7 @@
   color: @m3_on_surface;
   font-size: 1.02rem;
   font-weight: 820;
-  letter-spacing: -0.12px;
+  letter-spacing: 0;
 }
 
 .theme-material-expressive .settings-group-description {
