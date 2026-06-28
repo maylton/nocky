@@ -2,7 +2,7 @@ use std::thread;
 
 use super::AppController;
 use crate::{
-    background::BackgroundMessage,
+    background::{youtube_home_response_is_current, BackgroundMessage},
     config::StartupSource,
     youtube::{
         cacheable_youtube_playlist, clear_library_cache, queue_library_cache_save,
@@ -818,42 +818,53 @@ impl AppController {
                     Err(error) => self.youtube_page.show_error(&error),
                 },
                 BackgroundMessage::YouTubeStructuredPage {
+                    request_id,
                     title,
                     home,
                     append,
                     result,
-                } => match result {
-                    Ok(page) => {
-                        if home {
-                            {
-                                let mut current = self.youtube_home_page.borrow_mut();
-                                if append {
-                                    current.merge_page(page.clone());
-                                } else {
-                                    let mut next = page.clone();
-                                    if next.chips.is_empty()
-                                        && !next.selected_chip_params.is_empty()
-                                        && !current.chips.is_empty()
-                                    {
-                                        next.chips = current.chips.clone();
+                } if youtube_home_response_is_current(
+                    home,
+                    request_id,
+                    self.youtube_home_request_id.get(),
+                ) =>
+                {
+                    match result {
+                        Ok(page) => {
+                            if home {
+                                {
+                                    let mut current = self.youtube_home_page.borrow_mut();
+                                    if append {
+                                        current.merge_page(page.clone());
+                                    } else {
+                                        let mut next = page.clone();
+                                        if next.chips.is_empty()
+                                            && !next.selected_chip_params.is_empty()
+                                            && !current.chips.is_empty()
+                                        {
+                                            next.chips = current.chips.clone();
+                                        }
+                                        *current = next;
                                     }
-                                    *current = next;
+                                }
+                                if self.config.borrow().startup_source
+                                    == Some(StartupSource::YouTube)
+                                {
+                                    self.refresh_browser();
                                 }
                             }
-                            if self.config.borrow().startup_source == Some(StartupSource::YouTube) {
-                                self.refresh_browser();
-                            }
+                            self.youtube_page.show_structured_page(&title, page, append);
                         }
-                        self.youtube_page.show_structured_page(&title, page, append);
+                        Err(error) if append => {
+                            self.youtube_page.set_loading(false, &title);
+                            self.show_toast(&format!(
+                                "Não foi possível carregar mais recomendações: {error}"
+                            ));
+                        }
+                        Err(error) => self.youtube_page.show_error(&error),
                     }
-                    Err(error) if append => {
-                        self.youtube_page.set_loading(false, &title);
-                        self.show_toast(&format!(
-                            "Não foi possível carregar mais recomendações: {error}"
-                        ));
-                    }
-                    Err(error) => self.youtube_page.show_error(&error),
-                },
+                }
+                BackgroundMessage::YouTubeStructuredPage { .. } => {}
                 BackgroundMessage::YouTubeRecoveryRetry {
                     generation,
                     queue,

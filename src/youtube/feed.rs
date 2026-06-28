@@ -41,6 +41,16 @@ pub struct YouTubeHomePage {
     pub continuation: String,
 }
 
+impl YouTubeHomeSection {
+    pub fn playable_queue(&self) -> Vec<YouTubeItem> {
+        self.items
+            .iter()
+            .filter(|item| item.playable())
+            .cloned()
+            .collect()
+    }
+}
+
 impl YouTubeHomePage {
     #[cfg(test)]
     pub fn item_count(&self) -> usize {
@@ -126,6 +136,31 @@ mod tests {
 
         assert_eq!(first.item_count(), 2);
         assert!(first.continuation.is_empty());
+    }
+
+    #[test]
+    fn playable_queue_preserves_section_order() {
+        let section = YouTubeHomeSection {
+            items: vec![
+                item("one", "One"),
+                YouTubeItem {
+                    result_type: "album".to_string(),
+                    browse_id: "MPRE".to_string(),
+                    ..YouTubeItem::default()
+                },
+                item("two", "Two"),
+            ],
+            ..YouTubeHomeSection::default()
+        };
+
+        let queue = section.playable_queue();
+        assert_eq!(
+            queue
+                .iter()
+                .map(|item| item.video_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["one", "two"]
+        );
     }
 
     #[test]

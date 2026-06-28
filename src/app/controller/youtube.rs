@@ -542,6 +542,8 @@ impl AppController {
         };
         let append = !continuation.is_empty();
         let filtered = !params.is_empty();
+        let request_id = self.youtube_home_request_id.get().wrapping_add(1);
+        self.youtube_home_request_id.set(request_id);
         self.youtube_page.set_loading(
             true,
             if append {
@@ -564,6 +566,7 @@ impl AppController {
                     page
                 });
             let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
+                request_id,
                 title: "Para você".to_string(),
                 home: true,
                 append,
@@ -583,6 +586,7 @@ impl AppController {
         let sender = self.background.sender();
         thread::spawn(move || {
             let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
+                request_id: 0,
                 title: "Sua biblioteca do YouTube Music".to_string(),
                 home: false,
                 append: false,
@@ -664,6 +668,7 @@ impl AppController {
                     let sender = self.background.sender();
                     thread::spawn(move || {
                         let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
+                            request_id: 0,
                             title: "Sua biblioteca do YouTube Music".to_string(),
                             home: false,
                             append: false,
@@ -680,6 +685,7 @@ impl AppController {
                     let sender = self.background.sender();
                     thread::spawn(move || {
                         let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
+                            request_id: 0,
                             title: "Suas curtidas no YouTube Music".to_string(),
                             home: false,
                             append: false,

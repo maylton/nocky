@@ -80,6 +80,7 @@ pub(crate) enum BackgroundMessage {
         result: Result<Vec<YouTubeItem>, String>,
     },
     YouTubeStructuredPage {
+        request_id: u64,
         title: String,
         home: bool,
         append: bool,
@@ -119,6 +120,14 @@ pub(crate) enum BackgroundMessage {
     },
 }
 
+pub(crate) fn youtube_home_response_is_current(
+    home: bool,
+    request_id: u64,
+    current_request_id: u64,
+) -> bool {
+    !home || request_id == current_request_id
+}
+
 pub(crate) struct BackgroundChannel {
     sender: Sender<BackgroundMessage>,
     receiver: Receiver<BackgroundMessage>,
@@ -136,5 +145,17 @@ impl BackgroundChannel {
 
     pub(crate) fn try_recv(&self) -> Result<BackgroundMessage, TryRecvError> {
         self.receiver.try_recv()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::youtube_home_response_is_current;
+
+    #[test]
+    fn rejects_stale_home_responses_but_accepts_non_home_pages() {
+        assert!(youtube_home_response_is_current(true, 7, 7));
+        assert!(!youtube_home_response_is_current(true, 6, 7));
+        assert!(youtube_home_response_is_current(false, 0, 7));
     }
 }
