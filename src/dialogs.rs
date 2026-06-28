@@ -46,7 +46,7 @@ pub(crate) enum SettingsEvent {
     ClearOfflineDownloads,
 }
 
-pub(crate) fn present_youtube_settings<W>(parent: &adw::ApplicationWindow, root: &W)
+pub(crate) fn present_youtube_settings<W>(parent: &adw::ApplicationWindow, root: &W) -> adw::Dialog
 where
     W: IsA<gtk::Widget> + Clone + 'static,
 {
@@ -73,6 +73,7 @@ where
         host.remove(&youtube_root);
     });
     dialog.present(Some(parent));
+    dialog
 }
 
 pub(crate) fn present_startup_source<F>(

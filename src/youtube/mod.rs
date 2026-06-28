@@ -9,8 +9,8 @@ mod structured_cards;
 
 use crate::search_text::{normalize_search_text, search_matches, search_score};
 use crate::ui::widgets::ExpressiveLoadingIndicator;
+use adw::prelude::*;
 use gtk::glib;
-use gtk::prelude::*;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::json;
 use std::{
@@ -1101,6 +1101,8 @@ pub struct YouTubePage {
     heading: gtk::Label,
     loading: ExpressiveLoadingIndicator,
     results: gtk::ListBox,
+    results_scroll: gtk::ScrolledWindow,
+    host_dialog: RefCell<Option<adw::Dialog>>,
     items: RefCell<Vec<YouTubeItem>>,
     structured_page: RefCell<YouTubeHomePage>,
     event_tx: Sender<YouTubePageEvent>,
@@ -1277,6 +1279,8 @@ impl YouTubePage {
             heading,
             loading,
             results,
+            results_scroll,
+            host_dialog: RefCell::new(None),
             items: RefCell::new(Vec::new()),
             structured_page: RefCell::new(YouTubeHomePage::default()),
             event_tx,
@@ -1451,6 +1455,16 @@ impl YouTubePage {
         &self.root
     }
 
+    pub fn set_host_dialog(&self, dialog: adw::Dialog) {
+        self.host_dialog.replace(Some(dialog));
+    }
+
+    pub fn close_host_dialog(&self) {
+        if let Some(dialog) = self.host_dialog.borrow_mut().take() {
+            dialog.close();
+        }
+    }
+
     pub fn try_recv(&self) -> Option<YouTubePageEvent> {
         self.event_rx.try_recv().ok()
     }
@@ -1483,6 +1497,8 @@ impl YouTubePage {
     }
 
     pub fn show_structured_page(&self, title: &str, page: YouTubeHomePage, append: bool) {
+        let previous_scroll = append.then(|| self.results_scroll.vadjustment().value());
+
         {
             let mut current = self.structured_page.borrow_mut();
             if append {
@@ -1574,6 +1590,14 @@ impl YouTubePage {
                 .append(&empty_row("Nenhuma seção foi retornada pelo YouTube Music"));
         }
         self.items.replace(rows);
+
+        if let Some(previous_scroll) = previous_scroll {
+            let adjustment = self.results_scroll.vadjustment();
+            glib::idle_add_local_once(move || {
+                let maximum = (adjustment.upper() - adjustment.page_size()).max(adjustment.lower());
+                adjustment.set_value(previous_scroll.clamp(adjustment.lower(), maximum));
+            });
+        }
     }
 
     pub fn show_items(&self, title: &str, items: Vec<YouTubeItem>) {

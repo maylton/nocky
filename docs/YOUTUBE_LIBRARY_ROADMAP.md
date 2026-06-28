@@ -71,7 +71,7 @@ Validated with a connected account:
 
 Still required before completion:
 
-- Validate continuation append behavior in the UI.
+- Validate preserved scroll position after continuation append.
 - Validate stale-cache fallback in an offline/failure scenario.
 - Complete narrow-window and keyboard/focus checks.
 
@@ -111,9 +111,7 @@ Delivered:
 
 Pending live validation:
 
-- Open an album card and confirm the native album route.
-- Open an artist card and confirm the native artist route.
-- Open a playlist card and confirm the native playlist route.
+- Native album, artist and playlist transitions now close the YouTube dialog and reveal the routed browser page; live validation pending.
 - Confirm podcast/episode behavior for content returned by the account.
 - Keep chips non-actionable until a stable helper endpoint is available.
 
@@ -144,6 +142,8 @@ Delivered or implemented:
 - Structured-page events for opening albums and artists.
 - Podcast and episode activation behavior with explicit unsupported feedback.
 - Current page state is preserved while collection data loads.
+- Native collection navigation closes the YouTube dialog before revealing the browser route.
+- Continuation rebuilds preserve the previous vertical scroll position.
 - Horizontal action bar remains usable in narrow windows.
 - Card buttons support normal GTK keyboard activation.
 - Fixture, Rust and Python tests cover item-action routing and account-page ordering.
@@ -151,8 +151,8 @@ Delivered or implemented:
 
 Manual acceptance gate still required:
 
-- Validate feed continuation in the UI.
-- Open album, artist and playlist cards.
+- Validate preserved scroll after feed continuation.
+- Validate album, artist and playlist transitions into the native browser.
 - Exercise playback recovery/client fallback.
 - Exercise stale-cache fallback.
 - Confirm focus order and narrow-window usability.

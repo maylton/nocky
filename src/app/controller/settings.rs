@@ -209,7 +209,8 @@ impl AppController {
     }
 
     pub(crate) fn show_youtube_settings_dialog(self: &Rc<Self>) {
-        dialogs::present_youtube_settings(&self.window, self.youtube_page.root());
+        let dialog = dialogs::present_youtube_settings(&self.window, self.youtube_page.root());
+        self.youtube_page.set_host_dialog(dialog);
     }
 
     pub(crate) fn show_onboarding_wizard(self: &Rc<Self>) {

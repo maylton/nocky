@@ -586,6 +586,13 @@ impl AppController {
         });
     }
 
+    fn prepare_native_youtube_route(&self) {
+        self.youtube_page.close_host_dialog();
+        self.close_settings_page();
+        self.views.set_visible_child_name("music");
+        self.music_stack.set_visible_child_name("library");
+    }
+
     pub(crate) fn handle_youtube_events(&self) {
         while let Some(event) = self.youtube_page.try_recv() {
             let Some(bridge) = self.youtube_bridge.clone() else {
@@ -682,9 +689,11 @@ impl AppController {
                     });
                 }
                 YouTubePageEvent::OpenPlaylist(item) => {
+                    self.prepare_native_youtube_route();
                     self.load_youtube_playlist_for_browser(item);
                 }
                 YouTubePageEvent::OpenCollection(item) => {
+                    self.prepare_native_youtube_route();
                     self.load_youtube_collection_for_browser(item);
                 }
                 YouTubePageEvent::UnsupportedItem { title, result_type } => {
