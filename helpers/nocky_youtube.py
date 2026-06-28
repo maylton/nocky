@@ -384,7 +384,7 @@ def _parse_browser_headers(raw_text: str) -> dict[str, str]:
     normalized.setdefault("referer", "https://music.youtube.com/")
     normalized.setdefault("x-origin", "https://music.youtube.com")
     normalized.setdefault("accept", "*/*")
-    normalized.setdefault("accept-language", "en-US,en;q=0.9")
+    normalized.setdefault("accept-language", _accept_language())
     return _minimal_auth_headers(normalized)
 
 
@@ -408,7 +408,7 @@ def _session(timeout: float = 20.0):
 
 
 def _system_locale() -> str:
-    for key in ("LC_ALL", "LC_MESSAGES", "LANG"):
+    for key in ("LC_ALL", "LC_MESSAGES", "LANGUAGE", "LANG"):
         value = os.environ.get(key, "").strip()
         if value:
             return value
@@ -419,33 +419,70 @@ def _system_locale() -> str:
     return language or ""
 
 
+def _locale_candidates() -> list[str]:
+    return [
+        candidate.strip().replace("-", "_")
+        for candidate in re.split(r"[:;,]", _system_locale())
+        if candidate.strip()
+    ]
+
+
 def _language() -> str:
-    value = _system_locale().lower()
-    for language in ("pt", "es", "fr", "de", "it"):
-        if value.startswith(language):
+    for candidate in _locale_candidates():
+        language = candidate.split("_", 1)[0].split(".", 1)[0].lower()
+        if language in {"pt", "es", "en"}:
             return language
     return "en"
 
 
 def _location() -> str:
-    value = _system_locale().replace("-", "_").upper()
-    return "BR" if "_BR" in value else ""
+    for candidate in _locale_candidates():
+        locale_name = re.split(r"[.@]", candidate, maxsplit=1)[0]
+        parts = locale_name.split("_")
+        if len(parts) >= 2 and len(parts[1]) == 2 and parts[1].isalpha():
+            return parts[1].upper()
+    return ""
+
+
+def _accept_language(language: str = "", location: str = "") -> str:
+    language = language or _language()
+    location = location or _location()
+    primary = f"{language}-{location}" if location else language
+    if language == "en":
+        return f"{primary},en;q=0.9" if primary != "en" else "en-US,en;q=0.9"
+    return f"{primary},{language};q=0.9,en;q=0.7"
+
+
+def _locale_cache_namespace() -> str:
+    return f"{_language()}-{_location() or 'global'}"
 
 
 def _create_client(authenticated: bool = True):
     _require_dependencies()
     session = _session()
+    language = _language()
+    location = _location()
     if authenticated:
         payload = _load_session()
         headers = payload.get("headers")
         if isinstance(headers, dict) and headers:
-            normalized = {str(k): str(v) for k, v in headers.items()}
+            normalized = {
+                str(key).strip().lower(): str(value).strip()
+                for key, value in headers.items()
+                if str(key).strip() and str(value).strip()
+            }
+            normalized["accept-language"] = _accept_language(language, location)
             _ensure_authorization(normalized)
-            return YTMusic(normalized, requests_session=session)
+            return YTMusic(
+                normalized,
+                requests_session=session,
+                language=language,
+                location=location,
+            )
     return YTMusic(
         requests_session=session,
-        language=_language(),
-        location=_location(),
+        language=language,
+        location=location,
     )
 
 
@@ -1019,6 +1056,7 @@ def _yt_dlp_auth_args() -> tuple[list[str], Path | None]:
         for key, value in stored_headers.items()
         if str(key).strip() and str(value).strip()
     }
+    headers["accept-language"] = _accept_language()
 
     args: list[str] = []
     cookie_file = _write_yt_dlp_cookie_file(headers.get("cookie", ""))
@@ -1397,7 +1435,7 @@ def _feed_cache_key(
     params: str = "",
 ) -> str:
     params_key = hashlib.sha1(params.encode("utf-8")).hexdigest()[:12] if params else "root"
-    return f"{kind}:{params_key}:{continuation or '0'}:{section_limit}"
+    return f"{_locale_cache_namespace()}:{kind}:{params_key}:{continuation or '0'}:{section_limit}"
 
 
 def _library_method(client: Any, name: str, limit: int, **kwargs: Any) -> Any:
