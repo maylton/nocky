@@ -308,8 +308,8 @@ window.theme-material-expressive .header-action-button {
   background-color: transparent;
   box-shadow: none;
   transition:
-    border-radius 180ms ease,
-    background-color 180ms ease;
+    border-radius 180ms ease-out,
+    background-color 180ms ease-out;
 }
 
 /*

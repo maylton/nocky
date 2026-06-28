@@ -303,7 +303,7 @@ window.theme-material-expressive .settings-shortcuts-action {
   background-color: transparent;
   background-image: none;
   box-shadow: none;
-  transition: color 150ms ease;
+  transition: color 150ms ease-out;
 }
 
 .animated-page-switcher-button:hover {
