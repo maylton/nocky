@@ -18,11 +18,11 @@ This roadmap isolates the YouTube Music experience from Nocky's local Home. The 
 | --- | --- | --- |
 | 1. Versioned feed contract | Complete | PR #40 |
 | 2. Native Rust domain model | Complete | PR #40 |
-| 3. Dedicated feed UI | Implemented; card-first validation pending | PR #40 / PR #42 |
+| 3. Dedicated feed UI | Implemented; card-first rendering validated | PR #40 / PR #42 |
 | 4. Cache and resilient loading | Complete | PR #40 |
 | 5. Authentication hardening | Complete for manual session import | PR #40 |
-| 6. Broader account-library contract | Structured pages and navigation implemented; live validation pending | PR #40 / PR #42 |
-| 7. Stream-client fallback policy | Implemented; real fallback smoke test pending | PR #41 |
+| 6. Broader account-library contract | Structured pages visually validated; navigation smoke pending | PR #40 / PR #42 |
+| 7. Stream-client fallback policy | Implemented; real fallback smoke pending | PR #41 |
 | 8. Integration hardening and real-account validation | In progress | PR #42 |
 | 9. Native stream-source preferences | Planned | after Phase 8 |
 | 10. Assisted browser login | Planned, optional | after Phase 9 |
@@ -63,11 +63,17 @@ Implemented:
 - Quick picks and collection sections render as cards before long song lists.
 - Automatic load after a valid session is detected.
 
+Validated with a connected account:
+
+- Card-first rendering is visible in **Para você**, **Visão geral**, **Biblioteca** and **Curtidas**.
+- Account pages return the expected list, quick-pick, carousel and mixed layouts.
+- The local Home remains unchanged.
+
 Still required before completion:
 
-- Real-account validation of ordering, stale fallback and continuation behavior.
-- Responsive behavior for narrow windows.
-- Accessibility review of rows, headings and loading state.
+- Validate continuation append behavior in the UI.
+- Validate stale-cache fallback in an offline/failure scenario.
+- Complete narrow-window and keyboard/focus checks.
 
 ## Phase 4 — Cache and resilient loading
 
@@ -96,16 +102,20 @@ Delivered:
 
 Delivered:
 
-- Recently added songs, likes, playlists, albums and artists in the account overview.
+- Recently added songs, likes, playlists, albums and artists in structured account pages.
+- Card-first **Visão geral**, **Biblioteca** and **Curtidas** layouts.
+- Album and artist fallbacks derived from song metadata when dedicated endpoints are empty.
 - Podcast and episode-compatible data contract.
 - Parser tests in the quality gate and complete helper installation.
+- Explicit unsupported-item feedback rather than silent no-op behavior.
 
-Incomplete:
+Pending live validation:
 
-- Dedicated activation/navigation for albums and artists from the structured page.
-- Podcast and episode navigation behavior.
-- Actionable section chips and section endpoints.
-- Graceful unsupported-item messaging rather than silent no-op behavior.
+- Open an album card and confirm the native album route.
+- Open an artist card and confirm the native artist route.
+- Open a playlist card and confirm the native playlist route.
+- Confirm podcast/episode behavior for content returned by the account.
+- Keep chips non-actionable until a stable helper endpoint is available.
 
 ## Phase 7 — Stream-client fallback policy
 
@@ -117,10 +127,10 @@ Implemented in PR #41:
 - Client rotation after recoverable GStreamer/CDN failures.
 - Terminal availability-error detection.
 - Redacted diagnostics, selected-client metadata and deterministic tests.
+- Quality Gate execution for stacked pull requests.
 
 Pending validation:
 
-- Run CI for stacked pull requests.
 - Exercise at least one real fallback after a rejected or expired stream URL.
 - Confirm Premium and non-authenticated behavior on the target workstation.
 
@@ -128,17 +138,24 @@ Pending validation:
 
 **Goal:** close functional gaps before exposing more settings.
 
-Deliverables:
+Delivered or implemented:
 
-- Allow the Quality Gate workflow to run for stacked `codex/**` pull-request bases.
-- Add structured-page events for opening albums and artists.
-- Define podcast and episode activation behavior; unsupported shapes must show a clear message.
-- Make chips and section endpoints actionable where the helper provides valid endpoints.
-- Preserve current page state while loading a collection and recover cleanly from errors.
-- Improve the action bar for narrow windows using wrapping or an adaptive container.
-- Review keyboard activation, accessible labels and focus order.
-- Add fixture and Rust tests for item-action routing.
-- Perform a manual smoke test with a connected account covering feed, overview, continuation, album, artist, playlist, playback recovery and stale cache.
+- Quality Gate workflow runs for stacked `codex/**` pull-request bases.
+- Structured-page events for opening albums and artists.
+- Podcast and episode activation behavior with explicit unsupported feedback.
+- Current page state is preserved while collection data loads.
+- Horizontal action bar remains usable in narrow windows.
+- Card buttons support normal GTK keyboard activation.
+- Fixture, Rust and Python tests cover item-action routing and account-page ordering.
+- `scripts/smoke-youtube-structured.sh` validates the connected structured contract without exposing sensitive data.
+
+Manual acceptance gate still required:
+
+- Validate feed continuation in the UI.
+- Open album, artist and playlist cards.
+- Exercise playback recovery/client fallback.
+- Exercise stale-cache fallback.
+- Confirm focus order and narrow-window usability.
 
 Acceptance criteria:
 
