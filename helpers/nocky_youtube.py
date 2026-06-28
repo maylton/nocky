@@ -1534,26 +1534,26 @@ def _account_library_page(
         albums = _dedupe(explicit_albums + library_albums + liked_albums)
         artists = _dedupe(explicit_artists + library_artists + liked_artists)
         sections = [
-            ("Adicionadas recentemente", "list", songs[:60]),
-            ("Músicas curtidas", "list", liked[:60]),
             ("Suas playlists", "carousel", playlists[:24]),
             ("Álbuns", "carousel", albums[:36]),
             ("Artistas", "carousel", artists[:36]),
+            ("Adicionadas recentemente", "list", songs[:60]),
+            ("Músicas curtidas", "list", liked[:60]),
         ]
     elif mode == "library":
         albums = _dedupe(explicit_albums + library_albums)
         artists = _dedupe(explicit_artists + library_artists)
         sections = [
-            ("Músicas da biblioteca", "list", songs[:120]),
             ("Playlists", "carousel", playlists[:36]),
             ("Álbuns", "carousel", albums[:36]),
             ("Artistas", "carousel", artists[:36]),
+            ("Músicas da biblioteca", "list", songs[:120]),
         ]
     else:
         sections = [
-            ("Músicas curtidas", "list", liked[:120]),
             ("Álbuns das curtidas", "carousel", liked_albums[:36]),
             ("Artistas das curtidas", "carousel", liked_artists[:36]),
+            ("Músicas curtidas", "list", liked[:120]),
         ]
 
     return build_library_overview(sections)
@@ -1567,8 +1567,9 @@ def _cached_account_page(
         raise RuntimeError("Connect a YouTube Music browser session first")
 
     limit = max(12, min(250, int(payload.get("limit") or 120)))
-    # v3 keys deliberately bypass incomplete v2 caches that contained songs only.
-    cache_key = _feed_cache_key(f"{mode}_v3", "", limit)
+    # v4 keys bypass older account pages whose long song lists appeared
+    # before collection carousels.
+    cache_key = _feed_cache_key(f"{mode}_v4", "", limit)
     client = _create_client(authenticated=True)
 
     try:

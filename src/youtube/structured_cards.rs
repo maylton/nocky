@@ -11,7 +11,7 @@ const CAROUSEL_HEIGHT: i32 = 238;
 pub(crate) fn uses_card_carousel(layout: &str) -> bool {
     matches!(
         layout.trim().to_ascii_lowercase().as_str(),
-        "carousel" | "mixed"
+        "carousel" | "mixed" | "quick_picks"
     )
 }
 
@@ -185,7 +185,7 @@ mod tests {
         assert!(uses_card_carousel("carousel"));
         assert!(uses_card_carousel(" MIXED "));
         assert!(!uses_card_carousel("list"));
-        assert!(!uses_card_carousel("quick_picks"));
+        assert!(uses_card_carousel("quick_picks"));
     }
 
     #[test]

@@ -18,7 +18,7 @@ This roadmap isolates the YouTube Music experience from Nocky's local Home. The 
 | --- | --- | --- |
 | 1. Versioned feed contract | Complete | PR #40 |
 | 2. Native Rust domain model | Complete | PR #40 |
-| 3. Dedicated feed UI | Implemented; card-carousel validation pending | PR #40 / PR #42 |
+| 3. Dedicated feed UI | Implemented; card-first validation pending | PR #40 / PR #42 |
 | 4. Cache and resilient loading | Complete | PR #40 |
 | 5. Authentication hardening | Complete for manual session import | PR #40 |
 | 6. Broader account-library contract | Structured pages and navigation implemented; live validation pending | PR #40 / PR #42 |
@@ -60,6 +60,7 @@ Implemented:
 
 - **Para você** and **Visão geral** actions.
 - Structured section headers, playable rows, collection carousels and continuation rows.
+- Quick picks and collection sections render as cards before long song lists.
 - Automatic load after a valid session is detected.
 
 Still required before completion:

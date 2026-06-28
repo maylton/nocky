@@ -64,11 +64,11 @@ class AccountPageTests(unittest.TestCase):
         self.assertEqual(
             titles,
             [
-                "Adicionadas recentemente",
-                "Músicas curtidas",
                 "Suas playlists",
                 "Álbuns",
                 "Artistas",
+                "Adicionadas recentemente",
+                "Músicas curtidas",
             ],
         )
 
@@ -87,20 +87,22 @@ class AccountPageTests(unittest.TestCase):
         page = nocky_youtube._account_library_page(self.client, 80, "library")
         self.assertEqual(
             [section["title"] for section in page["sections"]],
-            ["Músicas da biblioteca", "Playlists", "Álbuns", "Artistas"],
+            ["Playlists", "Álbuns", "Artistas", "Músicas da biblioteca"],
         )
-        self.assertEqual(page["sections"][0]["layout"], "list")
-        self.assertEqual(page["sections"][2]["items"][0]["result_type"], "album")
-        self.assertEqual(page["sections"][3]["items"][0]["result_type"], "artist")
+        self.assertEqual(page["sections"][0]["layout"], "carousel")
+        self.assertEqual(page["sections"][1]["items"][0]["result_type"], "album")
+        self.assertEqual(page["sections"][2]["items"][0]["result_type"], "artist")
+        self.assertEqual(page["sections"][3]["layout"], "list")
 
     def test_liked_page_includes_derived_album_and_artist_sections(self) -> None:
         page = nocky_youtube._account_library_page(self.client, 80, "liked")
         self.assertEqual(
             [section["title"] for section in page["sections"]],
-            ["Músicas curtidas", "Álbuns das curtidas", "Artistas das curtidas"],
+            ["Álbuns das curtidas", "Artistas das curtidas", "Músicas curtidas"],
         )
-        self.assertEqual(page["sections"][1]["items"][0]["browse_id"], "MPREliked")
-        self.assertEqual(page["sections"][2]["items"][0]["browse_id"], "UCliked")
+        self.assertEqual(page["sections"][0]["items"][0]["browse_id"], "MPREliked")
+        self.assertEqual(page["sections"][1]["items"][0]["browse_id"], "UCliked")
+        self.assertEqual(page["sections"][2]["layout"], "list")
 
     def test_title_only_collections_remain_navigable_fallbacks(self) -> None:
         raw = {
