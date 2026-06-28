@@ -25,6 +25,8 @@ modules:
 - `background.rs`: application of `BackgroundMessage` results.
 - `favorites.rs` and `feedback.rs`: small favorite-state and user-feedback helpers.
 
-`AppController` still keeps the shared state fields in one struct. A later
-state-grouping pass can split those fields once the method boundaries remain
-stable.
+`AppController` keeps GTK handles directly, while non-visual coordination state
+lives in `ControllerRuntime`. A temporary `Deref` implementation preserves
+existing field access while the controller modules migrate toward explicit
+context accessors. Future passes can split that runtime into playback, queue,
+YouTube and persistence contexts without another large mechanical rewrite.
