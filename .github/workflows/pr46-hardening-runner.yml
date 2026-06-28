@@ -1,0 +1,113 @@
+name: PR 46 isolated hardening
+
+on:
+  pull_request:
+    branches:
+      - automation/pr46-hardening-base
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr46-isolated-hardening-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  harden:
+    if: github.head_ref == 'codex/youtube-home-structured-browser'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    container:
+      image: fedora:44
+
+    env:
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: "1"
+
+    steps:
+      - name: Install checkout prerequisites
+        shell: bash
+        run: dnf --assumeyes --setopt=install_weak_deps=False install ca-certificates git
+
+      - name: Checkout PR head
+        uses: actions/checkout@v6
+        with:
+          ref: codex/youtube-home-structured-browser
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Detect pending hardening script
+        id: pending
+        shell: bash
+        run: |
+          if [[ -f scripts/temporary_youtube_home_hardening.py ]]; then
+            echo 'apply=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'apply=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install build dependencies
+        if: steps.pending.outputs.apply == 'true'
+        shell: bash
+        run: |
+          dnf --assumeyes --setopt=install_weak_deps=False install \
+            curl \
+            gcc \
+            gcc-c++ \
+            gdk-pixbuf2-devel \
+            glib2-devel \
+            gstreamer1-devel \
+            gstreamer1-plugins-base-devel \
+            gtk4-devel \
+            libadwaita-devel \
+            make \
+            openssl-devel \
+            pkgconf-pkg-config \
+            python3
+
+      - name: Install Rust toolchain
+        if: steps.pending.outputs.apply == 'true'
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 --silent --show-error --fail \
+            https://sh.rustup.rs \
+            | sh -s -- -y --profile minimal --default-toolchain none
+          source "$HOME/.cargo/env"
+          rustup toolchain install stable \
+            --profile minimal \
+            --component rustfmt \
+            --component clippy
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Apply deterministic patch
+        if: steps.pending.outputs.apply == 'true'
+        shell: bash
+        run: python3 scripts/temporary_youtube_home_hardening.py
+
+      - name: Format patched Rust sources
+        if: steps.pending.outputs.apply == 'true'
+        shell: bash
+        run: cargo fmt --all
+
+      - name: Run complete quality gate
+        if: steps.pending.outputs.apply == 'true'
+        shell: bash
+        run: bash ./scripts/quality-gate.sh
+
+      - name: Commit validated hardening
+        if: steps.pending.outputs.apply == 'true'
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm scripts/temporary_youtube_home_hardening.py
+          git add -A
+          git diff --cached --check
+          git commit -m "fix: harden structured YouTube Home"
+          git push origin HEAD:codex/youtube-home-structured-browser
