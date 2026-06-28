@@ -1,5 +1,3 @@
-/* nocky_css_playback_toggles_phase2b_v5 */
-
 /*
  * Shared Repeat / Shuffle controls
  * --------------------------------
@@ -56,7 +54,9 @@ window.theme-material-expressive
   min-width: 44px;
   min-height: 44px;
   border-radius: 20px;
-  transition: background-color 180ms ease;
+  transition:
+    background-color 180ms ease-out,
+    box-shadow 220ms ease-out;
 }
 
 window.theme-material-expressive
@@ -100,6 +100,11 @@ window.theme-material-expressive
 }
 
 window.theme-material-expressive
+  button.playback-mode-toggle:focus-visible {
+  box-shadow: 0 0 0 2px alpha(@m3_primary, 0.30);
+}
+
+window.theme-material-expressive
   button.playback-mode-toggle:checked {
   color: @m3_on_primary_container;
   background-color: @m3_primary_container;
@@ -115,6 +120,14 @@ window.theme-material-expressive
     @m3_primary,
     0.10
   );
+}
+
+window.theme-material-expressive
+  button.playback-mode-toggle:checked:focus-visible {
+  box-shadow:
+    0 5px 12px alpha(black, 0.14),
+    0 0 0 2px alpha(@m3_primary, 0.34),
+    inset 0 0 0 1px alpha(@m3_primary, 0.14);
 }
 
 window.theme-material-expressive

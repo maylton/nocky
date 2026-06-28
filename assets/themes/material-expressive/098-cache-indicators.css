@@ -2,7 +2,7 @@
   min-width: 14px;
   min-height: 14px;
   margin: 0 2px;
-  transition: opacity 160ms ease;
+  transition: opacity 180ms ease-out;
 }
 
 .youtube-cache-indicator.youtube-cache-fresh {

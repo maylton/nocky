@@ -1,5 +1,3 @@
-/* queue2_interface_polish_v1 */
-
 .queue2-row {
   border-radius: 18px;
   opacity: 1;
@@ -22,7 +20,7 @@ button.queue2-drag-handle {
   min-width: 34px;
   min-height: 34px;
   padding: 0;
-  border-radius: 17px;
+  border-radius: 16px;
   background-color: transparent;
   box-shadow: none;
 }
@@ -268,17 +266,22 @@ window.theme-material-expressive .queue2-page-micro-badge {
 window.theme-material-expressive .queue2-page-actions button.queue2-page-action {
   min-height: 42px;
   padding: 0 16px;
-  border-radius: 18px;
+  border-radius: 20px;
   color: @m3_on_surface;
   background-color: alpha(@m3_surface_container_highest, 0.88);
-  border: 1px solid alpha(@m3_outline, 0.18);
+  border: 1px solid alpha(@m3_outline_variant, 0.42);
   box-shadow: none;
+  transition:
+    background-color 180ms ease-out,
+    border-color 180ms ease-out,
+    box-shadow 220ms ease-out;
 }
 
 window.theme-material-expressive .queue2-page-actions button.queue2-page-action:hover,
 window.theme-material-expressive .queue2-page-actions button.queue2-page-action:focus-visible {
   background-color: alpha(@m3_surface_container_highest, 0.98);
   border-color: alpha(@m3_primary, 0.26);
+  box-shadow: 0 0 0 2px alpha(@m3_primary, 0.10);
 }
 
 window.theme-material-expressive .queue2-page-actions button.queue2-page-action-danger {
