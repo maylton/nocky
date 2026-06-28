@@ -137,7 +137,7 @@ window.theme-material-expressive .player-eyebrow {
 
 window.theme-material-expressive .player-header-actions {
   padding: 2px;
-  border-radius: 19px;
+  border-radius: 20px;
   background-color: alpha(@m3_surface, 0.30);
 }
 
@@ -183,7 +183,7 @@ window.theme-material-expressive .player-artwork {
 window.theme-material-expressive .player-metadata-surface {
   min-height: 92px;
   padding: 13px 15px;
-  border-radius: 26px;
+  border-radius: 28px;
   border: 1px solid alpha(@m3_primary, 0.24);
 }
 
@@ -207,7 +207,7 @@ window.theme-material-expressive .player-album {
 window.theme-material-expressive .player-favorite-action {
   min-width: 38px;
   min-height: 38px;
-  border-radius: 19px;
+  border-radius: 20px;
 }
 
 
@@ -240,7 +240,7 @@ window.theme-material-expressive .player-transport-controls {
 window.theme-material-expressive .player-primary-control {
   min-width: 68px;
   min-height: 68px;
-  border-radius: 23px;
+  border-radius: 24px;
   color: @m3_on_primary;
   background-color: @m3_primary;
   box-shadow: 0 8px 22px alpha(@m3_primary, 0.26);
@@ -251,7 +251,7 @@ window.theme-material-expressive .player-primary-control {
 }
 
 window.theme-material-expressive .player-primary-control:hover {
-  border-radius: 34px;
+  border-radius: 32px;
   background-color: shade(@m3_primary, 1.06);
   box-shadow: 0 10px 26px alpha(@m3_primary, 0.34);
 }
@@ -330,7 +330,7 @@ window.theme-material-expressive .footer-track-artist {
 window.theme-material-expressive .footer-favorite-action {
   min-width: 30px;
   min-height: 30px;
-  border-radius: 15px;
+  border-radius: 16px;
 }
 
 
@@ -358,7 +358,7 @@ window.theme-material-expressive .footer-primary-control:hover {
 }
 
 window.theme-material-expressive .footer-primary-control:active {
-  border-radius: 15px;
+  border-radius: 16px;
   background-color: shade(@m3_primary, 0.94);
 }
 

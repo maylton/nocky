@@ -36,7 +36,7 @@ window.theme-material-expressive .expressive-footer {
   min-height: 78px;
   margin: 0 8px 8px 8px;
   padding: 6px 10px;
-  border-radius: 26px;
+  border-radius: 28px;
 }
 
 window.theme-material-expressive .expressive-footer.footer-mode-full {
@@ -52,7 +52,7 @@ window.theme-material-expressive .footer-info-card {
 window.theme-material-expressive .footer-artwork,
 window.theme-material-expressive .footer-artwork .mini-cover,
 window.theme-material-expressive .footer-artwork .cover-picture {
-  border-radius: 15px;
+  border-radius: 16px;
 }
 
 window.theme-material-expressive .footer-track-title {
@@ -66,7 +66,7 @@ window.theme-material-expressive .footer-track-artist {
 window.theme-material-expressive .footer-source-pill {
   min-height: 21px;
   padding: 0 8px;
-  border-radius: 11px;
+  border-radius: 12px;
   font-size: 0.64rem;
 }
 
@@ -77,17 +77,17 @@ window.theme-material-expressive .footer-center-surface {
 window.theme-material-expressive .footer-transport-controls {
   min-height: 50px;
   padding: 3px 7px;
-  border-radius: 25px;
+  border-radius: 24px;
 }
 
 window.theme-material-expressive .footer-primary-control {
   min-width: 50px;
   min-height: 50px;
-  border-radius: 17px;
+  border-radius: 16px;
 }
 
 window.theme-material-expressive .footer-primary-control:hover {
-  border-radius: 25px;
+  border-radius: 24px;
 }
 
 window.theme-material-expressive .footer-skip-control {
@@ -113,18 +113,18 @@ window.theme-material-expressive .footer-progress-row .time-label {
 window.theme-material-expressive .footer-utility-group {
   min-height: 50px;
   padding: 3px 6px;
-  border-radius: 21px;
+  border-radius: 20px;
 }
 
 window.theme-material-expressive .footer-utility-action {
   min-width: 38px;
   min-height: 38px;
-  border-radius: 13px;
+  border-radius: 12px;
 }
 
 window.theme-material-expressive .footer-utility-action:hover,
 window.theme-material-expressive .footer-utility-action:checked {
-  border-radius: 19px;
+  border-radius: 20px;
 }
 
 window.theme-material-expressive .expressive-footer.footer-mode-compact {
@@ -137,7 +137,7 @@ window.theme-material-expressive
   .footer-mode-compact
   .footer-info-card {
   min-height: 50px;
-  border-radius: 19px;
+  border-radius: 20px;
 }
 
 window.theme-material-expressive
@@ -159,7 +159,7 @@ window.theme-material-expressive
 window.theme-material-expressive
   .footer-mode-compact
   .footer-primary-control:hover {
-  border-radius: 23px;
+  border-radius: 24px;
 }
 
 window.theme-material-expressive
@@ -286,7 +286,7 @@ window.theme-material-expressive .expressive-header {
   min-height: 58px;
   margin: 8px 8px 0 8px;
   padding: 4px 8px;
-  border-radius: 26px;
+  border-radius: 28px;
   border: 1px solid alpha(@m3_outline, 0.22);
   background-color: @m3_surface_container;
   box-shadow: 0 6px 18px alpha(black, 0.16);
@@ -295,7 +295,7 @@ window.theme-material-expressive .expressive-header {
 window.theme-material-expressive .header-brand {
   min-height: 34px;
   padding: 0 14px;
-  border-radius: 17px;
+  border-radius: 16px;
   color: @m3_on_primary_container;
   background-color: @m3_primary_container;
   font-weight: 850;

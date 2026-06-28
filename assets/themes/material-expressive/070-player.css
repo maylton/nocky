@@ -140,7 +140,7 @@ window.theme-material-expressive
 window.theme-material-expressive
   .expressive-transport-enabled.expressive-transport-footer
   button.expressive-transport-primary.is-playing:focus-visible {
-  border-radius: 19px;
+  border-radius: 20px;
 }
 
 /* Secondary Previous/Next tonal surfaces. */
