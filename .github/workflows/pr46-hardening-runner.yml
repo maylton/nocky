@@ -87,7 +87,11 @@ jobs:
       - name: Apply deterministic patch
         if: steps.pending.outputs.apply == 'true'
         shell: bash
-        run: python3 scripts/temporary_youtube_home_hardening.py
+        run: |
+          python3 scripts/temporary_youtube_home_hardening.py
+          if [[ -f scripts/temporary_youtube_home_followup.py ]]; then
+            python3 scripts/temporary_youtube_home_followup.py
+          fi
 
       - name: Format patched Rust sources
         if: steps.pending.outputs.apply == 'true'
