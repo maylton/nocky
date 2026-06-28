@@ -159,7 +159,7 @@ now focuses on completing the user-facing history experience.
 - ✅ Recently added local albums ordered by filesystem creation/modification time.
 - ✅ Clear-history action.
 - ✅ History privacy controls.
-- Per-section empty states.
+- ✅ Per-section empty states.
 - Better deduplication when metadata differs only slightly.
 - Optional time-window filters such as recent week or recent month.
 
