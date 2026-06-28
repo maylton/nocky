@@ -134,7 +134,9 @@ Forbidden fields:
 - current-stream client metadata;
 - smoke test proving the custom order reaches the helper;
 - recovery test proving the failed client still rotates to the end;
-- narrow-window and keyboard validation.
+- narrow-window and keyboard validation;
+- manual confirmation that reordering, enabling/disabling, final-source
+  protection, reset, persistence and diagnostics work in the native dialog.
 
 ## Acceptance criteria
 
@@ -148,3 +150,4 @@ Forbidden fields:
 - No sensitive stream or account material is displayed or logged.
 - Local Home and `src/browser.rs` remain outside the implementation diff.
 - Format, check, tests, Clippy and Python tests pass in the Quality Gate.
+- Manual stream-source dialog validation passes before closing the phase.
