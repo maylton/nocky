@@ -666,16 +666,26 @@ impl AppController {
                     });
                 }
                 YouTubePageEvent::OpenPlaylist(item) => {
-                    let title = item.title.clone();
-                    self.youtube_page
-                        .set_loading(true, &format!("Carregando {title}..."));
-                    let sender = self.background.sender();
-                    thread::spawn(move || {
-                        let _ = sender.send(BackgroundMessage::YouTubeItems {
-                            title,
-                            result: bridge.playlist(&item),
-                        });
-                    });
+                    self.load_youtube_playlist_for_browser(item);
+                }
+                YouTubePageEvent::OpenCollection(item) => {
+                    self.load_youtube_collection_for_browser(item);
+                }
+                YouTubePageEvent::UnsupportedItem { title, result_type } => {
+                    let kind = match result_type.as_str() {
+                        "podcast" => "Podcast",
+                        "audiobook" => "Audiolivro",
+                        "channel" => "Canal",
+                        _ => "Item",
+                    };
+                    let detail = if title.trim().is_empty() {
+                        kind.to_string()
+                    } else {
+                        format!("{kind} “{title}”")
+                    };
+                    self.show_toast(&format!(
+                        "{detail} ainda não possui uma visualização compatível no Nocky"
+                    ));
                 }
                 YouTubePageEvent::Activate { item, queue, index } => {
                     self.resolve_youtube_track(item, queue, index, false)

@@ -4,6 +4,7 @@ pub(crate) mod diagnostics;
 pub(crate) mod error;
 mod feed;
 mod playback;
+mod routing;
 
 use crate::search_text::{normalize_search_text, search_matches, search_score};
 use crate::ui::widgets::ExpressiveLoadingIndicator;
@@ -30,6 +31,7 @@ use std::{
 
 pub(crate) use collections::{resolve_youtube_collection_item, youtube_home_prefetch_candidates};
 pub(crate) use feed::YouTubeHomePage;
+pub(crate) use routing::{youtube_item_action, YouTubeItemAction};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -871,6 +873,11 @@ pub enum YouTubePageEvent {
         index: usize,
     },
     OpenPlaylist(YouTubeItem),
+    OpenCollection(YouTubeItem),
+    UnsupportedItem {
+        title: String,
+        result_type: String,
+    },
 }
 
 pub struct YouTubeBridge {
@@ -1209,7 +1216,16 @@ impl YouTubePage {
         private_actions.append(&library_button);
         private_actions.append(&liked_button);
         private_actions.append(&playlists_button);
+        private_actions.set_hexpand(true);
         private_actions.set_sensitive(false);
+
+        let private_actions_scroll = gtk::ScrolledWindow::new();
+        private_actions_scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Never);
+        private_actions_scroll.set_propagate_natural_height(true);
+        private_actions_scroll.set_child(Some(&private_actions));
+        private_actions_scroll.set_tooltip_text(Some(
+            "Deslize horizontalmente para acessar todas as ações do YouTube Music",
+        ));
 
         let heading = gtk::Label::new(Some("Buscar no YouTube Music"));
         heading.set_xalign(0.0);
@@ -1235,7 +1251,7 @@ impl YouTubePage {
         root.append(&account_row);
         root.append(&auth_revealer);
         root.append(&search_row);
-        root.append(&private_actions);
+        root.append(&private_actions_scroll);
         root.append(&results_header);
         root.append(&results_scroll);
 
@@ -1377,29 +1393,43 @@ impl YouTubePage {
                 let Some(item) = page.items.borrow().get(index).cloned() else {
                     return;
                 };
-                if item.result_type == "continuation" {
-                    let _ = page.event_tx.send(YouTubePageEvent::LoadHome {
-                        continuation: item.params.clone(),
-                    });
-                } else if item.playable() {
-                    let queue = page
-                        .items
-                        .borrow()
-                        .iter()
-                        .filter(|item| item.playable())
-                        .cloned()
-                        .collect::<Vec<_>>();
-                    let selected = queue
-                        .iter()
-                        .position(|candidate| candidate.video_id == item.video_id)
-                        .unwrap_or(0);
-                    let _ = page.event_tx.send(YouTubePageEvent::Activate {
-                        item,
-                        queue,
-                        index: selected,
-                    });
-                } else if item.result_type == "playlist" && !item.browse_id.is_empty() {
-                    let _ = page.event_tx.send(YouTubePageEvent::OpenPlaylist(item));
+                match youtube_item_action(&item) {
+                    YouTubeItemAction::Continue => {
+                        let _ = page.event_tx.send(YouTubePageEvent::LoadHome {
+                            continuation: item.params.clone(),
+                        });
+                    }
+                    YouTubeItemAction::Play => {
+                        let queue = page
+                            .items
+                            .borrow()
+                            .iter()
+                            .filter(|item| item.playable())
+                            .cloned()
+                            .collect::<Vec<_>>();
+                        let selected = queue
+                            .iter()
+                            .position(|candidate| candidate.video_id == item.video_id)
+                            .unwrap_or(0);
+                        let _ = page.event_tx.send(YouTubePageEvent::Activate {
+                            item,
+                            queue,
+                            index: selected,
+                        });
+                    }
+                    YouTubeItemAction::OpenPlaylist => {
+                        let _ = page.event_tx.send(YouTubePageEvent::OpenPlaylist(item));
+                    }
+                    YouTubeItemAction::OpenCollection => {
+                        let _ = page.event_tx.send(YouTubePageEvent::OpenCollection(item));
+                    }
+                    YouTubeItemAction::Unsupported => {
+                        let _ = page.event_tx.send(YouTubePageEvent::UnsupportedItem {
+                            title: item.title,
+                            result_type: item.result_type,
+                        });
+                    }
+                    YouTubeItemAction::Ignore => {}
                 }
             });
         }
@@ -1611,9 +1641,10 @@ fn youtube_row(item: &YouTubeItem) -> gtk::ListBoxRow {
     content.append(&action);
 
     let row = gtk::ListBoxRow::new();
-    row.set_activatable(
-        item.playable() || item.result_type == "playlist" || item.result_type == "continuation",
-    );
+    row.set_activatable(!matches!(
+        youtube_item_action(item),
+        YouTubeItemAction::Ignore
+    ));
     row.set_child(Some(&content));
     row
 }
