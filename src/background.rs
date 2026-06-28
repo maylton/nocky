@@ -2,8 +2,8 @@ use crate::{
     lyrics::LyricLine,
     model::TrackData,
     youtube::{
-        YouTubeArtistOverview, YouTubeItem, YouTubeLibrarySnapshot, YouTubeSearchResults,
-        YouTubeStatus, YouTubeStream,
+        YouTubeArtistOverview, YouTubeHomePage, YouTubeItem, YouTubeLibrarySnapshot,
+        YouTubeSearchResults, YouTubeStatus, YouTubeStream,
     },
 };
 use std::{
@@ -78,6 +78,11 @@ pub(crate) enum BackgroundMessage {
     YouTubeItems {
         title: String,
         result: Result<Vec<YouTubeItem>, String>,
+    },
+    YouTubeStructuredPage {
+        title: String,
+        append: bool,
+        result: Result<YouTubeHomePage, String>,
     },
     YouTubeGlobalSearch {
         request_id: u64,

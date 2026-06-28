@@ -265,6 +265,7 @@ run_install_command() {
 
 install_file 0755 "target/release/${BIN_NAME}" "${BIN_DIR}/${BIN_NAME}"
 install_file 0755 "helpers/nocky_youtube.py" "${HELPER_DIR}/nocky_youtube.py"
+install_file 0644 "helpers/nocky_youtube_feed.py" "${HELPER_DIR}/nocky_youtube_feed.py"
 
 tmp_desktop="$(mktemp)"
 trap 'rm -f "$tmp_desktop"' EXIT
@@ -277,6 +278,7 @@ install_file 0644 "data/${APP_ID}.metainfo.xml" "${METAINFO_DIR}/${APP_ID}.metai
 install_file 0644 "README.md" "${DOC_DIR}/README.md"
 install_file 0644 "CHANGELOG.md" "${DOC_DIR}/CHANGELOG.md"
 install_file 0644 "docs/FROSTED_GLASS.md" "${DOC_DIR}/FROSTED_GLASS.md"
+install_file 0644 "docs/YOUTUBE_LIBRARY_ROADMAP.md" "${DOC_DIR}/YOUTUBE_LIBRARY_ROADMAP.md"
 
 icon_count=0
 while IFS= read -r -d '' icon; do

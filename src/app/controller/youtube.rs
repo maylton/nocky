@@ -533,6 +533,51 @@ impl AppController {
         });
     }
 
+    pub(crate) fn load_youtube_home_page(&self, continuation: String) {
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            self.youtube_page
+                .show_error("YouTube Music runtime is missing. Reinstall with --install-youtube.");
+            return;
+        };
+        let append = !continuation.is_empty();
+        self.youtube_page.set_loading(
+            true,
+            if append {
+                "Carregando mais recomendações..."
+            } else {
+                "Carregando seu feed do YouTube Music..."
+            },
+        );
+        let sender = self.background.sender();
+        thread::spawn(move || {
+            let result =
+                bridge.home_page((!continuation.is_empty()).then_some(continuation.as_str()));
+            let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
+                title: "Para você".to_string(),
+                append,
+                result,
+            });
+        });
+    }
+
+    pub(crate) fn load_youtube_library_overview(&self) {
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            self.youtube_page
+                .show_error("YouTube Music runtime is missing. Reinstall with --install-youtube.");
+            return;
+        };
+        self.youtube_page
+            .set_loading(true, "Carregando a visão geral da biblioteca...");
+        let sender = self.background.sender();
+        thread::spawn(move || {
+            let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
+                title: "Sua biblioteca do YouTube Music".to_string(),
+                append: false,
+                result: bridge.library_overview(),
+            });
+        });
+    }
+
     pub(crate) fn handle_youtube_events(&self) {
         while let Some(event) = self.youtube_page.try_recv() {
             let Some(bridge) = self.youtube_bridge.clone() else {
@@ -543,6 +588,12 @@ impl AppController {
             };
 
             match event {
+                YouTubePageEvent::LoadHome { continuation } => {
+                    self.load_youtube_home_page(continuation);
+                }
+                YouTubePageEvent::LoadLibraryOverview => {
+                    self.load_youtube_library_overview();
+                }
                 YouTubePageEvent::SyncLibrary => {
                     if self.sync_youtube_library(true, true) {
                         self.youtube_page

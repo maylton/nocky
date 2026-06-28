@@ -1,6 +1,8 @@
+mod backend;
 mod collections;
 pub(crate) mod diagnostics;
 pub(crate) mod error;
+mod feed;
 mod playback;
 
 use crate::search_text::{normalize_search_text, search_matches, search_score};
@@ -27,6 +29,7 @@ use std::{
 };
 
 pub(crate) use collections::{resolve_youtube_collection_item, youtube_home_prefetch_candidates};
+pub(crate) use feed::YouTubeHomePage;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -850,6 +853,10 @@ pub enum YouTubePageEvent {
     LoadLibrary,
     LoadLiked,
     LoadPlaylists,
+    LoadHome {
+        continuation: String,
+    },
+    LoadLibraryOverview,
     Activate {
         item: YouTubeItem,
         queue: Vec<YouTubeItem>,
@@ -911,6 +918,20 @@ impl YouTubeBridge {
 
     pub fn home(&self) -> Result<YouTubeHomeSuggestions, String> {
         self.run("home", json!({ "limit": 8 }))
+    }
+
+    pub fn home_page(&self, continuation: Option<&str>) -> Result<YouTubeHomePage, String> {
+        self.run(
+            "home_v2",
+            json!({
+                "continuation": continuation.unwrap_or_default(),
+                "section_limit": 6,
+            }),
+        )
+    }
+
+    pub fn library_overview(&self) -> Result<YouTubeHomePage, String> {
+        self.run("library_v2", json!({ "limit": 80 }))
     }
 
     pub fn sync_library(&self) -> Result<YouTubeLibrarySnapshot, String> {
@@ -1057,6 +1078,7 @@ pub struct YouTubePage {
     loading: ExpressiveLoadingIndicator,
     results: gtk::ListBox,
     items: RefCell<Vec<YouTubeItem>>,
+    structured_page: RefCell<YouTubeHomePage>,
     event_tx: Sender<YouTubePageEvent>,
     event_rx: Receiver<YouTubePageEvent>,
 }
@@ -1098,7 +1120,7 @@ impl YouTubePage {
         account_row.append(&disconnect_button);
 
         let auth_text = gtk::Label::new(Some(
-            "Com a conta aberta em music.youtube.com, copie uma requisição bem-sucedida como cURL ou copie o cabeçalho Cookie e cole abaixo. A sessão é salva no Secret Service quando disponível.",
+            "Abra o YouTube Music no navegador do sistema, entre na conta e copie uma requisição bem-sucedida como cURL ou apenas o cabeçalho Cookie. O Nocky nunca solicita sua senha e guarda somente os cabeçalhos mínimos no Secret Service quando disponível.",
         ));
         auth_text.set_wrap(true);
         auth_text.set_xalign(0.0);
@@ -1118,10 +1140,13 @@ impl YouTubePage {
         auth_scroll.add_css_class("youtube-auth-input");
         let import_button = gtk::Button::with_label("Importar sessão");
         import_button.add_css_class("suggested-action");
+        let open_browser_button = gtk::Button::with_label("Abrir no navegador");
+        open_browser_button.add_css_class("flat");
         let cancel_auth = gtk::Button::with_label("Cancelar");
         cancel_auth.add_css_class("flat");
         let auth_buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         auth_buttons.set_halign(gtk::Align::End);
+        auth_buttons.append(&open_browser_button);
         auth_buttons.append(&cancel_auth);
         auth_buttons.append(&import_button);
         let auth_box = gtk::Box::new(gtk::Orientation::Vertical, 10);
@@ -1155,14 +1180,24 @@ impl YouTubePage {
 
         let sync_button = gtk::Button::with_label("Sincronizar com Nocky");
         sync_button.add_css_class("suggested-action");
+        let home_button = gtk::Button::with_label("Para você");
+        let overview_button = gtk::Button::with_label("Visão geral");
         let library_button = gtk::Button::with_label("Biblioteca");
         let liked_button = gtk::Button::with_label("Curtidas");
         let playlists_button = gtk::Button::with_label("Playlists");
-        for button in [&library_button, &liked_button, &playlists_button] {
+        for button in [
+            &home_button,
+            &overview_button,
+            &library_button,
+            &liked_button,
+            &playlists_button,
+        ] {
             button.add_css_class("pill");
         }
         let private_actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         private_actions.append(&sync_button);
+        private_actions.append(&home_button);
+        private_actions.append(&overview_button);
         private_actions.append(&library_button);
         private_actions.append(&liked_button);
         private_actions.append(&playlists_button);
@@ -1210,6 +1245,7 @@ impl YouTubePage {
             loading,
             results,
             items: RefCell::new(Vec::new()),
+            structured_page: RefCell::new(YouTubeHomePage::default()),
             event_tx,
             event_rx,
         });
@@ -1228,6 +1264,16 @@ impl YouTubePage {
             cancel_auth.connect_clicked(move |_| {
                 if let Some(page) = weak.upgrade() {
                     page.auth_revealer.set_reveal_child(false);
+                }
+            });
+        }
+        {
+            open_browser_button.connect_clicked(move |_| {
+                if let Err(error) = gtk::gio::AppInfo::launch_default_for_uri(
+                    "https://music.youtube.com/",
+                    None::<&gtk::gio::AppLaunchContext>,
+                ) {
+                    eprintln!("Could not open YouTube Music in the browser: {error}");
                 }
             });
         }
@@ -1282,6 +1328,20 @@ impl YouTubePage {
         }
         {
             let sender = page.event_tx.clone();
+            home_button.connect_clicked(move |_| {
+                let _ = sender.send(YouTubePageEvent::LoadHome {
+                    continuation: String::new(),
+                });
+            });
+        }
+        {
+            let sender = page.event_tx.clone();
+            overview_button.connect_clicked(move |_| {
+                let _ = sender.send(YouTubePageEvent::LoadLibraryOverview);
+            });
+        }
+        {
+            let sender = page.event_tx.clone();
             library_button.connect_clicked(move |_| {
                 let _ = sender.send(YouTubePageEvent::LoadLibrary);
             });
@@ -1309,7 +1369,11 @@ impl YouTubePage {
                 let Some(item) = page.items.borrow().get(index).cloned() else {
                     return;
                 };
-                if item.playable() {
+                if item.result_type == "continuation" {
+                    let _ = page.event_tx.send(YouTubePageEvent::LoadHome {
+                        continuation: item.params.clone(),
+                    });
+                } else if item.playable() {
                     let queue = page
                         .items
                         .borrow()
@@ -1371,7 +1435,78 @@ impl YouTubePage {
         self.loading.widget().set_visible(loading);
     }
 
+    pub fn show_structured_page(&self, title: &str, page: YouTubeHomePage, append: bool) {
+        {
+            let mut current = self.structured_page.borrow_mut();
+            if append {
+                current.merge_page(page);
+            } else {
+                *current = page;
+            }
+        }
+        let snapshot = self.structured_page.borrow().clone();
+        clear_list_box(&self.results);
+        self.loading.widget().set_visible(false);
+        let heading = if snapshot.stale {
+            format!("{title} • cache offline")
+        } else {
+            title.to_string()
+        };
+        self.heading.set_text(&heading);
+
+        let mut rows = Vec::new();
+        if !snapshot.chips.is_empty() {
+            let chip_summary = YouTubeItem {
+                result_type: "chips".to_string(),
+                title: snapshot
+                    .chips
+                    .iter()
+                    .map(|chip| chip.title.as_str())
+                    .collect::<Vec<_>>()
+                    .join("  •  "),
+                ..YouTubeItem::default()
+            };
+            self.results.append(&youtube_row(&chip_summary));
+            rows.push(chip_summary);
+        }
+
+        for section in &snapshot.sections {
+            let header = YouTubeItem {
+                result_type: "section".to_string(),
+                title: section.title.clone(),
+                subtitle: section.label.clone(),
+                params: section.layout.clone(),
+                ..YouTubeItem::default()
+            };
+            self.results.append(&youtube_row(&header));
+            rows.push(header);
+            for item in &section.items {
+                self.results.append(&youtube_row(item));
+                rows.push(item.clone());
+            }
+        }
+
+        if !snapshot.continuation.is_empty() {
+            let continuation = YouTubeItem {
+                result_type: "continuation".to_string(),
+                title: "Carregar mais recomendações".to_string(),
+                subtitle: "Continuar o feed do YouTube Music".to_string(),
+                params: snapshot.continuation.clone(),
+                ..YouTubeItem::default()
+            };
+            self.results.append(&youtube_row(&continuation));
+            rows.push(continuation);
+        }
+
+        if rows.is_empty() {
+            self.results
+                .append(&empty_row("Nenhuma seção foi retornada pelo YouTube Music"));
+        }
+        self.items.replace(rows);
+    }
+
     pub fn show_items(&self, title: &str, items: Vec<YouTubeItem>) {
+        self.structured_page.replace(YouTubeHomePage::default());
         clear_list_box(&self.results);
         self.heading.set_text(title);
         self.loading.widget().set_visible(false);
@@ -1386,6 +1521,7 @@ impl YouTubePage {
     }
 
     pub fn show_error(&self, message: &str) {
+        self.structured_page.replace(YouTubeHomePage::default());
         self.loading.widget().set_visible(false);
         self.heading.set_text("Erro no YouTube Music");
         clear_list_box(&self.results);
@@ -1394,6 +1530,7 @@ impl YouTubePage {
     }
 
     pub fn show_empty(&self, message: &str) {
+        self.structured_page.replace(YouTubeHomePage::default());
         clear_list_box(&self.results);
         self.results.append(&empty_row(message));
         self.items.borrow_mut().clear();
@@ -1417,11 +1554,19 @@ impl YouTubePage {
 }
 
 fn youtube_row(item: &YouTubeItem) -> gtk::ListBoxRow {
+    if item.result_type == "section" {
+        return youtube_section_row(item);
+    }
+    if item.result_type == "chips" {
+        return youtube_chip_summary_row(item);
+    }
     let icon_name = match item.result_type.as_str() {
         "playlist" => "view-list-symbolic",
         "album" => "media-optical-symbolic",
         "artist" => "avatar-default-symbolic",
-        "video" => "video-x-generic-symbolic",
+        "video" | "episode" => "video-x-generic-symbolic",
+        "podcast" => "audio-speakers-symbolic",
+        "continuation" => "view-more-symbolic",
         _ => "audio-x-generic-symbolic",
     };
     let icon = gtk::Image::from_icon_name(icon_name);
@@ -1458,8 +1603,47 @@ fn youtube_row(item: &YouTubeItem) -> gtk::ListBoxRow {
     content.append(&action);
 
     let row = gtk::ListBoxRow::new();
-    row.set_activatable(item.playable() || item.result_type == "playlist");
+    row.set_activatable(
+        item.playable() || item.result_type == "playlist" || item.result_type == "continuation",
+    );
     row.set_child(Some(&content));
+    row
+}
+
+fn youtube_section_row(item: &YouTubeItem) -> gtk::ListBoxRow {
+    let title = gtk::Label::new(Some(&item.title));
+    title.set_xalign(0.0);
+    title.add_css_class("title-4");
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    content.set_margin_top(18);
+    content.set_margin_bottom(6);
+    content.set_margin_start(12);
+    content.set_margin_end(12);
+    content.append(&title);
+    if !item.subtitle.is_empty() {
+        let subtitle = gtk::Label::new(Some(&item.subtitle));
+        subtitle.set_xalign(0.0);
+        subtitle.add_css_class("dim-label");
+        content.append(&subtitle);
+    }
+    let row = gtk::ListBoxRow::new();
+    row.set_activatable(false);
+    row.set_child(Some(&content));
+    row
+}
+
+fn youtube_chip_summary_row(item: &YouTubeItem) -> gtk::ListBoxRow {
+    let label = gtk::Label::new(Some(&item.title));
+    label.set_xalign(0.0);
+    label.set_wrap(true);
+    label.set_margin_top(8);
+    label.set_margin_bottom(8);
+    label.set_margin_start(12);
+    label.set_margin_end(12);
+    label.add_css_class("dim-label");
+    let row = gtk::ListBoxRow::new();
+    row.set_activatable(false);
+    row.set_child(Some(&label));
     row
 }
 

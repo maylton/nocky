@@ -26,6 +26,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse, urlsplit, urlunsplit
 
+from nocky_youtube_feed import (
+    build_library_overview,
+    build_structured_home,
+    load_cached_page,
+    save_cached_page,
+)
+
 try:
     import requests
     from ytmusicapi import YTMusic
@@ -84,6 +91,10 @@ def _stream_cache_path() -> Path:
 
 def _stream_cache_lock_path() -> Path:
     return _cache_dir() / "stream-cache.lock"
+
+
+def _home_feed_cache_path() -> Path:
+    return _cache_dir() / "home-feed-v2.json"
 
 
 def _emit(payload: Any) -> None:
@@ -297,6 +308,35 @@ def _ensure_authorization(headers: dict[str, str]) -> None:
     headers["authorization"] = f"SAPISIDHASH {timestamp}_{digest}"
 
 
+def _minimal_auth_headers(headers: dict[str, str]) -> dict[str, str]:
+    cookie = headers.get("cookie", "")
+    if not _cookie_value(
+        cookie,
+        ("__Secure-3PAPISID", "SAPISID", "__Secure-1PAPISID", "APISID"),
+    ):
+        raise RuntimeError(
+            "The imported session does not contain a SAPISID-family YouTube cookie."
+        )
+
+    allowed = (
+        "cookie",
+        "x-goog-authuser",
+        "user-agent",
+        "origin",
+        "referer",
+        "x-origin",
+        "accept",
+        "accept-language",
+        "content-type",
+        "x-goog-visitor-id",
+        "x-youtube-client-name",
+        "x-youtube-client-version",
+    )
+    minimal = {key: headers[key] for key in allowed if headers.get(key)}
+    _ensure_authorization(minimal)
+    return minimal
+
+
 def _parse_browser_headers(raw_text: str) -> dict[str, str]:
     raw_text = (raw_text or "").strip()
     if not raw_text:
@@ -336,8 +376,7 @@ def _parse_browser_headers(raw_text: str) -> dict[str, str]:
     normalized.setdefault("x-origin", "https://music.youtube.com")
     normalized.setdefault("accept", "*/*")
     normalized.setdefault("accept-language", "en-US,en;q=0.9")
-    _ensure_authorization(normalized)
-    return normalized
+    return _minimal_auth_headers(normalized)
 
 
 def _require_dependencies() -> None:
@@ -1237,6 +1276,141 @@ def command_home(payload: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     return _home_suggestions(client, limit)
 
 
+def _feed_cache_key(kind: str, continuation: str = "", section_limit: int = 0) -> str:
+    return f"{kind}:{continuation or '0'}:{section_limit}"
+
+
+def _library_method(client: Any, name: str, limit: int, **kwargs: Any) -> Any:
+    method = getattr(client, name, None)
+    if method is None:
+        return []
+    try:
+        return method(limit=limit, **kwargs)
+    except TypeError:
+        try:
+            return method(limit=limit)
+        except TypeError:
+            return method()
+    except Exception as error:
+        print(f"Nocky YouTube library section {name} skipped: {error}", file=sys.stderr)
+        return []
+
+
+def command_home_v2(payload: dict[str, Any]) -> dict[str, Any]:
+    if not _load_session().get("headers"):
+        raise RuntimeError("Connect a YouTube Music browser session first")
+    continuation = str(payload.get("continuation") or "").strip()
+    try:
+        offset = max(0, int(continuation or 0))
+    except ValueError as error:
+        raise RuntimeError("Invalid YouTube Music feed continuation") from error
+    section_limit = max(1, min(12, int(payload.get("section_limit") or 6)))
+    cache_key = _feed_cache_key("home", continuation, section_limit)
+    client = _create_client(authenticated=True)
+
+    try:
+        fetch_limit = max(12, min(36, offset + section_limit + 1))
+        try:
+            rows = client.get_home(limit=fetch_limit)
+        except TypeError:
+            rows = client.get_home()
+        page = build_structured_home(
+            rows,
+            offset=offset,
+            section_limit=section_limit,
+        )
+        save_cached_page(_home_feed_cache_path(), cache_key, page)
+        return page
+    except Exception as error:
+        cached = load_cached_page(
+            _home_feed_cache_path(),
+            cache_key,
+            allow_stale=True,
+        )
+        if cached is not None:
+            print(f"Nocky YouTube home v2 using cached data: {error}", file=sys.stderr)
+            return cached
+        raise
+
+
+def command_library_v2(payload: dict[str, Any]) -> dict[str, Any]:
+    if not _load_session().get("headers"):
+        raise RuntimeError("Connect a YouTube Music browser session first")
+    limit = max(12, min(200, int(payload.get("limit") or 80)))
+    cache_key = _feed_cache_key("library", "", limit)
+    client = _create_client(authenticated=True)
+
+    try:
+        songs_data = _library_method(
+            client,
+            "get_library_songs",
+            limit,
+            order="recently_added",
+        )
+        liked_data = _library_method(client, "get_liked_songs", limit)
+        liked_results = (
+            liked_data.get("tracks") or []
+            if isinstance(liked_data, dict)
+            else liked_data or []
+        )
+        playlists_data = _library_method(client, "get_library_playlists", limit)
+        albums_data = _library_method(client, "get_library_albums", limit)
+        artists_data = _library_method(client, "get_library_artists", limit)
+
+        songs = [
+            item
+            for result in songs_data or []
+            if isinstance(result, dict)
+            if (item := _song_item(result))
+        ]
+        liked = [
+            item
+            for result in liked_results or []
+            if isinstance(result, dict)
+            if (item := _song_item(result))
+        ]
+        playlists = [
+            item
+            for result in playlists_data or []
+            if isinstance(result, dict)
+            if (item := _playlist_item(result, "Library playlist"))
+        ]
+        albums = [
+            item
+            for result in albums_data or []
+            if isinstance(result, dict)
+            if (item := _album_item(result, "Library album"))
+        ]
+        artists = [
+            item
+            for result in artists_data or []
+            if isinstance(result, dict)
+            if (item := _artist_item(result, "Library artist"))
+        ]
+
+        page = build_library_overview(
+            [
+                ("Adicionadas recentemente", "list", _dedupe(songs)),
+                ("Músicas curtidas", "list", _dedupe(liked)),
+                ("Suas playlists", "carousel", _dedupe(playlists)),
+                ("Álbuns da biblioteca", "carousel", _dedupe(albums)),
+                ("Artistas da biblioteca", "carousel", _dedupe(artists)),
+            ]
+        )
+        save_cached_page(_home_feed_cache_path(), cache_key, page)
+        return page
+    except Exception as error:
+        cached = load_cached_page(
+            _home_feed_cache_path(),
+            cache_key,
+            allow_stale=True,
+        )
+        if cached is not None:
+            print(f"Nocky YouTube library v2 using cached data: {error}", file=sys.stderr)
+            return cached
+        raise
+
+
 def command_playlist(payload: dict[str, Any]) -> list[dict[str, Any]]:
     client = _create_client(authenticated=True)
     browse_id = str(payload.get("browse_id") or "").strip()
@@ -1496,6 +1670,8 @@ COMMANDS = {
     "liked": command_liked,
     "rate": command_rate,
     "home": command_home,
+    "home_v2": command_home_v2,
+    "library_v2": command_library_v2,
     "playlists": command_playlists,
     "playlist": command_playlist,
     "collection": command_collection,
@@ -1507,7 +1683,7 @@ COMMANDS = {
 def main() -> int:
     try:
         if len(sys.argv) != 2 or sys.argv[1] not in COMMANDS:
-            raise RuntimeError("Usage: nocky_youtube.py <status|connect|disconnect|search|library|liked|rate|home|playlists|playlist|collection|artist|resolve>")
+            raise RuntimeError("Usage: nocky_youtube.py <status|connect|disconnect|search|library|library_v2|liked|rate|home|home_v2|playlists|playlist|collection|artist|resolve>")
         payload = _read_input()
         result = COMMANDS[sys.argv[1]](payload)
         _emit({"ok": True, "result": result})

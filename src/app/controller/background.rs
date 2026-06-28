@@ -120,6 +120,7 @@ impl AppController {
                                 self.prefetch_youtube_playlist_cache();
                                 self.prefetch_home_artist_profiles(false);
                             }
+                            self.load_youtube_home_page(String::new());
                         } else {
                             self.youtube_library.borrow_mut().clear();
                             clear_library_cache();
@@ -139,6 +140,7 @@ impl AppController {
                             library.synced = false;
                         }
                         let _ = self.sync_youtube_library(true, false);
+                        self.load_youtube_home_page(String::new());
                         self.show_toast("Conta do YouTube Music conectada");
                     }
                     Err(error) => {
@@ -813,6 +815,20 @@ impl AppController {
                 }
                 BackgroundMessage::YouTubeItems { title, result } => match result {
                     Ok(items) => self.youtube_page.show_items(&title, items),
+                    Err(error) => self.youtube_page.show_error(&error),
+                },
+                BackgroundMessage::YouTubeStructuredPage {
+                    title,
+                    append,
+                    result,
+                } => match result {
+                    Ok(page) => self.youtube_page.show_structured_page(&title, page, append),
+                    Err(error) if append => {
+                        self.youtube_page.set_loading(false, &title);
+                        self.show_toast(&format!(
+                            "Não foi possível carregar mais recomendações: {error}"
+                        ));
+                    }
                     Err(error) => self.youtube_page.show_error(&error),
                 },
                 BackgroundMessage::YouTubeRecoveryRetry {

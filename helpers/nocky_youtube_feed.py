@@ -1,0 +1,404 @@
+#!/usr/bin/env python3
+"""Structured YouTube Music feed parsing and cache helpers for Nocky.
+
+The module is deliberately independent from ytmusicapi so parser behavior can be
+validated with sanitized fixtures. The main helper supplies the raw payload from
+``YTMusic.get_home`` and this module preserves section boundaries, ordering,
+layout hints and continuation state for the native GTK client.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import time
+from pathlib import Path
+from typing import Any, Callable
+from urllib.parse import urlsplit, urlunsplit
+
+CONTRACT_VERSION = 2
+DEFAULT_CACHE_MAX_AGE = 12 * 60 * 60
+ItemFactory = Callable[[dict[str, Any], str], dict[str, Any] | None]
+
+
+def _text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, dict):
+        for key in ("text", "title", "name", "label"):
+            text = _text(value.get(key))
+            if text:
+                return text
+        runs = value.get("runs")
+        if isinstance(runs, list):
+            return "".join(_text(run) for run in runs if isinstance(run, dict)).strip()
+    return ""
+
+
+def _names(value: Any) -> str:
+    if isinstance(value, list):
+        values = [_text(item) for item in value]
+        return ", ".join(item for item in values if item)
+    return _text(value)
+
+
+def _upgrade_thumbnail_url(url: str, size: int = 1200) -> str:
+    url = (url or "").strip()
+    if not url:
+        return ""
+    parts = urlsplit(url)
+    path = parts.path
+    upgraded = re.sub(r"=w\d+-h\d+([^/?#]*)$", f"=w{size}-h{size}\\1", path)
+    upgraded = re.sub(r"=s\d+([^/?#]*)$", f"=s{size}\\1", upgraded)
+    if (
+        upgraded == path
+        and "googleusercontent.com" in parts.netloc
+        and "=" not in path.rsplit("/", 1)[-1]
+    ):
+        upgraded = f"{path}=s{size}"
+    return urlunsplit(parts._replace(path=upgraded))
+
+
+def _best_thumbnail(value: Any) -> str:
+    if isinstance(value, dict):
+        value = value.get("thumbnails") or value.get("thumbnail") or []
+    candidates = [item for item in (value or []) if isinstance(item, dict)]
+    if not candidates:
+        return ""
+    candidate = max(
+        candidates,
+        key=lambda item: int(item.get("width") or 0) * int(item.get("height") or 0),
+    )
+    return _upgrade_thumbnail_url(_text(candidate.get("url")))
+
+
+def _duration_seconds(result: dict[str, Any]) -> int:
+    for key in ("duration_seconds", "durationSeconds"):
+        try:
+            value = int(result.get(key) or 0)
+        except (TypeError, ValueError):
+            value = 0
+        if value > 0:
+            return value
+    duration = _text(result.get("duration") or result.get("length"))
+    parts = duration.split(":")
+    if len(parts) > 1 and all(part.isdigit() for part in parts):
+        total = 0
+        for part in parts:
+            total = total * 60 + int(part)
+        return total
+    return 0
+
+
+def _playlist_id(result: dict[str, Any]) -> str:
+    for key in ("playlistId", "playlist_id", "audioPlaylistId", "playlist"):
+        value = _text(result.get(key))
+        if value:
+            return value
+    browse_id = _text(result.get("browseId") or result.get("browse_id"))
+    if browse_id.startswith("VL"):
+        return browse_id[2:]
+    if browse_id.startswith(("PL", "RD", "OLAK5uy_")):
+        return browse_id
+    return ""
+
+
+def _generic_item(result: dict[str, Any], section_title: str) -> dict[str, Any] | None:
+    result_type = _text(result.get("resultType") or result.get("result_type")).lower()
+    video_id = _text(result.get("videoId") or result.get("video_id"))
+    browse_id = _text(result.get("browseId") or result.get("browse_id"))
+    playlist_id = _playlist_id(result)
+    title = _text(result.get("title") or result.get("name"))
+    if not title:
+        return None
+
+    if not result_type:
+        if video_id:
+            result_type = "song"
+        elif browse_id.startswith("MPRE"):
+            result_type = "album"
+        elif browse_id.startswith("UC"):
+            result_type = "artist"
+        elif playlist_id:
+            result_type = "playlist"
+        else:
+            return None
+
+    aliases = {
+        "podcast_episode": "episode",
+        "podcast-episode": "episode",
+        "upload": "song",
+        "uploaded_song": "song",
+    }
+    result_type = aliases.get(result_type, result_type)
+
+    artists = _names(result.get("artists") or result.get("artist") or result.get("author"))
+    album_value = result.get("album") or {}
+    album = _text(album_value)
+    duration = _duration_seconds(result)
+    count = _text(result.get("count") or result.get("itemCount") or result.get("trackCount"))
+    year = _text(result.get("year"))
+
+    if result_type in {"song", "video", "episode"}:
+        if not video_id:
+            return None
+        subtitle_parts = [artists, album]
+        if duration:
+            minutes, seconds = divmod(duration, 60)
+            subtitle_parts.append(f"{minutes}:{seconds:02d}")
+        subtitle = " • ".join(value for value in subtitle_parts if value)
+    elif result_type == "album":
+        if not browse_id:
+            return None
+        subtitle = " • ".join(value for value in (artists, year, section_title) if value)
+        album = title
+    elif result_type in {"artist", "podcast"}:
+        if not browse_id:
+            return None
+        subtitle = section_title or ("Podcast" if result_type == "podcast" else "Artist")
+        artists = title if result_type == "artist" else artists
+    elif result_type == "playlist":
+        browse_id = playlist_id or browse_id
+        if not browse_id:
+            return None
+        subtitle = " • ".join(value for value in (artists, f"{count} tracks" if count else section_title) if value)
+    else:
+        return None
+
+    return {
+        "result_type": result_type,
+        "title": title,
+        "subtitle": subtitle,
+        "video_id": video_id,
+        "browse_id": browse_id,
+        "album": album,
+        "artist": artists,
+        "playlist_kind": "mix" if result_type == "playlist" and any(
+            token in f"{title} {section_title}".lower() for token in ("mix", "radio", "supermix")
+        ) else ("recommended" if result_type == "playlist" else ""),
+        "params": _text(result.get("params")),
+        "duration_seconds": duration,
+        "thumbnail_url": _best_thumbnail(
+            result.get("thumbnails") or result.get("thumbnail") or []
+        ),
+    }
+
+
+def _identity(item: dict[str, Any]) -> tuple[str, str, str]:
+    return (
+        _text(item.get("result_type")),
+        _text(item.get("video_id") or item.get("browse_id")),
+        _text(item.get("title")).casefold(),
+    )
+
+
+def _dedupe(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[tuple[str, str, str]] = set()
+    output: list[dict[str, Any]] = []
+    for item in items:
+        key = _identity(item)
+        if key in seen:
+            continue
+        seen.add(key)
+        output.append(item)
+    return output
+
+
+def _layout(section: dict[str, Any], items: list[dict[str, Any]]) -> str:
+    explicit = _text(section.get("layout") or section.get("sectionType")).lower()
+    if explicit in {"carousel", "quick_picks", "grid", "list", "mixed"}:
+        return explicit
+    title = _text(section.get("title")).casefold()
+    item_types = {_text(item.get("result_type")) for item in items}
+    if any(token in title for token in ("quick picks", "escolhas rápidas", "ouça novamente", "listen again")):
+        return "quick_picks"
+    if item_types <= {"song", "video", "episode"}:
+        return "list" if len(items) > 8 else "quick_picks"
+    if len(item_types) > 1:
+        return "mixed"
+    return "carousel"
+
+
+def _section_id(section: dict[str, Any], title: str, absolute_index: int) -> str:
+    explicit = _text(
+        section.get("id")
+        or section.get("browseId")
+        or section.get("browse_id")
+        or section.get("params")
+    )
+    basis = explicit or f"{absolute_index}:{title}"
+    digest = hashlib.sha1(basis.encode("utf-8")).hexdigest()[:12]
+    return f"ytm-{digest}"
+
+
+def _endpoint(section: dict[str, Any]) -> dict[str, str]:
+    endpoint = section.get("endpoint") if isinstance(section.get("endpoint"), dict) else {}
+    return {
+        "browse_id": _text(
+            endpoint.get("browseId")
+            or endpoint.get("browse_id")
+            or section.get("browseId")
+            or section.get("browse_id")
+        ),
+        "params": _text(endpoint.get("params") or section.get("params")),
+    }
+
+
+def _chips(source: Any) -> list[dict[str, str]]:
+    candidates: Any = []
+    if isinstance(source, dict):
+        candidates = source.get("chips") or source.get("filters") or []
+    output: list[dict[str, str]] = []
+    for chip in candidates or []:
+        if not isinstance(chip, dict):
+            continue
+        title = _text(chip.get("title") or chip.get("text") or chip.get("name"))
+        if not title:
+            continue
+        output.append(
+            {
+                "title": title,
+                "browse_id": _text(chip.get("browseId") or chip.get("browse_id")),
+                "params": _text(chip.get("params")),
+            }
+        )
+    return output
+
+
+def build_structured_home(
+    source: Any,
+    *,
+    offset: int = 0,
+    section_limit: int = 6,
+    item_factory: ItemFactory | None = None,
+) -> dict[str, Any]:
+    """Convert a ytmusicapi home payload into Nocky's versioned feed contract."""
+
+    if isinstance(source, dict):
+        rows = source.get("sections") or source.get("contents") or source.get("results") or []
+    else:
+        rows = source or []
+    rows = [row for row in rows if isinstance(row, dict)]
+    offset = max(0, int(offset or 0))
+    section_limit = max(1, min(24, int(section_limit or 6)))
+    factory = item_factory or _generic_item
+
+    sections: list[dict[str, Any]] = []
+    selected_rows = rows[offset : offset + section_limit]
+    for relative_index, row in enumerate(selected_rows):
+        absolute_index = offset + relative_index
+        title = _text(row.get("title")) or "Recommended"
+        label = _text(row.get("strapline") or row.get("subtitle") or row.get("label"))
+        contents = row.get("contents") or row.get("items") or row.get("results") or []
+        items = []
+        for result in contents or []:
+            if not isinstance(result, dict):
+                continue
+            item = factory(result, title)
+            if item is not None:
+                items.append(item)
+        items = _dedupe(items)
+        if not items:
+            continue
+        sections.append(
+            {
+                "id": _section_id(row, title, absolute_index),
+                "title": title,
+                "label": label,
+                "thumbnail_url": _best_thumbnail(
+                    row.get("thumbnails") or row.get("thumbnail") or []
+                ),
+                "layout": _layout(row, items),
+                "endpoint": _endpoint(row),
+                "items": items,
+            }
+        )
+
+    next_offset = offset + section_limit
+    continuation = str(next_offset) if next_offset < len(rows) else ""
+    return {
+        "version": CONTRACT_VERSION,
+        "generated_at": int(time.time()),
+        "stale": False,
+        "chips": _chips(source),
+        "sections": sections,
+        "continuation": continuation,
+    }
+
+
+def build_library_overview(
+    sections: list[tuple[str, str, list[dict[str, Any]]]],
+) -> dict[str, Any]:
+    """Build the same feed contract for account-library collections."""
+
+    normalized_sections = []
+    for index, (title, layout, items) in enumerate(sections):
+        items = _dedupe([item for item in items if isinstance(item, dict)])
+        if not items:
+            continue
+        normalized_sections.append(
+            {
+                "id": _section_id({}, title, index),
+                "title": title,
+                "label": "",
+                "thumbnail_url": "",
+                "layout": layout,
+                "endpoint": {"browse_id": "", "params": ""},
+                "items": items,
+            }
+        )
+    return {
+        "version": CONTRACT_VERSION,
+        "generated_at": int(time.time()),
+        "stale": False,
+        "chips": [],
+        "sections": normalized_sections,
+        "continuation": "",
+    }
+
+
+def _read_cache(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def load_cached_page(
+    path: Path,
+    key: str,
+    *,
+    max_age: int = DEFAULT_CACHE_MAX_AGE,
+    allow_stale: bool = False,
+) -> dict[str, Any] | None:
+    payload = _read_cache(path)
+    entry = (payload.get("pages") or {}).get(key)
+    if not isinstance(entry, dict) or not isinstance(entry.get("page"), dict):
+        return None
+    saved_at = int(entry.get("saved_at") or 0)
+    expired = saved_at <= 0 or int(time.time()) - saved_at > max_age
+    if expired and not allow_stale:
+        return None
+    page = dict(entry["page"])
+    page["stale"] = expired or allow_stale
+    return page
+
+
+def save_cached_page(path: Path, key: str, page: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = _read_cache(path)
+    pages = payload.get("pages") if isinstance(payload.get("pages"), dict) else {}
+    pages[key] = {"saved_at": int(time.time()), "page": page}
+    payload = {"version": CONTRACT_VERSION, "pages": pages}
+    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.chmod(temporary, 0o600)
+    temporary.replace(path)
+    os.chmod(path, 0o600)

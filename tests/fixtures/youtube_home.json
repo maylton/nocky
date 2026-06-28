@@ -1,0 +1,63 @@
+{
+  "chips": [
+    {"title": "Energize", "params": "mood-energy"},
+    {"title": "Relax", "params": "mood-relax"}
+  ],
+  "sections": [
+    {
+      "title": "Quick picks",
+      "contents": [
+        {
+          "resultType": "song",
+          "title": "First Song",
+          "videoId": "abc123DEF45",
+          "artists": [{"name": "Artist One"}],
+          "album": {"name": "Album One"},
+          "duration": "3:20",
+          "thumbnails": [{"url": "https://example.test/first=w120-h120", "width": 120, "height": 120}]
+        },
+        {
+          "resultType": "song",
+          "title": "First Song",
+          "videoId": "abc123DEF45",
+          "artists": [{"name": "Artist One"}]
+        },
+        {
+          "resultType": "video",
+          "title": "Live Session",
+          "videoId": "ZYX987wvu65",
+          "artists": [{"name": "Artist Two"}]
+        }
+      ]
+    },
+    {
+      "title": "Albums for you",
+      "contents": [
+        {
+          "resultType": "album",
+          "title": "Album Two",
+          "browseId": "MPREb_example",
+          "artists": [{"name": "Artist Two"}],
+          "year": "2026"
+        }
+      ]
+    },
+    {
+      "title": "Your shows",
+      "contents": [
+        {
+          "resultType": "podcast",
+          "title": "Language Lab",
+          "browseId": "MPSP_example"
+        },
+        {
+          "resultType": "episode",
+          "title": "Episode 12",
+          "videoId": "EPISODE1234",
+          "artists": [{"name": "Language Lab"}],
+          "duration": "32:10"
+        }
+      ]
+    }
+  ]
+}
