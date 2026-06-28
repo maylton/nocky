@@ -1,5 +1,7 @@
 //! Settings UI components.
 
 mod page;
+mod shell;
+mod stream_sources;
 
-pub(crate) use page::SettingsPage;
+pub(crate) use shell::SettingsPage;
