@@ -24,7 +24,7 @@ This roadmap isolates the YouTube Music experience from Nocky's local Home. The 
 | 6. Broader account-library contract | Complete for currently returned account content | PR #40 / PR #42 |
 | 7. Stream-client fallback policy | Complete; authenticated recovery rotation validated | PR #41 / PR #42 |
 | 8. Integration hardening and real-account validation | Complete | PR #42 |
-| 9. Native stream-source preferences | In progress | next stacked PR |
+| 9. Native stream-source preferences | Complete and manually validated | PR #43 |
 | 10. Assisted browser login | Planned, optional | after Phase 9 |
 | 11. Remote library mutations and account profiles | Planned | later |
 | 12. Native InnerTube backend | Research track | later |
@@ -98,7 +98,7 @@ Delivered and validated:
 
 - Recently added songs, likes, playlists, albums and artists in structured account pages.
 - Card-first **Visão geral**, **Biblioteca** and **Curtidas** layouts.
-- Album and artist fallbacks derived from song metadata when dedicated endpoints are empty.
+- Album and artist fallbacks derived from song metadata when dedicated library endpoints are empty.
 - Podcast and episode-compatible data contract.
 - Parser tests in the quality gate and complete helper installation.
 - Explicit unsupported-item feedback rather than silent no-op behavior.
@@ -161,15 +161,42 @@ Acceptance criteria met:
 
 **Goal:** expose the fallback policy without requiring environment variables.
 
-Planned deliverables:
+Implemented:
 
-- Native **Fontes de stream** page within YouTube Music settings.
-- Enabled/disabled state and ordered priority persisted in Nocky's configuration.
-- Safe reset to defaults.
-- Availability/authentication explanation for each client.
-- Diagnostics showing the client used by the current stream without exposing URLs or headers.
+- Version-tolerant `youtube_stream_sources` configuration with ordered and disabled client keys.
+- Normalization of unknown, duplicated and missing values with a safe built-in fallback.
+- Protection against disabling every runnable source.
+- Automatic helper consumption of the persisted order while preserving environment override priority.
+- Native **Fontes de stream** settings entry and dialog.
+- Enabled/disabled switches, move-up and move-down actions, and immediate persistence.
+- Safe **Restaurar padrões** action.
+- Portuguese, English and Spanish labels and client capability descriptions.
+- Effective-order summary in the settings surface.
+- Privacy-safe last-stream diagnostic showing only client, format, protocol, container, codec and fallback state.
+- Controller safeguards that preserve the latest stream policy when unrelated settings are saved.
 
-The automatic default policy must remain reliable without user configuration.
+Automated validation completed:
+
+- Legacy configurations resolve to the current defaults.
+- Unknown and duplicate client keys are normalized deterministically.
+- A custom persisted order reaches the helper.
+- `NOCKY_YOUTUBE_STREAM_CLIENTS` retains priority as an explicit override.
+- Forced recovery moves the rejected source to the end of the effective order.
+- Formatting, compilation, Rust tests, strict Clippy, Python tests, shell checks and release metadata pass in the complete Quality Gate.
+- Local Home and `src/browser.rs` remain outside the implementation diff.
+
+Manual validation completed:
+
+- Dialog layout and scrolling were validated at the minimum supported window width.
+- Reordering up and down updates the effective-order summary immediately.
+- Enable/disable switches work, and the final active source remains protected.
+- Reset restores the standard order and enabled state.
+- Closing, reopening and restarting Nocky preserve the saved source policy.
+- Keyboard operation works on the dialog controls.
+- A subsequent YouTube resolution respects the saved order.
+- The last-stream diagnostic remains limited to privacy-safe metadata.
+
+The automatic default policy remains reliable without user configuration.
 
 ## Phase 10 — Assisted browser login
 

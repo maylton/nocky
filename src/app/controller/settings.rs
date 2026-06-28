@@ -2,7 +2,7 @@
 
 use super::AppController;
 use crate::{
-    config::{BlurMode, StartupSource},
+    config::{AppConfig, BlurMode, StartupSource},
     dialogs::{self, SettingsEvent},
     onboarding,
 };
@@ -12,6 +12,8 @@ use std::rc::Rc;
 
 impl AppController {
     pub(crate) fn open_settings_page(&self) {
+        let persisted_stream_sources = AppConfig::load().youtube_stream_sources;
+        self.config.borrow_mut().youtube_stream_sources = persisted_stream_sources;
         let initial = self.config.borrow().clone();
         self.settings_page
             .rebuild(&initial, self._theme.noctalia_shell_detected());

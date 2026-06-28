@@ -8,7 +8,9 @@ network access so behavior can be covered by deterministic unit tests.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import json
 import os
+from pathlib import Path
 import re
 from typing import Iterable
 
@@ -81,7 +83,9 @@ PROFILES: dict[str, StreamClientProfile] = {
 }
 
 DEFAULT_ORDER = ("web_music", "web_creator", "tv", "android_vr", "web")
+CANONICAL_ORDER = tuple(PROFILES)
 ENV_ORDER = "NOCKY_YOUTUBE_STREAM_CLIENTS"
+ENV_CONFIG_FILE = "NOCKY_CONFIG_FILE"
 
 _TERMINAL_PATTERNS = (
     "age-restricted",
@@ -126,21 +130,86 @@ _RECOVERABLE_PATTERNS = (
 )
 
 
+def _validated_keys(values: Iterable[object]) -> list[str]:
+    requested: list[str] = []
+    for value in values:
+        key = str(value).strip().lower()
+        if key in PROFILES and key not in requested:
+            requested.append(key)
+    return requested
+
+
+def _config_path() -> Path:
+    override = os.environ.get(ENV_CONFIG_FILE, "").strip()
+    if override:
+        return Path(override).expanduser()
+    root = Path(
+        os.environ.get("XDG_CONFIG_HOME", "").strip()
+        or (Path.home() / ".config")
+    )
+    return root / "nocky" / "config.json"
+
+
+def configured_order() -> list[str] | None:
+    """Read the normalized enabled order from Nocky's persisted configuration.
+
+    Invalid or unavailable configuration is ignored so the built-in policy remains
+    a reliable fallback. This function never returns sensitive configuration data.
+    """
+
+    try:
+        payload = json.loads(_config_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return None
+
+    sources = payload.get("youtube_stream_sources")
+    if not isinstance(sources, dict):
+        return None
+
+    raw_order = sources.get("order")
+    raw_disabled = sources.get("disabled")
+    if not isinstance(raw_order, list) and not isinstance(raw_disabled, list):
+        return None
+
+    order = _validated_keys(raw_order if isinstance(raw_order, list) else [])
+    for key in CANONICAL_ORDER:
+        if key not in order:
+            order.append(key)
+
+    disabled = set(
+        _validated_keys(raw_disabled if isinstance(raw_disabled, list) else [])
+    )
+    enabled = [key for key in order if key not in disabled]
+    return enabled or None
+
+
+def _requested_order_state(raw: str | None) -> tuple[list[str], bool]:
+    if raw is not None:
+        requested = _validated_keys((raw or "").split(","))
+        return (requested or list(DEFAULT_ORDER), bool(requested))
+
+    environment = os.environ.get(ENV_ORDER, "").strip()
+    if environment:
+        requested = _validated_keys(environment.split(","))
+        return (requested or list(DEFAULT_ORDER), bool(requested))
+
+    persisted = configured_order()
+    if persisted:
+        return persisted, True
+
+    return list(DEFAULT_ORDER), False
+
+
 def parse_requested_order(raw: str | None) -> list[str]:
     """Return a validated, de-duplicated client order.
 
-    Unknown values are ignored. Disabled profiles such as ``ios`` are accepted
-    only when explicitly named by the user/environment.
+    Explicit environment values have priority. When no environment override is
+    present, the persisted Nocky preference is used. Disabled profiles such as
+    ``ios`` are accepted only when explicitly enabled in one of those sources.
     """
 
-    if raw is None:
-        raw = os.environ.get(ENV_ORDER, "")
-    tokens = [token.strip().lower() for token in (raw or "").split(",")]
-    requested: list[str] = []
-    for token in tokens:
-        if token in PROFILES and token not in requested:
-            requested.append(token)
-    return requested or list(DEFAULT_ORDER)
+    order, _ = _requested_order_state(raw)
+    return order
 
 
 def ordered_profiles(
@@ -149,8 +218,11 @@ def ordered_profiles(
     failed_client: str = "",
     requested_order: Iterable[str] | None = None,
 ) -> list[StreamClientProfile]:
-    keys = list(requested_order) if requested_order is not None else parse_requested_order(None)
-    explicit = requested_order is not None or bool(os.environ.get(ENV_ORDER, "").strip())
+    if requested_order is not None:
+        keys = _validated_keys(requested_order)
+        explicit = True
+    else:
+        keys, explicit = _requested_order_state(None)
 
     profiles: list[StreamClientProfile] = []
     for key in keys:

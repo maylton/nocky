@@ -42,8 +42,13 @@ cargo clippy \
 
 if [[ -f helpers/nocky_youtube.py ]]; then
     section "Python helper"
-    python3 -m py_compile helpers/nocky_youtube.py helpers/nocky_youtube_feed.py
+    python3 -m py_compile \
+        helpers/nocky_youtube.py \
+        helpers/nocky_youtube_feed.py \
+        helpers/nocky_stream_clients.py \
+        scripts/smoke_youtube_stream_preferences.py
     python3 -m unittest discover -s tests -p 'test_youtube_*.py' -v
+    python3 scripts/smoke_youtube_stream_preferences.py
 fi
 
 section "Shell syntax"
@@ -57,6 +62,6 @@ done < <(
 )
 
 section "Release metadata"
-./scripts/verify-release.sh
+bash ./scripts/verify-release.sh
 
 section "Quality gate passed"

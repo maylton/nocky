@@ -91,6 +91,114 @@ impl AppLanguage {
     }
 }
 
+pub const YOUTUBE_STREAM_SOURCE_KEYS: [&str; 6] =
+    ["web_music", "web_creator", "tv", "android_vr", "web", "ios"];
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct YouTubeStreamSources {
+    pub order: Vec<String>,
+    pub disabled: Vec<String>,
+}
+
+impl Default for YouTubeStreamSources {
+    fn default() -> Self {
+        Self {
+            order: YOUTUBE_STREAM_SOURCE_KEYS
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+            disabled: vec!["ios".to_string()],
+        }
+    }
+}
+
+impl YouTubeStreamSources {
+    fn known(key: &str) -> bool {
+        YOUTUBE_STREAM_SOURCE_KEYS.contains(&key)
+    }
+
+    fn normalized_keys(values: &[String]) -> Vec<String> {
+        let mut normalized = Vec::new();
+        for value in values {
+            let key = value.trim().to_ascii_lowercase();
+            if Self::known(&key) && !normalized.contains(&key) {
+                normalized.push(key);
+            }
+        }
+        normalized
+    }
+
+    pub fn normalize(&mut self) -> bool {
+        let previous = self.clone();
+
+        if self.order.is_empty() && self.disabled.is_empty() {
+            *self = Self::default();
+            return *self != previous;
+        }
+
+        self.order = Self::normalized_keys(&self.order);
+        for key in YOUTUBE_STREAM_SOURCE_KEYS {
+            if !self.order.iter().any(|value| value == key) {
+                self.order.push(key.to_string());
+            }
+        }
+
+        self.disabled = Self::normalized_keys(&self.disabled);
+        if self.effective_order().is_empty() {
+            self.disabled.retain(|key| key != "android_vr");
+        }
+
+        *self != previous
+    }
+
+    pub fn effective_order(&self) -> Vec<String> {
+        self.order
+            .iter()
+            .filter(|key| !self.disabled.contains(key))
+            .cloned()
+            .collect()
+    }
+
+    pub fn is_enabled(&self, key: &str) -> bool {
+        Self::known(key) && !self.disabled.iter().any(|disabled| disabled == key)
+    }
+
+    pub fn set_enabled(&mut self, key: &str, enabled: bool) -> bool {
+        if !Self::known(key) || self.is_enabled(key) == enabled {
+            return false;
+        }
+
+        if enabled {
+            self.disabled.retain(|disabled| disabled != key);
+            return true;
+        }
+
+        if self.effective_order().len() <= 1 {
+            return false;
+        }
+
+        self.disabled.push(key.to_string());
+        true
+    }
+
+    pub fn move_source(&mut self, key: &str, offset: isize) -> bool {
+        let Some(index) = self.order.iter().position(|source| source == key) else {
+            return false;
+        };
+        let target = index as isize + offset;
+        if target < 0 || target >= self.order.len() as isize {
+            return false;
+        }
+        self.order.swap(index, target as usize);
+        true
+    }
+
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
@@ -110,6 +218,8 @@ pub struct AppConfig {
     pub youtube_auto_sync: bool,
     #[serde(default)]
     pub offline_collection_auto_sync: bool,
+    #[serde(default)]
+    pub youtube_stream_sources: YouTubeStreamSources,
     pub language: AppLanguage,
     pub volume: f64,
     pub liked_tracks: Vec<PathBuf>,
@@ -140,6 +250,7 @@ impl Default for AppConfig {
             noctalia_theme_sync: true,
             youtube_auto_sync: true,
             offline_collection_auto_sync: false,
+            youtube_stream_sources: YouTubeStreamSources::default(),
             language: AppLanguage::detect_system(),
             volume: 0.75,
             liked_tracks: Vec::new(),
@@ -192,6 +303,8 @@ impl AppConfig {
             };
         }
 
+        let stream_sources_normalized = config.youtube_stream_sources.normalize();
+
         // Existing installations must not be interrupted by the new
         // first-run wizard. Only genuinely new configurations start with
         // onboarding_completed = false.
@@ -200,8 +313,12 @@ impl AppConfig {
         }
 
         // Transparently migrate settings from the old project name and
-        // persist the onboarding migration marker.
-        if source != path || !onboarding_was_stored || !visual_theme_was_stored {
+        // persist compatibility and normalization markers.
+        if source != path
+            || !onboarding_was_stored
+            || !visual_theme_was_stored
+            || stream_sources_normalized
+        {
             let _ = config.save();
         }
         config
@@ -320,4 +437,76 @@ fn legacy_config_path() -> PathBuf {
     glib::user_config_dir()
         .join("noctalia-music")
         .join("config.json")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stream_sources_default_to_current_policy() {
+        let sources = YouTubeStreamSources::default();
+        assert_eq!(
+            sources.effective_order(),
+            ["web_music", "web_creator", "tv", "android_vr", "web"]
+                .into_iter()
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        );
+        assert!(!sources.is_enabled("ios"));
+    }
+
+    #[test]
+    fn stream_sources_normalize_unknown_duplicate_and_missing_keys() {
+        let mut sources = YouTubeStreamSources {
+            order: vec![
+                "TV".to_string(),
+                "unknown".to_string(),
+                "tv".to_string(),
+                "ios".to_string(),
+            ],
+            disabled: vec!["unknown".to_string(), "web".to_string(), "web".to_string()],
+        };
+
+        assert!(sources.normalize());
+        assert_eq!(sources.order[0], "tv");
+        assert_eq!(sources.order[1], "ios");
+        assert_eq!(sources.order.len(), YOUTUBE_STREAM_SOURCE_KEYS.len());
+        assert_eq!(sources.disabled, vec!["web"]);
+    }
+
+    #[test]
+    fn stream_sources_never_leave_policy_empty() {
+        let mut sources = YouTubeStreamSources {
+            order: YOUTUBE_STREAM_SOURCE_KEYS
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+            disabled: YOUTUBE_STREAM_SOURCE_KEYS
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+        };
+
+        assert!(sources.normalize());
+        assert!(sources.is_enabled("android_vr"));
+        assert_eq!(sources.effective_order(), vec!["android_vr"]);
+        assert!(!sources.set_enabled("android_vr", false));
+    }
+
+    #[test]
+    fn legacy_config_without_stream_sources_uses_defaults() {
+        let config: AppConfig = serde_json::from_value(serde_json::json!({
+            "onboarding_completed": true
+        }))
+        .expect("legacy config should deserialize");
+
+        assert_eq!(
+            config.youtube_stream_sources.effective_order(),
+            ["web_music", "web_creator", "tv", "android_vr", "web"]
+                .into_iter()
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        );
+    }
 }

@@ -2,6 +2,7 @@
 
 use super::AppController;
 use crate::{
+    config::AppConfig,
     listening_history,
     playback::{queue::QueueSource, session::PlaybackSession},
     youtube::YouTubeItem,
@@ -11,7 +12,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 impl AppController {
     pub(crate) fn save_config(&self) {
-        if let Err(error) = self.config.borrow().save() {
+        let persisted_stream_sources = AppConfig::load().youtube_stream_sources;
+        let mut config = self.config.borrow_mut();
+        config.youtube_stream_sources = persisted_stream_sources;
+        if let Err(error) = config.save() {
             eprintln!("Could not save Nocky settings: {error}");
         }
     }
