@@ -13,7 +13,7 @@ pub(crate) enum YouTubeItemAction {
 pub(crate) fn youtube_item_action(item: &YouTubeItem) -> YouTubeItemAction {
     let result_type = item.result_type.trim().to_ascii_lowercase();
 
-    if matches!(result_type.as_str(), "section" | "chips") {
+    if matches!(result_type.as_str(), "section" | "chips" | "carousel") {
         return YouTubeItemAction::Ignore;
     }
 
@@ -116,6 +116,10 @@ mod tests {
         );
         assert_eq!(
             youtube_item_action(&item("chips")),
+            YouTubeItemAction::Ignore
+        );
+        assert_eq!(
+            youtube_item_action(&item("carousel")),
             YouTubeItemAction::Ignore
         );
     }

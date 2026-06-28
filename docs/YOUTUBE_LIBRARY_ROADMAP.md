@@ -18,12 +18,12 @@ This roadmap isolates the YouTube Music experience from Nocky's local Home. The 
 | --- | --- | --- |
 | 1. Versioned feed contract | Complete | PR #40 |
 | 2. Native Rust domain model | Complete | PR #40 |
-| 3. Dedicated feed UI | Implemented; live validation pending | PR #40 |
+| 3. Dedicated feed UI | Implemented; card-carousel validation pending | PR #40 / PR #42 |
 | 4. Cache and resilient loading | Complete | PR #40 |
 | 5. Authentication hardening | Complete for manual session import | PR #40 |
-| 6. Broader account-library contract | Partial: data contract complete, navigation incomplete | PR #40 |
-| 7. Stream-client fallback policy | Implemented; stacked-PR CI pending | PR #41 |
-| 8. Integration hardening and real-account validation | Next | `codex/youtube-integration-hardening` |
+| 6. Broader account-library contract | Structured pages and navigation implemented; live validation pending | PR #40 / PR #42 |
+| 7. Stream-client fallback policy | Implemented; real fallback smoke test pending | PR #41 |
+| 8. Integration hardening and real-account validation | In progress | PR #42 |
 | 9. Native stream-source preferences | Planned | after Phase 8 |
 | 10. Assisted browser login | Planned, optional | after Phase 9 |
 | 11. Remote library mutations and account profiles | Planned | later |
@@ -59,7 +59,7 @@ Delivered:
 Implemented:
 
 - **Para você** and **Visão geral** actions.
-- Structured section headers, playable rows and continuation rows.
+- Structured section headers, playable rows, collection carousels and continuation rows.
 - Automatic load after a valid session is detected.
 
 Still required before completion:

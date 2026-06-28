@@ -7,9 +7,10 @@ use crate::{
     config::StartupSource,
     listening_history,
     youtube::{
-        self as youtube_domain, cache_items_for_browser, resolve_youtube_collection_item,
-        youtube_collection_cache_key, youtube_collection_key, youtube_home_prefetch_candidates,
-        YouTubeItem, YouTubePageEvent, YouTubeSearchResults, YouTubeStatus,
+        self as youtube_domain, cache_home_page_covers, cache_items_for_browser,
+        resolve_youtube_collection_item, youtube_collection_cache_key, youtube_collection_key,
+        youtube_home_prefetch_candidates, YouTubeItem, YouTubePageEvent, YouTubeSearchResults,
+        YouTubeStatus,
     },
 };
 use gtk::prelude::*;
@@ -550,8 +551,12 @@ impl AppController {
         );
         let sender = self.background.sender();
         thread::spawn(move || {
-            let result =
-                bridge.home_page((!continuation.is_empty()).then_some(continuation.as_str()));
+            let result = bridge
+                .home_page((!continuation.is_empty()).then_some(continuation.as_str()))
+                .map(|mut page| {
+                    cache_home_page_covers(&mut page);
+                    page
+                });
             let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
                 title: "Para você".to_string(),
                 append,
@@ -573,7 +578,10 @@ impl AppController {
             let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
                 title: "Sua biblioteca do YouTube Music".to_string(),
                 append: false,
-                result: bridge.library_overview(),
+                result: bridge.library_overview().map(|mut page| {
+                    cache_home_page_covers(&mut page);
+                    page
+                }),
             });
         });
     }
@@ -640,7 +648,10 @@ impl AppController {
                         let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
                             title: "Sua biblioteca do YouTube Music".to_string(),
                             append: false,
-                            result: bridge.library_page(),
+                            result: bridge.library_page().map(|mut page| {
+                                cache_home_page_covers(&mut page);
+                                page
+                            }),
                         });
                     });
                 }
@@ -652,7 +663,10 @@ impl AppController {
                         let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
                             title: "Suas curtidas no YouTube Music".to_string(),
                             append: false,
-                            result: bridge.liked_page(),
+                            result: bridge.liked_page().map(|mut page| {
+                                cache_home_page_covers(&mut page);
+                                page
+                            }),
                         });
                     });
                 }

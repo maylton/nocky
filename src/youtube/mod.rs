@@ -5,6 +5,7 @@ pub(crate) mod error;
 mod feed;
 mod playback;
 mod routing;
+mod structured_cards;
 
 use crate::search_text::{normalize_search_text, search_matches, search_score};
 use crate::ui::widgets::ExpressiveLoadingIndicator;
@@ -1500,6 +1501,16 @@ impl YouTubePage {
         };
         self.heading.set_text(&heading);
 
+        let playable_queue = Rc::new(
+            snapshot
+                .sections
+                .iter()
+                .flat_map(|section| section.items.iter())
+                .filter(|item| item.playable())
+                .cloned()
+                .collect::<Vec<_>>(),
+        );
+
         let mut rows = Vec::new();
         if !snapshot.chips.is_empty() {
             let chip_summary = YouTubeItem {
@@ -1526,9 +1537,23 @@ impl YouTubePage {
             };
             self.results.append(&youtube_row(&header));
             rows.push(header);
-            for item in &section.items {
-                self.results.append(&youtube_row(item));
-                rows.push(item.clone());
+
+            if structured_cards::uses_card_carousel(&section.layout) {
+                self.results.append(&structured_cards::youtube_carousel_row(
+                    section,
+                    Rc::clone(&playable_queue),
+                    self.event_tx.clone(),
+                ));
+                rows.push(YouTubeItem {
+                    result_type: "carousel".to_string(),
+                    title: section.title.clone(),
+                    ..YouTubeItem::default()
+                });
+            } else {
+                for item in &section.items {
+                    self.results.append(&youtube_row(item));
+                    rows.push(item.clone());
+                }
             }
         }
 
@@ -1724,6 +1749,21 @@ pub fn cache_items_for_browser(items: &mut [YouTubeItem]) {
                 item.cover_path = path.to_string_lossy().to_string();
             }
         }
+    }
+}
+
+pub fn cache_home_page_covers(page: &mut YouTubeHomePage) {
+    const PAGE_COVER_BUDGET: usize = 24;
+    let mut remaining = PAGE_COVER_BUDGET;
+
+    for section in &mut page.sections {
+        if remaining == 0 || !structured_cards::uses_card_carousel(&section.layout) {
+            continue;
+        }
+
+        let count = section.items.len().min(remaining);
+        cache_items_for_browser(&mut section.items[..count]);
+        remaining -= count;
     }
 }
 
