@@ -12,6 +12,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+const PALETTE_TRANSITION_MS: u64 = 520;
+const PALETTE_FRAME_MS: u64 = 16;
+
 pub struct VisualThemeManager {
     _provider: gtk::CssProvider,
     palette_provider: gtk::CssProvider,
@@ -139,9 +142,9 @@ impl VisualThemeManager {
 
         let weak = Rc::downgrade(self);
         let started = Instant::now();
-        let duration = Duration::from_millis(420);
+        let duration = Duration::from_millis(PALETTE_TRANSITION_MS);
 
-        glib::timeout_add_local(Duration::from_millis(32), move || {
+        glib::timeout_add_local(Duration::from_millis(PALETTE_FRAME_MS), move || {
             let Some(manager) = weak.upgrade() else {
                 return glib::ControlFlow::Break;
             };
@@ -154,7 +157,7 @@ impl VisualThemeManager {
 
             let progress =
                 (started.elapsed().as_secs_f64() / duration.as_secs_f64()).clamp(0.0, 1.0);
-            let eased = progress * progress * (3.0 - 2.0 * progress);
+            let eased = emphasized_decelerate(progress);
             let palette = start.interpolate(target, eased);
 
             manager.current_palette.set(palette);
@@ -172,5 +175,21 @@ impl VisualThemeManager {
 
     fn apply_palette(&self, palette: MaterialPalette) {
         self.palette_provider.load_from_string(&palette.to_css());
+    }
+}
+
+fn emphasized_decelerate(progress: f64) -> f64 {
+    1.0 - (1.0 - progress.clamp(0.0, 1.0)).powi(3)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn palette_motion_is_emphasized_and_bounded() {
+        assert_eq!(emphasized_decelerate(0.0), 0.0);
+        assert_eq!(emphasized_decelerate(1.0), 1.0);
+        assert!(emphasized_decelerate(0.5) > 0.5);
     }
 }

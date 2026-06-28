@@ -150,10 +150,10 @@ window.theme-material-expressive
     0 3px 12px alpha(black, 0.28),
     0 0 0 1px alpha(@m3_primary, 0.16);
   transition:
-    background-color 180ms ease,
-    color 180ms ease,
-    box-shadow 180ms ease,
-    transform 120ms ease;
+    background-color 180ms ease-out,
+    color 180ms ease-out,
+    box-shadow 220ms ease-out,
+    transform 140ms ease-out;
 }
 
 .collection-card-context-action:hover {

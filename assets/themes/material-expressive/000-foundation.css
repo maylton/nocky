@@ -60,7 +60,7 @@ window.theme-material-expressive .media-control,
 window.theme-material-expressive .card-icon-button,
 window.theme-material-expressive .footer-control {
   border-radius: 18px;
-  transition: background-color 180ms ease;
+  transition: background-color 180ms ease-out;
 }
 
 window.theme-material-expressive .media-control:hover,
@@ -245,9 +245,9 @@ window.theme-material-expressive .player-primary-control {
   background-color: @m3_primary;
   box-shadow: 0 8px 22px alpha(@m3_primary, 0.26);
   transition:
-    border-radius 180ms ease,
-    background-color 180ms ease,
-    box-shadow 180ms ease;
+    border-radius 220ms ease-out,
+    background-color 180ms ease-out,
+    box-shadow 220ms ease-out;
 }
 
 window.theme-material-expressive .player-primary-control:hover {

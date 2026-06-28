@@ -88,8 +88,8 @@ window.theme-material-expressive button.sidebar-row {
   box-shadow: none;
   font-weight: 620;
   transition:
-    border-radius 180ms ease,
-    background-color 180ms ease;
+    border-radius 220ms ease-out,
+    background-color 180ms ease-out;
 }
 
 window.theme-material-expressive button.sidebar-row:hover {
@@ -208,9 +208,9 @@ window.theme-material-expressive .collection-card {
   border: 1px solid alpha(@m3_outline, 0.18);
   box-shadow: 0 5px 16px alpha(black, 0.13);
   transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease;
+    background-color 180ms ease-out,
+    border-color 180ms ease-out,
+    box-shadow 220ms ease-out;
 }
 
 window.theme-material-expressive .home-card-button:hover .collection-card,
@@ -311,8 +311,8 @@ window.theme-material-expressive .playlist-list row.playlist-card-row {
   background-color: @m3_surface_container;
   border: 1px solid alpha(@m3_outline, 0.13);
   transition:
-    border-radius 180ms ease,
-    background-color 180ms ease;
+    border-radius 220ms ease-out,
+    background-color 180ms ease-out;
 }
 
 window.theme-material-expressive .queue-list row.media-list-row:hover,
