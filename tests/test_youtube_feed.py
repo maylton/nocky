@@ -26,8 +26,13 @@ class StructuredHomeTests(unittest.TestCase):
         )
 
     def test_preserves_sections_order_and_chips(self) -> None:
-        page = build_structured_home(self.fixture, section_limit=10)
+        page = build_structured_home(
+            self.fixture,
+            section_limit=10,
+            selected_chip_params="mood-energy",
+        )
         self.assertEqual(page["version"], 2)
+        self.assertEqual(page["selected_chip_params"], "mood-energy")
         self.assertEqual([section["title"] for section in page["sections"]], [
             "Quick picks",
             "Albums for you",

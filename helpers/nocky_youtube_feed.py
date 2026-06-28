@@ -276,6 +276,7 @@ def build_structured_home(
     *,
     offset: int = 0,
     section_limit: int = 6,
+    selected_chip_params: str = "",
     item_factory: ItemFactory | None = None,
 ) -> dict[str, Any]:
     """Convert a ytmusicapi home payload into Nocky's versioned feed contract."""
@@ -326,6 +327,7 @@ def build_structured_home(
         "version": CONTRACT_VERSION,
         "generated_at": int(time.time()),
         "stale": False,
+        "selected_chip_params": _text(selected_chip_params),
         "chips": _chips(source),
         "sections": sections,
         "continuation": continuation,
