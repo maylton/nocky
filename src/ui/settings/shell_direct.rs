@@ -24,10 +24,8 @@ pub(crate) struct SettingsPage {
 impl SettingsPage {
     pub(crate) fn new(initial: &AppConfig, noctalia_available: bool) -> Rc<Self> {
         let base = BaseSettingsPage::new(initial, noctalia_available);
-        let (entry, button, stream_summary) = stream_sources::entry_row(
-            &initial.youtube_stream_sources,
-            initial.language,
-        );
+        let (entry, button, stream_summary) =
+            stream_sources::entry_row(&initial.youtube_stream_sources, initial.language);
         stream_summary.set_text(&effective_summary(initial));
 
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
