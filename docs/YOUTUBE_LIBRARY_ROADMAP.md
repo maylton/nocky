@@ -24,7 +24,7 @@ This roadmap isolates the YouTube Music experience from Nocky's local Home. The 
 | 6. Broader account-library contract | Complete for currently returned account content | PR #40 / PR #42 |
 | 7. Stream-client fallback policy | Complete; authenticated recovery rotation validated | PR #41 / PR #42 |
 | 8. Integration hardening and real-account validation | Complete | PR #42 |
-| 9. Native stream-source preferences | Implemented; manual UI validation pending | PR #43 |
+| 9. Native stream-source preferences | Complete and manually validated | PR #43 |
 | 10. Assisted browser login | Planned, optional | after Phase 9 |
 | 11. Remote library mutations and account profiles | Planned | later |
 | 12. Native InnerTube backend | Research track | later |
@@ -185,14 +185,16 @@ Automated validation completed:
 - Formatting, compilation, Rust tests, strict Clippy, Python tests, shell checks and release metadata pass in the complete Quality Gate.
 - Local Home and `src/browser.rs` remain outside the implementation diff.
 
-Manual acceptance gate:
+Manual validation completed:
 
-- Confirm the dialog layout and scrolling at the minimum supported window width.
-- Reorder, disable and re-enable sources with mouse and keyboard.
-- Confirm the final enabled source cannot be disabled.
-- Restart Nocky and confirm the order and enabled state persist.
-- Restore defaults and confirm the standard order returns.
-- Play a YouTube track, reopen the dialog and confirm the last-stream diagnostic shows only safe metadata.
+- Dialog layout and scrolling were validated at the minimum supported window width.
+- Reordering up and down updates the effective-order summary immediately.
+- Enable/disable switches work, and the final active source remains protected.
+- Reset restores the standard order and enabled state.
+- Closing, reopening and restarting Nocky preserve the saved source policy.
+- Keyboard operation works on the dialog controls.
+- A subsequent YouTube resolution respects the saved order.
+- The last-stream diagnostic remains limited to privacy-safe metadata.
 
 The automatic default policy remains reliable without user configuration.
 
