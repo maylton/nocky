@@ -451,6 +451,12 @@ pub(crate) fn present_dialog<W>(
             state.rebuild();
         });
     }
+    {
+        let state_lifetime = state.clone();
+        dialog.connect_closed(move |_| {
+            let _ = &state_lifetime;
+        });
+    }
 
     content.append(&summary);
     content.append(&diagnostic);
