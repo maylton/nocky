@@ -565,6 +565,7 @@ impl AppController {
                 });
             let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
                 title: "Para você".to_string(),
+                home: true,
                 append,
                 result,
             });
@@ -583,6 +584,7 @@ impl AppController {
         thread::spawn(move || {
             let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
                 title: "Sua biblioteca do YouTube Music".to_string(),
+                home: false,
                 append: false,
                 result: bridge.library_overview().map(|mut page| {
                     cache_home_page_covers(&mut page);
@@ -663,6 +665,7 @@ impl AppController {
                     thread::spawn(move || {
                         let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
                             title: "Sua biblioteca do YouTube Music".to_string(),
+                            home: false,
                             append: false,
                             result: bridge.library_page().map(|mut page| {
                                 cache_home_page_covers(&mut page);
@@ -678,6 +681,7 @@ impl AppController {
                     thread::spawn(move || {
                         let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
                             title: "Suas curtidas no YouTube Music".to_string(),
+                            home: false,
                             append: false,
                             result: bridge.liked_page().map(|mut page| {
                                 cache_home_page_covers(&mut page);

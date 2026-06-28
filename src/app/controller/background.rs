@@ -819,10 +819,33 @@ impl AppController {
                 },
                 BackgroundMessage::YouTubeStructuredPage {
                     title,
+                    home,
                     append,
                     result,
                 } => match result {
-                    Ok(page) => self.youtube_page.show_structured_page(&title, page, append),
+                    Ok(page) => {
+                        if home {
+                            {
+                                let mut current = self.youtube_home_page.borrow_mut();
+                                if append {
+                                    current.merge_page(page.clone());
+                                } else {
+                                    let mut next = page.clone();
+                                    if next.chips.is_empty()
+                                        && !next.selected_chip_params.is_empty()
+                                        && !current.chips.is_empty()
+                                    {
+                                        next.chips = current.chips.clone();
+                                    }
+                                    *current = next;
+                                }
+                            }
+                            if self.config.borrow().startup_source == Some(StartupSource::YouTube) {
+                                self.refresh_browser();
+                            }
+                        }
+                        self.youtube_page.show_structured_page(&title, page, append);
+                    }
                     Err(error) if append => {
                         self.youtube_page.set_loading(false, &title);
                         self.show_toast(&format!(

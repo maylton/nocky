@@ -10,7 +10,8 @@ use crate::{
     youtube::{
         artist_credit_contains, credited_artists, youtube_cache_visual_state,
         youtube_collection_cache_key, youtube_collection_key, YouTubeCacheVisualState,
-        YouTubeCollectionEntry, YouTubeItem, YouTubeLibraryCache,
+        YouTubeCollectionEntry, YouTubeHomePage, YouTubeHomeSection, YouTubeItem,
+        YouTubeLibraryCache,
     },
 };
 use gtk::{gdk, gio::prelude::ListModelExt, glib, prelude::*};
@@ -125,6 +126,10 @@ pub enum BrowserEvent {
     },
     PlayYouTubeAlbum(YouTubeItem),
     PlayYouTubePlaylist(YouTubeItem),
+    LoadYouTubeHome {
+        continuation: String,
+        params: String,
+    },
     OpenYouTubePlaylist(YouTubeItem),
     OpenYouTubeCollection(YouTubeItem),
     LoadMoreAlbums,
@@ -178,6 +183,7 @@ pub struct BrowserRenderContext<'a> {
     pub history: &'a ListeningHistory,
     pub playback: &'a BrowserPlaybackState,
     pub offline: &'a OfflineStore,
+    pub youtube_home: &'a YouTubeHomePage,
 }
 
 #[derive(Clone, Debug)]
@@ -258,6 +264,7 @@ enum HomeCard {
         cover_path: Option<PathBuf>,
         indices: Vec<usize>,
     },
+    YouTubeTrack(YouTubeItem),
     YouTubePlaylist(YouTubeItem),
 }
 
@@ -361,6 +368,20 @@ impl HomeCard {
                 placeholder_icon: "media-playlist-shuffle-symbolic",
                 placeholder_class: "playlist-placeholder",
             },
+            Self::YouTubeTrack(item) => CollectionCardDescriptor {
+                cover_path: item.cached_cover(),
+                title: &item.title,
+                subtitle: if item.subtitle.is_empty() {
+                    &item.artist
+                } else {
+                    &item.subtitle
+                },
+                detail: "YouTube Music",
+                online: true,
+                artist: false,
+                placeholder_icon: "audio-x-generic-symbolic",
+                placeholder_class: "playlist-placeholder",
+            },
             Self::YouTubePlaylist(item) => CollectionCardDescriptor {
                 cover_path: item.cached_cover(),
                 title: &item.title,
@@ -391,6 +412,11 @@ impl HomeCard {
                 title: title.clone(),
                 indices: indices.clone(),
             },
+            Self::YouTubeTrack(item) => BrowserEvent::YouTubeTrackActivated {
+                item: item.clone(),
+                queue: vec![item.clone()],
+                index: 0,
+            },
             Self::YouTubePlaylist(item) => BrowserEvent::OpenYouTubePlaylist(item.clone()),
         }
     }
@@ -415,6 +441,11 @@ impl HomeCard {
             Self::LocalMix { title, .. } => {
                 format!("local-mix:{}", title.to_lowercase())
             }
+            Self::YouTubeTrack(item) => format!(
+                "youtube-track:{}:{}",
+                item.video_id,
+                item.title.to_lowercase()
+            ),
             Self::YouTubePlaylist(item) => {
                 format!("youtube-playlist:{}", item.title.to_lowercase())
             }
@@ -1762,7 +1793,14 @@ impl LibraryBrowser {
                 self.root.set_visible_child_name("playlists");
             }
             BrowserRoute::All if query.trim().is_empty() => {
-                self.rebuild_home(tracks, config, youtube, context.history, context.playback);
+                self.rebuild_home(
+                    tracks,
+                    config,
+                    youtube,
+                    context.youtube_home,
+                    context.history,
+                    context.playback,
+                );
                 self.root.set_visible_child_name("home");
             }
             route => {
@@ -2627,6 +2665,7 @@ impl LibraryBrowser {
         tracks: &[Track],
         config: &AppConfig,
         youtube: &YouTubeLibraryCache,
+        youtube_home_page: &YouTubeHomePage,
         history: &ListeningHistory,
         playback: &BrowserPlaybackState,
     ) {
@@ -2634,12 +2673,56 @@ impl LibraryBrowser {
         let copy = home_copy(language);
         let card_effects =
             config.visual_theme.is_expressive() && config.expressive_home_card_effects;
+        let active_source = match config.startup_source {
+            Some(StartupSource::YouTube) => ListeningSource::YouTube,
+            _ => ListeningSource::Local,
+        };
+        let youtube_home = active_source == ListeningSource::YouTube;
 
         let next_home = gtk::Box::new(gtk::Orientation::Vertical, 22);
         next_home.set_hexpand(true);
         next_home.set_vexpand(false);
         next_home.add_css_class("library-home");
         next_home.add_css_class("expressive-library-home");
+
+        if youtube_home && !youtube_home_page.sections.is_empty() {
+            next_home.append(&youtube_home_chip_bar(youtube_home_page, &self.event_tx));
+            for section in &youtube_home_page.sections {
+                let cards = youtube_feed_section_cards(section);
+                if cards.is_empty() {
+                    continue;
+                }
+                next_home.append(&home_section(
+                    &section.title,
+                    &section.label,
+                    copy.waiting_content,
+                    cards,
+                    playback,
+                    config,
+                    &self.event_tx,
+                    language,
+                    card_effects,
+                ));
+            }
+
+            let generation = self.home_generation.get().wrapping_add(1);
+            self.home_generation.set(generation);
+            let child_name = format!("home-{generation}");
+            let previous = self.home_stack.visible_child();
+
+            self.home_stack.add_named(&next_home, Some(&child_name));
+            self.home_stack.set_visible_child_name(&child_name);
+
+            if let Some(previous) = previous {
+                let stack = self.home_stack.clone();
+                glib::timeout_add_local_once(Duration::from_millis(220), move || {
+                    if previous.parent().as_ref() == Some(stack.upcast_ref()) {
+                        stack.remove(&previous);
+                    }
+                });
+            }
+            return;
+        }
 
         if matches!(config.startup_source, Some(StartupSource::YouTube)) {
             let mixes = youtube
@@ -2683,12 +2766,6 @@ impl LibraryBrowser {
                 card_effects,
             ));
         }
-
-        let active_source = match config.startup_source {
-            Some(StartupSource::YouTube) => ListeningSource::YouTube,
-            _ => ListeningSource::Local,
-        };
-        let youtube_home = active_source == ListeningSource::YouTube;
 
         if config.show_personalized_home_history {
             let recent_activity = history.recent_activity(active_source, 12);
@@ -3788,6 +3865,12 @@ fn search_card_text(card: &HomeCard) -> String {
             detail,
             ..
         } => format!("{title} {subtitle} {detail}"),
+        HomeCard::YouTubeTrack(item) => {
+            format!(
+                "{} {} {} {}",
+                item.title, item.subtitle, item.artist, item.album
+            )
+        }
         HomeCard::YouTubePlaylist(item) => format!(
             "{} {} {} {} {}",
             item.title, item.subtitle, item.artist, item.album, item.playlist_kind
@@ -4317,6 +4400,14 @@ fn search_collection_button(card: HomeCard, event_tx: &Sender<BrowserEvent>) -> 
             detail.as_str(),
             false,
         ),
+        HomeCard::YouTubeTrack(item) => (
+            item.cached_cover(),
+            "audio-x-generic-symbolic",
+            item.title.as_str(),
+            item.subtitle.as_str(),
+            "YouTube Music",
+            true,
+        ),
         HomeCard::YouTubePlaylist(item) => (
             item.cached_cover(),
             "view-list-symbolic",
@@ -4396,6 +4487,11 @@ fn search_collection_button(card: HomeCard, event_tx: &Sender<BrowserEvent>) -> 
             HomeCard::LocalMix { title, indices, .. } => {
                 BrowserEvent::PlayLocalMix { title, indices }
             }
+            HomeCard::YouTubeTrack(item) => BrowserEvent::YouTubeTrackActivated {
+                item: item.clone(),
+                queue: vec![item],
+                index: 0,
+            },
             HomeCard::YouTubePlaylist(item) => BrowserEvent::OpenYouTubePlaylist(item),
         };
         let _ = sender.send(event);
@@ -4646,6 +4742,102 @@ fn home_history_section(
     section.append(&heading);
     section.append(&scroll);
     section
+}
+
+fn youtube_home_chip_bar(page: &YouTubeHomePage, event_tx: &Sender<BrowserEvent>) -> gtk::Box {
+    let section = gtk::Box::new(gtk::Orientation::Vertical, 8);
+    section.add_css_class("home-section");
+    section.add_css_class("youtube-home-chip-section");
+
+    let rail = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    rail.add_css_class("youtube-chip-row");
+    rail.set_margin_start(2);
+    rail.set_margin_end(2);
+
+    let all = gtk::Button::with_label("Tudo");
+    all.add_css_class("pill");
+    if page.selected_chip_params.trim().is_empty() {
+        all.add_css_class("suggested-action");
+    }
+    {
+        let event_tx = event_tx.clone();
+        all.connect_clicked(move |_| {
+            let _ = event_tx.send(BrowserEvent::LoadYouTubeHome {
+                continuation: String::new(),
+                params: String::new(),
+            });
+        });
+    }
+    rail.append(&all);
+
+    for chip in &page.chips {
+        let button = gtk::Button::with_label(&chip.title);
+        button.add_css_class("pill");
+        if !chip.params.is_empty() && chip.params == page.selected_chip_params {
+            button.add_css_class("suggested-action");
+        }
+        let params = chip.params.clone();
+        let event_tx = event_tx.clone();
+        button.connect_clicked(move |_| {
+            let _ = event_tx.send(BrowserEvent::LoadYouTubeHome {
+                continuation: String::new(),
+                params: params.clone(),
+            });
+        });
+        rail.append(&button);
+    }
+
+    let scroll = gtk::ScrolledWindow::new();
+    scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Never);
+    scroll.set_overlay_scrolling(true);
+    scroll.set_child(Some(&rail));
+    scroll.add_css_class("home-carousel-scroll");
+
+    section.append(&scroll);
+    section
+}
+
+fn youtube_feed_section_cards(section: &YouTubeHomeSection) -> Vec<HomeCard> {
+    section
+        .items
+        .iter()
+        .filter_map(youtube_feed_item_card)
+        .take(18)
+        .collect()
+}
+
+fn youtube_feed_item_card(item: &YouTubeItem) -> Option<HomeCard> {
+    match item.result_type.as_str() {
+        "song" | "video" | "episode" if item.playable() => {
+            Some(HomeCard::YouTubeTrack(item.clone()))
+        }
+        "album" => Some(HomeCard::YouTubeAlbum {
+            item: item.clone(),
+            subtitle: if item.artist.is_empty() {
+                item.subtitle.clone()
+            } else {
+                item.artist.clone()
+            },
+            detail: if item.subtitle.is_empty() {
+                "Álbum • YouTube Music".to_string()
+            } else {
+                item.subtitle.clone()
+            },
+            cover_path: item.cached_cover().map(Path::to_path_buf),
+        }),
+        "artist" => Some(HomeCard::YouTubeArtist {
+            item: item.clone(),
+            subtitle: if item.subtitle.is_empty() {
+                "Artista".to_string()
+            } else {
+                item.subtitle.clone()
+            },
+            detail: "Artista • YouTube Music".to_string(),
+            cover_path: item.cached_cover().map(Path::to_path_buf),
+        }),
+        "playlist" => Some(HomeCard::YouTubePlaylist(item.clone())),
+        _ => None,
+    }
 }
 
 #[expect(
@@ -5106,6 +5298,17 @@ fn home_card_button(
             } else {
                 item.browse_id.clone()
             },
+            item.title.clone(),
+        ),
+        HomeCard::YouTubeTrack(item) => (
+            Some(BrowserEvent::YouTubeTrackActivated {
+                item: item.clone(),
+                queue: vec![item.clone()],
+                index: 0,
+            }),
+            None,
+            "track",
+            item.video_id.clone(),
             item.title.clone(),
         ),
         HomeCard::YouTubePlaylist(item) => (

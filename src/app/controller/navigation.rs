@@ -59,6 +59,7 @@ impl AppController {
         let state = self.state.borrow();
         let config = self.config.borrow();
         let youtube = self.youtube_library.borrow();
+        let youtube_home = self.youtube_home_page.borrow();
         let query = self.search_query.borrow();
         let youtube_only = config.startup_source == Some(StartupSource::YouTube);
         let effective_tracks: &[Track] = if youtube_only {
@@ -73,6 +74,7 @@ impl AppController {
         let has_library = !query.trim().is_empty()
             || !effective_tracks.is_empty()
             || youtube.has_content()
+            || !youtube_home.sections.is_empty()
             || youtube.syncing;
         self.music_stack
             .set_visible_child_name(if has_library { "library" } else { "empty" });
@@ -84,6 +86,7 @@ impl AppController {
                 history: &self.listening_history.borrow(),
                 playback: &playback,
                 offline: &self.offline_store.borrow(),
+                youtube_home: &youtube_home,
             },
             &query,
         );
@@ -104,6 +107,7 @@ impl AppController {
         let state = self.state.borrow();
         let config = self.config.borrow();
         let youtube = self.youtube_library.borrow();
+        let youtube_home = self.youtube_home_page.borrow();
         let query = self.search_query.borrow();
         let youtube_only = config.startup_source == Some(StartupSource::YouTube);
         let effective_tracks: &[Track] = if youtube_only {
@@ -124,6 +128,7 @@ impl AppController {
                 history: &self.listening_history.borrow(),
                 playback: &playback,
                 offline: &self.offline_store.borrow(),
+                youtube_home: &youtube_home,
             },
             &query,
         );
@@ -322,6 +327,12 @@ impl AppController {
                 }
                 BrowserEvent::PlayYouTubePlaylist(item) => {
                     self.play_youtube_collection(item, true);
+                }
+                BrowserEvent::LoadYouTubeHome {
+                    continuation,
+                    params,
+                } => {
+                    self.load_youtube_home_page(continuation, params);
                 }
                 BrowserEvent::OpenYouTubePlaylist(item) => {
                     self.load_youtube_playlist_for_browser(item);

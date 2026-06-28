@@ -81,6 +81,7 @@ pub(crate) enum BackgroundMessage {
     },
     YouTubeStructuredPage {
         title: String,
+        home: bool,
         append: bool,
         result: Result<YouTubeHomePage, String>,
     },

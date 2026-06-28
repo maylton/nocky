@@ -31,7 +31,7 @@ use std::{
 };
 
 pub(crate) use collections::{resolve_youtube_collection_item, youtube_home_prefetch_candidates};
-pub(crate) use feed::{YouTubeHomeChip, YouTubeHomePage};
+pub(crate) use feed::{YouTubeHomeChip, YouTubeHomePage, YouTubeHomeSection};
 pub(crate) use routing::{youtube_item_action, YouTubeItemAction};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
