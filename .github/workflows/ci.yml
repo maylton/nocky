@@ -73,34 +73,4 @@ jobs:
 
       - name: Run quality gate
         shell: bash
-        run: |
-          set -o pipefail
-          bash ./scripts/quality-gate.sh 2>&1 | tee /tmp/nocky-quality-gate.log
-
-      - name: Prepare rustfmt output
-        if: always()
-        shell: bash
-        run: |
-          cargo fmt --all
-          mkdir -p /tmp/nocky-rustfmt/src/ui/settings
-          cp src/config.rs /tmp/nocky-rustfmt/src/config.rs
-          cp src/ui/settings/shell_direct.rs /tmp/nocky-rustfmt/src/ui/settings/shell_direct.rs
-          cp src/ui/settings/stream_sources.rs /tmp/nocky-rustfmt/src/ui/settings/stream_sources.rs
-
-      - name: Upload quality gate log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: quality-gate-log
-          path: /tmp/nocky-quality-gate.log
-          if-no-files-found: error
-          retention-days: 3
-
-      - name: Upload rustfmt output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rustfmt-output
-          path: /tmp/nocky-rustfmt
-          if-no-files-found: error
-          retention-days: 3
+        run: bash ./scripts/quality-gate.sh
