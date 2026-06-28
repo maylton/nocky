@@ -101,7 +101,10 @@ fn last_stream_diagnostic(language: AppLanguage) -> String {
     let Ok(payload) = serde_json::from_str::<serde_json::Value>(&contents) else {
         return unavailable();
     };
-    let Some(streams) = payload.get("streams").and_then(serde_json::Value::as_object) else {
+    let Some(streams) = payload
+        .get("streams")
+        .and_then(serde_json::Value::as_object)
+    else {
         return unavailable();
     };
     let Some((_expires_at, stream)) = streams
