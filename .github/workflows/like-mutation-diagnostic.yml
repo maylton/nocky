@@ -1,4 +1,4 @@
-name: Like Mutation Diagnostic
+name: Like Mutation Rustfmt Diagnostic
 
 on:
   pull_request:
@@ -13,31 +13,22 @@ permissions:
   contents: read
 
 jobs:
-  rustfmt:
+  rustfmt-diff:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-        with:
-          show-progress: false
-      - run: rustup component add rustfmt
-      - name: Check focused formatting
+      - name: Clone branch quietly
         run: |
-          rustfmt --edition 2021 --check \
+          git clone --quiet --depth=1 \
+            --branch codex/youtube-like-mutation-foundation \
+            https://github.com/maylton/nocky.git repo
+      - name: Install rustfmt
+        run: rustup component add rustfmt --quiet
+      - name: Print exact rustfmt diff
+        working-directory: repo
+        run: |
+          rustfmt --edition 2021 \
             src/youtube/like_mutation.rs \
             tests/youtube_like_mutation.rs
-
-  standalone-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          show-progress: false
-      - name: Compile with warnings denied
-        run: |
-          mkdir -p target/diagnostic
-          rustc --edition 2021 --test \
-            -D warnings \
-            tests/youtube_like_mutation.rs \
-            -o target/diagnostic/youtube_like_mutation
-      - name: Run focused tests
-        run: target/diagnostic/youtube_like_mutation
+          git diff --exit-code -- \
+            src/youtube/like_mutation.rs \
+            tests/youtube_like_mutation.rs
