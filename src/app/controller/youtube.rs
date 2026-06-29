@@ -748,6 +748,24 @@ impl AppController {
                         });
                     });
                 }
+                YouTubePageEvent::CreatePlaylist {
+                    title,
+                    description,
+                    privacy,
+                } => {
+                    if self.youtube_playlist_create_pending.replace(true) {
+                        self.show_toast("A criação anterior ainda está em andamento");
+                        continue;
+                    }
+
+                    self.youtube_page
+                        .set_loading(true, "Criando playlist no YouTube Music...");
+                    let sender = self.background.sender();
+                    thread::spawn(move || {
+                        let result = bridge.create_empty_playlist(&title, &description, &privacy);
+                        let _ = sender.send(BackgroundMessage::YouTubePlaylistCreated { result });
+                    });
+                }
                 YouTubePageEvent::OpenPlaylist(item) => {
                     self.prepare_native_youtube_route();
                     self.load_youtube_playlist_for_browser(item);

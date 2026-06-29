@@ -8,6 +8,7 @@ mod like_mutation;
 #[cfg(feature = "assisted-login")]
 mod login_policy;
 mod playback;
+mod playlist_create;
 mod routing;
 mod structured_cards;
 
@@ -38,6 +39,7 @@ pub(crate) use assisted_login::present as present_assisted_login;
 pub(crate) use collections::{resolve_youtube_collection_item, youtube_home_prefetch_candidates};
 pub(crate) use feed::{YouTubeHomeChip, YouTubeHomePage, YouTubeHomeSection};
 pub(crate) use like_mutation::{LikeMutationRegistry, LikeMutationStartError};
+pub(crate) use playlist_create::{playlist_creation_error_message, YouTubePlaylistCreation};
 pub(crate) use routing::{youtube_item_action, YouTubeItemAction};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -871,6 +873,11 @@ pub enum YouTubePageEvent {
     LoadLibrary,
     LoadLiked,
     LoadPlaylists,
+    CreatePlaylist {
+        title: String,
+        description: String,
+        privacy: String,
+    },
     LoadHome {
         continuation: String,
         params: String,
@@ -1228,12 +1235,15 @@ impl YouTubePage {
         let library_button = gtk::Button::with_label("Biblioteca");
         let liked_button = gtk::Button::with_label("Curtidas");
         let playlists_button = gtk::Button::with_label("Playlists");
+        let create_playlist_button = gtk::Button::with_label("Criar playlist");
+        create_playlist_button.add_css_class("suggested-action");
         for button in [
             &home_button,
             &overview_button,
             &library_button,
             &liked_button,
             &playlists_button,
+            &create_playlist_button,
         ] {
             button.add_css_class("pill");
         }
@@ -1244,6 +1254,7 @@ impl YouTubePage {
         private_actions.append(&library_button);
         private_actions.append(&liked_button);
         private_actions.append(&playlists_button);
+        private_actions.append(&create_playlist_button);
         private_actions.set_hexpand(true);
         private_actions.set_sensitive(false);
 
@@ -1418,6 +1429,14 @@ impl YouTubePage {
             let sender = page.event_tx.clone();
             playlists_button.connect_clicked(move |_| {
                 let _ = sender.send(YouTubePageEvent::LoadPlaylists);
+            });
+        }
+        {
+            let weak = Rc::downgrade(&page);
+            create_playlist_button.connect_clicked(move |_| {
+                if let Some(page) = weak.upgrade() {
+                    page.present_playlist_create_dialog();
+                }
             });
         }
         {
