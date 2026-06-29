@@ -273,8 +273,10 @@ install_file 0755 "target/release/${BIN_NAME}" "${BIN_DIR}/${BIN_NAME}"
 install_file 0755 "helpers/nocky_youtube.py" "${HELPER_DIR}/nocky_youtube.py"
 install_file 0755 "helpers/nocky_youtube_profile.py" "${HELPER_DIR}/nocky_youtube_profile.py"
 install_file 0755 "helpers/nocky_youtube_profiles.py" "${HELPER_DIR}/nocky_youtube_profiles.py"
+install_file 0755 "helpers/nocky_youtube_playlist_create.py" "${HELPER_DIR}/nocky_youtube_playlist_create.py"
 install_file 0644 "helpers/nocky_account_profile.py" "${HELPER_DIR}/nocky_account_profile.py"
 install_file 0644 "helpers/nocky_account_discovery.py" "${HELPER_DIR}/nocky_account_discovery.py"
+install_file 0644 "helpers/nocky_playlist_mutations.py" "${HELPER_DIR}/nocky_playlist_mutations.py"
 install_file 0644 "helpers/nocky_youtube_feed.py" "${HELPER_DIR}/nocky_youtube_feed.py"
 install_file 0644 "helpers/nocky_stream_clients.py" "${HELPER_DIR}/nocky_stream_clients.py"
 
@@ -291,6 +293,7 @@ install_file 0644 "CHANGELOG.md" "${DOC_DIR}/CHANGELOG.md"
 install_file 0644 "docs/FROSTED_GLASS.md" "${DOC_DIR}/FROSTED_GLASS.md"
 install_file 0644 "docs/YOUTUBE_LIBRARY_ROADMAP.md" "${DOC_DIR}/YOUTUBE_LIBRARY_ROADMAP.md"
 install_file 0644 "docs/YOUTUBE_ACCOUNT_PROFILE_DISCOVERY.md" "${DOC_DIR}/YOUTUBE_ACCOUNT_PROFILE_DISCOVERY.md"
+install_file 0644 "docs/YOUTUBE_PLAYLIST_CREATION.md" "${DOC_DIR}/YOUTUBE_PLAYLIST_CREATION.md"
 
 icon_count=0
 while IFS= read -r -d '' icon; do
