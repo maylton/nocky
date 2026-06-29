@@ -7,7 +7,7 @@ trap 'rm -f "$RESULT_FILE"' EXIT
 chmod 600 "$RESULT_FILE"
 
 cd "$ROOT_DIR"
-python3 helpers/nocky_youtube_profiles.py >"$RESULT_FILE"
+python3 helpers/nocky_youtube_profiles.py >"$RESULT_FILE" || true
 
 python3 - "$RESULT_FILE" <<'PY'
 from __future__ import annotations
@@ -16,7 +16,11 @@ import json
 import sys
 from pathlib import Path
 
-payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+try:
+    payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+except Exception as error:
+    raise SystemExit(f"Profile discovery returned invalid diagnostic output: {error}")
+
 if not payload.get("ok"):
     raise SystemExit(f"Profile discovery failed: {payload.get('error') or 'unknown error'}")
 
