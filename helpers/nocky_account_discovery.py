@@ -63,12 +63,17 @@ def _photo_url(item: dict[str, Any]) -> str:
     return ""
 
 
-def _brand_id(item: dict[str, Any]) -> str:
+def _identity_selector(item: dict[str, Any]) -> dict[str, Any] | None:
     endpoint = item.get("serviceEndpoint")
     if not isinstance(endpoint, dict):
-        return ""
+        return None
     selector = endpoint.get("selectActiveIdentityEndpoint")
-    if not isinstance(selector, dict):
+    return selector if isinstance(selector, dict) else None
+
+
+def _brand_id(item: dict[str, Any]) -> str:
+    selector = _identity_selector(item)
+    if selector is None:
         return ""
     tokens = selector.get("supportedTokens")
     if not isinstance(tokens, list):
@@ -130,6 +135,7 @@ def discover_account_profiles(payload: Any) -> dict[str, Any]:
                 continue
             handle = _text(item.get("channelHandle"))
             brand_id = _brand_id(item)
+            has_selector = _identity_selector(item) is not None
 
             if brand_id:
                 if brand_id in seen_brand_ids:
@@ -150,15 +156,23 @@ def discover_account_profiles(payload: Any) -> dict[str, Any]:
                     "kind": "brand" if brand_id else "unknown",
                     "is_selected": bool(item.get("isSelected")),
                     "switchable": bool(brand_id),
+                    "_has_identity_selector": has_selector,
                 }
             )
 
-    without_brand_id = [profile for profile in parsed if not profile["profile_id"]]
-    if len(without_brand_id) == 1:
-        primary = without_brand_id[0]
+    primary_candidates = [
+        profile
+        for profile in parsed
+        if not profile["profile_id"] and not profile["_has_identity_selector"]
+    ]
+    if len(primary_candidates) == 1:
+        primary = primary_candidates[0]
         primary["profile_id"] = "primary"
         primary["kind"] = "primary"
         primary["switchable"] = True
+
+    for profile in parsed:
+        profile.pop("_has_identity_selector", None)
 
     profile_ids = [profile["profile_id"] for profile in parsed]
     selected_count = sum(bool(profile["is_selected"]) for profile in parsed)
