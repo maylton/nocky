@@ -2,8 +2,8 @@
 mod playlist_mutation_contract;
 
 use playlist_mutation_contract::{
-    PlaylistMutationBlock, PlaylistMutationRequest, PlaylistMutationRisk,
-    PlaylistPrivacy, PlaylistTarget, PlaylistTrackIdentity,
+    PlaylistMutationBlock, PlaylistMutationRequest, PlaylistMutationRisk, PlaylistPrivacy,
+    PlaylistTarget, PlaylistTrackIdentity,
 };
 
 fn owned_playlist() -> PlaylistTarget {
