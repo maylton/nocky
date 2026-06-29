@@ -113,6 +113,7 @@ pub(crate) struct ControllerRuntime {
     pub(crate) youtube_like_request_id: Cell<u64>,
     pub(crate) youtube_like_pending: RefCell<HashMap<String, u64>>,
     pub(crate) youtube_like_mutations: RefCell<LikeMutationRegistry>,
+    pub(crate) youtube_playlist_create_pending: Cell<bool>,
 }
 
 pub(crate) struct AppController {

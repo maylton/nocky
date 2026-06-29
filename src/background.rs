@@ -3,7 +3,7 @@ use crate::{
     model::TrackData,
     youtube::{
         YouTubeArtistOverview, YouTubeHomePage, YouTubeItem, YouTubeLibrarySnapshot,
-        YouTubeSearchResults, YouTubeStatus, YouTubeStream,
+        YouTubePlaylistCreation, YouTubeSearchResults, YouTubeStatus, YouTubeStream,
     },
 };
 use std::{
@@ -39,6 +39,9 @@ pub(crate) enum BackgroundMessage {
         item: YouTubeItem,
         liked: bool,
         result: Result<bool, String>,
+    },
+    YouTubePlaylistCreated {
+        result: Result<YouTubePlaylistCreation, String>,
     },
     YouTubeLikeReconciled {
         request_id: u64,

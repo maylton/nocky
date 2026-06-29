@@ -582,6 +582,7 @@ impl AppController {
                 youtube_like_request_id: Cell::new(0),
                 youtube_like_pending: RefCell::new(HashMap::new()),
                 youtube_like_mutations: RefCell::new(LikeMutationRegistry::default()),
+                youtube_playlist_create_pending: Cell::new(false),
             },
             sidebar_motion: sidebar_parts.motion,
             sidebar_content: sidebar_parts.content,

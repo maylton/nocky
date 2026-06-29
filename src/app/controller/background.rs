@@ -7,8 +7,9 @@ use crate::{
     },
     config::{AppLanguage, StartupSource},
     youtube::{
-        cacheable_youtube_playlist, clear_library_cache, queue_library_cache_save,
-        youtube_collection_cache_key, youtube_collection_key,
+        cacheable_youtube_playlist, clear_library_cache, playlist_creation_error_message,
+        queue_library_cache_save, youtube_collection_cache_key, youtube_collection_key,
+        YouTubeItem,
     },
 };
 
@@ -320,6 +321,56 @@ impl AppController {
                     self.youtube_like_mutations
                         .borrow_mut()
                         .clear_finished(&video_id);
+                }
+                BackgroundMessage::YouTubePlaylistCreated { result } => {
+                    self.youtube_playlist_create_pending.set(false);
+                    match result {
+                        Ok(created) => {
+                            let privacy_label = match created.privacy.as_str() {
+                                "PUBLIC" => "pública",
+                                "UNLISTED" => "não listada",
+                                _ => "privada",
+                            };
+                            let item = YouTubeItem {
+                                result_type: "playlist".to_string(),
+                                title: created.title.clone(),
+                                subtitle: format!("Playlist {privacy_label} • criada agora"),
+                                browse_id: created.playlist_id.clone(),
+                                playlist_kind: "library".to_string(),
+                                ..YouTubeItem::default()
+                            };
+
+                            let playlists = {
+                                let mut library = self.youtube_library.borrow_mut();
+                                library
+                                    .playlists
+                                    .retain(|candidate| candidate.browse_id != item.browse_id);
+                                library.playlists.insert(0, item);
+                                library.synced = false;
+                                library.playlists.clone()
+                            };
+
+                            if let Err(error) =
+                                queue_library_cache_save(&self.youtube_library.borrow())
+                            {
+                                eprintln!(
+                                    "Could not save the created YouTube playlist locally: {error}"
+                                );
+                            }
+
+                            self.youtube_page.show_items("Suas playlists", playlists);
+                            self.refresh_browser();
+                            self.show_toast(&format!(
+                                "Playlist “{}” criada no YouTube Music",
+                                created.title
+                            ));
+                        }
+                        Err(error) => {
+                            eprintln!("Could not create YouTube Music playlist: {error}");
+                            self.youtube_page.set_loading(false, "YouTube Music");
+                            self.show_toast(playlist_creation_error_message(&error));
+                        }
+                    }
                 }
                 BackgroundMessage::YouTubeLibrarySynced { notify, result } => match result {
                     Ok(snapshot) => {

@@ -2,7 +2,7 @@
 
 use super::{
     HelperResponse, YouTubeBridge, YouTubeHomePage, YouTubeItem, YouTubeLibrarySnapshot,
-    YouTubeStatus,
+    YouTubePlaylistCreation, YouTubeStatus,
 };
 use serde::{Deserialize, Serialize};
 use std::process::{Command, Stdio};
@@ -21,6 +21,12 @@ pub trait YouTubeMusicBackend {
     fn sync_library(&self) -> Result<YouTubeLibrarySnapshot, String>;
     fn search(&self, query: &str, filter: &str) -> Result<Vec<YouTubeItem>, String>;
     fn playlist(&self, playlist: &YouTubeItem) -> Result<Vec<YouTubeItem>, String>;
+    fn create_empty_playlist(
+        &self,
+        title: &str,
+        description: &str,
+        privacy: &str,
+    ) -> Result<YouTubePlaylistCreation, String>;
     fn rate(&self, video_id: &str, liked: bool) -> Result<bool, String>;
 }
 
@@ -224,6 +230,15 @@ impl YouTubeMusicBackend for YouTubeBridge {
 
     fn playlist(&self, playlist: &YouTubeItem) -> Result<Vec<YouTubeItem>, String> {
         YouTubeBridge::playlist(self, playlist)
+    }
+
+    fn create_empty_playlist(
+        &self,
+        title: &str,
+        description: &str,
+        privacy: &str,
+    ) -> Result<YouTubePlaylistCreation, String> {
+        YouTubeBridge::create_empty_playlist(self, title, description, privacy)
     }
 
     fn rate(&self, video_id: &str, liked: bool) -> Result<bool, String> {
