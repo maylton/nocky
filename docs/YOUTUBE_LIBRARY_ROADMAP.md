@@ -34,7 +34,7 @@ headers come from the structured YouTube Music feed.
 | 7. Stream-client fallback policy | Complete; authenticated recovery rotation validated | PR #41 / PR #42 |
 | 8. Integration hardening and real-account validation | Complete | PR #42 |
 | 9. Native stream-source preferences | Complete and manually validated | PR #43 |
-| 10. Android-parity YouTube Home organization | Implemented; real-chip manual validation pending | PR #46 |
+| 10. Android-parity YouTube Home organization | Complete and manually validated | PR #46 |
 | 11. Assisted browser login | Planned, optional | later |
 | 12. Remote library mutations and account profiles | Planned | later |
 | 13. Native InnerTube backend | Research track | later |
@@ -257,13 +257,20 @@ Implemented in PR #46:
 - Keep Local Home personalized sections separate from the YouTube Home.
 - Add fixture tests for chip extraction, selection request bodies,
   continuation params, section order and header preservation.
+- Provide optimistic chip selection, localized loading feedback and explicit
+  feedback when YouTube returns unchanged recommendation sections.
+- Keep the horizontal scrollbar below the chip controls without overlaying them.
 
-Manual validation pending:
+Manual validation completed:
 
-- Confirm the connected account returns more than the root **Tudo** chip.
-- Select every returned chip and confirm the section feed changes.
-- Return to **Tudo** and confirm the root feed and chip list are restored.
-- Confirm filtered load-more requests remain on the selected chip.
+- The connected account returns localized server-provided chips beyond **Tudo**.
+- Selecting chips highlights the active choice immediately and displays localized loading feedback in the main Home.
+- Filtered responses replace the feed sections; identical server responses produce explicit feedback instead of appearing inert.
+- Returning to **Tudo** restores the root feed and preserves the chip list.
+- Rapid chip switching keeps the final request and selection.
+- Filtered load-more requests retain the selected chip params.
+- The horizontal scrollbar remains below the chip controls without overlap at narrow widths.
+- Local Home behavior remains unchanged.
 
 Acceptance criteria:
 
