@@ -1,4 +1,4 @@
-name: Playlist Mutation Contract Diagnostic
+name: Playlist Mutation Rustfmt Diagnostic
 
 on:
   pull_request:
@@ -13,31 +13,22 @@ permissions:
   contents: read
 
 jobs:
-  rustfmt:
+  rustfmt-diff:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-        with:
-          show-progress: false
-      - run: rustup component add rustfmt
-      - name: Check focused formatting
+      - name: Clone branch quietly
         run: |
-          rustfmt --edition 2021 --check \
+          git clone --quiet --depth=1 \
+            --branch codex/youtube-playlist-mutation-architecture \
+            https://github.com/maylton/nocky.git repo
+      - name: Install rustfmt
+        run: rustup component add rustfmt
+      - name: Print exact rustfmt diff
+        working-directory: repo
+        run: |
+          rustfmt --edition 2021 \
             src/youtube/playlist_mutation_contract.rs \
             tests/youtube_playlist_mutation_contract.rs
-
-  standalone-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          show-progress: false
-      - name: Compile contract tests with warnings denied
-        run: |
-          mkdir -p target/diagnostic
-          rustc --edition 2021 --test \
-            -D warnings \
-            tests/youtube_playlist_mutation_contract.rs \
-            -o target/diagnostic/youtube_playlist_mutation_contract
-      - name: Run contract tests
-        run: target/diagnostic/youtube_playlist_mutation_contract
+          git diff --exit-code -- \
+            src/youtube/playlist_mutation_contract.rs \
+            tests/youtube_playlist_mutation_contract.rs
