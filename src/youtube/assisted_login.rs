@@ -4,7 +4,7 @@ use crate::config::AppLanguage;
 mod implementation {
     use super::AppLanguage;
     use crate::youtube::login_policy::{
-        is_youtube_music_uri, navigation_disposition, NavigationDisposition,
+        is_youtube_music_uri, navigation_disposition, navigation_host, NavigationDisposition,
     };
     use adw::prelude::*;
     use gtk::{gio, glib};
@@ -36,6 +36,7 @@ mod implementation {
         missing_session: &'static str,
         cookie_error: &'static str,
         blocked: &'static str,
+        blocked_host: &'static str,
         cancel: &'static str,
     }
 
@@ -50,6 +51,7 @@ mod implementation {
                 missing_session: "O YouTube Music abriu, mas a sessão autenticada ainda não foi encontrada. Conclua o login ou escolha a conta correta.",
                 cookie_error: "Não foi possível ler a sessão do YouTube Music.",
                 blocked: "Este endereço não faz parte do fluxo de login permitido.",
+                blocked_host: "Endereço bloqueado:",
                 cancel: "Cancelar",
             },
             AppLanguage::English => Copy {
@@ -61,6 +63,7 @@ mod implementation {
                 missing_session: "YouTube Music opened, but an authenticated session was not found yet. Finish signing in or choose the correct account.",
                 cookie_error: "The YouTube Music session could not be read.",
                 blocked: "This address is outside the permitted sign-in flow.",
+                blocked_host: "Blocked address:",
                 cancel: "Cancel",
             },
             AppLanguage::Spanish => Copy {
@@ -72,6 +75,7 @@ mod implementation {
                 missing_session: "YouTube Music se abrió, pero todavía no se encontró una sesión autenticada. Finaliza el acceso o elige la cuenta correcta.",
                 cookie_error: "No se pudo leer la sesión de YouTube Music.",
                 blocked: "Esta dirección no forma parte del flujo de acceso permitido.",
+                blocked_host: "Dirección bloqueada:",
                 cancel: "Cancelar",
             },
         }
@@ -206,7 +210,11 @@ mod implementation {
                     }
                     NavigationDisposition::Block => {
                         decision.ignore();
-                        status.set_text(text.blocked);
+                        if let Some(host) = navigation_host(&uri) {
+                            status.set_text(&format!("{} {host}", text.blocked_host));
+                        } else {
+                            status.set_text(text.blocked);
+                        }
                     }
                 }
                 true
