@@ -7,8 +7,8 @@ expose a GTK action and it is not installed as a user-facing capability yet.
 
 The first checkpoint accepts exactly:
 
-- one confirmed-owned playlist ID;
-- one confirmed-editable state from the read-only metadata contract;
+- one caller-confirmed playlist ID;
+- one caller-confirmed editable state from the read-only metadata contract;
 - one 11-character YouTube video ID;
 - duplicate insertion disabled.
 
@@ -16,16 +16,22 @@ An optional `VL` browse prefix is removed before the request is sent. URLs,
 source-playlist cloning, batches and explicit duplicate insertion are rejected
 before session or client access.
 
+Caller-provided ownership is only the first gate. After authentication, the
+helper fetches the same playlist through the read-only metadata contract and
+requires the returned playlist ID, `owned` state and effective editability to
+match before any remote change can be attempted.
+
 ## Runtime call
 
-A valid request maps to the pinned runtime method with:
+After the authenticated ownership check, a valid request maps to the pinned
+runtime method with:
 
 - the normalized playlist ID;
 - one `videoIds` entry;
 - `duplicates=False`.
 
-The helper calls the method once. It does not retry automatically because an
-ambiguous network failure could otherwise insert the same item twice.
+The helper calls the mutation method once. It does not retry automatically
+because an ambiguous network failure could otherwise insert the same item twice.
 
 ## Sanitized result
 
@@ -52,8 +58,9 @@ for ownership, privacy, duplicate occurrences and `setVideoId` identity.
 
 ## Failure behavior
 
-- Invalid ownership, editability or identifiers fail before authentication.
+- Invalid caller ownership, editability or identifiers fail before authentication.
 - Missing authentication fails before client creation.
+- Missing or mismatched remote ownership metadata blocks the mutation.
 - Unsupported runtimes fail without attempting another method.
 - Only `STATUS_SUCCEEDED` is accepted as confirmation.
 - Unexpected or partial responses become a generic sanitized error.
