@@ -274,11 +274,11 @@ impl YouTubePage {
 
 #[cfg(test)]
 mod tests {
+    use super::playlist_metadata_model::{YouTubePlaylistMetadata, YouTubePlaylistTrackMetadata};
     use super::{
         format_playlist_metadata_diagnostic, playlist_creation_error_message, privacy_code,
         YouTubePlaylistCreation,
     };
-    use super::playlist_metadata_model::{YouTubePlaylistMetadata, YouTubePlaylistTrackMetadata};
 
     #[test]
     fn privacy_selection_defaults_to_private() {
