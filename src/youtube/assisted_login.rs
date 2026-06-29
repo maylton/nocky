@@ -351,10 +351,7 @@ mod implementation {
 
                             status.set_text(text.capturing);
                             spinner.start();
-                            finish_callback(
-                                &callback,
-                                format!("Cookie: {}", pairs.join("; ")),
-                            );
+                            finish_callback(&callback, format!("Cookie: {}", pairs.join("; ")));
 
                             let (validation_tx, validation_rx) = mpsc::channel();
                             thread::spawn(move || {
