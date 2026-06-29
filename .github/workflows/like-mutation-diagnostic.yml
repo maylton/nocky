@@ -1,9 +1,13 @@
 name: Like Mutation Diagnostic
 
 on:
-  push:
+  pull_request:
     branches:
-      - codex/youtube-like-mutation-foundation
+      - codex/profile-discovery-status
+    paths:
+      - 'src/youtube/like_mutation.rs'
+      - 'tests/youtube_like_mutation.rs'
+      - '.github/workflows/like-mutation-diagnostic.yml'
 
 permissions:
   contents: read
