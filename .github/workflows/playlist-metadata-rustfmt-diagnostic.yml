@@ -1,0 +1,32 @@
+name: Playlist Metadata Rustfmt Diagnostic
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/youtube/playlist_create.rs'
+      - 'src/app/controller/mod.rs'
+      - 'src/app/controller/callbacks.rs'
+      - 'src/app/controller/youtube_playlist_metadata.rs'
+      - '.github/workflows/playlist-metadata-rustfmt-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  rustfmt-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          show-progress: false
+      - run: rustup component add rustfmt
+      - name: Print exact rustfmt diff
+        run: |
+          cargo fmt --all
+          git diff --exit-code -- \
+            src/youtube/playlist_create.rs \
+            src/app/controller/mod.rs \
+            src/app/controller/callbacks.rs \
+            src/app/controller/youtube_playlist_metadata.rs
