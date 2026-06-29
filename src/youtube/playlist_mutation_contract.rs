@@ -65,6 +65,7 @@ pub enum PlaylistMutationBlock {
     MissingVideoId,
     MissingSetVideoId,
     DuplicateVideoId,
+    DuplicateSetVideoId,
     NoChanges,
     ConfirmationMismatch,
 }
@@ -123,17 +124,17 @@ impl PlaylistMutationRequest {
                     blocks.push(PlaylistMutationBlock::MissingVideoId);
                 }
 
-                let mut seen = HashSet::new();
+                let mut seen_set_video_ids = HashSet::new();
                 for track in tracks {
                     let video_id = track.video_id.trim();
                     let set_video_id = track.set_video_id.trim();
                     if video_id.is_empty() {
                         blocks.push(PlaylistMutationBlock::MissingVideoId);
-                    } else if !seen.insert(video_id) {
-                        blocks.push(PlaylistMutationBlock::DuplicateVideoId);
                     }
                     if set_video_id.is_empty() {
                         blocks.push(PlaylistMutationBlock::MissingSetVideoId);
+                    } else if !seen_set_video_ids.insert(set_video_id) {
+                        blocks.push(PlaylistMutationBlock::DuplicateSetVideoId);
                     }
                 }
             }
