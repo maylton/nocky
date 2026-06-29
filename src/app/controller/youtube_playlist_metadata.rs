@@ -10,7 +10,7 @@ use crate::{
     youtube::{cacheable_youtube_playlist, YouTubeItem},
 };
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::{
         mpsc::{self, Receiver, Sender, TryRecvError},
         Mutex, OnceLock,
@@ -40,20 +40,14 @@ fn pending_metadata_requests() -> &'static Mutex<HashSet<String>> {
     PENDING.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
-fn completed_metadata_requests() -> &'static Mutex<HashSet<String>> {
-    static COMPLETED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
-    COMPLETED.get_or_init(|| Mutex::new(HashSet::new()))
+fn cached_metadata_results() -> &'static Mutex<HashMap<String, Option<String>>> {
+    static RESULTS: OnceLock<Mutex<HashMap<String, Option<String>>>> = OnceLock::new();
+    RESULTS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn mark_metadata_pending(
-    pending: &mut HashSet<String>,
-    completed: &HashSet<String>,
-    browse_id: &str,
-) -> bool {
+fn mark_metadata_pending(pending: &mut HashSet<String>, browse_id: &str) -> bool {
     let browse_id = browse_id.trim();
-    !browse_id.is_empty()
-        && !completed.contains(browse_id)
-        && pending.insert(browse_id.to_string())
+    !browse_id.is_empty() && pending.insert(browse_id.to_string())
 }
 
 fn apply_playlist_metadata_diagnostic(
@@ -108,19 +102,35 @@ impl AppController {
             return;
         }
 
+        let browse_id = playlist.browse_id.trim().to_string();
+        let cached = cached_metadata_results()
+            .lock()
+            .ok()
+            .and_then(|results| results.get(&browse_id).cloned());
+        match cached {
+            Some(Some(diagnostic)) => {
+                let changed = apply_playlist_metadata_diagnostic(
+                    &mut self.youtube_library.borrow_mut().playlists,
+                    &browse_id,
+                    &diagnostic,
+                );
+                if changed && self.is_open_youtube_playlist(&browse_id) {
+                    self.refresh_browser();
+                }
+                return;
+            }
+            Some(None) => return,
+            None => {}
+        }
+
         let Some(bridge) = self.youtube_bridge.clone() else {
             return;
         };
-        let browse_id = playlist.browse_id.trim().to_string();
-
         {
             let Ok(mut pending) = pending_metadata_requests().lock() else {
                 return;
             };
-            let Ok(completed) = completed_metadata_requests().lock() else {
-                return;
-            };
-            if !mark_metadata_pending(&mut pending, &completed, &browse_id) {
+            if !mark_metadata_pending(&mut pending, &browse_id) {
                 return;
             }
         }
@@ -147,12 +157,12 @@ impl AppController {
             if let Ok(mut pending) = pending_metadata_requests().lock() {
                 pending.remove(&browse_id);
             }
-            if let Ok(mut completed) = completed_metadata_requests().lock() {
-                completed.insert(browse_id.clone());
-            }
 
             match result {
                 Ok(diagnostic) => {
+                    if let Ok(mut results) = cached_metadata_results().lock() {
+                        results.insert(browse_id.clone(), Some(diagnostic.clone()));
+                    }
                     let changed = apply_playlist_metadata_diagnostic(
                         &mut self.youtube_library.borrow_mut().playlists,
                         &browse_id,
@@ -163,6 +173,9 @@ impl AppController {
                     }
                 }
                 Err(error) => {
+                    if let Ok(mut results) = cached_metadata_results().lock() {
+                        results.insert(browse_id.clone(), None);
+                    }
                     eprintln!(
                         "Could not load read-only YouTube playlist metadata for {browse_id}: {error}"
                     );
@@ -179,28 +192,13 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
-    fn pending_requests_reject_empty_duplicate_and_completed_ids() {
+    fn pending_requests_reject_empty_and_duplicate_ids() {
         let mut pending = HashSet::new();
-        let mut completed = HashSet::new();
 
-        assert!(!mark_metadata_pending(&mut pending, &completed, "  "));
-        assert!(mark_metadata_pending(
-            &mut pending,
-            &completed,
-            "PL-owned"
-        ));
-        assert!(!mark_metadata_pending(
-            &mut pending,
-            &completed,
-            "PL-owned"
-        ));
-        pending.remove("PL-owned");
-        completed.insert("PL-owned".to_string());
-        assert!(!mark_metadata_pending(
-            &mut pending,
-            &completed,
-            "PL-owned"
-        ));
+        assert!(!mark_metadata_pending(&mut pending, "  "));
+        assert!(mark_metadata_pending(&mut pending, "PL-owned"));
+        assert!(!mark_metadata_pending(&mut pending, "PL-owned"));
+        assert_eq!(pending.len(), 1);
     }
 
     #[test]
