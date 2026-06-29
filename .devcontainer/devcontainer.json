@@ -1,0 +1,30 @@
+{
+  "name": "Nocky GUI test",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
+
+  "features": {
+    "ghcr.io/devcontainers/features/desktop-lite:1": {
+      "password": "vscode",
+      "webPort": "6080"
+    }
+  },
+
+  "forwardPorts": [6080],
+
+  "portsAttributes": {
+    "6080": {
+      "label": "Nocky desktop",
+      "onAutoForward": "notify"
+    }
+  },
+
+  "containerEnv": {
+    "DISPLAY": ":1",
+    "GDK_BACKEND": "x11",
+    "GSK_RENDERER": "cairo",
+    "LIBGL_ALWAYS_SOFTWARE": "1",
+    "WEBKIT_DISABLE_COMPOSITING_MODE": "1"
+  },
+
+  "remoteUser": "vscode"
+}
