@@ -8,7 +8,6 @@ never sends an edit request and never writes playlist metadata to disk.
 
 from __future__ import annotations
 
-import argparse
 import json
 import re
 import sys
@@ -49,17 +48,23 @@ def fetch_playlist_metadata(playlist_id: str, limit: int = 500) -> dict[str, Any
     return normalize_playlist_detail(response)
 
 
-def _arguments(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("playlist_id")
-    parser.add_argument("--limit", type=int, default=500)
-    return parser.parse_args(argv)
+def _arguments(argv: list[str]) -> tuple[str, int]:
+    if not argv:
+        raise RuntimeError("A YouTube Music playlist ID is required")
+    if len(argv) == 1:
+        return argv[0], 500
+    if len(argv) == 3 and argv[1] == "--limit":
+        try:
+            return argv[0], int(argv[2])
+        except ValueError as error:
+            raise RuntimeError("Playlist detail limit must be an integer") from error
+    raise RuntimeError("Usage: nocky_youtube_playlist.py PLAYLIST_ID [--limit NUMBER]")
 
 
 def main(argv: list[str] | None = None) -> int:
     try:
-        arguments = _arguments(list(sys.argv[1:] if argv is None else argv))
-        result = fetch_playlist_metadata(arguments.playlist_id, arguments.limit)
+        playlist_id, limit = _arguments(list(sys.argv[1:] if argv is None else argv))
+        result = fetch_playlist_metadata(playlist_id, limit)
         _emit({"ok": True, "result": result})
         return 0
     except Exception as error:
