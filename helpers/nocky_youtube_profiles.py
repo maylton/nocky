@@ -45,9 +45,30 @@ def discover_profiles() -> dict[str, Any]:
     return discover_account_profiles(raw_response)
 
 
+def discovery_summary(discovery: Any) -> dict[str, Any]:
+    """Return the minimal contract consumed by the native status UI.
+
+    Candidate identifiers, photos, names and handles intentionally do not cross
+    the Python-to-Rust boundary. The active display label is provided by the
+    separately validated account-profile helper.
+    """
+
+    result = discovery if isinstance(discovery, dict) else {}
+    profiles = result.get("profiles")
+    profiles = profiles if isinstance(profiles, list) else []
+
+    return {
+        "state": str(result.get("state") or "unavailable"),
+        "deterministic": bool(result.get("deterministic")),
+        "profile_count": len([profile for profile in profiles if isinstance(profile, dict)]),
+    }
+
+
 def main() -> int:
     try:
-        _emit({"ok": True, "result": discover_profiles()})
+        discovery = discover_profiles()
+        result = discovery_summary(discovery) if "--summary" in sys.argv[1:] else discovery
+        _emit({"ok": True, "result": result})
         return 0
     except Exception as error:
         _emit({"ok": False, "error": str(error) or error.__class__.__name__})
