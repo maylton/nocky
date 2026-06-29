@@ -1,9 +1,9 @@
 """Validation and sanitization for YouTube Music playlist operations.
 
-The installed module contains the non-network contracts shared by empty-playlist
-creation and read-only playlist metadata inspection. Every request is validated
-before the YouTube client is created, and raw service responses never cross the
-helper boundary.
+The installed module contains the non-network contracts shared by playlist
+creation, read-only metadata inspection and single-item addition. Every request
+is validated before the YouTube client is created, and raw service responses
+never cross the helper boundary.
 """
 
 from __future__ import annotations
@@ -13,6 +13,8 @@ from typing import Any
 
 ALLOWED_PRIVACY = {"PRIVATE", "UNLISTED", "PUBLIC"}
 PLAYLIST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
+_SUCCESS_STATUS = "STATUS_SUCCEEDED"
 
 
 def _text(value: Any) -> str:
@@ -37,6 +39,13 @@ def normalize_playlist_id(value: Any) -> str:
     if not playlist_id or not PLAYLIST_ID_PATTERN.fullmatch(playlist_id):
         raise RuntimeError("Invalid YouTube Music playlist ID")
     return playlist_id
+
+
+def normalize_video_id(value: Any) -> str:
+    video_id = _text(value)
+    if not VIDEO_ID_PATTERN.fullmatch(video_id):
+        raise RuntimeError("Invalid YouTube video ID")
+    return video_id
 
 
 def normalize_playlist_detail(payload: Any) -> dict[str, Any]:
@@ -134,4 +143,59 @@ def sanitize_create_result(
         "playlist_id": playlist_id,
         "title": title,
         "privacy": privacy,
+    }
+
+
+def normalize_add_request(payload: Any) -> dict[str, Any]:
+    """Return a single-item, duplicate-safe addition request."""
+
+    if not isinstance(payload, dict):
+        raise RuntimeError("Expected a playlist item addition object")
+    if payload.get("owned") is not True or payload.get("editable") is not True:
+        raise RuntimeError("Playlist ownership and editability must be confirmed")
+
+    playlist_id = normalize_playlist_id(
+        payload.get("playlist_id") or payload.get("playlistId")
+    )
+    source_playlist = str(
+        payload.get("source_playlist") or payload.get("sourcePlaylist") or ""
+    ).strip()
+    if source_playlist:
+        raise RuntimeError("Source-playlist additions are not supported")
+    if payload.get("duplicates") is True:
+        raise RuntimeError("Duplicate playlist items are not allowed")
+
+    raw_video_ids = payload.get("video_ids") or payload.get("videoIds")
+    if raw_video_ids is None:
+        raw_video_ids = [payload.get("video_id") or payload.get("videoId")]
+    if not isinstance(raw_video_ids, list) or len(raw_video_ids) != 1:
+        raise RuntimeError("Exactly one playlist item is required")
+
+    return {
+        "playlist_id": playlist_id,
+        "video_ids": [normalize_video_id(raw_video_ids[0])],
+        "duplicates": False,
+    }
+
+
+def sanitize_add_result(
+    raw_result: Any,
+    *,
+    playlist_id: str,
+    video_id: str,
+) -> dict[str, Any]:
+    status = ""
+    if isinstance(raw_result, str):
+        status = raw_result.strip()
+    elif isinstance(raw_result, dict):
+        status = str(raw_result.get("status") or "").strip()
+
+    if status != _SUCCESS_STATUS:
+        raise RuntimeError("YouTube Music did not confirm the playlist item addition")
+
+    return {
+        "playlist_id": normalize_playlist_id(playlist_id),
+        "video_id": normalize_video_id(video_id),
+        "added_count": 1,
+        "reconciliation_required": True,
     }
