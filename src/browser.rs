@@ -184,6 +184,7 @@ pub struct BrowserRenderContext<'a> {
     pub playback: &'a BrowserPlaybackState,
     pub offline: &'a OfflineStore,
     pub youtube_home: &'a YouTubeHomePage,
+    pub youtube_home_loading: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -1818,6 +1819,7 @@ impl LibraryBrowser {
                     config,
                     youtube,
                     context.youtube_home,
+                    context.youtube_home_loading,
                     context.history,
                     context.playback,
                 );
@@ -2680,12 +2682,17 @@ impl LibraryBrowser {
         });
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Home rendering keeps its source-aware dependencies and loading state explicit"
+    )]
     fn rebuild_home(
         &self,
         tracks: &[Track],
         config: &AppConfig,
         youtube: &YouTubeLibraryCache,
         youtube_home_page: &YouTubeHomePage,
+        youtube_home_loading: bool,
         history: &ListeningHistory,
         playback: &BrowserPlaybackState,
     ) {
@@ -2711,6 +2718,9 @@ impl LibraryBrowser {
                 &self.event_tx,
                 language,
             ));
+            if youtube_home_loading {
+                next_home.append(&youtube_home_loading_banner(youtube_home_page, language));
+            }
             for section in &youtube_home_page.sections {
                 let cards = youtube_feed_section_cards(section, language);
                 if cards.is_empty() {
@@ -4797,6 +4807,7 @@ fn youtube_home_chip_bar(
     rail.add_css_class("youtube-chip-row");
     rail.set_margin_start(2);
     rail.set_margin_end(2);
+    rail.set_margin_bottom(10);
 
     let all = gtk::Button::with_label(copy.youtube_all);
     all.add_css_class("pill");
@@ -4833,12 +4844,44 @@ fn youtube_home_chip_bar(
 
     let scroll = gtk::ScrolledWindow::new();
     scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Never);
-    scroll.set_overlay_scrolling(true);
+    scroll.set_overlay_scrolling(false);
+    scroll.set_min_content_height(52);
+    scroll.set_propagate_natural_height(true);
     scroll.set_child(Some(&rail));
     scroll.add_css_class("home-carousel-scroll");
 
     section.append(&scroll);
     section
+}
+
+fn youtube_home_loading_banner(page: &YouTubeHomePage, language: AppLanguage) -> gtk::Box {
+    let selected_title = page
+        .chips
+        .iter()
+        .find(|chip| chip.params == page.selected_chip_params)
+        .map(|chip| chip.title.as_str());
+    let message = match (language, selected_title) {
+        (AppLanguage::Portuguese, Some(title)) => format!("Carregando {title}…"),
+        (AppLanguage::English, Some(title)) => format!("Loading {title}…"),
+        (AppLanguage::Spanish, Some(title)) => format!("Cargando {title}…"),
+        (AppLanguage::Portuguese, None) => "Atualizando recomendações…".to_string(),
+        (AppLanguage::English, None) => "Refreshing recommendations…".to_string(),
+        (AppLanguage::Spanish, None) => "Actualizando recomendaciones…".to_string(),
+    };
+
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    row.set_halign(gtk::Align::Start);
+    row.set_margin_start(2);
+    row.add_css_class("youtube-home-loading-row");
+
+    let indicator = ExpressiveLoadingIndicator::with_size(18);
+    row.append(indicator.widget());
+
+    let label = gtk::Label::new(Some(&message));
+    label.set_xalign(0.0);
+    label.add_css_class("dim-label");
+    row.append(&label);
+    row
 }
 
 fn youtube_feed_section_cards(

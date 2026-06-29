@@ -87,6 +87,7 @@ impl AppController {
                 playback: &playback,
                 offline: &self.offline_store.borrow(),
                 youtube_home: &youtube_home,
+                youtube_home_loading: self.youtube_home_loading.get(),
             },
             &query,
         );
@@ -129,6 +130,7 @@ impl AppController {
                 playback: &playback,
                 offline: &self.offline_store.borrow(),
                 youtube_home: &youtube_home,
+                youtube_home_loading: self.youtube_home_loading.get(),
             },
             &query,
         );

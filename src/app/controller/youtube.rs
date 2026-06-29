@@ -542,8 +542,29 @@ impl AppController {
         };
         let append = !continuation.is_empty();
         let filtered = !params.is_empty();
+        if !append {
+            let current = self.youtube_home_page.borrow();
+            if !current.sections.is_empty()
+                && current.selected_chip_params == params
+                && !self.youtube_home_loading.get()
+            {
+                return;
+            }
+        }
+
         let request_id = self.youtube_home_request_id.get().wrapping_add(1);
         self.youtube_home_request_id.set(request_id);
+        if !append {
+            let previous = self.youtube_home_page.borrow().selected_chip_params.clone();
+            self.youtube_home_previous_params.replace(previous);
+            self.youtube_home_page.borrow_mut().selected_chip_params = params.clone();
+        }
+        self.youtube_home_loading.set(true);
+        let youtube_active = self.config.borrow().startup_source == Some(StartupSource::YouTube);
+        if youtube_active {
+            self.refresh_browser();
+        }
+
         self.youtube_page.set_loading(
             true,
             if append {

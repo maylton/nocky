@@ -559,6 +559,8 @@ impl AppController {
                 youtube_request_id: Cell::new(0),
                 youtube_search_request_id: Cell::new(0),
                 youtube_home_request_id: Cell::new(0),
+                youtube_home_loading: Cell::new(false),
+                youtube_home_previous_params: RefCell::new(String::new()),
                 youtube_recovery_in_progress: Cell::new(false),
                 youtube_recovery_attempted: Cell::new(false),
                 youtube_recovery_retry_count: Cell::new(0),
