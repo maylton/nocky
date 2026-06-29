@@ -1,8 +1,11 @@
+mod assisted_login;
 mod backend;
 mod collections;
 pub(crate) mod diagnostics;
 pub(crate) mod error;
 mod feed;
+#[cfg(feature = "assisted-login")]
+mod login_policy;
 mod playback;
 mod routing;
 mod structured_cards;
@@ -30,6 +33,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+pub(crate) use assisted_login::present as present_assisted_login;
 pub(crate) use collections::{resolve_youtube_collection_item, youtube_home_prefetch_candidates};
 pub(crate) use feed::{YouTubeHomeChip, YouTubeHomePage, YouTubeHomeSection};
 pub(crate) use routing::{youtube_item_action, YouTubeItemAction};
@@ -858,6 +862,7 @@ pub enum YouTubePageEvent {
         query: String,
         filter: String,
     },
+    AssistedLogin,
     Connect(String),
     Disconnect,
     SyncLibrary,
@@ -1098,6 +1103,7 @@ pub struct YouTubePage {
     root: gtk::Box,
     status: gtk::Label,
     connect_button: gtk::Button,
+    manual_import_button: gtk::Button,
     disconnect_button: gtk::Button,
     private_actions: gtk::Box,
     auth_revealer: gtk::Revealer,
@@ -1131,7 +1137,7 @@ impl YouTubePage {
         title.set_xalign(0.0);
         title.add_css_class("title-1");
         let subtitle = gtk::Label::new(Some(
-            "Busque no catálogo ou conecte a sessão do navegador para acessar sua biblioteca.",
+            "Busque no catálogo ou entre com o navegador para acessar sua biblioteca e playlists.",
         ));
         subtitle.set_xalign(0.0);
         subtitle.set_wrap(true);
@@ -1141,18 +1147,21 @@ impl YouTubePage {
         status.set_xalign(0.0);
         status.set_hexpand(true);
         status.add_css_class("youtube-status");
-        let connect_button = gtk::Button::with_label("Conectar conta");
+        let connect_button = gtk::Button::with_label("Entrar com o navegador");
         connect_button.add_css_class("suggested-action");
+        let manual_import_button = gtk::Button::with_label("Importar sessão manualmente");
+        manual_import_button.add_css_class("flat");
         let disconnect_button = gtk::Button::with_label("Desconectar");
         disconnect_button.add_css_class("flat");
         disconnect_button.set_visible(false);
         let account_row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
         account_row.append(&status);
+        account_row.append(&manual_import_button);
         account_row.append(&connect_button);
         account_row.append(&disconnect_button);
 
         let auth_text = gtk::Label::new(Some(
-            "Abra o YouTube Music no navegador do sistema, entre na conta e copie uma requisição bem-sucedida como cURL ou apenas o cabeçalho Cookie. O Nocky nunca solicita sua senha e guarda somente os cabeçalhos mínimos no Secret Service quando disponível.",
+            "Alternativa avançada: abra o YouTube Music no navegador do sistema e cole uma requisição bem-sucedida como cURL ou apenas o cabeçalho Cookie. O Nocky guarda somente os cabeçalhos mínimos no Secret Service quando disponível.",
         ));
         auth_text.set_wrap(true);
         auth_text.set_xalign(0.0);
@@ -1170,7 +1179,7 @@ impl YouTubePage {
         auth_scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
         auth_scroll.set_child(Some(&auth_view));
         auth_scroll.add_css_class("youtube-auth-input");
-        let import_button = gtk::Button::with_label("Importar sessão");
+        let import_button = gtk::Button::with_label("Salvar sessão importada");
         import_button.add_css_class("suggested-action");
         let open_browser_button = gtk::Button::with_label("Abrir no navegador");
         open_browser_button.add_css_class("flat");
@@ -1276,6 +1285,7 @@ impl YouTubePage {
             root,
             status,
             connect_button,
+            manual_import_button,
             disconnect_button,
             private_actions,
             auth_revealer,
@@ -1294,11 +1304,17 @@ impl YouTubePage {
         });
 
         {
-            let button = page.connect_button.clone();
+            let sender = page.event_tx.clone();
+            page.connect_button.connect_clicked(move |_| {
+                let _ = sender.send(YouTubePageEvent::AssistedLogin);
+            });
+        }
+        {
+            let button = page.manual_import_button.clone();
             let weak = Rc::downgrade(&page);
             button.connect_clicked(move |_| {
                 if let Some(page) = weak.upgrade() {
-                    page.auth_revealer.set_reveal_child(true);
+                    page.show_manual_import();
                 }
             });
         }
@@ -1463,6 +1479,15 @@ impl YouTubePage {
         &self.root
     }
 
+    pub fn show_manual_import(&self) {
+        self.auth_revealer.set_reveal_child(true);
+        self.auth_buffer.set_text("");
+    }
+
+    pub fn submit_assisted_session(&self, raw: String) {
+        let _ = self.event_tx.send(YouTubePageEvent::Connect(raw));
+    }
+
     pub fn set_host_dialog(&self, dialog: adw::Dialog) {
         self.host_dialog.replace(Some(dialog));
     }
@@ -1486,6 +1511,7 @@ impl YouTubePage {
             };
             self.status.set_text(&format!("Conectado: {account}"));
             self.connect_button.set_visible(false);
+            self.manual_import_button.set_visible(false);
             self.disconnect_button.set_visible(true);
             self.private_actions.set_sensitive(true);
             self.auth_revealer.set_reveal_child(false);
@@ -1494,6 +1520,7 @@ impl YouTubePage {
             self.status
                 .set_text("Não conectado - a busca pública continua disponível");
             self.connect_button.set_visible(true);
+            self.manual_import_button.set_visible(true);
             self.disconnect_button.set_visible(false);
             self.private_actions.set_sensitive(false);
         }

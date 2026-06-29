@@ -9,6 +9,10 @@ homepage = "https://github.com/maylton/nocky"
 keywords = ["music", "gtk4", "gstreamer", "mpris", "linux"]
 categories = ["multimedia::audio"]
 
+[features]
+default = ["assisted-login"]
+assisted-login = ["dep:webkit6"]
+
 [dependencies]
 adw = { package = "libadwaita", version = "0.9", features = ["v1_8"] }
 gtk = { package = "gtk4", version = "0.11", features = ["v4_14"] }
@@ -21,6 +25,7 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 walkdir = "2.5"
+webkit6 = { version = "0.6.1", optional = true }
 
 [profile.release]
 lto = "thin"

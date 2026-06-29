@@ -21,6 +21,19 @@ use std::{
 };
 
 impl AppController {
+    pub(crate) fn present_assisted_youtube_login(&self) {
+        let page = self.youtube_page.clone();
+        let language = self.config.borrow().language;
+        if let Err(error) =
+            youtube_domain::present_assisted_login(&self.window, language, move |raw| {
+                page.submit_assisted_session(raw)
+            })
+        {
+            self.youtube_page.show_manual_import();
+            self.show_toast(&error);
+        }
+    }
+
     pub(crate) fn refresh_youtube_status(&self) {
         let Some(bridge) = self.youtube_bridge.clone() else {
             self.youtube_page.set_status(&YouTubeStatus::default());
@@ -636,6 +649,9 @@ impl AppController {
             };
 
             match event {
+                YouTubePageEvent::AssistedLogin => {
+                    self.present_assisted_youtube_login();
+                }
                 YouTubePageEvent::LoadHome {
                     continuation,
                     params,

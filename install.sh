@@ -112,7 +112,7 @@ install_dependencies() {
     if $INSTALL_YOUTUBE; then
       run_root apt-get install "${args[@]}" \
         python3 python3-venv python3-pip python3-gi \
-        gir1.2-secret-1 libsecret-1-0 curl unzip
+        gir1.2-secret-1 libsecret-1-0 libwebkitgtk-6.0-dev curl unzip
     fi
     return
   fi
@@ -129,7 +129,7 @@ install_dependencies() {
       desktop-file-utils hicolor-icon-theme
     if $INSTALL_YOUTUBE; then
       run_root dnf install "${args[@]}" \
-        python3 python3-pip python3-gobject libsecret curl unzip
+        python3 python3-pip python3-gobject libsecret webkitgtk6.0-devel curl unzip
     fi
     return
   fi
@@ -146,7 +146,7 @@ install_dependencies() {
       desktop-file-utils hicolor-icon-theme
     if $INSTALL_YOUTUBE; then
       run_root yum install "${args[@]}" \
-        python3 python3-pip python3-gobject libsecret curl unzip
+        python3 python3-pip python3-gobject libsecret webkitgtk6.0-devel curl unzip
     fi
     return
   fi
@@ -161,7 +161,7 @@ install_dependencies() {
       desktop-file-utils hicolor-icon-theme
     if $INSTALL_YOUTUBE; then
       run_root zypper --non-interactive install \
-        python3 python3-pip python3-gobject libsecret-1-0 curl unzip
+        python3 python3-pip python3-gobject libsecret-1-0 'pkgconfig(webkitgtk-6.0)' curl unzip
     fi
     return
   fi
@@ -176,7 +176,7 @@ install_dependencies() {
       desktop-file-utils hicolor-icon-theme
     if $INSTALL_YOUTUBE; then
       run_root pacman "${args[@]}" \
-        python python-pip python-gobject libsecret curl unzip
+        python python-pip python-gobject libsecret webkitgtk-6.0 curl unzip
     fi
     return
   fi
@@ -199,7 +199,9 @@ if ((${#missing[@]})); then
   exit 1
 fi
 
-for package in gtk4 libadwaita-1 gstreamer-1.0; do
+required_packages=(gtk4 libadwaita-1 gstreamer-1.0)
+$INSTALL_YOUTUBE && required_packages+=(webkitgtk-6.0)
+for package in "${required_packages[@]}"; do
   if ! pkg-config --exists "$package"; then
     echo "Missing development package detected by pkg-config: $package" >&2
     exit 1
@@ -218,7 +220,11 @@ fi
 
 cd "$ROOT_DIR"
 echo "Building ${APP_NAME} ${VERSION} in release mode..."
-cargo build --release --locked
+if $INSTALL_YOUTUBE; then
+  cargo build --release --locked
+else
+  cargo build --release --locked --no-default-features
+fi
 
 if $BUILD_ONLY; then
   echo "Build completed: $ROOT_DIR/target/release/$BIN_NAME"

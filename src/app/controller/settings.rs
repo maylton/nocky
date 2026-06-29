@@ -231,7 +231,7 @@ impl AppController {
                     return;
                 };
 
-                let choose_local_folder = {
+                let (choose_local_folder, suggest_youtube_login) = {
                     let mut config = controller.config.borrow_mut();
                     config.startup_source = Some(choices.startup_source);
                     config.show_personalized_home_history = choices.show_personalized_home_history;
@@ -242,8 +242,12 @@ impl AppController {
                     config.noctalia_theme_sync = noctalia_available && choices.noctalia_theme_sync;
                     config.onboarding_completed = true;
 
-                    choices.startup_source == StartupSource::Local
-                        && config.music_directory.is_none()
+                    (
+                        choices.startup_source == StartupSource::Local
+                            && config.music_directory.is_none(),
+                        choices.suggest_youtube_login
+                            && choices.startup_source == StartupSource::YouTube,
+                    )
                 };
 
                 controller.save_config();
@@ -255,6 +259,13 @@ impl AppController {
                     let controller = controller.clone();
                     glib::idle_add_local_once(move || {
                         controller.choose_library_folder();
+                    });
+                } else if suggest_youtube_login {
+                    let controller = controller.clone();
+                    glib::idle_add_local_once(move || {
+                        if !controller.youtube_library.borrow().connected {
+                            controller.present_assisted_youtube_login();
+                        }
                     });
                 }
             },
