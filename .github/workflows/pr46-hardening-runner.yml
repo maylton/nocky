@@ -87,11 +87,7 @@ jobs:
       - name: Apply deterministic patch
         if: steps.pending.outputs.apply == 'true'
         shell: bash
-        run: |
-          python3 scripts/temporary_youtube_home_hardening.py
-          if [[ -f scripts/temporary_youtube_home_followup.py ]]; then
-            python3 scripts/temporary_youtube_home_followup.py
-          fi
+        run: python3 scripts/temporary_youtube_home_hardening.py
 
       - name: Format patched Rust sources
         if: steps.pending.outputs.apply == 'true'
@@ -101,21 +97,7 @@ jobs:
       - name: Run complete quality gate
         if: steps.pending.outputs.apply == 'true'
         shell: bash
-        run: |
-          set +e
-          bash ./scripts/quality-gate.sh > quality-gate.log 2>&1
-          status=$?
-          tail -n 160 quality-gate.log
-          exit "$status"
-
-      - name: Upload quality gate log
-        if: always() && steps.pending.outputs.apply == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr46-quality-gate-log
-          path: quality-gate.log
-          if-no-files-found: ignore
-          retention-days: 1
+        run: bash ./scripts/quality-gate.sh
 
       - name: Commit validated hardening
         if: steps.pending.outputs.apply == 'true' && success()
@@ -127,5 +109,5 @@ jobs:
           rm scripts/temporary_youtube_home_hardening.py
           git add -A
           git diff --cached --check
-          git commit -m "fix: harden structured YouTube Home"
+          git commit -m "docs: complete YouTube Home phase"
           git push origin HEAD:codex/youtube-home-structured-browser
