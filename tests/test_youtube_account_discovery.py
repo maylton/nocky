@@ -22,6 +22,7 @@ def account(
     profile_id: str = "",
     selected: bool = False,
     photo: str = "https://example.invalid/avatar.jpg",
+    wrapper: str = "accountItem",
 ) -> dict[str, object]:
     item: dict[str, object] = {
         "accountName": runs(name),
@@ -37,7 +38,7 @@ def account(
                 "clickTrackingParams": "not-part-of-contract",
             }
         }
-    return {"accountItem": item}
+    return {wrapper: item}
 
 
 def payload(*items: dict[str, object]) -> dict[str, object]:
@@ -111,13 +112,17 @@ class AccountDiscoveryTests(unittest.TestCase):
         self.assertFalse(result["deterministic"])
         self.assertTrue(all(not item["switchable"] for item in result["profiles"]))
 
-    def test_invalid_id_is_not_returned(self) -> None:
+    def test_invalid_identity_selector_stays_ambiguous(self) -> None:
         result = discover_account_profiles(
             payload(account("Invalid", profile_id="invalid-id", selected=True))
         )
 
         self.assertNotIn("invalid-id", json.dumps(result))
-        self.assertEqual(result["profiles"][0]["profile_id"], "primary")
+        self.assertEqual(result["state"], "ambiguous")
+        self.assertFalse(result["deterministic"])
+        self.assertEqual(result["profiles"][0]["profile_id"], "")
+        self.assertEqual(result["profiles"][0]["kind"], "unknown")
+        self.assertFalse(result["profiles"][0]["switchable"])
 
     def test_non_https_photo_is_rejected(self) -> None:
         result = discover_account_profiles(
@@ -134,6 +139,27 @@ class AccountDiscoveryTests(unittest.TestCase):
             )
         )
         self.assertEqual(len(result["profiles"]), 2)
+
+    def test_multiple_selected_profiles_are_ambiguous(self) -> None:
+        result = discover_account_profiles(
+            payload(
+                account("Primary", selected=True),
+                account(
+                    "Brand",
+                    profile_id="111111111111111111111",
+                    selected=True,
+                ),
+            )
+        )
+        self.assertEqual(result["state"], "ambiguous")
+        self.assertFalse(result["deterministic"])
+
+    def test_alternate_account_item_renderer_is_supported(self) -> None:
+        result = discover_account_profiles(
+            payload(account("Primary", selected=True, wrapper="accountItemRenderer"))
+        )
+        self.assertEqual(result["state"], "single")
+        self.assertEqual(result["profiles"][0]["profile_id"], "primary")
 
     def test_contract_is_allowlisted(self) -> None:
         result = discover_account_profiles(
