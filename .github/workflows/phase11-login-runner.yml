@@ -89,22 +89,63 @@ jobs:
         if: steps.pending.outputs.apply == 'true'
         shell: bash
         run: |
-          python3 - <<'PY'
+          set +e
+          {
+            python3 - <<'PY'
           from pathlib import Path
 
           path = Path("scripts/temporary_assisted_login_patch.py")
           text = path.read_text(encoding="utf-8")
-          marker = 'replace(\n    "install.sh",\n    \'\'\'      gstreamer1.0-plugins-bad'
+          marker = '\nreplace(\n    "install.sh",'
           start = text.find(marker)
           if start >= 0:
-              next_block = text.find('\nreplace(\n    "install.sh",', start + len(marker))
-              if next_block < 0:
-                  raise SystemExit("could not isolate redundant install.sh replacement")
-              text = text[:start] + text[next_block + 1:]
+              text = text[:start] + "\n"
               path.write_text(text, encoding="utf-8")
           PY
-          set +e
-          python3 scripts/temporary_assisted_login_patch.py > assisted-login-patch.log 2>&1
+            python3 scripts/temporary_assisted_login_patch.py
+            python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("install.sh")
+          text = path.read_text(encoding="utf-8")
+
+          def replace(old: str, new: str, expected: int = 1) -> None:
+              global text
+              count = text.count(old)
+              if count != expected:
+                  raise SystemExit(
+                      f"install.sh: expected {expected} occurrence(s), found {count}: {old!r}"
+                  )
+              text = text.replace(old, new)
+
+          replace(
+              "        gir1.2-secret-1 libsecret-1-0 curl unzip\n",
+              "        gir1.2-secret-1 libsecret-1-0 libwebkitgtk-6.0-dev curl unzip\n",
+          )
+          replace(
+              "        python3 python3-pip python3-gobject libsecret curl unzip\n",
+              "        python3 python3-pip python3-gobject libsecret webkitgtk6.0-devel curl unzip\n",
+              expected=2,
+          )
+          replace(
+              "        python3 python3-pip python3-gobject libsecret-1-0 curl unzip\n",
+              "        python3 python3-pip python3-gobject libsecret-1-0 'pkgconfig(webkitgtk-6.0)' curl unzip\n",
+          )
+          replace(
+              "        python python-pip python-gobject libsecret curl unzip\n",
+              "        python python-pip python-gobject libsecret webkitgtk-6.0 curl unzip\n",
+          )
+          replace(
+              "for package in gtk4 libadwaita-1 gstreamer-1.0; do\n",
+              "required_packages=(gtk4 libadwaita-1 gstreamer-1.0)\n$INSTALL_YOUTUBE && required_packages+=(webkitgtk-6.0)\nfor package in \"${required_packages[@]}\"; do\n",
+          )
+          replace(
+              'cd "$ROOT_DIR"\necho "Building ${APP_NAME} ${VERSION} in release mode..."\ncargo build --release --locked\n',
+              'cd "$ROOT_DIR"\necho "Building ${APP_NAME} ${VERSION} in release mode..."\nif $INSTALL_YOUTUBE; then\n  cargo build --release --locked\nelse\n  cargo build --release --locked --no-default-features\nfi\n',
+          )
+          path.write_text(text, encoding="utf-8")
+          PY
+          } > assisted-login-patch.log 2>&1
           status=$?
           cat assisted-login-patch.log
           exit "$status"
