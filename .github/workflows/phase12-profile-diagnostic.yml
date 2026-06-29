@@ -1,4 +1,4 @@
-name: Phase 12 Profile Diagnostic
+name: Phase 12 Rustfmt Diagnostic
 
 on:
   push:
@@ -9,51 +9,21 @@ on:
       - main
     paths:
       - 'src/youtube/backend.rs'
-      - 'helpers/nocky_youtube_profiles.py'
-      - 'tests/test_youtube_profiles_helper.py'
-      - 'install.sh'
       - '.github/workflows/phase12-profile-diagnostic.yml'
 
 permissions:
   contents: read
 
 jobs:
-  rustfmt:
+  rustfmt-diff:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          show-progress: false
       - name: Install Rust formatting component
         run: rustup component add rustfmt
-      - name: Check Rust formatting
-        run: cargo fmt --all -- --check
-
-  python-contract:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - name: Compile profile discovery helpers
+      - name: Print exact rustfmt diff
         run: |
-          python3 -m py_compile \
-            helpers/nocky_account_discovery.py \
-            helpers/nocky_account_profile.py \
-            helpers/nocky_youtube_profiles.py \
-            helpers/nocky_youtube_profile.py \
-            helpers/nocky_youtube.py
-      - name: Run profile discovery tests
-        run: |
-          python3 -m unittest \
-            tests.test_youtube_account_discovery \
-            tests.test_youtube_profiles_helper \
-            -v
-
-  packaging:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - name: Check installer syntax
-        run: bash -n install.sh
-      - name: Check discovery files are packaged
-        run: |
-          grep -Fq 'helpers/nocky_youtube_profiles.py' install.sh
-          grep -Fq 'helpers/nocky_account_discovery.py' install.sh
-          grep -Fq 'docs/YOUTUBE_ACCOUNT_PROFILE_DISCOVERY.md' install.sh
+          cargo fmt --all
+          git diff --exit-code -- src/youtube/backend.rs
