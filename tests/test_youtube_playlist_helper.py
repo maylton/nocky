@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import io
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -38,6 +40,26 @@ class YouTubePlaylistHelperTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaisesRegex(RuntimeError, "Invalid YouTube Music"):
                     nocky_youtube_playlist.normalize_playlist_id(value)
+
+    def test_parses_optional_limit_without_argparse_exit(self) -> None:
+        self.assertEqual(
+            nocky_youtube_playlist._arguments(["PL-example", "--limit", "25"]),
+            ("PL-example", 25),
+        )
+        with self.assertRaisesRegex(RuntimeError, "must be an integer"):
+            nocky_youtube_playlist._arguments(
+                ["PL-example", "--limit", "invalid"]
+            )
+
+    def test_missing_argument_returns_json_error_envelope(self) -> None:
+        output = io.StringIO()
+        with patch.object(sys, "stdout", output):
+            status = nocky_youtube_playlist.main([])
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(status, 2)
+        self.assertFalse(payload["ok"])
+        self.assertIn("playlist ID is required", payload["error"])
 
     def test_requires_connected_session_before_client_creation(self) -> None:
         with patch.object(
