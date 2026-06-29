@@ -77,10 +77,18 @@ pub(crate) fn is_youtube_music_uri(uri: &str) -> bool {
     https_host(uri).as_deref() == Some("music.youtube.com")
 }
 
+pub(crate) fn is_post_login_sync_uri(uri: &str) -> bool {
+    matches!(
+        https_host(uri).as_deref(),
+        Some("accounts.youtube.com" | "www.google.com")
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        is_youtube_music_uri, navigation_disposition, navigation_host, NavigationDisposition,
+        is_post_login_sync_uri, is_youtube_music_uri, navigation_disposition, navigation_host,
+        NavigationDisposition,
     };
 
     #[test]
@@ -102,6 +110,23 @@ mod tests {
             navigation_disposition("https://support.google.com/youtubemusic"),
             NavigationDisposition::OpenExternal
         );
+    }
+
+    #[test]
+    fn recognizes_post_login_session_synchronization_hosts() {
+        assert!(is_post_login_sync_uri(
+            "https://accounts.youtube.com/accounts/SetSID?ssdc=1"
+        ));
+        assert!(is_post_login_sync_uri(
+            "https://www.google.com/accounts/SetSID"
+        ));
+        assert!(!is_post_login_sync_uri(
+            "https://accounts.google.com/v3/signin"
+        ));
+        assert!(!is_post_login_sync_uri("https://gds.google.com/web/chip"));
+        assert!(!is_post_login_sync_uri(
+            "https://accounts.youtube.com.evil.example/accounts/SetSID"
+        ));
     }
 
     #[test]
