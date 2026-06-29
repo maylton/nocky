@@ -103,6 +103,58 @@ class YouTubeProfilesHelperTests(unittest.TestCase):
         self.assertNotIn("private@example.invalid", str(result))
         self.assertNotIn("not-allowed", str(result))
 
+    def test_native_summary_excludes_candidate_ids_and_photos(self) -> None:
+        summary = nocky_youtube_profiles.discovery_summary(
+            {
+                "state": "multiple",
+                "deterministic": True,
+                "profiles": [
+                    {
+                        "profile_id": "123456789012345678901",
+                        "name": "Primary",
+                        "channel_handle": "@primary",
+                        "photo_url": "https://example.invalid/primary.jpg",
+                        "is_selected": True,
+                    },
+                    {
+                        "profile_id": "987654321098765432109",
+                        "name": "Brand",
+                        "channel_handle": "@brand",
+                        "photo_url": "https://example.invalid/brand.jpg",
+                        "is_selected": False,
+                    },
+                ],
+            }
+        )
+
+        self.assertEqual(
+            summary,
+            {
+                "state": "multiple",
+                "deterministic": True,
+                "profile_count": 2,
+                "active_name": "Primary",
+                "active_handle": "@primary",
+            },
+        )
+        serialized = str(summary)
+        self.assertNotIn("123456789012345678901", serialized)
+        self.assertNotIn("987654321098765432109", serialized)
+        self.assertNotIn("example.invalid", serialized)
+        self.assertNotIn("Brand", serialized)
+
+    def test_native_summary_degrades_to_unavailable(self) -> None:
+        self.assertEqual(
+            nocky_youtube_profiles.discovery_summary(None),
+            {
+                "state": "unavailable",
+                "deterministic": False,
+                "profile_count": 0,
+                "active_name": "",
+                "active_handle": "",
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
