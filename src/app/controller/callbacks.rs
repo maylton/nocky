@@ -97,7 +97,9 @@ impl AppController {
                     return glib::ControlFlow::Break;
                 };
                 controller.handle_background_messages();
+                controller.handle_youtube_playlist_metadata_updates();
                 controller.handle_browser_events();
+                controller.poll_current_youtube_playlist_metadata();
                 controller.handle_youtube_events();
                 controller.handle_settings_events();
                 controller.handle_mpris_commands();
