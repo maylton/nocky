@@ -88,7 +88,21 @@ jobs:
       - name: Apply deterministic implementation patch
         if: steps.pending.outputs.apply == 'true'
         shell: bash
-        run: python3 scripts/temporary_assisted_login_patch.py
+        run: |
+          set +e
+          python3 scripts/temporary_assisted_login_patch.py > assisted-login-patch.log 2>&1
+          status=$?
+          cat assisted-login-patch.log
+          exit "$status"
+
+      - name: Upload patch diagnostics
+        if: always() && steps.pending.outputs.apply == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: assisted-login-patch-log
+          path: assisted-login-patch.log
+          if-no-files-found: ignore
+          retention-days: 1
 
       - name: Refresh dependency lockfile
         if: steps.pending.outputs.apply == 'true'
@@ -121,6 +135,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           rm scripts/temporary_assisted_login_patch.py
+          rm -f assisted-login-patch.log
           git add -A
           git diff --cached --check
           git commit -m "feat: add assisted YouTube Music login"
