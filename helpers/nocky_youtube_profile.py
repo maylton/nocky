@@ -43,8 +43,6 @@ def _refreshed_profile(session: dict[str, Any]) -> dict[str, str]:
     if refreshed.get("name"):
         session["account"] = refreshed["name"]
 
-    storage = nocky_youtube._store_session(session)
-    session["storage"] = storage
     nocky_youtube._store_session(session)
     return refreshed
 
