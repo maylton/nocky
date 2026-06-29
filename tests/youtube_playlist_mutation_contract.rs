@@ -93,6 +93,47 @@ fn removing_tracks_requires_set_video_identity() {
 }
 
 #[test]
+fn duplicate_track_occurrences_are_distinguished_by_set_video_id() {
+    let request = PlaylistMutationRequest::RemoveTracks {
+        target: owned_playlist(),
+        tracks: vec![
+            PlaylistTrackIdentity {
+                video_id: "video-1".to_string(),
+                set_video_id: "set-video-1".to_string(),
+            },
+            PlaylistTrackIdentity {
+                video_id: "video-1".to_string(),
+                set_video_id: "set-video-2".to_string(),
+            },
+        ],
+    };
+
+    assert_eq!(request.validate(), Ok(()));
+}
+
+#[test]
+fn repeated_set_video_identity_is_blocked() {
+    let request = PlaylistMutationRequest::RemoveTracks {
+        target: owned_playlist(),
+        tracks: vec![
+            PlaylistTrackIdentity {
+                video_id: "video-1".to_string(),
+                set_video_id: "set-video-1".to_string(),
+            },
+            PlaylistTrackIdentity {
+                video_id: "video-2".to_string(),
+                set_video_id: "set-video-1".to_string(),
+            },
+        ],
+    };
+
+    assert_eq!(
+        request.validate(),
+        Err(vec![PlaylistMutationBlock::DuplicateSetVideoId])
+    );
+}
+
+#[test]
 fn track_removal_is_allowed_only_with_complete_identity() {
     let request = PlaylistMutationRequest::RemoveTracks {
         target: owned_playlist(),
