@@ -5,6 +5,7 @@ use std::{cell::Cell, rc::Rc};
 #[derive(Clone, Copy, Debug)]
 pub struct OnboardingChoices {
     pub startup_source: StartupSource,
+    pub suggest_youtube_login: bool,
     pub show_personalized_home_history: bool,
     pub blur_mode: BlurMode,
     pub blur_opacity: f64,
@@ -25,6 +26,8 @@ struct Copy {
     local_body: &'static str,
     youtube_title: &'static str,
     youtube_body: &'static str,
+    youtube_login_title: &'static str,
+    youtube_login_body: &'static str,
     experimental_title: &'static str,
     experimental_body: &'static str,
     learning_title: &'static str,
@@ -55,6 +58,9 @@ struct Copy {
     summary_title: &'static str,
     summary_body: &'static str,
     summary_source: &'static str,
+    summary_login: &'static str,
+    summary_login_browser: &'static str,
+    summary_login_not_needed: &'static str,
     summary_learning: &'static str,
     summary_blur: &'static str,
     summary_palette: &'static str,
@@ -80,7 +86,9 @@ fn copy(language: AppLanguage) -> Copy {
             local_title: "Arquivos locais",
             local_body: "Use músicas armazenadas no computador. O Nocky poderá pedir a pasta da biblioteca ao concluir.",
             youtube_title: "YouTube Music",
-            youtube_body: "Use a busca pública e, opcionalmente, conecte sua conta para sincronizar biblioteca e playlists.",
+            youtube_body: "Use o catálogo online e entre com o navegador para sincronizar biblioteca, curtidas e playlists.",
+            youtube_login_title: "Login recomendado",
+            youtube_login_body: "Ao concluir, o Nocky abrirá uma janela isolada para você entrar no YouTube Music. A importação manual continuará disponível como alternativa avançada.",
             experimental_title: "Integração experimental",
             experimental_body: "O acesso ao YouTube Music usa interfaces não oficiais e pode precisar de atualizações quando o serviço mudar. A conexão da conta é opcional e os dados de sessão permanecem locais.",
             learning_title: "O player aprende com você",
@@ -111,6 +119,9 @@ fn copy(language: AppLanguage) -> Copy {
             summary_title: "Tudo pronto",
             summary_body: "Revise as escolhas antes de abrir o Nocky.",
             summary_source: "Fonte da Home",
+            summary_login: "Próximo passo",
+            summary_login_browser: "Entrar com o navegador",
+            summary_login_not_needed: "Nenhum login necessário",
             summary_learning: "Home personalizada",
             summary_blur: "Desfoque",
             summary_palette: "Paleta do Noctalia",
@@ -133,7 +144,9 @@ fn copy(language: AppLanguage) -> Copy {
             local_title: "Local files",
             local_body: "Use music stored on this computer. Nocky can ask for the library folder after setup.",
             youtube_title: "YouTube Music",
-            youtube_body: "Use public search and optionally connect an account to synchronize your library and playlists.",
+            youtube_body: "Use the online catalog and sign in with the browser to synchronize your library, likes, and playlists.",
+            youtube_login_title: "Recommended sign-in",
+            youtube_login_body: "When setup finishes, Nocky will open an isolated window for YouTube Music sign-in. Manual session import remains available as an advanced alternative.",
             experimental_title: "Experimental integration",
             experimental_body: "YouTube Music access uses unofficial interfaces and may require updates when the service changes. Account connection is optional and session data remains local.",
             learning_title: "The player learns with you",
@@ -164,6 +177,9 @@ fn copy(language: AppLanguage) -> Copy {
             summary_title: "Ready to go",
             summary_body: "Review your choices before opening Nocky.",
             summary_source: "Home source",
+            summary_login: "Next step",
+            summary_login_browser: "Sign in with browser",
+            summary_login_not_needed: "No sign-in required",
             summary_learning: "Personalized Home",
             summary_blur: "Blur",
             summary_palette: "Noctalia palette",
@@ -186,7 +202,9 @@ fn copy(language: AppLanguage) -> Copy {
             local_title: "Archivos locales",
             local_body: "Usa música almacenada en el ordenador. Nocky podrá solicitar la carpeta al finalizar.",
             youtube_title: "YouTube Music",
-            youtube_body: "Usa la búsqueda pública y conecta una cuenta opcionalmente para sincronizar biblioteca y playlists.",
+            youtube_body: "Usa el catálogo en línea e inicia sesión con el navegador para sincronizar biblioteca, favoritos y playlists.",
+            youtube_login_title: "Inicio de sesión recomendado",
+            youtube_login_body: "Al finalizar, Nocky abrirá una ventana aislada para iniciar sesión en YouTube Music. La importación manual seguirá disponible como alternativa avanzada.",
             experimental_title: "Integración experimental",
             experimental_body: "El acceso a YouTube Music usa interfaces no oficiales y puede necesitar actualizaciones cuando cambie el servicio. Conectar la cuenta es opcional y los datos de sesión permanecen locales.",
             learning_title: "El reproductor aprende contigo",
@@ -217,6 +235,9 @@ fn copy(language: AppLanguage) -> Copy {
             summary_title: "Todo listo",
             summary_body: "Revisa tus opciones antes de abrir Nocky.",
             summary_source: "Fuente de Home",
+            summary_login: "Siguiente paso",
+            summary_login_browser: "Iniciar sesión con el navegador",
+            summary_login_not_needed: "No se necesita iniciar sesión",
             summary_learning: "Inicio personalizado",
             summary_blur: "Desenfoque",
             summary_palette: "Paleta de Noctalia",
@@ -398,6 +419,20 @@ pub fn present<F>(
         &youtube_choice,
     ));
 
+    let login_recommendation = gtk::Box::new(gtk::Orientation::Vertical, 5);
+    login_recommendation.add_css_class("onboarding-warning");
+    let login_title = gtk::Label::new(Some(text.youtube_login_title));
+    login_title.set_xalign(0.0);
+    login_title.add_css_class("heading");
+    let login_body = gtk::Label::new(Some(text.youtube_login_body));
+    login_body.set_xalign(0.0);
+    login_body.set_wrap(true);
+    login_body.add_css_class("dim-label");
+    login_recommendation.append(&login_title);
+    login_recommendation.append(&login_body);
+    login_recommendation.set_visible(youtube_choice.is_active());
+    source_content.append(&login_recommendation);
+
     let warning = gtk::Box::new(gtk::Orientation::Vertical, 5);
     warning.add_css_class("onboarding-warning");
     let warning_title = gtk::Label::new(Some(text.experimental_title));
@@ -414,8 +449,11 @@ pub fn present<F>(
 
     {
         let warning = warning.clone();
+        let login_recommendation = login_recommendation.clone();
         youtube_choice.connect_active_notify(move |choice| {
-            warning.set_visible(choice.is_active());
+            let active = choice.is_active();
+            warning.set_visible(active);
+            login_recommendation.set_visible(active);
         });
     }
 
@@ -554,6 +592,7 @@ pub fn present<F>(
     let (summary_page, summary_content) = page_shell(text.summary_title, text.summary_body);
 
     let summary_source = gtk::Label::new(None);
+    let summary_login = gtk::Label::new(None);
     let summary_learning = gtk::Label::new(None);
     let summary_blur = gtk::Label::new(None);
     let summary_palette = gtk::Label::new(None);
@@ -561,6 +600,7 @@ pub fn present<F>(
     let summary_footer = gtk::Label::new(None);
 
     summary_content.append(&summary_row(text.summary_source, &summary_source));
+    summary_content.append(&summary_row(text.summary_login, &summary_login));
     summary_content.append(&summary_row(text.summary_learning, &summary_learning));
     summary_content.append(&summary_row(text.summary_blur, &summary_blur));
     summary_content.append(&summary_row(text.summary_palette, &summary_palette));
@@ -615,6 +655,7 @@ pub fn present<F>(
         let visual_theme = visual_theme.clone();
         let footer = footer.clone();
         let summary_source = summary_source.clone();
+        let summary_login = summary_login.clone();
         let summary_learning = summary_learning.clone();
         let summary_blur = summary_blur.clone();
         let summary_palette = summary_palette.clone();
@@ -635,6 +676,11 @@ pub fn present<F>(
                     text.local_title
                 } else {
                     text.youtube_title
+                });
+                summary_login.set_text(if local_choice.is_active() {
+                    text.summary_login_not_needed
+                } else {
+                    text.summary_login_browser
                 });
                 summary_learning.set_text(if personalized_history.is_active() {
                     text.yes
@@ -708,12 +754,14 @@ pub fn present<F>(
                 BlurMode::Off
             };
 
+            let youtube_selected = !local_choice.is_active();
             let choices = OnboardingChoices {
-                startup_source: if local_choice.is_active() {
-                    StartupSource::Local
-                } else {
+                startup_source: if youtube_selected {
                     StartupSource::YouTube
+                } else {
+                    StartupSource::Local
                 },
+                suggest_youtube_login: youtube_selected,
                 show_personalized_home_history: personalized_history.is_active(),
                 blur_mode: blur,
                 blur_opacity: (opacity.value() / 100.0).clamp(0.45, 0.95),

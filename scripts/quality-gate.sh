@@ -17,6 +17,15 @@ pkg-config --modversion gtk4
 pkg-config --modversion libadwaita-1
 pkg-config --modversion gstreamer-1.0
 
+cargo_feature_args=(--all-features)
+if pkg-config --exists webkitgtk-6.0; then
+    pkg-config --modversion webkitgtk-6.0
+    echo "Validating the official assisted-login build"
+else
+    cargo_feature_args=(--no-default-features)
+    echo "WebKitGTK 6 is unavailable; validating the minimal manual-login build"
+fi
+
 section "Formatting"
 cargo fmt --all -- --check
 
@@ -24,19 +33,19 @@ section "Compilation"
 cargo check \
     --locked \
     --all-targets \
-    --all-features
+    "${cargo_feature_args[@]}"
 
 section "Tests"
 cargo test \
     --locked \
     --all-targets \
-    --all-features
+    "${cargo_feature_args[@]}"
 
 section "Clippy"
 cargo clippy \
     --locked \
     --all-targets \
-    --all-features \
+    "${cargo_feature_args[@]}" \
     -- \
     -D warnings
 
