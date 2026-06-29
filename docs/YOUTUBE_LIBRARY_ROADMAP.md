@@ -17,7 +17,9 @@ headers come from the structured YouTube Music feed.
 - Do not add arbitrary local filters, time-window chips or local history
   groupings to the YouTube Home. YouTube feed chips are the primary tab/filter
   model for that surface.
-- Authentication stays browser-session based until an assisted login flow is proven safe and optional.
+- Authentication remains browser-session based. Supported builds present the
+  assisted browser login as the standard flow and keep manual cURL/Cookie import
+  as the compatibility fallback.
 - Every network-facing addition requires a cache/fallback path, redacted diagnostics and fixture-based tests.
 - A phase is complete only after its acceptance criteria and validation gate have passed.
 
@@ -35,7 +37,7 @@ headers come from the structured YouTube Music feed.
 | 8. Integration hardening and real-account validation | Complete | PR #42 |
 | 9. Native stream-source preferences | Complete and manually validated | PR #43 |
 | 10. Android-parity YouTube Home organization | Complete and manually validated | PR #46 |
-| 11. Assisted browser login | Planned, optional | later |
+| 11. Assisted browser login and first-run onboarding | In progress; privacy review approved | PR #49 / implementation branch |
 | 12. Remote library mutations and account profiles | Planned | later |
 | 13. Native InnerTube backend | Research track | later |
 | 14. Release hardening and observability | Planned | before stable release |
@@ -280,19 +282,63 @@ Acceptance criteria:
 - Albums, artists, playlists and playable rows keep existing native routing.
 - Narrow-window horizontal usability and keyboard activation remain intact.
 
-## Phase 11 — Assisted browser login
+## Phase 11 — Assisted browser login and onboarding
 
-**Goal:** reduce manual cookie-copy friction without turning Nocky into a web wrapper.
+**Goal:** make assisted browser login the standard account-connection flow in
+supported builds without turning Nocky into a web wrapper. Manual session import
+remains available as the advanced compatibility alternative.
 
-Planned deliverables:
+Privacy and packaging review:
 
-- Optional isolated WebKitGTK login window.
-- Strict navigation allowlist for Google Accounts and YouTube Music.
-- Capture only the minimum session data after successful login.
-- No permanent JavaScript bridge and no password access.
-- Manual import remains available as fallback.
+- The architecture review was approved in PR #49 before implementation.
+- The WebKitGTK integration remains isolated behind an `assisted-login` build
+  feature so minimal/community builds can omit the browser engine.
+- Official builds should enable the feature and present **Sign in with browser**
+  as the primary action.
 
-This phase requires a separate privacy and packaging review before implementation.
+Implementation deliverables:
+
+- Dedicated ephemeral WebKitGTK login window.
+- Strict HTTPS navigation allowlist for the audited Google Accounts and YouTube
+  Music hosts.
+- No JavaScript bridge, DOM inspection, password access, downloads or persistent
+  browser profile.
+- Capture only the browser session associated with the YouTube Music URI, pass
+  it through the existing minimum-header normalization and validate it before
+  replacing the saved session.
+- Reuse Secret Service storage and the protected `0600` fallback file.
+- Keep **Import session manually** available as a secondary/advanced action.
+- Localized status, cancellation and error states in Portuguese, English and
+  Spanish.
+
+First-run onboarding update:
+
+- The onboarding remains a first-run-only wizard. Existing installations keep
+  their stored `onboarding_completed` migration and are not interrupted.
+- When **YouTube Music** is selected as the initial source, the source page must
+  explain that the standard next step is signing in through Nocky's isolated
+  browser window.
+- The final summary must show the assisted login as the recommended next step.
+- After the onboarding dialog closes, Nocky should open the assisted login flow
+  automatically. The windows must not overlap or compete for focus.
+- Cancelling the browser login leaves YouTube public search available and keeps
+  manual import accessible from the YouTube page.
+- Selecting **Local files** must not show or launch the YouTube login suggestion.
+- Portuguese, English and Spanish onboarding blocks must remain structurally and
+  semantically equivalent.
+
+Acceptance criteria:
+
+- In official/feature-enabled builds, the main account button opens assisted
+  browser login directly.
+- Manual import is visibly secondary but remains functional.
+- No password or page DOM is read by Nocky.
+- Browser data is ephemeral and session storage is replaced only after a valid
+  authenticated request succeeds.
+- Choosing YouTube Music during genuine first-run onboarding recommends and
+  launches assisted login after the wizard closes.
+- Existing users do not see the first-run wizard again after updating.
+- The Local Home and local-library onboarding path remain unchanged.
 
 ## Phase 12 — Remote library mutations and account profiles
 
@@ -322,8 +368,8 @@ Before a stable release:
 
 Stop for explicit review before:
 
-- embedding a browser/login engine;
-- persisting new authentication material;
+- changing the approved assisted-login security boundary;
+- persisting new authentication material outside the existing normalized session contract;
 - replacing yt-dlp or GStreamer;
 - adding remote destructive mutations;
 - changing local Home or local-library behavior;
