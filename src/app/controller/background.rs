@@ -180,10 +180,16 @@ impl AppController {
 
                     match result {
                         Ok(remote_state) if remote_state == liked => {
+                            self.youtube_like_mutations
+                                .borrow_mut()
+                                .confirm(&item.video_id);
                             let Some(bridge) = self.youtube_bridge.clone() else {
                                 self.youtube_like_pending
                                     .borrow_mut()
                                     .remove(&item.video_id);
+                                self.youtube_like_mutations
+                                    .borrow_mut()
+                                    .clear_finished(&item.video_id);
                                 self.show_toast(
                                     "Curtida salva, mas a verificação remota não pôde ser iniciada",
                                 );
@@ -206,12 +212,25 @@ impl AppController {
                             self.youtube_like_pending
                                 .borrow_mut()
                                 .remove(&item.video_id);
-                            self.apply_youtube_like_cache(&item, !liked);
+                            let rollback_liked = {
+                                let mut mutations = self.youtube_like_mutations.borrow_mut();
+                                mutations.rollback(
+                                    &item.video_id,
+                                    "remote state did not match the requested value",
+                                );
+                                let visible = mutations
+                                    .get(&item.video_id)
+                                    .map(|mutation| mutation.visible_value())
+                                    .unwrap_or(!liked);
+                                mutations.clear_finished(&item.video_id);
+                                visible
+                            };
+                            self.apply_youtube_like_cache(&item, rollback_liked);
                             if self
                                 .current_youtube_item()
                                 .is_some_and(|current| current.video_id == item.video_id)
                             {
-                                self.set_youtube_favorite_visual_state(!liked);
+                                self.set_youtube_favorite_visual_state(rollback_liked);
                             }
                             self.refresh_browser();
                             self.show_toast(
@@ -222,12 +241,22 @@ impl AppController {
                             self.youtube_like_pending
                                 .borrow_mut()
                                 .remove(&item.video_id);
-                            self.apply_youtube_like_cache(&item, !liked);
+                            let rollback_liked = {
+                                let mut mutations = self.youtube_like_mutations.borrow_mut();
+                                mutations.rollback(&item.video_id, error.clone());
+                                let visible = mutations
+                                    .get(&item.video_id)
+                                    .map(|mutation| mutation.visible_value())
+                                    .unwrap_or(!liked);
+                                mutations.clear_finished(&item.video_id);
+                                visible
+                            };
+                            self.apply_youtube_like_cache(&item, rollback_liked);
                             if self
                                 .current_youtube_item()
                                 .is_some_and(|current| current.video_id == item.video_id)
                             {
-                                self.set_youtube_favorite_visual_state(!liked);
+                                self.set_youtube_favorite_visual_state(rollback_liked);
                             }
                             self.refresh_browser();
                             eprintln!("Could not update YouTube Music like state: {error}");
@@ -287,6 +316,10 @@ impl AppController {
                             );
                         }
                     }
+
+                    self.youtube_like_mutations
+                        .borrow_mut()
+                        .clear_finished(&video_id);
                 }
                 BackgroundMessage::YouTubeLibrarySynced { notify, result } => match result {
                     Ok(snapshot) => {
