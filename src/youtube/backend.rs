@@ -175,9 +175,9 @@ impl YouTubeBridge {
                 Ok(discovery) => {
                     if let Some(suffix) = discovery.diagnostic_suffix() {
                         if status.account.trim().is_empty() {
-                            status.account = suffix;
+                            status.account = format!("Perfis: {suffix}");
                         } else {
-                            status.account = format!("{} · {suffix}", status.account.trim());
+                            status.account = format!("{}\nPerfis: {suffix}", status.account.trim());
                         }
                     }
                 }
