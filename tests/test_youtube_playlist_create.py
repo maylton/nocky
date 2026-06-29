@@ -187,5 +187,24 @@ class PlaylistCreationHelperTests(unittest.TestCase):
         self.assertNotIn("must-not-escape", str(raised.exception))
 
 
+class PlaylistCreationPackagingTests(unittest.TestCase):
+    def test_installer_packages_creation_helper_contract_and_documentation(self) -> None:
+        installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        for required_path in (
+            "helpers/nocky_youtube_playlist_create.py",
+            "helpers/nocky_playlist_mutations.py",
+            "docs/YOUTUBE_PLAYLIST_CREATION.md",
+        ):
+            with self.subTest(required_path=required_path):
+                self.assertIn(required_path, installer)
+
+    def test_smoke_script_requires_explicit_remote_confirmation(self) -> None:
+        smoke = (ROOT / "scripts/smoke-youtube-playlist-create.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("NOCKY_CONFIRM_PLAYLIST_CREATE", smoke)
+        self.assertIn("NOCKY_PLAYLIST_TITLE", smoke)
+
+
 if __name__ == "__main__":
     unittest.main()
