@@ -54,6 +54,7 @@ if [[ -f helpers/nocky_youtube.py ]]; then
     python3 -m py_compile \
         helpers/nocky_account_discovery.py \
         helpers/nocky_account_profile.py \
+        helpers/nocky_playlist_metadata.py \
         helpers/nocky_youtube_profiles.py \
         helpers/nocky_youtube_profile.py \
         helpers/nocky_youtube.py \
