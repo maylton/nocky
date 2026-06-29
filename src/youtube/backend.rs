@@ -56,8 +56,6 @@ pub struct YouTubeProfileDiscoverySummary {
     pub state: String,
     pub deterministic: bool,
     pub profile_count: usize,
-    pub active_name: String,
-    pub active_handle: String,
 }
 
 impl YouTubeProfileDiscoverySummary {
@@ -270,12 +268,27 @@ mod tests {
     }
 
     #[test]
+    fn discovery_deserialization_accepts_minimal_contract() {
+        let discovery: YouTubeProfileDiscoverySummary = serde_json::from_value(
+            serde_json::json!({
+                "state": "multiple",
+                "deterministic": true,
+                "profile_count": 2
+            }),
+        )
+        .unwrap();
+
+        assert_eq!(discovery.state, "multiple");
+        assert!(discovery.deterministic);
+        assert_eq!(discovery.profile_count, 2);
+    }
+
+    #[test]
     fn single_profile_discovery_has_read_only_status() {
         let discovery = YouTubeProfileDiscoverySummary {
             state: "single".to_string(),
             deterministic: true,
             profile_count: 1,
-            ..YouTubeProfileDiscoverySummary::default()
         };
 
         assert_eq!(
@@ -290,7 +303,6 @@ mod tests {
             state: "multiple".to_string(),
             deterministic: true,
             profile_count: 3,
-            ..YouTubeProfileDiscoverySummary::default()
         };
 
         assert_eq!(
@@ -305,7 +317,6 @@ mod tests {
             state: "ambiguous".to_string(),
             deterministic: false,
             profile_count: 2,
-            ..YouTubeProfileDiscoverySummary::default()
         };
 
         assert_eq!(
