@@ -1,0 +1,127 @@
+name: Phase 11 assisted login runner
+
+on:
+  pull_request:
+    branches:
+      - automation/phase11-login-base
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: write
+
+concurrency:
+  group: phase11-assisted-login-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    if: github.head_ref == 'codex/youtube-assisted-login'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    container:
+      image: fedora:44
+
+    env:
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: "1"
+
+    steps:
+      - name: Install checkout prerequisites
+        shell: bash
+        run: dnf --assumeyes --setopt=install_weak_deps=False install ca-certificates git
+
+      - name: Checkout implementation branch
+        uses: actions/checkout@v6
+        with:
+          ref: codex/youtube-assisted-login
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Detect pending patch
+        id: pending
+        shell: bash
+        run: |
+          if [[ -f scripts/temporary_assisted_login_patch.py ]]; then
+            echo 'apply=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'apply=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install build dependencies
+        if: steps.pending.outputs.apply == 'true'
+        shell: bash
+        run: |
+          dnf --assumeyes --setopt=install_weak_deps=False install \
+            curl \
+            gcc \
+            gcc-c++ \
+            gdk-pixbuf2-devel \
+            glib2-devel \
+            gstreamer1-devel \
+            gstreamer1-plugins-base-devel \
+            gtk4-devel \
+            libadwaita-devel \
+            make \
+            openssl-devel \
+            pkgconf-pkg-config \
+            python3 \
+            webkitgtk6.0-devel
+
+      - name: Install Rust toolchain
+        if: steps.pending.outputs.apply == 'true'
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 --silent --show-error --fail \
+            https://sh.rustup.rs \
+            | sh -s -- -y --profile minimal --default-toolchain none
+          source "$HOME/.cargo/env"
+          rustup toolchain install stable \
+            --profile minimal \
+            --component rustfmt \
+            --component clippy
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Apply deterministic implementation patch
+        if: steps.pending.outputs.apply == 'true'
+        shell: bash
+        run: python3 scripts/temporary_assisted_login_patch.py
+
+      - name: Refresh dependency lockfile
+        if: steps.pending.outputs.apply == 'true'
+        shell: bash
+        run: cargo check --all-targets --all-features
+
+      - name: Format sources
+        if: steps.pending.outputs.apply == 'true'
+        shell: bash
+        run: cargo fmt --all
+
+      - name: Validate minimal build without WebKit
+        if: steps.pending.outputs.apply == 'true'
+        shell: bash
+        run: |
+          cargo check --locked --all-targets --no-default-features
+          cargo test --locked --all-targets --no-default-features
+          cargo clippy --locked --all-targets --no-default-features -- -D warnings
+
+      - name: Run complete feature-enabled quality gate
+        if: steps.pending.outputs.apply == 'true'
+        shell: bash
+        run: bash ./scripts/quality-gate.sh
+
+      - name: Commit validated implementation
+        if: steps.pending.outputs.apply == 'true' && success()
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm scripts/temporary_assisted_login_patch.py
+          git add -A
+          git diff --cached --check
+          git commit -m "feat: add assisted YouTube Music login"
+          git push origin HEAD:codex/youtube-assisted-login
