@@ -9,8 +9,8 @@ use crate::{
     youtube::{
         self as youtube_domain, cache_home_page_covers, cache_items_for_browser,
         resolve_youtube_collection_item, youtube_collection_cache_key, youtube_collection_key,
-        youtube_home_prefetch_candidates, YouTubeItem, YouTubePageEvent, YouTubeSearchResults,
-        YouTubeStatus,
+        youtube_home_prefetch_candidates, LikeMutationStartError, YouTubeItem, YouTubePageEvent,
+        YouTubeSearchResults, YouTubeStatus,
     },
 };
 use gtk::prelude::*;
@@ -960,13 +960,31 @@ impl AppController {
             return;
         };
 
+        let previous_liked = self.youtube_item_is_liked(&item.video_id);
+        let liked = !previous_liked;
+        match self
+            .youtube_like_mutations
+            .borrow_mut()
+            .begin(&item.video_id, previous_liked, liked)
+        {
+            Ok(_) => {}
+            Err(LikeMutationStartError::AlreadyPending) => {
+                self.show_toast("Aguarde a confirmação da curtida anterior");
+                return;
+            }
+            Err(LikeMutationStartError::MissingId) => {
+                self.show_toast("Esta música não possui um identificador válido do YouTube");
+                return;
+            }
+            Err(LikeMutationStartError::Unchanged) => return,
+        }
+
         let request_id = self.youtube_like_request_id.get().wrapping_add(1);
         self.youtube_like_request_id.set(request_id);
         self.youtube_like_pending
             .borrow_mut()
             .insert(item.video_id.clone(), request_id);
 
-        let liked = !self.youtube_item_is_liked(&item.video_id);
         self.apply_youtube_like_cache(&item, liked);
 
         if self

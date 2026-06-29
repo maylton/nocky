@@ -27,8 +27,8 @@ use crate::{
     },
     visual_theme,
     youtube::{
-        diagnostics as youtube_diagnostics, load_library_cache, YouTubeBridge, YouTubeHomePage,
-        YouTubePage, YouTubeSearchResults,
+        diagnostics as youtube_diagnostics, load_library_cache, LikeMutationRegistry,
+        YouTubeBridge, YouTubeHomePage, YouTubePage, YouTubeSearchResults,
     },
     APP_ID, HOME_PLAYER_WIDTH,
 };
@@ -581,6 +581,7 @@ impl AppController {
                 offline_download_pending: RefCell::new(HashSet::new()),
                 youtube_like_request_id: Cell::new(0),
                 youtube_like_pending: RefCell::new(HashMap::new()),
+                youtube_like_mutations: RefCell::new(LikeMutationRegistry::default()),
             },
             sidebar_motion: sidebar_parts.motion,
             sidebar_content: sidebar_parts.content,

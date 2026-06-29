@@ -43,7 +43,10 @@ use crate::{
     },
     visual_theme,
     visualizer::SpectrumVisualizer,
-    youtube::{YouTubeBridge, YouTubeHomePage, YouTubeItem, YouTubeLibraryCache, YouTubePage},
+    youtube::{
+        LikeMutationRegistry, YouTubeBridge, YouTubeHomePage, YouTubeItem, YouTubeLibraryCache,
+        YouTubePage,
+    },
 };
 use std::{
     cell::{Cell, RefCell},
@@ -109,6 +112,7 @@ pub(crate) struct ControllerRuntime {
     pub(crate) offline_download_pending: RefCell<HashSet<String>>,
     pub(crate) youtube_like_request_id: Cell<u64>,
     pub(crate) youtube_like_pending: RefCell<HashMap<String, u64>>,
+    pub(crate) youtube_like_mutations: RefCell<LikeMutationRegistry>,
 }
 
 pub(crate) struct AppController {

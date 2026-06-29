@@ -4,6 +4,7 @@ mod collections;
 pub(crate) mod diagnostics;
 pub(crate) mod error;
 mod feed;
+mod like_mutation;
 #[cfg(feature = "assisted-login")]
 mod login_policy;
 mod playback;
@@ -36,6 +37,7 @@ use std::{
 pub(crate) use assisted_login::present as present_assisted_login;
 pub(crate) use collections::{resolve_youtube_collection_item, youtube_home_prefetch_candidates};
 pub(crate) use feed::{YouTubeHomeChip, YouTubeHomePage, YouTubeHomeSection};
+pub(crate) use like_mutation::{LikeMutationRegistry, LikeMutationStartError};
 pub(crate) use routing::{youtube_item_action, YouTubeItemAction};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
