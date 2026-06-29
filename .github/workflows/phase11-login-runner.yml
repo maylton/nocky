@@ -103,6 +103,9 @@ jobs:
               path.write_text(text, encoding="utf-8")
           PY
             python3 scripts/temporary_assisted_login_patch.py
+            if [[ -f scripts/temporary_assisted_login_followup.py ]]; then
+              python3 scripts/temporary_assisted_login_followup.py
+            fi
             python3 - <<'PY'
           from pathlib import Path
 
@@ -173,9 +176,24 @@ jobs:
         if: steps.pending.outputs.apply == 'true'
         shell: bash
         run: |
-          cargo check --locked --all-targets --no-default-features
-          cargo test --locked --all-targets --no-default-features
-          cargo clippy --locked --all-targets --no-default-features -- -D warnings
+          set +e
+          {
+            cargo check --locked --all-targets --no-default-features
+            cargo test --locked --all-targets --no-default-features
+            cargo clippy --locked --all-targets --no-default-features -- -D warnings
+          } > assisted-login-minimal.log 2>&1
+          status=$?
+          tail -n 180 assisted-login-minimal.log
+          exit "$status"
+
+      - name: Upload minimal-build diagnostics
+        if: always() && steps.pending.outputs.apply == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: assisted-login-minimal-log
+          path: assisted-login-minimal.log
+          if-no-files-found: ignore
+          retention-days: 1
 
       - name: Run complete feature-enabled quality gate
         if: steps.pending.outputs.apply == 'true'
@@ -189,8 +207,8 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          rm scripts/temporary_assisted_login_patch.py
-          rm -f assisted-login-patch.log
+          rm -f scripts/temporary_assisted_login_patch.py scripts/temporary_assisted_login_followup.py
+          rm -f assisted-login-patch.log assisted-login-minimal.log
           git add -A
           git diff --cached --check
           git commit -m "feat: add assisted YouTube Music login"
