@@ -1,9 +1,7 @@
 #[path = "../src/youtube/like_mutation.rs"]
 mod like_mutation;
 
-use like_mutation::{
-    LikeMutationPhase, LikeMutationRegistry, LikeMutationStartError,
-};
+use like_mutation::{LikeMutationPhase, LikeMutationRegistry, LikeMutationStartError};
 
 #[test]
 fn optimistic_value_is_visible_while_pending() {
