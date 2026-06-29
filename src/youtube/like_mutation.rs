@@ -56,7 +56,11 @@ impl LikeMutationRegistry {
         if previous == target {
             return Err(LikeMutationStartError::Unchanged);
         }
-        if self.entries.get(video_id).is_some_and(LikeMutation::pending) {
+        if self
+            .entries
+            .get(video_id)
+            .is_some_and(LikeMutation::pending)
+        {
             return Err(LikeMutationStartError::AlreadyPending);
         }
 
@@ -101,7 +105,11 @@ impl LikeMutationRegistry {
     }
 
     pub fn clear_finished(&mut self, video_id: &str) -> bool {
-        if self.entries.get(video_id).is_some_and(|entry| !entry.pending()) {
+        if self
+            .entries
+            .get(video_id)
+            .is_some_and(|entry| !entry.pending())
+        {
             self.entries.remove(video_id);
             return true;
         }
