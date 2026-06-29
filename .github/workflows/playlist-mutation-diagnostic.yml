@@ -1,0 +1,43 @@
+name: Playlist Mutation Contract Diagnostic
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/youtube/playlist_mutation_contract.rs'
+      - 'tests/youtube_playlist_mutation_contract.rs'
+      - '.github/workflows/playlist-mutation-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          show-progress: false
+      - run: rustup component add rustfmt
+      - name: Check focused formatting
+        run: |
+          rustfmt --edition 2021 --check \
+            src/youtube/playlist_mutation_contract.rs \
+            tests/youtube_playlist_mutation_contract.rs
+
+  standalone-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          show-progress: false
+      - name: Compile contract tests with warnings denied
+        run: |
+          mkdir -p target/diagnostic
+          rustc --edition 2021 --test \
+            -D warnings \
+            tests/youtube_playlist_mutation_contract.rs \
+            -o target/diagnostic/youtube_playlist_mutation_contract
+      - name: Run contract tests
+        run: target/diagnostic/youtube_playlist_mutation_contract
