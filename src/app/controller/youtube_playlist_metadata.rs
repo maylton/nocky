@@ -5,7 +5,10 @@
 //! service response is persisted and no playlist mutation is exposed here.
 
 use super::AppController;
-use crate::youtube::{cacheable_youtube_playlist, YouTubeItem};
+use crate::{
+    browser::BrowserRoute,
+    youtube::{cacheable_youtube_playlist, YouTubeItem},
+};
 use std::{
     collections::HashSet,
     sync::{
@@ -17,7 +20,10 @@ use std::{
 
 type PlaylistMetadataResult = (String, Result<String, String>);
 
-fn metadata_channel() -> &'static (Sender<PlaylistMetadataResult>, Mutex<Receiver<PlaylistMetadataResult>>) {
+fn metadata_channel() -> &'static (
+    Sender<PlaylistMetadataResult>,
+    Mutex<Receiver<PlaylistMetadataResult>>,
+) {
     static CHANNEL: OnceLock<(
         Sender<PlaylistMetadataResult>,
         Mutex<Receiver<PlaylistMetadataResult>>,
@@ -34,9 +40,20 @@ fn pending_metadata_requests() -> &'static Mutex<HashSet<String>> {
     PENDING.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
-fn mark_metadata_pending(pending: &mut HashSet<String>, browse_id: &str) -> bool {
+fn completed_metadata_requests() -> &'static Mutex<HashSet<String>> {
+    static COMPLETED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    COMPLETED.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn mark_metadata_pending(
+    pending: &mut HashSet<String>,
+    completed: &HashSet<String>,
+    browse_id: &str,
+) -> bool {
     let browse_id = browse_id.trim();
-    !browse_id.is_empty() && pending.insert(browse_id.to_string())
+    !browse_id.is_empty()
+        && !completed.contains(browse_id)
+        && pending.insert(browse_id.to_string())
 }
 
 fn apply_playlist_metadata_diagnostic(
@@ -65,6 +82,24 @@ fn apply_playlist_metadata_diagnostic(
 }
 
 impl AppController {
+    pub(crate) fn poll_current_youtube_playlist_metadata(&self) {
+        let browse_id = match self.browser.route() {
+            BrowserRoute::YouTubePlaylist { browse_id, .. } => browse_id,
+            _ => return,
+        };
+        let playlist = self
+            .youtube_library
+            .borrow()
+            .playlists
+            .iter()
+            .find(|playlist| playlist.browse_id == browse_id)
+            .cloned();
+
+        if let Some(playlist) = playlist {
+            self.request_youtube_playlist_metadata(playlist);
+        }
+    }
+
     pub(crate) fn request_youtube_playlist_metadata(&self, playlist: YouTubeItem) {
         if !self.youtube_library.borrow().connected
             || !cacheable_youtube_playlist(&playlist)
@@ -82,7 +117,10 @@ impl AppController {
             let Ok(mut pending) = pending_metadata_requests().lock() else {
                 return;
             };
-            if !mark_metadata_pending(&mut pending, &browse_id) {
+            let Ok(completed) = completed_metadata_requests().lock() else {
+                return;
+            };
+            if !mark_metadata_pending(&mut pending, &completed, &browse_id) {
                 return;
             }
         }
@@ -108,6 +146,9 @@ impl AppController {
 
             if let Ok(mut pending) = pending_metadata_requests().lock() {
                 pending.remove(&browse_id);
+            }
+            if let Ok(mut completed) = completed_metadata_requests().lock() {
+                completed.insert(browse_id.clone());
             }
 
             match result {
@@ -138,13 +179,28 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
-    fn pending_requests_reject_empty_and_duplicate_ids() {
+    fn pending_requests_reject_empty_duplicate_and_completed_ids() {
         let mut pending = HashSet::new();
+        let mut completed = HashSet::new();
 
-        assert!(!mark_metadata_pending(&mut pending, "  "));
-        assert!(mark_metadata_pending(&mut pending, "PL-owned"));
-        assert!(!mark_metadata_pending(&mut pending, "PL-owned"));
-        assert_eq!(pending.len(), 1);
+        assert!(!mark_metadata_pending(&mut pending, &completed, "  "));
+        assert!(mark_metadata_pending(
+            &mut pending,
+            &completed,
+            "PL-owned"
+        ));
+        assert!(!mark_metadata_pending(
+            &mut pending,
+            &completed,
+            "PL-owned"
+        ));
+        pending.remove("PL-owned");
+        completed.insert("PL-owned".to_string());
+        assert!(!mark_metadata_pending(
+            &mut pending,
+            &completed,
+            "PL-owned"
+        ));
     }
 
     #[test]
