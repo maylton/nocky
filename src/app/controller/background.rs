@@ -2,8 +2,10 @@ use std::thread;
 
 use super::AppController;
 use crate::{
-    background::BackgroundMessage,
-    config::StartupSource,
+    background::{
+        youtube_home_response_is_current, youtube_home_sections_changed, BackgroundMessage,
+    },
+    config::{AppLanguage, StartupSource},
     youtube::{
         cacheable_youtube_playlist, clear_library_cache, queue_library_cache_save,
         youtube_collection_cache_key, youtube_collection_key,
@@ -818,19 +820,94 @@ impl AppController {
                     Err(error) => self.youtube_page.show_error(&error),
                 },
                 BackgroundMessage::YouTubeStructuredPage {
+                    request_id,
                     title,
+                    home,
                     append,
                     result,
-                } => match result {
-                    Ok(page) => self.youtube_page.show_structured_page(&title, page, append),
-                    Err(error) if append => {
-                        self.youtube_page.set_loading(false, &title);
-                        self.show_toast(&format!(
-                            "Não foi possível carregar mais recomendações: {error}"
-                        ));
+                } if youtube_home_response_is_current(
+                    home,
+                    request_id,
+                    self.youtube_home_request_id.get(),
+                ) =>
+                {
+                    if home {
+                        self.youtube_home_loading.set(false);
                     }
-                    Err(error) => self.youtube_page.show_error(&error),
-                },
+                    match result {
+                        Ok(page) => {
+                            let mut unchanged_filtered_feed = false;
+                            if home {
+                                {
+                                    let mut current = self.youtube_home_page.borrow_mut();
+                                    unchanged_filtered_feed = !append
+                                        && !page.selected_chip_params.is_empty()
+                                        && !youtube_home_sections_changed(&current, &page);
+                                    if append {
+                                        current.merge_page(page.clone());
+                                    } else {
+                                        let mut next = page.clone();
+                                        if next.chips.is_empty()
+                                            && !next.selected_chip_params.is_empty()
+                                            && !current.chips.is_empty()
+                                        {
+                                            next.chips = current.chips.clone();
+                                        }
+                                        *current = next;
+                                    }
+                                }
+                                self.youtube_home_previous_params.borrow_mut().clear();
+                                if self.config.borrow().startup_source
+                                    == Some(StartupSource::YouTube)
+                                {
+                                    self.refresh_browser();
+                                }
+                            }
+                            self.youtube_page.show_structured_page(&title, page, append);
+                            if unchanged_filtered_feed {
+                                let message = match self.config.borrow().language {
+                                    AppLanguage::Portuguese => {
+                                        "O YouTube Music retornou as mesmas recomendações para este filtro."
+                                    }
+                                    AppLanguage::English => {
+                                        "YouTube Music returned the same recommendations for this filter."
+                                    }
+                                    AppLanguage::Spanish => {
+                                        "YouTube Music devolvió las mismas recomendaciones para este filtro."
+                                    }
+                                };
+                                self.show_toast(message);
+                            }
+                        }
+                        Err(error) if append => {
+                            if home
+                                && self.config.borrow().startup_source
+                                    == Some(StartupSource::YouTube)
+                            {
+                                self.refresh_browser();
+                            }
+                            self.youtube_page.set_loading(false, &title);
+                            self.show_toast(&format!(
+                                "Não foi possível carregar mais recomendações: {error}"
+                            ));
+                        }
+                        Err(error) => {
+                            if home {
+                                let previous = std::mem::take(
+                                    &mut *self.youtube_home_previous_params.borrow_mut(),
+                                );
+                                self.youtube_home_page.borrow_mut().selected_chip_params = previous;
+                                if self.config.borrow().startup_source
+                                    == Some(StartupSource::YouTube)
+                                {
+                                    self.refresh_browser();
+                                }
+                            }
+                            self.youtube_page.show_error(&error);
+                        }
+                    }
+                }
+                BackgroundMessage::YouTubeStructuredPage { .. } => {}
                 BackgroundMessage::YouTubeRecoveryRetry {
                     generation,
                     queue,

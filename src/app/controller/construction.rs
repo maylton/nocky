@@ -27,8 +27,8 @@ use crate::{
     },
     visual_theme,
     youtube::{
-        diagnostics as youtube_diagnostics, load_library_cache, YouTubeBridge, YouTubePage,
-        YouTubeSearchResults,
+        diagnostics as youtube_diagnostics, load_library_cache, YouTubeBridge, YouTubeHomePage,
+        YouTubePage, YouTubeSearchResults,
     },
     APP_ID, HOME_PLAYER_WIDTH,
 };
@@ -558,6 +558,9 @@ impl AppController {
                 youtube_state: RefCell::new(None),
                 youtube_request_id: Cell::new(0),
                 youtube_search_request_id: Cell::new(0),
+                youtube_home_request_id: Cell::new(0),
+                youtube_home_loading: Cell::new(false),
+                youtube_home_previous_params: RefCell::new(String::new()),
                 youtube_recovery_in_progress: Cell::new(false),
                 youtube_recovery_attempted: Cell::new(false),
                 youtube_recovery_retry_count: Cell::new(0),
@@ -572,6 +575,7 @@ impl AppController {
                 youtube_playlist_prefetching: Cell::new(false),
                 youtube_pending_playlist: RefCell::new(None),
                 youtube_bridge,
+                youtube_home_page: RefCell::new(YouTubeHomePage::default()),
                 youtube_library: RefCell::new(load_library_cache()),
                 offline_store: RefCell::new(OfflineStore::load_default()),
                 offline_download_pending: RefCell::new(HashSet::new()),

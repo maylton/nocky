@@ -80,7 +80,9 @@ pub(crate) enum BackgroundMessage {
         result: Result<Vec<YouTubeItem>, String>,
     },
     YouTubeStructuredPage {
+        request_id: u64,
         title: String,
+        home: bool,
         append: bool,
         result: Result<YouTubeHomePage, String>,
     },
@@ -118,6 +120,21 @@ pub(crate) enum BackgroundMessage {
     },
 }
 
+pub(crate) fn youtube_home_response_is_current(
+    home: bool,
+    request_id: u64,
+    current_request_id: u64,
+) -> bool {
+    !home || request_id == current_request_id
+}
+
+pub(crate) fn youtube_home_sections_changed(
+    current: &YouTubeHomePage,
+    incoming: &YouTubeHomePage,
+) -> bool {
+    current.sections != incoming.sections
+}
+
 pub(crate) struct BackgroundChannel {
     sender: Sender<BackgroundMessage>,
     receiver: Receiver<BackgroundMessage>,
@@ -135,5 +152,47 @@ impl BackgroundChannel {
 
     pub(crate) fn try_recv(&self) -> Result<BackgroundMessage, TryRecvError> {
         self.receiver.try_recv()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{youtube_home_response_is_current, youtube_home_sections_changed};
+    use crate::youtube::{YouTubeHomePage, YouTubeHomeSection};
+
+    #[test]
+    fn rejects_stale_home_responses_but_accepts_non_home_pages() {
+        assert!(youtube_home_response_is_current(true, 7, 7));
+        assert!(!youtube_home_response_is_current(true, 6, 7));
+        assert!(youtube_home_response_is_current(false, 0, 7));
+    }
+
+    #[test]
+    fn detects_identical_and_changed_home_sections() {
+        let current = YouTubeHomePage {
+            sections: vec![YouTubeHomeSection {
+                id: "quick".to_string(),
+                title: "Quick picks".to_string(),
+                ..YouTubeHomeSection::default()
+            }],
+            selected_chip_params: "first".to_string(),
+            ..YouTubeHomePage::default()
+        };
+        let same_sections = YouTubeHomePage {
+            sections: current.sections.clone(),
+            selected_chip_params: "second".to_string(),
+            ..YouTubeHomePage::default()
+        };
+        let changed = YouTubeHomePage {
+            sections: vec![YouTubeHomeSection {
+                id: "energy".to_string(),
+                title: "Energy".to_string(),
+                ..YouTubeHomeSection::default()
+            }],
+            ..YouTubeHomePage::default()
+        };
+
+        assert!(!youtube_home_sections_changed(&current, &same_sections));
+        assert!(youtube_home_sections_changed(&current, &changed));
     }
 }

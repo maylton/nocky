@@ -34,7 +34,7 @@ headers come from the structured YouTube Music feed.
 | 7. Stream-client fallback policy | Complete; authenticated recovery rotation validated | PR #41 / PR #42 |
 | 8. Integration hardening and real-account validation | Complete | PR #42 |
 | 9. Native stream-source preferences | Complete and manually validated | PR #43 |
-| 10. Android-parity YouTube Home organization | Planned | after Phase 9 |
+| 10. Android-parity YouTube Home organization | Complete and manually validated | PR #46 |
 | 11. Assisted browser login | Planned, optional | later |
 | 12. Remote library mutations and account profiles | Planned | later |
 | 13. Native InnerTube backend | Research track | later |
@@ -241,18 +241,36 @@ The automatic default policy remains reliable without user configuration.
 **Goal:** make the desktop YouTube Home feel structurally aligned with the
 Android fork while preserving GTK conventions.
 
-Planned deliverables:
+Implemented in PR #46:
 
 - Render YouTube feed chips at the top of the YouTube Home.
-- Selecting a chip loads the corresponding feed params and preserves the chip
-  list from the root feed.
+- Extract localized chip titles and browse params from the Web InnerTube Home
+  response before `ytmusicapi` flattens the page into section rows.
+- Selecting a chip loads the corresponding `FEmusic_home` browse params and
+  preserves the chip list from the root feed.
 - Render each YouTube section using the returned header title, optional label,
   thumbnail shape hint and endpoint.
-- Keep section continuation/load-more behavior tied to the YouTube endpoint.
+- Keep section continuation/load-more behavior tied to the selected YouTube
+  Home params.
 - Treat Quick Picks as a feed/pinned online section, not as a local history
   filter.
 - Keep Local Home personalized sections separate from the YouTube Home.
-- Add fixture tests for chip selection, section order and header preservation.
+- Add fixture tests for chip extraction, selection request bodies,
+  continuation params, section order and header preservation.
+- Provide optimistic chip selection, localized loading feedback and explicit
+  feedback when YouTube returns unchanged recommendation sections.
+- Keep the horizontal scrollbar below the chip controls without overlaying them.
+
+Manual validation completed:
+
+- The connected account returns localized server-provided chips beyond **Tudo**.
+- Selecting chips highlights the active choice immediately and displays localized loading feedback in the main Home.
+- Filtered responses replace the feed sections; identical server responses produce explicit feedback instead of appearing inert.
+- Returning to **Tudo** restores the root feed and preserves the chip list.
+- Rapid chip switching keeps the final request and selection.
+- Filtered load-more requests retain the selected chip params.
+- The horizontal scrollbar remains below the chip controls without overlap at narrow widths.
+- Local Home behavior remains unchanged.
 
 Acceptance criteria:
 

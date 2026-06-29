@@ -29,6 +29,8 @@ from urllib.parse import parse_qs, urlparse, urlsplit, urlunsplit
 from nocky_youtube_feed import (
     build_library_overview,
     build_structured_home,
+    extract_inner_tube_home_chips,
+    find_inner_tube_home_section_list,
     load_cached_page,
     save_cached_page,
 )
@@ -47,6 +49,12 @@ try:
     from ytmusicapi import YTMusic
     from ytmusicapi.exceptions import YTMusicServerError, YTMusicUserError
     try:
+        from ytmusicapi.continuations import get_continuations as ytmusic_get_continuations
+        from ytmusicapi.parsers.browsing import parse_mixed_content as ytmusic_parse_mixed_content
+    except Exception:
+        ytmusic_get_continuations = None
+        ytmusic_parse_mixed_content = None
+    try:
         from ytmusicapi.setup import setup as ytmusicapi_setup
     except Exception:
         ytmusicapi_setup = None
@@ -55,6 +63,8 @@ except Exception as error:  # pragma: no cover - reported to the native app
     YTMusic = None
     YTMusicServerError = RuntimeError
     YTMusicUserError = RuntimeError
+    ytmusic_get_continuations = None
+    ytmusic_parse_mixed_content = None
     ytmusicapi_setup = None
     IMPORT_ERROR = error
 else:
@@ -384,7 +394,7 @@ def _parse_browser_headers(raw_text: str) -> dict[str, str]:
     normalized.setdefault("referer", "https://music.youtube.com/")
     normalized.setdefault("x-origin", "https://music.youtube.com")
     normalized.setdefault("accept", "*/*")
-    normalized.setdefault("accept-language", "en-US,en;q=0.9")
+    normalized.setdefault("accept-language", _accept_language())
     return _minimal_auth_headers(normalized)
 
 
@@ -408,7 +418,7 @@ def _session(timeout: float = 20.0):
 
 
 def _system_locale() -> str:
-    for key in ("LC_ALL", "LC_MESSAGES", "LANG"):
+    for key in ("LC_ALL", "LC_MESSAGES", "LANGUAGE", "LANG"):
         value = os.environ.get(key, "").strip()
         if value:
             return value
@@ -419,33 +429,70 @@ def _system_locale() -> str:
     return language or ""
 
 
+def _locale_candidates() -> list[str]:
+    return [
+        candidate.strip().replace("-", "_")
+        for candidate in re.split(r"[:;,]", _system_locale())
+        if candidate.strip()
+    ]
+
+
 def _language() -> str:
-    value = _system_locale().lower()
-    for language in ("pt", "es", "fr", "de", "it"):
-        if value.startswith(language):
+    for candidate in _locale_candidates():
+        language = candidate.split("_", 1)[0].split(".", 1)[0].lower()
+        if language in {"pt", "es", "en"}:
             return language
     return "en"
 
 
 def _location() -> str:
-    value = _system_locale().replace("-", "_").upper()
-    return "BR" if "_BR" in value else ""
+    for candidate in _locale_candidates():
+        locale_name = re.split(r"[.@]", candidate, maxsplit=1)[0]
+        parts = locale_name.split("_")
+        if len(parts) >= 2 and len(parts[1]) == 2 and parts[1].isalpha():
+            return parts[1].upper()
+    return ""
+
+
+def _accept_language(language: str = "", location: str = "") -> str:
+    language = language or _language()
+    location = location or _location()
+    primary = f"{language}-{location}" if location else language
+    if language == "en":
+        return f"{primary},en;q=0.9" if primary != "en" else "en-US,en;q=0.9"
+    return f"{primary},{language};q=0.9,en;q=0.7"
+
+
+def _locale_cache_namespace() -> str:
+    return f"{_language()}-{_location() or 'global'}"
 
 
 def _create_client(authenticated: bool = True):
     _require_dependencies()
     session = _session()
+    language = _language()
+    location = _location()
     if authenticated:
         payload = _load_session()
         headers = payload.get("headers")
         if isinstance(headers, dict) and headers:
-            normalized = {str(k): str(v) for k, v in headers.items()}
+            normalized = {
+                str(key).strip().lower(): str(value).strip()
+                for key, value in headers.items()
+                if str(key).strip() and str(value).strip()
+            }
+            normalized["accept-language"] = _accept_language(language, location)
             _ensure_authorization(normalized)
-            return YTMusic(normalized, requests_session=session)
+            return YTMusic(
+                normalized,
+                requests_session=session,
+                language=language,
+                location=location,
+            )
     return YTMusic(
         requests_session=session,
-        language=_language(),
-        location=_location(),
+        language=language,
+        location=location,
     )
 
 
@@ -1019,6 +1066,7 @@ def _yt_dlp_auth_args() -> tuple[list[str], Path | None]:
         for key, value in stored_headers.items()
         if str(key).strip() and str(value).strip()
     }
+    headers["accept-language"] = _accept_language()
 
     args: list[str] = []
     cookie_file = _write_yt_dlp_cookie_file(headers.get("cookie", ""))
@@ -1397,7 +1445,7 @@ def _feed_cache_key(
     params: str = "",
 ) -> str:
     params_key = hashlib.sha1(params.encode("utf-8")).hexdigest()[:12] if params else "root"
-    return f"{kind}:{params_key}:{continuation or '0'}:{section_limit}"
+    return f"{_locale_cache_namespace()}:{kind}:{params_key}:{continuation or '0'}:{section_limit}"
 
 
 def _library_method(client: Any, name: str, limit: int, **kwargs: Any) -> Any:
@@ -1416,6 +1464,64 @@ def _library_method(client: Any, name: str, limit: int, **kwargs: Any) -> Any:
         return []
 
 
+def _inner_tube_home_response(client: Any, params: str = "") -> tuple[dict[str, Any], dict[str, Any]]:
+    sender = getattr(client, "_send_request", None)
+    if not callable(sender):
+        raise RuntimeError("The installed ytmusicapi version does not expose the Web Home request")
+    body: dict[str, Any] = {"browseId": "FEmusic_home"}
+    if params:
+        body["params"] = params
+    response = sender("browse", body)
+    if not isinstance(response, dict):
+        raise RuntimeError("YouTube Music returned an invalid Home response")
+    return body, response
+
+
+def _inner_tube_home_rows(
+    client: Any,
+    params: str,
+    limit: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    if ytmusic_parse_mixed_content is None:
+        raise RuntimeError("The installed ytmusicapi version cannot parse filtered Home responses")
+    body, response = _inner_tube_home_response(client, params)
+    section_list = find_inner_tube_home_section_list(response)
+    contents = section_list.get("contents") if isinstance(section_list.get("contents"), list) else []
+    if not contents:
+        raise RuntimeError("YouTube Music did not return filtered Home sections")
+    rows = list(ytmusic_parse_mixed_content(contents) or [])
+    remaining = max(0, limit - len(rows))
+    if (
+        remaining > 0
+        and section_list.get("continuations")
+        and ytmusic_get_continuations is not None
+    ):
+        sender = getattr(client, "_send_request")
+
+        def request_func(additional_params: dict[str, Any]):
+            return sender("browse", body, additional_params)
+
+        rows.extend(
+            ytmusic_get_continuations(
+                section_list,
+                "sectionListContinuation",
+                remaining,
+                request_func,
+                ytmusic_parse_mixed_content,
+            )
+        )
+    return rows, response
+
+
+def _cached_root_home_chips(section_limit: int) -> list[dict[str, str]]:
+    root = load_cached_page(
+        _home_feed_cache_path(),
+        _feed_cache_key("home", "", section_limit, ""),
+        allow_stale=True,
+    )
+    return list((root or {}).get("chips") or [])
+
+
 def command_home_v2(payload: dict[str, Any]) -> dict[str, Any]:
     if not _load_session().get("headers"):
         raise RuntimeError("Connect a YouTube Music browser session first")
@@ -1431,35 +1537,42 @@ def command_home_v2(payload: dict[str, Any]) -> dict[str, Any]:
 
     try:
         fetch_limit = max(12, min(36, offset + section_limit + 1))
+        chips = _cached_root_home_chips(section_limit)
         if params:
-            try:
-                rows = client.get_home(limit=fetch_limit, params=params)
-            except TypeError:
+            rows, raw_response = _inner_tube_home_rows(client, params, fetch_limit)
+            if not chips:
+                chips = extract_inner_tube_home_chips(raw_response)
+            if not chips:
                 try:
-                    rows = client.get_home(params=params)
-                except TypeError as error:
-                    raise RuntimeError(
-                        "The installed ytmusicapi version does not support YouTube Home chip params"
-                    ) from error
+                    _body, root_response = _inner_tube_home_response(client)
+                    chips = extract_inner_tube_home_chips(root_response)
+                except Exception as chip_error:
+                    print(
+                        f"Nocky YouTube root chips unavailable: {chip_error}",
+                        file=sys.stderr,
+                    )
         else:
             try:
                 rows = client.get_home(limit=fetch_limit)
             except TypeError:
                 rows = client.get_home()
+            if offset == 0 or not chips:
+                try:
+                    _body, raw_response = _inner_tube_home_response(client)
+                    chips = extract_inner_tube_home_chips(raw_response) or chips
+                except Exception as chip_error:
+                    print(
+                        f"Nocky YouTube Home chips unavailable: {chip_error}",
+                        file=sys.stderr,
+                    )
         page = build_structured_home(
             rows,
             offset=offset,
             section_limit=section_limit,
             selected_chip_params=params,
         )
-        if params and not page.get("chips"):
-            root = load_cached_page(
-                _home_feed_cache_path(),
-                _feed_cache_key("home", "", section_limit, ""),
-                allow_stale=True,
-            )
-            if root is not None:
-                page["chips"] = root.get("chips") or []
+        if chips:
+            page["chips"] = chips
         save_cached_page(_home_feed_cache_path(), cache_key, page)
         return page
     except Exception as error:

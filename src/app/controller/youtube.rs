@@ -542,6 +542,29 @@ impl AppController {
         };
         let append = !continuation.is_empty();
         let filtered = !params.is_empty();
+        if !append {
+            let current = self.youtube_home_page.borrow();
+            if !current.sections.is_empty()
+                && current.selected_chip_params == params
+                && !self.youtube_home_loading.get()
+            {
+                return;
+            }
+        }
+
+        let request_id = self.youtube_home_request_id.get().wrapping_add(1);
+        self.youtube_home_request_id.set(request_id);
+        if !append {
+            let previous = self.youtube_home_page.borrow().selected_chip_params.clone();
+            self.youtube_home_previous_params.replace(previous);
+            self.youtube_home_page.borrow_mut().selected_chip_params = params.clone();
+        }
+        self.youtube_home_loading.set(true);
+        let youtube_active = self.config.borrow().startup_source == Some(StartupSource::YouTube);
+        if youtube_active {
+            self.refresh_browser();
+        }
+
         self.youtube_page.set_loading(
             true,
             if append {
@@ -564,7 +587,9 @@ impl AppController {
                     page
                 });
             let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
+                request_id,
                 title: "Para você".to_string(),
+                home: true,
                 append,
                 result,
             });
@@ -582,7 +607,9 @@ impl AppController {
         let sender = self.background.sender();
         thread::spawn(move || {
             let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
+                request_id: 0,
                 title: "Sua biblioteca do YouTube Music".to_string(),
+                home: false,
                 append: false,
                 result: bridge.library_overview().map(|mut page| {
                     cache_home_page_covers(&mut page);
@@ -662,7 +689,9 @@ impl AppController {
                     let sender = self.background.sender();
                     thread::spawn(move || {
                         let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
+                            request_id: 0,
                             title: "Sua biblioteca do YouTube Music".to_string(),
+                            home: false,
                             append: false,
                             result: bridge.library_page().map(|mut page| {
                                 cache_home_page_covers(&mut page);
@@ -677,7 +706,9 @@ impl AppController {
                     let sender = self.background.sender();
                     thread::spawn(move || {
                         let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
+                            request_id: 0,
                             title: "Suas curtidas no YouTube Music".to_string(),
+                            home: false,
                             append: false,
                             result: bridge.liked_page().map(|mut page| {
                                 cache_home_page_covers(&mut page);

@@ -43,7 +43,7 @@ use crate::{
     },
     visual_theme,
     visualizer::SpectrumVisualizer,
-    youtube::{YouTubeBridge, YouTubeItem, YouTubeLibraryCache, YouTubePage},
+    youtube::{YouTubeBridge, YouTubeHomePage, YouTubeItem, YouTubeLibraryCache, YouTubePage},
 };
 use std::{
     cell::{Cell, RefCell},
@@ -86,6 +86,9 @@ pub(crate) struct ControllerRuntime {
     pub(crate) youtube_state: RefCell<Option<YouTubePlaybackState>>,
     pub(crate) youtube_request_id: Cell<u64>,
     pub(crate) youtube_search_request_id: Cell<u64>,
+    pub(crate) youtube_home_request_id: Cell<u64>,
+    pub(crate) youtube_home_loading: Cell<bool>,
+    pub(crate) youtube_home_previous_params: RefCell<String>,
     pub(crate) youtube_recovery_in_progress: Cell<bool>,
     pub(crate) youtube_recovery_attempted: Cell<bool>,
     pub(crate) youtube_recovery_retry_count: Cell<u8>,
@@ -100,6 +103,7 @@ pub(crate) struct ControllerRuntime {
     pub(crate) youtube_playlist_prefetching: Cell<bool>,
     pub(crate) youtube_pending_playlist: RefCell<Option<YouTubeItem>>,
     pub(crate) youtube_bridge: Option<Arc<YouTubeBridge>>,
+    pub(crate) youtube_home_page: RefCell<YouTubeHomePage>,
     pub(crate) youtube_library: RefCell<YouTubeLibraryCache>,
     pub(crate) offline_store: RefCell<OfflineStore>,
     pub(crate) offline_download_pending: RefCell<HashSet<String>>,
