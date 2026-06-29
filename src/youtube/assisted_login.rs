@@ -4,13 +4,15 @@ use crate::config::AppLanguage;
 mod implementation {
     use super::AppLanguage;
     use crate::youtube::login_policy::{
-        is_youtube_music_uri, navigation_disposition, navigation_host, NavigationDisposition,
+        is_post_login_sync_uri, is_youtube_music_uri, navigation_disposition, navigation_host,
+        NavigationDisposition,
     };
     use adw::prelude::*;
     use gtk::{gio, glib};
     use std::{
         cell::{Cell, RefCell},
         rc::Rc,
+        time::Duration,
     };
     use webkit6::{
         prelude::*, CookieAcceptPolicy, LoadEvent, NavigationPolicyDecision, NetworkSession,
@@ -32,6 +34,8 @@ mod implementation {
         description: &'static str,
         loading: &'static str,
         waiting: &'static str,
+        waiting_host: &'static str,
+        finalizing: &'static str,
         capturing: &'static str,
         missing_session: &'static str,
         cookie_error: &'static str,
@@ -47,6 +51,8 @@ mod implementation {
                 description: "Entre na sua conta nesta janela isolada. O Nocky não lê sua senha nem o conteúdo da página; ele captura somente a sessão associada ao YouTube Music depois que o login termina.",
                 loading: "Abrindo o login seguro…",
                 waiting: "Conclua o login para continuar.",
+                waiting_host: "Concluindo o login em:",
+                finalizing: "Finalizando o login e abrindo o YouTube Music…",
                 capturing: "Validando a sessão do YouTube Music…",
                 missing_session: "O YouTube Music abriu, mas a sessão autenticada ainda não foi encontrada. Conclua o login ou escolha a conta correta.",
                 cookie_error: "Não foi possível ler a sessão do YouTube Music.",
@@ -59,6 +65,8 @@ mod implementation {
                 description: "Sign in inside this isolated window. Nocky never reads your password or page contents; it captures only the YouTube Music session after sign-in finishes.",
                 loading: "Opening secure sign-in…",
                 waiting: "Complete sign-in to continue.",
+                waiting_host: "Finishing sign-in at:",
+                finalizing: "Finishing sign-in and opening YouTube Music…",
                 capturing: "Validating the YouTube Music session…",
                 missing_session: "YouTube Music opened, but an authenticated session was not found yet. Finish signing in or choose the correct account.",
                 cookie_error: "The YouTube Music session could not be read.",
@@ -71,6 +79,8 @@ mod implementation {
                 description: "Inicia sesión dentro de esta ventana aislada. Nocky no lee tu contraseña ni el contenido de la página; solo captura la sesión de YouTube Music cuando finaliza el acceso.",
                 loading: "Abriendo el acceso seguro…",
                 waiting: "Completa el inicio de sesión para continuar.",
+                waiting_host: "Finalizando el acceso en:",
+                finalizing: "Finalizando el acceso y abriendo YouTube Music…",
                 capturing: "Validando la sesión de YouTube Music…",
                 missing_session: "YouTube Music se abrió, pero todavía no se encontró una sesión autenticada. Finaliza el acceso o elige la cuenta correcta.",
                 cookie_error: "No se pudo leer la sesión de YouTube Music.",
@@ -223,6 +233,7 @@ mod implementation {
 
         let callback: SessionCallback = Rc::new(RefCell::new(Some(Box::new(on_session))));
         let capturing = Rc::new(Cell::new(false));
+        let returning_to_music = Rc::new(Cell::new(false));
         {
             let window = window.clone();
             let status = status.clone();
@@ -230,6 +241,7 @@ mod implementation {
             let cookie_manager = cookie_manager.clone();
             let callback = callback.clone();
             let capturing = capturing.clone();
+            let returning_to_music = returning_to_music.clone();
             web_view.connect_load_changed(move |web_view, event| {
                 if event != LoadEvent::Finished {
                     return;
@@ -238,8 +250,33 @@ mod implementation {
                     .uri()
                     .map(|value| value.to_string())
                     .unwrap_or_default();
-                if !is_youtube_music_uri(&uri) || capturing.replace(true) {
-                    status.set_text(text.waiting);
+
+                if is_post_login_sync_uri(&uri) {
+                    status.set_text(text.finalizing);
+                    spinner.start();
+                    if !returning_to_music.replace(true) {
+                        let web_view = web_view.clone();
+                        let returning_to_music = returning_to_music.clone();
+                        glib::timeout_add_local_once(Duration::from_millis(700), move || {
+                            if returning_to_music.replace(false) {
+                                web_view.load_uri(YOUTUBE_MUSIC_URI);
+                            }
+                        });
+                    }
+                    return;
+                }
+
+                if !is_youtube_music_uri(&uri) {
+                    if let Some(host) = navigation_host(&uri) {
+                        status.set_text(&format!("{} {host}", text.waiting_host));
+                    } else {
+                        status.set_text(text.waiting);
+                    }
+                    return;
+                }
+
+                returning_to_music.set(false);
+                if capturing.replace(true) {
                     return;
                 }
 
@@ -296,7 +333,9 @@ mod implementation {
         web_view.connect_load_failed({
             let status = status.clone();
             let spinner = spinner.clone();
+            let returning_to_music = returning_to_music.clone();
             move |_, _, _, _| {
+                returning_to_music.set(false);
                 spinner.stop();
                 status.set_text(text.waiting);
                 false
