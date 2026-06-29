@@ -6,10 +6,42 @@ RESULT_FILE="$(mktemp)"
 trap 'rm -f "$RESULT_FILE"' EXIT
 chmod 600 "$RESULT_FILE"
 
-cd "$ROOT_DIR"
-python3 helpers/nocky_youtube_profiles.py >"$RESULT_FILE" || true
+python_candidates=()
+[[ -n "${NOCKY_YOUTUBE_PYTHON:-}" ]] && python_candidates+=("$NOCKY_YOUTUBE_PYTHON")
+[[ -n "${NOCKY_RUNTIME_DIR:-}" ]] && python_candidates+=("$NOCKY_RUNTIME_DIR/bin/python3")
+python_candidates+=(
+    "$ROOT_DIR/.nocky-runtime/bin/python3"
+    "$HOME/.local/share/nocky/runtime/bin/python3"
+    "/usr/local/share/nocky/runtime/bin/python3"
+    "/usr/share/nocky/runtime/bin/python3"
+)
+if command -v python3 >/dev/null 2>&1; then
+    python_candidates+=("$(command -v python3)")
+fi
 
-python3 - "$RESULT_FILE" <<'PY'
+YOUTUBE_PYTHON=""
+for candidate in "${python_candidates[@]}"; do
+    [[ -x "$candidate" ]] || continue
+    if "$candidate" -c 'import requests, ytmusicapi' >/dev/null 2>&1; then
+        YOUTUBE_PYTHON="$candidate"
+        break
+    fi
+done
+
+if [[ -z "$YOUTUBE_PYTHON" ]]; then
+    cat >&2 <<EOF
+No Nocky YouTube runtime with ytmusicapi was found.
+Create the project-local runtime with:
+  ./scripts/setup-youtube-runtime.sh
+Then run this smoke test again.
+EOF
+    exit 2
+fi
+
+cd "$ROOT_DIR"
+"$YOUTUBE_PYTHON" helpers/nocky_youtube_profiles.py >"$RESULT_FILE" || true
+
+"$YOUTUBE_PYTHON" - "$RESULT_FILE" <<'PY'
 from __future__ import annotations
 
 import json
