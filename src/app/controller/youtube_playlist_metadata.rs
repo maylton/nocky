@@ -12,7 +12,7 @@ use crate::{
 use std::{
     collections::{HashMap, HashSet},
     sync::{
-        mpsc::{self, Receiver, Sender, TryRecvError},
+        mpsc::{self, Receiver, Sender},
         Mutex, OnceLock,
     },
     thread,
@@ -147,13 +147,7 @@ impl AppController {
             return;
         };
 
-        loop {
-            let update = match receiver.try_recv() {
-                Ok(update) => update,
-                Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
-            };
-            let (browse_id, result) = update;
-
+        while let Ok((browse_id, result)) = receiver.try_recv() {
             if let Ok(mut pending) = pending_metadata_requests().lock() {
                 pending.remove(&browse_id);
             }
