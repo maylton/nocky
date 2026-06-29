@@ -37,8 +37,8 @@ headers come from the structured YouTube Music feed.
 | 8. Integration hardening and real-account validation | Complete | PR #42 |
 | 9. Native stream-source preferences | Complete and manually validated | PR #43 |
 | 10. Android-parity YouTube Home organization | Complete and manually validated | PR #46 |
-| 11. Assisted browser login and first-run onboarding | In progress; privacy review approved | PR #49 / implementation branch |
-| 12. Remote library mutations and account profiles | Planned | later |
+| 11. Assisted browser login and first-run onboarding | Complete and manually validated | PR #55 |
+| 12. Remote library mutations and account profiles | In progress; active-profile foundation validated | PR #57 / issue #56 |
 | 13. Native InnerTube backend | Research track | later |
 | 14. Release hardening and observability | Planned | before stable release |
 
@@ -342,12 +342,58 @@ Acceptance criteria:
 
 ## Phase 12 — Remote library mutations and account profiles
 
-Planned capabilities:
+### Slice 12A — active-profile foundation
 
-- Like/unlike feedback in all relevant views.
-- Create, rename and edit remote playlists where supported.
-- Add/remove playlist tracks with optimistic UI and rollback.
-- Account/channel profile selection and clear active-profile indication.
+Status: implemented and manually validated in PR #57.
+
+Delivered:
+
+- Active profile name, channel handle and photo URL normalization from
+  `ytmusicapi.get_account_info()`.
+- Display-only profile persistence using an explicit allowlist.
+- Compatibility with sessions that only contain the legacy `account` field.
+- Native Rust profile model and active-profile status enrichment.
+- Non-fatal fallback when profile metadata cannot be refreshed.
+- Helper installation and complete Quality Gate coverage.
+- Python tests covering current, legacy and missing metadata plus exclusion of
+  cookies, headers and authorization values.
+- Rust tests covering label composition and version-tolerant deserialization.
+
+Validated:
+
+- The active account name and channel handle appear in the YouTube Music account
+  status when the service returns them.
+- Missing optional metadata does not change connection status.
+- Existing sessions remain functional.
+- Feed, library, search and private actions continue working.
+- No authentication material appears in profile logs or payloads.
+- Quality Gate #296 passed on the final checkpoint.
+- A real-account CachyOS run passed after restart.
+
+### Slice 12B — profile discovery and selection semantics
+
+Next checkpoint:
+
+- Determine whether multiple YouTube and Brand Account profiles can be
+  discovered deterministically through the current authenticated backend.
+- Define a stable identifier that does not rely only on display name or handle.
+- Validate whether switching requires a fresh browser session or can safely use
+  an account index/header already present in the normalized contract.
+- Keep the active profile explicit in every selection surface.
+- Fall back to the single active-profile presentation when discovery is absent
+  or ambiguous.
+- Do not broaden persisted authentication material.
+
+### Slice 12C — remote library mutations
+
+Planned after profile semantics are documented:
+
+- Like/unlike feedback in all relevant views with optimistic UI and rollback.
+- Remote reconciliation after each mutation.
+- Create and rename playlists where supported.
+- Add/remove playlist tracks with clear remote ownership and failure recovery.
+
+Remote destructive operations require a separate review before implementation.
 
 ## Phase 13 — Native InnerTube backend research
 
@@ -373,4 +419,5 @@ Stop for explicit review before:
 - replacing yt-dlp or GStreamer;
 - adding remote destructive mutations;
 - changing local Home or local-library behavior;
-- enabling telemetry beyond local privacy-safe debug diagnostics.
+- enabling telemetry beyond local privacy-safe debug diagnostics;
+- shipping profile switching without deterministic active-profile semantics.
