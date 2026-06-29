@@ -4,6 +4,9 @@
 //! Native code retains only the display diagnostic and the confirmed editability
 //! bit needed by the separately reviewed playlist-item action.
 
+#[path = "youtube_playlist_add.rs"]
+mod playlist_add;
+
 use super::AppController;
 use crate::{
     browser::BrowserRoute,
