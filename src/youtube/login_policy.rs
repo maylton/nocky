@@ -9,10 +9,13 @@ pub(crate) enum NavigationDisposition {
 
 const EMBEDDED_HOSTS: &[&str] = &[
     "accounts.google.com",
+    "accounts.youtube.com",
     "consent.google.com",
     "consent.youtube.com",
+    "gds.google.com",
     "music.youtube.com",
     "myaccount.google.com",
+    "www.google.com",
     "www.youtube.com",
 ];
 
@@ -53,6 +56,10 @@ fn https_host(uri: &str) -> Option<String> {
     Some(host)
 }
 
+pub(crate) fn navigation_host(uri: &str) -> Option<String> {
+    https_host(uri)
+}
+
 pub(crate) fn navigation_disposition(uri: &str) -> NavigationDisposition {
     let Some(host) = https_host(uri) else {
         return NavigationDisposition::Block;
@@ -72,18 +79,25 @@ pub(crate) fn is_youtube_music_uri(uri: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_youtube_music_uri, navigation_disposition, NavigationDisposition};
+    use super::{
+        is_youtube_music_uri, navigation_disposition, navigation_host, NavigationDisposition,
+    };
 
     #[test]
     fn allows_only_exact_audited_https_hosts() {
-        assert_eq!(
-            navigation_disposition("https://accounts.google.com/v3/signin"),
-            NavigationDisposition::Allow
-        );
-        assert_eq!(
-            navigation_disposition("https://music.youtube.com/"),
-            NavigationDisposition::Allow
-        );
+        for uri in [
+            "https://accounts.google.com/v3/signin",
+            "https://accounts.youtube.com/accounts/SetSID?ssdc=1",
+            "https://www.google.com/accounts/SetSID",
+            "https://gds.google.com/web/chip",
+            "https://music.youtube.com/",
+        ] {
+            assert_eq!(
+                navigation_disposition(uri),
+                NavigationDisposition::Allow,
+                "{uri}"
+            );
+        }
         assert_eq!(
             navigation_disposition("https://support.google.com/youtubemusic"),
             NavigationDisposition::OpenExternal
@@ -95,6 +109,8 @@ mod tests {
         for uri in [
             "http://accounts.google.com/",
             "https://accounts.google.com.evil.example/",
+            "https://accounts.youtube.com.evil.example/accounts/SetSID",
+            "https://www.google.com.evil.example/accounts/SetSID",
             "https://user@accounts.google.com/",
             "https://127.0.0.1/",
             "https://[::1]/",
@@ -109,6 +125,15 @@ mod tests {
                 "{uri}"
             );
         }
+    }
+
+    #[test]
+    fn diagnostics_return_only_the_sanitized_hostname() {
+        assert_eq!(
+            navigation_host("https://accounts.youtube.com/accounts/SetSID?token=secret"),
+            Some("accounts.youtube.com".to_string())
+        );
+        assert_eq!(navigation_host("javascript:alert(1)"), None);
     }
 
     #[test]
