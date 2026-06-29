@@ -13,7 +13,7 @@ import nocky_youtube_playlist_create  # noqa: E402
 
 
 class FakeClient:
-    def __init__(self, response=None):
+    def __init__(self, response=None, add_result="STATUS_SUCCEEDED"):
         self.response = response or {
             "id": "PL-owned",
             "title": "Focus",
@@ -21,17 +21,23 @@ class FakeClient:
             "privacy": "PRIVATE",
             "tracks": [
                 {
-                    "videoId": "abcdefghijk",
+                    "videoId": "zzzzzzzzzzz",
                     "setVideoId": "set-occurrence-1",
                     "title": "Track",
                 }
             ],
         }
+        self.add_result = add_result
         self.calls = []
+        self.add_calls = []
 
     def get_playlist(self, playlist_id, limit=100):
         self.calls.append((playlist_id, limit))
         return self.response
+
+    def add_playlist_items(self, playlist_id, videoIds=None, duplicates=False):
+        self.add_calls.append((playlist_id, list(videoIds or []), duplicates))
+        return self.add_result
 
 
 class PackagedPlaylistMetadataTests(unittest.TestCase):
@@ -118,6 +124,132 @@ class PackagedPlaylistMetadataTests(unittest.TestCase):
         self.assertEqual(client.calls, [("PL-owned", 500)])
         self.assertEqual(result["playlist_id"], "PL-owned")
         self.assertEqual(result["tracks"][0]["set_video_id"], "set-occurrence-1")
+
+    def test_add_operation_revalidates_and_submits_exactly_one_item(self) -> None:
+        client = FakeClient()
+        with patch.object(
+            nocky_youtube_playlist_create.nocky_youtube,
+            "_load_session",
+            return_value={"headers": {"test": "value"}},
+        ):
+            with patch.object(
+                nocky_youtube_playlist_create.nocky_youtube,
+                "_create_client",
+                return_value=client,
+            ):
+                result = nocky_youtube_playlist_create.execute(
+                    {
+                        "operation": "add",
+                        "playlist_id": "VLPL-owned",
+                        "video_id": "abcdefghijk",
+                        "owned": True,
+                        "editable": True,
+                    }
+                )
+
+        self.assertEqual(client.calls, [("PL-owned", 500)])
+        self.assertEqual(client.add_calls, [("PL-owned", ["abcdefghijk"], False)])
+        self.assertEqual(
+            result,
+            {
+                "playlist_id": "PL-owned",
+                "video_id": "abcdefghijk",
+                "added_count": 1,
+                "reconciliation_required": True,
+            },
+        )
+
+    def test_add_rejects_duplicate_or_unowned_requests_before_session_access(self) -> None:
+        invalid = (
+            {
+                "operation": "add",
+                "playlist_id": "PL-owned",
+                "video_id": "abcdefghijk",
+                "owned": False,
+                "editable": True,
+            },
+            {
+                "operation": "add",
+                "playlist_id": "PL-owned",
+                "video_id": "abcdefghijk",
+                "owned": True,
+                "editable": True,
+                "duplicates": True,
+            },
+        )
+        with patch.object(
+            nocky_youtube_playlist_create.nocky_youtube,
+            "_load_session",
+        ) as load_session:
+            for payload in invalid:
+                with self.subTest(payload=payload):
+                    with self.assertRaises(RuntimeError):
+                        nocky_youtube_playlist_create.execute(payload)
+            load_session.assert_not_called()
+
+    def test_existing_remote_item_blocks_addition(self) -> None:
+        client = FakeClient(
+            {
+                "id": "PL-owned",
+                "title": "Focus",
+                "owned": True,
+                "privacy": "PRIVATE",
+                "tracks": [{"videoId": "abcdefghijk", "title": "Already there"}],
+            }
+        )
+        with patch.object(
+            nocky_youtube_playlist_create.nocky_youtube,
+            "_load_session",
+            return_value={"headers": {"test": "value"}},
+        ):
+            with patch.object(
+                nocky_youtube_playlist_create.nocky_youtube,
+                "_create_client",
+                return_value=client,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "already"):
+                    nocky_youtube_playlist_create.execute(
+                        {
+                            "operation": "add",
+                            "playlist_id": "PL-owned",
+                            "video_id": "abcdefghijk",
+                            "owned": True,
+                            "editable": True,
+                        }
+                    )
+        self.assertEqual(client.add_calls, [])
+
+    def test_remote_shared_playlist_blocks_addition(self) -> None:
+        client = FakeClient(
+            {
+                "id": "PL-owned",
+                "title": "Shared",
+                "owned": False,
+                "privacy": "UNLISTED",
+                "tracks": [],
+            }
+        )
+        with patch.object(
+            nocky_youtube_playlist_create.nocky_youtube,
+            "_load_session",
+            return_value={"headers": {"test": "value"}},
+        ):
+            with patch.object(
+                nocky_youtube_playlist_create.nocky_youtube,
+                "_create_client",
+                return_value=client,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "ownership and editability"):
+                    nocky_youtube_playlist_create.execute(
+                        {
+                            "operation": "add",
+                            "playlist_id": "PL-owned",
+                            "video_id": "abcdefghijk",
+                            "owned": True,
+                            "editable": True,
+                        }
+                    )
+        self.assertEqual(client.add_calls, [])
 
     def test_mismatched_metadata_is_rejected(self) -> None:
         client = FakeClient(
