@@ -46,30 +46,21 @@ def discover_profiles() -> dict[str, Any]:
 
 
 def discovery_summary(discovery: Any) -> dict[str, Any]:
-    """Return the narrower contract consumed by the native status UI.
+    """Return the minimal contract consumed by the native status UI.
 
-    Candidate identifiers, photos and non-active profile details intentionally
-    do not cross the Python-to-Rust boundary.
+    Candidate identifiers, photos, names and handles intentionally do not cross
+    the Python-to-Rust boundary. The active display label is provided by the
+    separately validated account-profile helper.
     """
 
     result = discovery if isinstance(discovery, dict) else {}
     profiles = result.get("profiles")
     profiles = profiles if isinstance(profiles, list) else []
-    active = next(
-        (
-            profile
-            for profile in profiles
-            if isinstance(profile, dict) and bool(profile.get("is_selected"))
-        ),
-        {},
-    )
 
     return {
         "state": str(result.get("state") or "unavailable"),
         "deterministic": bool(result.get("deterministic")),
         "profile_count": len([profile for profile in profiles if isinstance(profile, dict)]),
-        "active_name": str(active.get("name") or "").strip(),
-        "active_handle": str(active.get("channel_handle") or "").strip(),
     }
 
 
