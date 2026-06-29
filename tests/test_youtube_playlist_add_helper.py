@@ -14,9 +14,29 @@ import nocky_youtube_playlist_add  # noqa: E402
 
 
 class FakeClient:
-    def __init__(self, result="STATUS_SUCCEEDED"):
+    def __init__(
+        self,
+        result="STATUS_SUCCEEDED",
+        metadata=None,
+        *,
+        expose_adder=True,
+    ):
         self.result = result
+        self.metadata = metadata or {
+            "id": "PL-example",
+            "title": "Example",
+            "owned": True,
+            "privacy": "PRIVATE",
+            "tracks": [],
+        }
+        self.metadata_calls = []
         self.calls = []
+        if not expose_adder:
+            self.add_playlist_items = None
+
+    def get_playlist(self, playlist_id, limit=100):
+        self.metadata_calls.append((playlist_id, limit))
+        return self.metadata
 
     def add_playlist_items(self, playlist_id, videoIds=None, duplicates=False):
         self.calls.append((playlist_id, list(videoIds or []), duplicates))
@@ -61,7 +81,7 @@ class PlaylistAddHelperTests(unittest.TestCase):
                     )
                 create_client.assert_not_called()
 
-    def test_calls_add_api_once_with_duplicates_disabled(self) -> None:
+    def test_calls_add_api_once_after_remote_ownership_check(self) -> None:
         client = FakeClient(
             {
                 "status": "STATUS_SUCCEEDED",
@@ -90,12 +110,78 @@ class PlaylistAddHelperTests(unittest.TestCase):
                 )
 
         create_client.assert_called_once_with(authenticated=True)
+        self.assertEqual(client.metadata_calls, [("PL-example", 1)])
         self.assertEqual(client.calls, [("PL-example", ["abcdefghijk"], False)])
         self.assertEqual(result["added_count"], 1)
         self.assertTrue(result["reconciliation_required"])
         self.assertNotIn("setVideoId", str(result))
 
-    def test_missing_runtime_method_is_sanitized(self) -> None:
+    def test_remote_unowned_playlist_blocks_mutation(self) -> None:
+        client = FakeClient(
+            metadata={
+                "id": "PL-example",
+                "title": "Shared",
+                "owned": False,
+                "privacy": "UNLISTED",
+                "tracks": [],
+            }
+        )
+        with patch.object(
+            nocky_youtube_playlist_add.nocky_youtube,
+            "_load_session",
+            return_value={"headers": {"test": "value"}},
+        ):
+            with patch.object(
+                nocky_youtube_playlist_add.nocky_youtube,
+                "_create_client",
+                return_value=client,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "did not confirm"):
+                    nocky_youtube_playlist_add.add_playlist_item(
+                        {
+                            "playlist_id": "PL-example",
+                            "video_id": "abcdefghijk",
+                            "owned": True,
+                            "editable": True,
+                        }
+                    )
+
+        self.assertEqual(client.metadata_calls, [("PL-example", 1)])
+        self.assertEqual(client.calls, [])
+
+    def test_mismatched_remote_playlist_blocks_mutation(self) -> None:
+        client = FakeClient(
+            metadata={
+                "id": "PL-different",
+                "title": "Different",
+                "owned": True,
+                "privacy": "PRIVATE",
+                "tracks": [],
+            }
+        )
+        with patch.object(
+            nocky_youtube_playlist_add.nocky_youtube,
+            "_load_session",
+            return_value={"headers": {"test": "value"}},
+        ):
+            with patch.object(
+                nocky_youtube_playlist_add.nocky_youtube,
+                "_create_client",
+                return_value=client,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "mismatched"):
+                    nocky_youtube_playlist_add.add_playlist_item(
+                        {
+                            "playlist_id": "PL-example",
+                            "video_id": "abcdefghijk",
+                            "owned": True,
+                            "editable": True,
+                        }
+                    )
+
+        self.assertEqual(client.calls, [])
+
+    def test_missing_read_method_is_sanitized(self) -> None:
         with patch.object(
             nocky_youtube_playlist_add.nocky_youtube,
             "_load_session",
@@ -106,6 +192,28 @@ class PlaylistAddHelperTests(unittest.TestCase):
                 "_create_client",
                 return_value=object(),
             ):
+                with self.assertRaisesRegex(RuntimeError, "cannot verify playlist ownership"):
+                    nocky_youtube_playlist_add.add_playlist_item(
+                        {
+                            "playlist_id": "PL-example",
+                            "video_id": "abcdefghijk",
+                            "owned": True,
+                            "editable": True,
+                        }
+                    )
+
+    def test_missing_add_method_is_sanitized_after_verification(self) -> None:
+        client = FakeClient(expose_adder=False)
+        with patch.object(
+            nocky_youtube_playlist_add.nocky_youtube,
+            "_load_session",
+            return_value={"headers": {"test": "value"}},
+        ):
+            with patch.object(
+                nocky_youtube_playlist_add.nocky_youtube,
+                "_create_client",
+                return_value=client,
+            ):
                 with self.assertRaisesRegex(RuntimeError, "cannot add playlist items"):
                     nocky_youtube_playlist_add.add_playlist_item(
                         {
@@ -115,6 +223,9 @@ class PlaylistAddHelperTests(unittest.TestCase):
                             "editable": True,
                         }
                     )
+
+        self.assertEqual(client.metadata_calls, [("PL-example", 1)])
+        self.assertEqual(client.calls, [])
 
     def test_main_emits_standard_json_error_envelope(self) -> None:
         output = io.StringIO()
