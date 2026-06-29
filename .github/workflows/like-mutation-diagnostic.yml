@@ -22,7 +22,7 @@ jobs:
             --branch codex/youtube-like-mutation-foundation \
             https://github.com/maylton/nocky.git repo
       - name: Install rustfmt
-        run: rustup component add rustfmt --quiet
+        run: rustup component add rustfmt
       - name: Print exact rustfmt diff
         working-directory: repo
         run: |
