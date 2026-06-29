@@ -102,9 +102,12 @@ def add_playlist_item(payload: Any) -> dict[str, Any]:
     request = normalize_add_request(payload)
     client = _authenticated_client()
 
-    metadata = _read_metadata(client, request["playlist_id"], 1)
+    metadata = _read_metadata(client, request["playlist_id"], 500)
     if metadata.get("owned") is not True or metadata.get("editable") is not True:
         raise RuntimeError("YouTube Music did not confirm playlist ownership and editability")
+    video_id = request["video_ids"][0]
+    if any(track.get("video_id") == video_id for track in metadata.get("tracks", [])):
+        raise RuntimeError("The track is already in the playlist")
 
     adder = getattr(client, "add_playlist_items", None)
     if not callable(adder):
@@ -118,7 +121,7 @@ def add_playlist_item(payload: Any) -> dict[str, Any]:
     return sanitize_add_result(
         raw_result,
         playlist_id=request["playlist_id"],
-        video_id=request["video_ids"][0],
+        video_id=video_id,
     )
 
 
