@@ -113,9 +113,7 @@ impl YouTubeBridge {
             .ok_or_else(|| "The YouTube profile helper returned no result".to_string())
     }
 
-    pub fn account_discovery_summary(
-        &self,
-    ) -> Result<YouTubeProfileDiscoverySummary, String> {
+    pub fn account_discovery_summary(&self) -> Result<YouTubeProfileDiscoverySummary, String> {
         let helper = self
             .helper
             .parent()
@@ -151,9 +149,9 @@ impl YouTubeBridge {
             }));
         }
 
-        response.result.ok_or_else(|| {
-            "The YouTube profile-discovery helper returned no result".to_string()
-        })
+        response
+            .result
+            .ok_or_else(|| "The YouTube profile-discovery helper returned no result".to_string())
     }
 
     pub fn status_with_profile(&self) -> Result<YouTubeStatus, String> {
@@ -177,8 +175,7 @@ impl YouTubeBridge {
                         if status.account.trim().is_empty() {
                             status.account = format!("Perfis: {suffix}");
                         } else {
-                            status.account =
-                                format!("{}\nPerfis: {suffix}", status.account.trim());
+                            status.account = format!("{}\nPerfis: {suffix}", status.account.trim());
                         }
                     }
                 }
@@ -272,13 +269,12 @@ mod tests {
 
     #[test]
     fn discovery_deserialization_accepts_minimal_contract() {
-        let discovery: YouTubeProfileDiscoverySummary =
-            serde_json::from_value(serde_json::json!({
-                "state": "multiple",
-                "deterministic": true,
-                "profile_count": 2
-            }))
-            .unwrap();
+        let discovery: YouTubeProfileDiscoverySummary = serde_json::from_value(serde_json::json!({
+            "state": "multiple",
+            "deterministic": true,
+            "profile_count": 2
+        }))
+        .unwrap();
 
         assert_eq!(discovery.state, "multiple");
         assert!(discovery.deterministic);
