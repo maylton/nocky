@@ -17,6 +17,7 @@ mod queue;
 mod queue_presentation;
 mod settings;
 mod youtube;
+mod youtube_playlist_metadata;
 
 pub(crate) use construction::build_application;
 

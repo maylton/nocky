@@ -1,8 +1,15 @@
+#[path = "playlist_metadata.rs"]
+mod playlist_metadata_model;
+
 use super::{HelperResponse, YouTubeBridge, YouTubePage, YouTubePageEvent};
 use adw::prelude::*;
-use serde::{Deserialize, Serialize};
+use playlist_metadata_model::{YouTubePlaylistMetadata, YouTubePlaylistPrivacy};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::json;
-use std::process::{Command, Stdio};
+use std::{
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -13,67 +20,114 @@ pub struct YouTubePlaylistCreation {
 }
 
 impl YouTubeBridge {
-    pub fn create_empty_playlist(
-        &self,
-        title: &str,
-        description: &str,
-        privacy: &str,
-    ) -> Result<YouTubePlaylistCreation, String> {
-        let helper = self
-            .helper
+    fn playlist_helper_path(&self) -> Result<PathBuf, String> {
+        self.helper
             .parent()
             .map(|directory| directory.join("nocky_youtube_playlist_create.py"))
             .filter(|path| path.is_file())
             .ok_or_else(|| {
-                "The Nocky YouTube playlist-creation helper was not found. Reinstall Nocky."
-                    .to_string()
-            })?;
+                "The Nocky YouTube playlist helper was not found. Reinstall Nocky.".to_string()
+            })
+    }
 
+    fn run_playlist_helper<T: DeserializeOwned>(
+        &self,
+        payload: serde_json::Value,
+        operation: &str,
+    ) -> Result<T, String> {
+        let helper = self.playlist_helper_path()?;
         let mut child = Command::new(&self.python)
             .arg(helper)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|error| {
-                format!("Could not start the YouTube playlist-creation helper: {error}")
-            })?;
+            .map_err(|error| format!("Could not start the YouTube playlist helper: {error}"))?;
 
         if let Some(mut stdin) = child.stdin.take() {
-            serde_json::to_writer(
-                &mut stdin,
-                &json!({
-                    "title": title,
-                    "description": description,
-                    "privacy": privacy,
-                }),
-            )
-            .map_err(|error| {
-                format!("Could not send the playlist request to the YouTube helper: {error}")
+            serde_json::to_writer(&mut stdin, &payload).map_err(|error| {
+                format!("Could not send the playlist {operation} request: {error}")
             })?;
         }
 
         let output = child
             .wait_with_output()
             .map_err(|error| format!("The YouTube playlist helper did not finish: {error}"))?;
-        let response: HelperResponse<YouTubePlaylistCreation> =
+        let response: HelperResponse<T> =
             serde_json::from_slice(&output.stdout).map_err(|error| {
                 let stderr = String::from_utf8_lossy(&output.stderr);
-                format!(
-                    "Invalid response from the YouTube playlist-creation helper: {error}. {stderr}"
-                )
+                format!("Invalid response from the YouTube playlist helper: {error}. {stderr}")
             })?;
 
         if !response.ok {
             return Err(response.error.unwrap_or_else(|| {
-                "The YouTube playlist-creation helper reported an unknown error".to_string()
+                format!("The YouTube playlist helper reported an unknown {operation} error")
             }));
         }
 
         response
             .result
-            .ok_or_else(|| "The YouTube playlist-creation helper returned no result".to_string())
+            .ok_or_else(|| format!("The YouTube playlist helper returned no {operation} result"))
     }
+
+    pub fn create_empty_playlist(
+        &self,
+        title: &str,
+        description: &str,
+        privacy: &str,
+    ) -> Result<YouTubePlaylistCreation, String> {
+        self.run_playlist_helper(
+            json!({
+                "operation": "create",
+                "title": title,
+                "description": description,
+                "privacy": privacy,
+            }),
+            "creation",
+        )
+    }
+
+    pub fn playlist_metadata_diagnostic(&self, playlist_id: &str) -> Result<String, String> {
+        let metadata: YouTubePlaylistMetadata = self.run_playlist_helper(
+            json!({
+                "operation": "metadata",
+                "playlist_id": playlist_id,
+                "limit": 500,
+            }),
+            "metadata",
+        )?;
+
+        if metadata.playlist_id.trim() != playlist_id.trim().trim_start_matches("VL") {
+            return Err("The YouTube playlist helper returned mismatched metadata".to_string());
+        }
+
+        Ok(format_playlist_metadata_diagnostic(&metadata))
+    }
+}
+
+fn format_playlist_metadata_diagnostic(metadata: &YouTubePlaylistMetadata) -> String {
+    let privacy = match metadata.privacy_kind() {
+        YouTubePlaylistPrivacy::Private => "privada",
+        YouTubePlaylistPrivacy::Unlisted => "não listada",
+        YouTubePlaylistPrivacy::Public => "pública",
+        YouTubePlaylistPrivacy::Unknown => "privacidade desconhecida",
+    };
+
+    if !metadata.owned {
+        return format!("Playlist compartilhada • {privacy} • somente leitura");
+    }
+    if !metadata.can_edit() {
+        return format!("Playlist própria • {privacy} • edição indisponível");
+    }
+
+    let identified = metadata.removable_track_count();
+    let total = metadata.tracks.len();
+    let identity = if identified == total && metadata.has_unique_removal_identities() {
+        format!("{identified} ocorrências identificadas")
+    } else {
+        format!("{identified} de {total} ocorrências identificadas")
+    };
+    format!("Playlist própria • {privacy} • {identity}")
 }
 
 pub fn playlist_creation_error_message(error: &str) -> &'static str {
@@ -220,7 +274,11 @@ impl YouTubePage {
 
 #[cfg(test)]
 mod tests {
-    use super::{playlist_creation_error_message, privacy_code, YouTubePlaylistCreation};
+    use super::playlist_metadata_model::{YouTubePlaylistMetadata, YouTubePlaylistTrackMetadata};
+    use super::{
+        format_playlist_metadata_diagnostic, playlist_creation_error_message, privacy_code,
+        YouTubePlaylistCreation,
+    };
 
     #[test]
     fn privacy_selection_defaults_to_private() {
@@ -249,5 +307,42 @@ mod tests {
         assert!(playlist_creation_error_message("401 unauthorized").contains("expirou"));
         assert!(playlist_creation_error_message("network timeout").contains("Sem conexão"));
         assert!(playlist_creation_error_message("unknown failure").contains("Não foi possível"));
+    }
+
+    #[test]
+    fn metadata_diagnostic_marks_owned_private_playlist() {
+        let metadata = YouTubePlaylistMetadata {
+            playlist_id: "PL-owned".to_string(),
+            owned: true,
+            editable: true,
+            privacy: "PRIVATE".to_string(),
+            tracks: vec![YouTubePlaylistTrackMetadata {
+                video_id: "abcdefghijk".to_string(),
+                set_video_id: "set-occurrence-1".to_string(),
+                title: "Track".to_string(),
+            }],
+            ..YouTubePlaylistMetadata::default()
+        };
+
+        assert_eq!(
+            format_playlist_metadata_diagnostic(&metadata),
+            "Playlist própria • privada • 1 ocorrências identificadas"
+        );
+    }
+
+    #[test]
+    fn metadata_diagnostic_keeps_shared_playlist_read_only() {
+        let metadata = YouTubePlaylistMetadata {
+            playlist_id: "PL-shared".to_string(),
+            owned: false,
+            editable: false,
+            privacy: "UNLISTED".to_string(),
+            ..YouTubePlaylistMetadata::default()
+        };
+
+        assert_eq!(
+            format_playlist_metadata_diagnostic(&metadata),
+            "Playlist compartilhada • não listada • somente leitura"
+        );
     }
 }
