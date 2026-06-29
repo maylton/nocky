@@ -74,12 +74,8 @@ impl PlaylistMutationRequest {
     pub fn risk(&self) -> PlaylistMutationRisk {
         match self {
             Self::Create { .. } => PlaylistMutationRisk::NonDestructive,
-            Self::AddTracks { .. } | Self::EditMetadata { .. } => {
-                PlaylistMutationRisk::Reversible
-            }
-            Self::RemoveTracks { .. } | Self::Delete { .. } => {
-                PlaylistMutationRisk::Destructive
-            }
+            Self::AddTracks { .. } | Self::EditMetadata { .. } => PlaylistMutationRisk::Reversible,
+            Self::RemoveTracks { .. } | Self::Delete { .. } => PlaylistMutationRisk::Destructive,
         }
     }
 
@@ -143,9 +139,7 @@ impl PlaylistMutationRequest {
                 confirmation,
             } => {
                 validate_owned_target(target, &mut blocks);
-                if target.title.trim().is_empty()
-                    || confirmation.trim() != target.title.trim()
-                {
+                if target.title.trim().is_empty() || confirmation.trim() != target.title.trim() {
                     blocks.push(PlaylistMutationBlock::ConfirmationMismatch);
                 }
             }
