@@ -5,8 +5,8 @@ mod implementation {
     use super::AppLanguage;
     use crate::youtube::{
         login_policy::{
-            is_post_login_sync_uri, is_youtube_music_uri, navigation_disposition,
-            navigation_host, NavigationDisposition,
+            is_post_login_sync_uri, is_youtube_music_uri, navigation_disposition, navigation_host,
+            NavigationDisposition,
         },
         YouTubeBridge,
     };
