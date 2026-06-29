@@ -17,6 +17,7 @@ mod queue;
 mod queue_presentation;
 mod settings;
 mod youtube;
+mod youtube_playlist_metadata;
 
 pub(crate) use construction::build_application;
 
@@ -178,60 +179,3 @@ pub(crate) struct AppController {
     pub(crate) mini_title: gtk::Label,
     pub(crate) mini_artist: gtk::Label,
     pub(crate) footer_source: gtk::Label,
-    pub(crate) footer_now_playing: gtk::Button,
-    pub(crate) footer_center: gtk::Box,
-    pub(crate) footer_right_controls: gtk::Box,
-    pub(crate) volume_revealer: gtk::Revealer,
-    pub(crate) music_stack: gtk::Stack,
-    pub(crate) empty_title: gtk::Label,
-    pub(crate) empty_text: gtk::Label,
-    pub(crate) empty_add: gtk::Button,
-    pub(crate) hero_cover: CoverView,
-    pub(crate) mini_cover: CoverView,
-    pub(crate) player_bar: gtk::CenterBox,
-    pub(crate) play_icon: gtk::Image,
-    pub(crate) hero_play_icon: gtk::Image,
-    pub(crate) favorite_icon: gtk::Image,
-    pub(crate) footer_favorite_icon: gtk::Image,
-    pub(crate) footer_favorite_button: gtk::Button,
-    pub(crate) progress: gtk::Scale,
-    pub(crate) home_progress_stack: gtk::Stack,
-    pub(crate) home_wave_progress: WaveProgress,
-    pub(crate) elapsed: gtk::Label,
-    pub(crate) duration: gtk::Label,
-    pub(crate) footer_progress_stack: gtk::Stack,
-    pub(crate) footer_traditional_progress: gtk::Scale,
-    pub(crate) footer_progress: WaveProgress,
-    pub(crate) footer_elapsed: gtk::Label,
-    pub(crate) footer_duration: gtk::Label,
-    pub(crate) volume: gtk::Adjustment,
-    pub(crate) mute_icon: gtk::Image,
-    pub(crate) mute_button: gtk::Button,
-    pub(crate) volume_before_mute: Cell<f64>,
-    pub(crate) compact_volume_expanded: Cell<bool>,
-    pub(crate) compact_volume_spring_generation: Rc<Cell<u64>>,
-    pub(crate) footer_metadata_transition: TransitionClock,
-    pub(crate) lyrics_button: gtk::ToggleButton,
-    pub(crate) footer_previous: gtk::Button,
-    pub(crate) footer_play_button: gtk::Button,
-    pub(crate) footer_transport_motion: Rc<ExpressiveTransport>,
-    pub(crate) footer_next: gtk::Button,
-    pub(crate) footer_repeat_button: gtk::ToggleButton,
-    pub(crate) footer_shuffle_button: gtk::ToggleButton,
-    pub(crate) repeat_button: gtk::ToggleButton,
-    pub(crate) shuffle_button: gtk::ToggleButton,
-    pub(crate) visualizer: SpectrumVisualizer,
-    pub(crate) visual_theme_manager: Rc<visual_theme::VisualThemeManager>,
-    pub(crate) _theme: Rc<theme::ThemeBridge>,
-}
-
-// Transitional compatibility layer: controller modules can keep using
-// `self.state`, `self.config`, and related field access while runtime state is
-// progressively split into explicit domain contexts.
-impl std::ops::Deref for AppController {
-    type Target = ControllerRuntime;
-
-    fn deref(&self) -> &Self::Target {
-        &self.runtime
-    }
-}
