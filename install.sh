@@ -271,6 +271,8 @@ run_install_command() {
 
 install_file 0755 "target/release/${BIN_NAME}" "${BIN_DIR}/${BIN_NAME}"
 install_file 0755 "helpers/nocky_youtube.py" "${HELPER_DIR}/nocky_youtube.py"
+install_file 0755 "helpers/nocky_youtube_profile.py" "${HELPER_DIR}/nocky_youtube_profile.py"
+install_file 0644 "helpers/nocky_account_profile.py" "${HELPER_DIR}/nocky_account_profile.py"
 install_file 0644 "helpers/nocky_youtube_feed.py" "${HELPER_DIR}/nocky_youtube_feed.py"
 install_file 0644 "helpers/nocky_stream_clients.py" "${HELPER_DIR}/nocky_stream_clients.py"
 

@@ -44,7 +44,9 @@ impl AppController {
         };
         let sender = self.background.sender();
         thread::spawn(move || {
-            let _ = sender.send(BackgroundMessage::YouTubeStatus(bridge.status()));
+            let _ = sender.send(BackgroundMessage::YouTubeStatus(
+                bridge.status_with_profile(),
+            ));
         });
     }
 
@@ -686,8 +688,9 @@ impl AppController {
                         .set_loading(true, "Validando sessão do navegador...");
                     let sender = self.background.sender();
                     thread::spawn(move || {
-                        let _ =
-                            sender.send(BackgroundMessage::YouTubeConnected(bridge.connect(&raw)));
+                        let _ = sender.send(BackgroundMessage::YouTubeConnected(
+                            bridge.connect_with_profile(&raw),
+                        ));
                     });
                 }
                 YouTubePageEvent::Disconnect => {
@@ -695,8 +698,9 @@ impl AppController {
                         .set_loading(true, "Desconectando conta...");
                     let sender = self.background.sender();
                     thread::spawn(move || {
-                        let _ = sender
-                            .send(BackgroundMessage::YouTubeDisconnected(bridge.disconnect()));
+                        let _ = sender.send(BackgroundMessage::YouTubeDisconnected(
+                            bridge.disconnect_with_profile(),
+                        ));
                     });
                 }
                 YouTubePageEvent::LoadLibrary => {
