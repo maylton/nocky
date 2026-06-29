@@ -1,4 +1,4 @@
-name: Playlist Metadata Rustfmt Diagnostic
+name: Formatting Diagnostic
 
 on:
   pull_request:
@@ -15,18 +15,25 @@ permissions:
   contents: read
 
 jobs:
-  rustfmt-diff:
+  formatting:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           show-progress: false
       - run: rustup component add rustfmt
-      - name: Print exact rustfmt diff
+      - name: Format files
         run: |
           cargo fmt --all
-          git diff --exit-code -- \
+          git diff -- \
             src/youtube/playlist_create.rs \
             src/app/controller/mod.rs \
             src/app/controller/callbacks.rs \
-            src/app/controller/youtube_playlist_metadata.rs
+            src/app/controller/youtube_playlist_metadata.rs \
+            > formatting.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: formatting-output
+          path: formatting.txt
+      - name: Check formatting
+        run: test ! -s formatting.txt
