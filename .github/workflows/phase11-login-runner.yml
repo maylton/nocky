@@ -89,6 +89,20 @@ jobs:
         if: steps.pending.outputs.apply == 'true'
         shell: bash
         run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/temporary_assisted_login_patch.py")
+          text = path.read_text(encoding="utf-8")
+          marker = 'replace(\n    "install.sh",\n    \'\'\'      gstreamer1.0-plugins-bad'
+          start = text.find(marker)
+          if start >= 0:
+              next_block = text.find('\nreplace(\n    "install.sh",', start + len(marker))
+              if next_block < 0:
+                  raise SystemExit("could not isolate redundant install.sh replacement")
+              text = text[:start] + text[next_block + 1:]
+              path.write_text(text, encoding="utf-8")
+          PY
           set +e
           python3 scripts/temporary_assisted_login_patch.py > assisted-login-patch.log 2>&1
           status=$?
