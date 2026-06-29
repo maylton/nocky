@@ -171,6 +171,10 @@ impl AppController {
     }
 
     pub(crate) fn handle_youtube_playlist_metadata_updates(&self) {
+        self.handle_youtube_playlist_add_requests();
+        self.handle_youtube_playlist_add_updates();
+        self.update_youtube_playlist_add_action();
+
         let Ok(receiver) = metadata_channel().1.lock() else {
             return;
         };
