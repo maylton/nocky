@@ -19,6 +19,15 @@ pub struct YouTubePlaylistCreation {
     pub privacy: String,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct YouTubePlaylistAddition {
+    pub playlist_id: String,
+    pub video_id: String,
+    pub added_count: usize,
+    pub reconciliation_required: bool,
+}
+
 impl YouTubeBridge {
     fn playlist_helper_path(&self) -> Result<PathBuf, String> {
         self.helper
@@ -87,7 +96,7 @@ impl YouTubeBridge {
         )
     }
 
-    pub fn playlist_metadata_diagnostic(&self, playlist_id: &str) -> Result<String, String> {
+    pub fn playlist_metadata_access(&self, playlist_id: &str) -> Result<(String, bool), String> {
         let metadata: YouTubePlaylistMetadata = self.run_playlist_helper(
             json!({
                 "operation": "metadata",
@@ -101,7 +110,32 @@ impl YouTubeBridge {
             return Err("The YouTube playlist helper returned mismatched metadata".to_string());
         }
 
-        Ok(format_playlist_metadata_diagnostic(&metadata))
+        let editable = metadata.can_edit();
+        Ok((format_playlist_metadata_diagnostic(&metadata), editable))
+    }
+
+    #[allow(dead_code)]
+    pub fn playlist_metadata_diagnostic(&self, playlist_id: &str) -> Result<String, String> {
+        self.playlist_metadata_access(playlist_id)
+            .map(|(diagnostic, _)| diagnostic)
+    }
+
+    pub fn add_playlist_item(
+        &self,
+        playlist_id: &str,
+        video_id: &str,
+    ) -> Result<YouTubePlaylistAddition, String> {
+        self.run_playlist_helper(
+            json!({
+                "operation": "add",
+                "playlist_id": playlist_id,
+                "video_id": video_id,
+                "owned": true,
+                "editable": true,
+                "duplicates": false,
+            }),
+            "item addition",
+        )
     }
 }
 
@@ -123,7 +157,10 @@ fn format_playlist_metadata_diagnostic(metadata: &YouTubePlaylistMetadata) -> St
     let identified = metadata.removable_track_count();
     let total = metadata.tracks.len();
     let identity = if identified == total && metadata.has_unique_removal_identities() {
-        format!("{identified} ocorrências identificadas")
+        match identified {
+            1 => "1 ocorrência identificada".to_string(),
+            count => format!("{count} ocorrências identificadas"),
+        }
     } else {
         format!("{identified} de {total} ocorrências identificadas")
     };
@@ -154,6 +191,38 @@ pub fn playlist_creation_error_message(error: &str) -> &'static str {
         "Escolha um título válido para a playlist."
     } else {
         "Não foi possível criar a playlist no YouTube Music."
+    }
+}
+
+#[allow(dead_code)]
+pub fn playlist_add_error_message(error: &str) -> &'static str {
+    let normalized = error.to_lowercase();
+    if normalized.contains("session")
+        || normalized.contains("authentication")
+        || normalized.contains("unauthorized")
+        || normalized.contains("401")
+    {
+        "A sessão do YouTube Music expirou. Reconecte sua conta para editar playlists."
+    } else if normalized.contains("ownership")
+        || normalized.contains("editability")
+        || normalized.contains("permission")
+        || normalized.contains("forbidden")
+        || normalized.contains("403")
+    {
+        "Esta playlist não está disponível para edição nesta conta."
+    } else if normalized.contains("duplicate") || normalized.contains("already") {
+        "Esta música já está na playlist."
+    } else if normalized.contains("network")
+        || normalized.contains("offline")
+        || normalized.contains("timed out")
+        || normalized.contains("timeout")
+        || normalized.contains("connect")
+    {
+        "Não foi possível confirmar a adição. A playlist não foi alterada no Nocky."
+    } else if normalized.contains("video id") || normalized.contains("playlist id") {
+        "A música ou a playlist não possui um identificador válido."
+    } else {
+        "Não foi possível adicionar a música à playlist."
     }
 }
 
@@ -276,7 +345,8 @@ impl YouTubePage {
 mod tests {
     use super::playlist_metadata_model::{YouTubePlaylistMetadata, YouTubePlaylistTrackMetadata};
     use super::{
-        format_playlist_metadata_diagnostic, playlist_creation_error_message, privacy_code,
+        format_playlist_metadata_diagnostic, playlist_add_error_message,
+        playlist_creation_error_message, privacy_code, YouTubePlaylistAddition,
         YouTubePlaylistCreation,
     };
 
@@ -303,10 +373,33 @@ mod tests {
     }
 
     #[test]
+    fn addition_result_accepts_only_the_sanitized_contract() {
+        let result: YouTubePlaylistAddition = serde_json::from_value(serde_json::json!({
+            "playlist_id": "PL_owned",
+            "video_id": "abcdefghijk",
+            "added_count": 1,
+            "reconciliation_required": true
+        }))
+        .unwrap();
+
+        assert_eq!(result.playlist_id, "PL_owned");
+        assert_eq!(result.video_id, "abcdefghijk");
+        assert_eq!(result.added_count, 1);
+        assert!(result.reconciliation_required);
+    }
+
+    #[test]
     fn creation_errors_are_actionable_without_raw_details() {
         assert!(playlist_creation_error_message("401 unauthorized").contains("expirou"));
         assert!(playlist_creation_error_message("network timeout").contains("Sem conexão"));
         assert!(playlist_creation_error_message("unknown failure").contains("Não foi possível"));
+    }
+
+    #[test]
+    fn addition_errors_are_actionable_without_raw_details() {
+        assert!(playlist_add_error_message("401 unauthorized").contains("expirou"));
+        assert!(playlist_add_error_message("ownership missing").contains("não está disponível"));
+        assert!(playlist_add_error_message("network timeout").contains("não foi alterada"));
     }
 
     #[test]
@@ -326,7 +419,7 @@ mod tests {
 
         assert_eq!(
             format_playlist_metadata_diagnostic(&metadata),
-            "Playlist própria • privada • 1 ocorrências identificadas"
+            "Playlist própria • privada • 1 ocorrência identificada"
         );
     }
 
