@@ -424,12 +424,15 @@ impl AppController {
         self.hero_play_icon.set_icon_name(Some(icon));
         self.player_view
             .set_visualizer_active(playing && self.visualizer.widget().is_visible());
-        let animate_m3 = playing && self.config.borrow().visual_theme.is_expressive();
+        let config = self.config.borrow();
+        let animate_m3 = playing && config.visual_theme.is_expressive();
+        let language = config.language;
+        drop(config);
         self.home_wave_progress.set_playing(animate_m3);
         self.footer_progress.set_playing(animate_m3);
 
         if matches!(self.browser.route(), BrowserRoute::All) {
-            self.refresh_browser();
+            self.browser.update_home_playback_state(playing, language);
         }
     }
 

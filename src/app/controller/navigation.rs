@@ -54,6 +54,12 @@ impl AppController {
     }
 
     pub(crate) fn refresh_browser(&self) {
+        let home_visible = matches!(self.browser.route(), BrowserRoute::All)
+            && self.search_query.borrow().trim().is_empty();
+        if !home_visible {
+            self.browser.mark_home_dirty();
+        }
+
         let home_scroll_positions = self.browser.home_scroll_positions();
         let playback = self.browser_playback_state();
         let state = self.state.borrow();

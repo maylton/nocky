@@ -1001,6 +1001,7 @@ pub struct LibraryBrowser {
     root: gtk::Stack,
     home_stack: gtk::Stack,
     home_generation: Rc<Cell<u64>>,
+    home_dirty: Cell<bool>,
     search_content: gtk::Box,
     last_search_query: RefCell<String>,
     search_track_limit: Rc<Cell<usize>>,
@@ -1285,6 +1286,115 @@ fn collect_scrolled_windows(widget: &gtk::Widget, output: &mut Vec<gtk::Scrolled
     }
 }
 
+fn should_reuse_youtube_home(
+    route: &BrowserRoute,
+    query: &str,
+    youtube_source: bool,
+    dirty: bool,
+    mounted: bool,
+) -> bool {
+    matches!(route, BrowserRoute::All)
+        && query.trim().is_empty()
+        && youtube_source
+        && !dirty
+        && mounted
+}
+
+fn update_active_home_playback_controls(
+    widget: &gtk::Widget,
+    playing: bool,
+    language: AppLanguage,
+) -> usize {
+    let mut updated = 0;
+    if let Ok(button) = widget.clone().downcast::<gtk::Button>() {
+        if button.has_css_class("collection-card-context-action")
+            && button.has_css_class("active")
+            && !button.has_css_class("loading")
+        {
+            button.set_icon_name(if playing {
+                "media-playback-pause-symbolic"
+            } else {
+                "media-playback-start-symbolic"
+            });
+            button.set_tooltip_text(Some(match (language, playing) {
+                (AppLanguage::Portuguese, true) => "Pausar coleção",
+                (AppLanguage::Portuguese, false) => "Continuar coleção",
+                (AppLanguage::English, true) => "Pause collection",
+                (AppLanguage::English, false) => "Resume collection",
+                (AppLanguage::Spanish, true) => "Pausar colección",
+                (AppLanguage::Spanish, false) => "Continuar colección",
+            }));
+            updated += 1;
+        }
+    }
+
+    let mut child = widget.first_child();
+    while let Some(current) = child {
+        updated += update_active_home_playback_controls(&current, playing, language);
+        child = current.next_sibling();
+    }
+    updated
+}
+
+#[cfg(test)]
+mod home_render_reuse_tests {
+    use super::*;
+
+    #[test]
+    fn reuses_a_clean_mounted_youtube_home() {
+        assert!(should_reuse_youtube_home(
+            &BrowserRoute::All,
+            "",
+            true,
+            false,
+            true,
+        ));
+    }
+
+    #[test]
+    fn dirty_or_unmounted_home_must_rebuild() {
+        assert!(!should_reuse_youtube_home(
+            &BrowserRoute::All,
+            "",
+            true,
+            true,
+            true,
+        ));
+        assert!(!should_reuse_youtube_home(
+            &BrowserRoute::All,
+            "",
+            true,
+            false,
+            false,
+        ));
+    }
+
+    #[test]
+    fn search_local_and_non_home_routes_never_reuse_youtube_home() {
+        assert!(!should_reuse_youtube_home(
+            &BrowserRoute::All,
+            "query",
+            true,
+            false,
+            true,
+        ));
+        assert!(!should_reuse_youtube_home(
+            &BrowserRoute::All,
+            "",
+            false,
+            false,
+            true,
+        ));
+        assert!(!should_reuse_youtube_home(
+            &BrowserRoute::Albums,
+            "",
+            true,
+            false,
+            true,
+        ));
+    }
+}
+
 impl LibraryBrowser {
     pub fn home_scroll_positions(&self) -> Vec<f64> {
         let Some(content) = self.home_stack.visible_child() else {
@@ -1319,6 +1429,23 @@ impl LibraryBrowser {
                 adjustment.set_value(value.clamp(0.0, maximum));
             }
         });
+    }
+
+    pub fn mark_home_dirty(&self) {
+        self.home_dirty.set(true);
+    }
+
+    pub fn update_home_playback_state(&self, playing: bool, language: AppLanguage) -> usize {
+        let Some(content) = self.home_stack.visible_child() else {
+            return 0;
+        };
+        update_active_home_playback_controls(&content, playing, language)
+    }
+
+    fn has_mounted_youtube_home(&self) -> bool {
+        self.home_stack
+            .visible_child()
+            .is_some_and(|content| content.has_css_class("youtube-home-v2"))
     }
 
     pub fn append_youtube_home_page(
@@ -1367,6 +1494,7 @@ impl LibraryBrowser {
         if let Some(load_more) = youtube_home_load_more_button(incoming, &self.event_tx, language) {
             home.append(&load_more);
         }
+        self.home_dirty.set(false);
         true
     }
 
@@ -1715,6 +1843,7 @@ impl LibraryBrowser {
             root,
             home_stack,
             home_generation,
+            home_dirty: Cell::new(true),
             search_content,
             last_search_query: RefCell::new(String::new()),
             search_track_limit,
@@ -1848,7 +1977,18 @@ impl LibraryBrowser {
         let previous = self.route();
         self.root
             .set_transition_type(route_transition(&previous, &route));
+        let reuse_home = should_reuse_youtube_home(
+            &route,
+            query,
+            config.startup_source == Some(StartupSource::YouTube),
+            self.home_dirty.get(),
+            self.has_mounted_youtube_home(),
+        );
         self.route.replace(route);
+        if reuse_home {
+            self.root.set_visible_child_name("home");
+            return;
+        }
         self.refresh(tracks, config, youtube, context, query);
     }
 
@@ -2821,17 +2961,20 @@ impl LibraryBrowser {
             let child_name = format!("home-{generation}");
             let previous = self.home_stack.visible_child();
 
+            // A large YouTube Home can contain hundreds of nested widgets after
+            // continuation pages are appended. Avoid keeping two full trees alive
+            // during a crossfade when a real data refresh is required.
+            self.home_stack
+                .set_transition_type(gtk::StackTransitionType::None);
             self.home_stack.add_named(&next_home, Some(&child_name));
             self.home_stack.set_visible_child_name(&child_name);
 
             if let Some(previous) = previous {
-                let stack = self.home_stack.clone();
-                glib::timeout_add_local_once(Duration::from_millis(220), move || {
-                    if previous.parent().as_ref() == Some(stack.upcast_ref()) {
-                        stack.remove(&previous);
-                    }
-                });
+                if previous.parent().as_ref() == Some(self.home_stack.upcast_ref()) {
+                    self.home_stack.remove(&previous);
+                }
             }
+            self.home_dirty.set(false);
             return;
         }
 
@@ -2974,6 +3117,8 @@ impl LibraryBrowser {
         let child_name = format!("home-{generation}");
         let previous = self.home_stack.visible_child();
 
+        self.home_stack
+            .set_transition_type(gtk::StackTransitionType::Crossfade);
         self.home_stack.add_named(&next_home, Some(&child_name));
         self.home_stack.set_visible_child_name(&child_name);
 
@@ -2985,6 +3130,7 @@ impl LibraryBrowser {
                 }
             });
         }
+        self.home_dirty.set(false);
     }
 
     fn rebuild_albums(&self, tracks: &[Track], youtube: &YouTubeLibraryCache, query: &str) {
