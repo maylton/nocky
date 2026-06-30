@@ -24,18 +24,28 @@ use std::{
 type PlaylistAddRequest = (String, String);
 type PlaylistAddResult = (String, String, Result<Vec<YouTubeItem>, String>);
 
-fn request_channel() -> &'static (Sender<PlaylistAddRequest>, Mutex<Receiver<PlaylistAddRequest>>) {
-    static CHANNEL: OnceLock<(Sender<PlaylistAddRequest>, Mutex<Receiver<PlaylistAddRequest>>)> =
-        OnceLock::new();
+fn request_channel() -> &'static (
+    Sender<PlaylistAddRequest>,
+    Mutex<Receiver<PlaylistAddRequest>>,
+) {
+    static CHANNEL: OnceLock<(
+        Sender<PlaylistAddRequest>,
+        Mutex<Receiver<PlaylistAddRequest>>,
+    )> = OnceLock::new();
     CHANNEL.get_or_init(|| {
         let (sender, receiver) = mpsc::channel();
         (sender, Mutex::new(receiver))
     })
 }
 
-fn result_channel() -> &'static (Sender<PlaylistAddResult>, Mutex<Receiver<PlaylistAddResult>>) {
-    static CHANNEL: OnceLock<(Sender<PlaylistAddResult>, Mutex<Receiver<PlaylistAddResult>>)> =
-        OnceLock::new();
+fn result_channel() -> &'static (
+    Sender<PlaylistAddResult>,
+    Mutex<Receiver<PlaylistAddResult>>,
+) {
+    static CHANNEL: OnceLock<(
+        Sender<PlaylistAddResult>,
+        Mutex<Receiver<PlaylistAddResult>>,
+    )> = OnceLock::new();
     CHANNEL.get_or_init(|| {
         let (sender, receiver) = mpsc::channel();
         (sender, Mutex::new(receiver))
@@ -172,9 +182,7 @@ fn error_message(language: AppLanguage, error: &str) -> &'static str {
         (AppLanguage::Portuguese, _, _, _, true) => {
             "Não foi possível confirmar a alteração. A playlist no Nocky não foi modificada."
         }
-        (AppLanguage::Portuguese, _, _, _, _) => {
-            "Não foi possível adicionar a faixa à playlist."
-        }
+        (AppLanguage::Portuguese, _, _, _, _) => "Não foi possível adicionar a faixa à playlist.",
         (AppLanguage::English, true, _, _, _) => {
             "Your YouTube Music session expired. Reconnect your account to continue."
         }
