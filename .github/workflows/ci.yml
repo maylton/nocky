@@ -73,30 +73,4 @@ jobs:
 
       - name: Run quality gate
         shell: bash
-        run: |
-          set -o pipefail
-          bash ./scripts/quality-gate.sh 2>&1 | tee /tmp/quality-gate.log
-
-      - name: Capture quality diagnostics
-        if: failure()
-        shell: bash
-        run: |
-          mkdir -p /tmp/nocky-quality-diagnostics/src/app/controller
-          mkdir -p /tmp/nocky-quality-diagnostics/src/youtube
-          cp /tmp/quality-gate.log /tmp/nocky-quality-diagnostics/quality-gate.log
-          cargo fmt --all || true
-          cp src/app/controller/youtube_playlist_add.rs \
-            /tmp/nocky-quality-diagnostics/src/app/controller/
-          cp src/app/controller/youtube_playlist_metadata.rs \
-            /tmp/nocky-quality-diagnostics/src/app/controller/
-          cp src/youtube/playlist_create.rs \
-            /tmp/nocky-quality-diagnostics/src/youtube/
-
-      - name: Upload quality diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: quality-diagnostics
-          path: /tmp/nocky-quality-diagnostics
-          if-no-files-found: error
-          retention-days: 1
+        run: bash ./scripts/quality-gate.sh
