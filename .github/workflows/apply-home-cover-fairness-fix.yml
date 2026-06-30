@@ -1,0 +1,34 @@
+name: Apply Home cover fairness fix
+
+on:
+  push:
+    branches:
+      - codex/home-v2-polish-and-dynamic-playlists
+    paths:
+      - scripts/apply-home-cover-fairness-fix.py
+      - .github/workflows/apply-home-cover-fairness-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: codex/home-v2-polish-and-dynamic-playlists
+          fetch-depth: 0
+      - run: python3 scripts/apply-home-cover-fairness-fix.py
+      - run: cargo fmt --all
+      - run: cargo test home_cover_cache_tests -- --nocapture
+      - run: |
+          rm scripts/apply-home-cover-fairness-fix.py
+          rm .github/workflows/apply-home-cover-fairness-fix.yml
+      - run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix: distribute Home artwork caching across sections"
+          git push origin HEAD:codex/home-v2-polish-and-dynamic-playlists
