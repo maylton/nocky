@@ -1,0 +1,47 @@
+name: Apply Home V2 polish patch
+
+on:
+  push:
+    branches:
+      - codex/home-v2-polish-and-dynamic-playlists
+    paths:
+      - scripts/apply-home-v2-polish.py
+      - .github/workflows/apply-home-v2-polish.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v6
+        with:
+          ref: codex/home-v2-polish-and-dynamic-playlists
+          fetch-depth: 0
+
+      - name: Apply patch
+        run: python3 scripts/apply-home-v2-polish.py
+
+      - name: Format Rust
+        run: cargo fmt --all
+
+      - name: Run focused Python tests
+        run: |
+          python3 -m unittest tests.test_youtube_feed
+          python3 -m unittest tests.test_youtube_playlist_metadata_packaged
+
+      - name: Remove temporary patch machinery
+        run: |
+          rm scripts/apply-home-v2-polish.py
+          rm .github/workflows/apply-home-v2-polish.yml
+
+      - name: Commit implementation
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix: polish Home V2 and dynamic playlists"
+          git push origin HEAD:codex/home-v2-polish-and-dynamic-playlists
