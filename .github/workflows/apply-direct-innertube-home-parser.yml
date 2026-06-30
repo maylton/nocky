@@ -29,16 +29,41 @@ jobs:
         run: python3 scripts/apply-direct-innertube-home-parser.py
 
       - name: Run direct parser tests
+        id: tests
+        shell: bash
         run: |
-          python3 -m unittest tests.test_youtube_innertube_home -v
-          python3 -m unittest discover -s tests -p 'test_youtube_*.py' -q
+          set +e
+          python3 -m unittest tests.test_youtube_innertube_home -v > /tmp/direct-parser-tests.log 2>&1
+          first=$?
+          python3 -m unittest discover -s tests -p 'test_youtube_*.py' -q > /tmp/all-youtube-tests.log 2>&1
+          second=$?
+          echo "$first" > /tmp/direct-parser-tests.status
+          echo "$second" > /tmp/all-youtube-tests.status
+          cat /tmp/direct-parser-tests.log
+          cat /tmp/all-youtube-tests.log
+          if [[ $first -ne 0 || $second -ne 0 ]]; then
+            exit 1
+          fi
+
+      - name: Upload parser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-home-parser-tests
+          path: |
+            /tmp/direct-parser-tests.log
+            /tmp/all-youtube-tests.log
+            /tmp/direct-parser-tests.status
+            /tmp/all-youtube-tests.status
 
       - name: Remove temporary patch machinery
+        if: success()
         run: |
           rm scripts/apply-direct-innertube-home-parser.py
           rm .github/workflows/apply-direct-innertube-home-parser.yml
 
       - name: Commit implementation
+        if: success()
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
