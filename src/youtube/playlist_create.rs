@@ -114,6 +114,7 @@ impl YouTubeBridge {
         Ok((format_playlist_metadata_diagnostic(&metadata), editable))
     }
 
+    #[allow(dead_code)]
     pub fn playlist_metadata_diagnostic(&self, playlist_id: &str) -> Result<String, String> {
         self.playlist_metadata_access(playlist_id)
             .map(|(diagnostic, _)| diagnostic)
@@ -193,6 +194,7 @@ pub fn playlist_creation_error_message(error: &str) -> &'static str {
     }
 }
 
+#[allow(dead_code)]
 pub fn playlist_add_error_message(error: &str) -> &'static str {
     let normalized = error.to_lowercase();
     if normalized.contains("session")
