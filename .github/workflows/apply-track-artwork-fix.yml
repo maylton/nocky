@@ -1,0 +1,38 @@
+name: Apply track artwork fix
+
+on:
+  push:
+    branches:
+      - codex/home-v2-polish-and-dynamic-playlists
+    paths:
+      - scripts/apply-home-playlist-artwork-enrichment.py
+      - .github/workflows/apply-track-artwork-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: codex/home-v2-polish-and-dynamic-playlists
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-youtube.txt
+      - run: python3 scripts/apply-home-playlist-artwork-enrichment.py
+      - run: cargo fmt --all
+      - run: python3 -m unittest tests.test_youtube_track_artwork
+      - run: |
+          rm scripts/apply-home-playlist-artwork-enrichment.py
+          rm .github/workflows/apply-track-artwork-fix.yml
+      - run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix: restore track artwork in generated mixes"
+          git push origin HEAD:codex/home-v2-polish-and-dynamic-playlists
