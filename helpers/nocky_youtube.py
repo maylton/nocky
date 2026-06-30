@@ -29,11 +29,14 @@ from urllib.parse import parse_qs, urlparse, urlsplit, urlunsplit
 from nocky_youtube_feed import (
     build_library_overview,
     build_structured_home,
-    enrich_inner_tube_home_rows,
     extract_inner_tube_home_chips,
     find_inner_tube_home_section_list,
     load_cached_page,
     save_cached_page,
+)
+from nocky_youtube_innertube_home import (
+    missing_artwork_by_section,
+    parse_inner_tube_home_sections,
 )
 
 from nocky_stream_clients import (
@@ -146,7 +149,7 @@ def _stream_cache_lock_path() -> Path:
 
 
 def _home_feed_cache_path() -> Path:
-    return _cache_dir() / "home-feed-v3.json"
+    return _cache_dir() / "home-feed-v4.json"
 
 
 def _emit(payload: Any) -> None:
@@ -1555,18 +1558,23 @@ def _inner_tube_home_rows(
     params: str,
     limit: int,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    if ytmusic_parse_mixed_content is None:
-        raise RuntimeError("The installed ytmusicapi version cannot parse Home responses")
     body, response = _inner_tube_home_response(client, params)
     section_list = find_inner_tube_home_section_list(response)
     contents = section_list.get("contents") if isinstance(section_list.get("contents"), list) else []
     if not contents:
         raise RuntimeError("YouTube Music did not return Home sections")
 
-    rows = enrich_inner_tube_home_rows(
-        list(ytmusic_parse_mixed_content(contents) or []),
-        contents,
-    )
+    # Raw renderers are the primary source. This preserves artwork, endpoint
+    # identity and item ordering before ytmusicapi's mixed-content parser can
+    # simplify or discard renderer-specific fields.
+    rows = parse_inner_tube_home_sections(contents)
+    if not rows and ytmusic_parse_mixed_content is not None:
+        print(
+            "Nocky YouTube Home direct parser returned no rows; using metadata fallback",
+            file=sys.stderr,
+        )
+        rows = list(ytmusic_parse_mixed_content(contents) or [])
+
     sender = getattr(client, "_send_request")
     current = section_list
     seen_continuations: set[str] = set()
@@ -1589,11 +1597,23 @@ def _inner_tube_home_rows(
         raw_contents = current.get("contents") if isinstance(current.get("contents"), list) else []
         if not raw_contents:
             break
-        parsed = list(ytmusic_parse_mixed_content(raw_contents) or [])
-        enriched = enrich_inner_tube_home_rows(parsed, raw_contents)
-        if not enriched:
+        parsed = parse_inner_tube_home_sections(raw_contents)
+        if not parsed and ytmusic_parse_mixed_content is not None:
+            parsed = list(ytmusic_parse_mixed_content(raw_contents) or [])
+        if not parsed:
             break
-        rows.extend(enriched)
+        rows.extend(parsed)
+
+    missing = missing_artwork_by_section(rows)
+    if missing:
+        summary = ", ".join(
+            f"{title}: {count}/{total}"
+            for title, count, total in missing[:12]
+        )
+        print(
+            f"Nocky YouTube raw Home items still missing artwork: {summary}",
+            file=sys.stderr,
+        )
     return rows, response
 
 

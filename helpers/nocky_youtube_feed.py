@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
 
-CONTRACT_VERSION = 3
+CONTRACT_VERSION = 4
 DEFAULT_CACHE_MAX_AGE = 12 * 60 * 60
 VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
 ItemFactory = Callable[[dict[str, Any], str], dict[str, Any] | None]

@@ -34,7 +34,7 @@ class StructuredHomeTests(unittest.TestCase):
             section_limit=10,
             selected_chip_params="mood-energy",
         )
-        self.assertEqual(page["version"], 3)
+        self.assertEqual(page["version"], 4)
         self.assertEqual(page["selected_chip_params"], "mood-energy")
         self.assertEqual([section["title"] for section in page["sections"]], [
             "Quick picks",
