@@ -521,16 +521,53 @@ def _upgrade_thumbnail_url(url: str, size: int = 1200) -> str:
     return urlunsplit(parts._replace(path=upgraded))
 
 
+def _thumbnail_candidates(value: Any) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    visited: set[int] = set()
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            identity = id(node)
+            if identity in visited:
+                return
+            visited.add(identity)
+            url = str(node.get("url") or "").strip()
+            if url:
+                candidates.append(node)
+            for child in node.values():
+                if isinstance(child, (dict, list, tuple)):
+                    walk(child)
+        elif isinstance(node, (list, tuple)):
+            identity = id(node)
+            if identity in visited:
+                return
+            visited.add(identity)
+            for child in node:
+                walk(child)
+
+    walk(value)
+    return candidates
+
+
+def _thumbnail_area(item: dict[str, Any]) -> int:
+    try:
+        width = int(item.get("width") or 0)
+        height = int(item.get("height") or 0)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, width) * max(0, height)
+
+
 def _best_thumbnail(thumbnails: Any) -> str:
-    candidates = [item for item in (thumbnails or []) if isinstance(item, dict)]
+    candidates = _thumbnail_candidates(thumbnails)
     if not candidates:
         return ""
-    candidate = max(candidates, key=lambda item: int(item.get("width") or 0) * int(item.get("height") or 0))
+    candidate = max(candidates, key=_thumbnail_area)
     return _upgrade_thumbnail_url(str(candidate.get("url") or ""))
 
 
 def _thumbnails(result: dict[str, Any]) -> Any:
-    return result.get("thumbnails") or result.get("thumbnail") or []
+    return result
 
 
 def _text(value: Any) -> str:

@@ -576,7 +576,7 @@ impl AppController {
         }
         self.youtube_home_loading.set(true);
         let youtube_active = self.config.borrow().startup_source == Some(StartupSource::YouTube);
-        if youtube_active {
+        if youtube_active && !append {
             self.refresh_browser();
         }
 

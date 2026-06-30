@@ -922,6 +922,18 @@ impl AppController {
                         Ok(page) => {
                             let mut unchanged_filtered_feed = false;
                             if home {
+                                let youtube_active = self.config.borrow().startup_source
+                                    == Some(StartupSource::YouTube);
+                                let appended_in_place = if append && youtube_active {
+                                    let playback = self.browser_playback_state();
+                                    self.browser.append_youtube_home_page(
+                                        &page,
+                                        &playback,
+                                        &self.config.borrow(),
+                                    )
+                                } else {
+                                    false
+                                };
                                 {
                                     let mut current = self.youtube_home_page.borrow_mut();
                                     unchanged_filtered_feed = !append
@@ -941,9 +953,7 @@ impl AppController {
                                     }
                                 }
                                 self.youtube_home_previous_params.borrow_mut().clear();
-                                if self.config.borrow().startup_source
-                                    == Some(StartupSource::YouTube)
-                                {
+                                if youtube_active && (!append || !appended_in_place) {
                                     self.refresh_browser();
                                 }
                             }
@@ -968,7 +978,8 @@ impl AppController {
                                 && self.config.borrow().startup_source
                                     == Some(StartupSource::YouTube)
                             {
-                                self.refresh_browser();
+                                self.browser
+                                    .reset_youtube_home_load_more(self.config.borrow().language);
                             }
                             self.youtube_page.set_loading(false, &title);
                             self.show_toast(&format!(

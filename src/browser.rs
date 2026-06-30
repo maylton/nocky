@@ -1321,6 +1321,76 @@ impl LibraryBrowser {
         });
     }
 
+    pub fn append_youtube_home_page(
+        &self,
+        incoming: &YouTubeHomePage,
+        playback: &BrowserPlaybackState,
+        config: &AppConfig,
+    ) -> bool {
+        if !matches!(self.route(), BrowserRoute::All) {
+            return false;
+        }
+        let Some(content) = self.home_stack.visible_child() else {
+            return false;
+        };
+        let Ok(home) = content.downcast::<gtk::Box>() else {
+            return false;
+        };
+        if !home.has_css_class("youtube-home-v2") {
+            return false;
+        }
+
+        remove_direct_children_with_css(&home, "youtube-home-loading-row");
+        remove_direct_children_with_css(&home, "youtube-home-load-more");
+
+        let language = config.language;
+        let copy = home_copy(language);
+        let card_effects =
+            config.visual_theme.is_expressive() && config.expressive_home_card_effects;
+        for section in &incoming.sections {
+            let cards = youtube_feed_section_cards(section, language);
+            if cards.is_empty() {
+                continue;
+            }
+            home.append(&home_section(
+                &section.title,
+                &section.label,
+                copy.waiting_content,
+                cards,
+                playback,
+                config,
+                &self.event_tx,
+                language,
+                card_effects,
+            ));
+        }
+        if let Some(load_more) = youtube_home_load_more_button(incoming, &self.event_tx, language) {
+            home.append(&load_more);
+        }
+        true
+    }
+
+    pub fn reset_youtube_home_load_more(&self, language: AppLanguage) {
+        let Some(content) = self.home_stack.visible_child() else {
+            return;
+        };
+        let Ok(home) = content.downcast::<gtk::Box>() else {
+            return;
+        };
+        let copy = home_copy(language);
+        let mut child = home.first_child();
+        while let Some(current) = child {
+            if current.has_css_class("youtube-home-load-more") {
+                if let Ok(button) = current.clone().downcast::<gtk::Button>() {
+                    button.set_label(copy.youtube_load_more);
+                    button.set_sensitive(true);
+                }
+                return;
+            }
+            child = current.next_sibling();
+        }
+    }
+
     pub fn new() -> Self {
         let (event_tx, events) = mpsc::channel();
         let visible_tracks = Rc::new(RefCell::new(Vec::new()));
@@ -2713,6 +2783,7 @@ impl LibraryBrowser {
         next_home.add_css_class("expressive-library-home");
 
         if youtube_home && !youtube_home_page.sections.is_empty() {
+            next_home.add_css_class("youtube-home-v2");
             next_home.append(&youtube_home_chip_bar(
                 youtube_home_page,
                 &self.event_tx,
@@ -2739,20 +2810,9 @@ impl LibraryBrowser {
                 ));
             }
 
-            if !youtube_home_page.continuation.trim().is_empty() {
-                let load_more = gtk::Button::with_label(copy.youtube_load_more);
-                load_more.set_halign(gtk::Align::Center);
-                load_more.add_css_class("pill");
-                load_more.add_css_class("suggested-action");
-                let continuation = youtube_home_page.continuation.clone();
-                let params = youtube_home_page.selected_chip_params.clone();
-                let event_tx = self.event_tx.clone();
-                load_more.connect_clicked(move |_| {
-                    let _ = event_tx.send(BrowserEvent::LoadYouTubeHome {
-                        continuation: continuation.clone(),
-                        params: params.clone(),
-                    });
-                });
+            if let Some(load_more) =
+                youtube_home_load_more_button(youtube_home_page, &self.event_tx, language)
+            {
                 next_home.append(&load_more);
             }
 
@@ -4793,6 +4853,16 @@ fn home_history_section(
     section
 }
 
+fn remove_direct_children_with_css(container: &gtk::Box, class_name: &str) {
+    let mut child = container.first_child();
+    while let Some(current) = child {
+        child = current.next_sibling();
+        if current.has_css_class(class_name) {
+            container.remove(&current);
+        }
+    }
+}
+
 fn youtube_home_chip_bar(
     page: &YouTubeHomePage,
     event_tx: &Sender<BrowserEvent>,
@@ -4806,7 +4876,7 @@ fn youtube_home_chip_bar(
     let rail = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     rail.add_css_class("youtube-chip-row");
     rail.set_margin_start(2);
-    rail.set_margin_end(2);
+    rail.set_margin_end(28);
     rail.set_margin_bottom(10);
 
     let all = gtk::Button::with_label(copy.youtube_all);
@@ -4845,13 +4915,48 @@ fn youtube_home_chip_bar(
     let scroll = gtk::ScrolledWindow::new();
     scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Never);
     scroll.set_overlay_scrolling(false);
+    scroll.set_hexpand(true);
     scroll.set_min_content_height(52);
     scroll.set_propagate_natural_height(true);
     scroll.set_child(Some(&rail));
     scroll.add_css_class("home-carousel-scroll");
+    scroll.add_css_class("youtube-chip-scroll");
 
     section.append(&scroll);
     section
+}
+
+fn youtube_home_load_more_button(
+    page: &YouTubeHomePage,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> Option<gtk::Button> {
+    if page.continuation.trim().is_empty() {
+        return None;
+    }
+    let copy = home_copy(language);
+    let loading_label = match language {
+        AppLanguage::Portuguese => "Carregando…",
+        AppLanguage::English => "Loading…",
+        AppLanguage::Spanish => "Cargando…",
+    };
+    let load_more = gtk::Button::with_label(copy.youtube_load_more);
+    load_more.set_halign(gtk::Align::Center);
+    load_more.add_css_class("pill");
+    load_more.add_css_class("suggested-action");
+    load_more.add_css_class("youtube-home-load-more");
+    let continuation = page.continuation.clone();
+    let params = page.selected_chip_params.clone();
+    let event_tx = event_tx.clone();
+    load_more.connect_clicked(move |button| {
+        button.set_label(loading_label);
+        button.set_sensitive(false);
+        let _ = event_tx.send(BrowserEvent::LoadYouTubeHome {
+            continuation: continuation.clone(),
+            params: params.clone(),
+        });
+    });
+    Some(load_more)
 }
 
 fn youtube_home_loading_banner(page: &YouTubeHomePage, language: AppLanguage) -> gtk::Box {
