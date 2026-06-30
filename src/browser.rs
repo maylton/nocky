@@ -4875,9 +4875,10 @@ fn youtube_home_chip_bar(
 
     let rail = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     rail.add_css_class("youtube-chip-row");
+    rail.set_margin_top(4);
     rail.set_margin_start(2);
     rail.set_margin_end(28);
-    rail.set_margin_bottom(18);
+    rail.set_margin_bottom(24);
 
     let all = gtk::Button::with_label(copy.youtube_all);
     all.add_css_class("pill");
@@ -4916,7 +4917,7 @@ fn youtube_home_chip_bar(
     scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Never);
     scroll.set_overlay_scrolling(false);
     scroll.set_hexpand(true);
-    scroll.set_min_content_height(64);
+    scroll.set_min_content_height(80);
     scroll.set_propagate_natural_height(true);
     scroll.set_child(Some(&rail));
     scroll.add_css_class("home-carousel-scroll");

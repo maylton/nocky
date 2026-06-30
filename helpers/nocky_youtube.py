@@ -687,6 +687,9 @@ def _song_item(result: dict[str, Any], result_type: str = "song") -> dict[str, A
     album_data = result.get("album") or {}
     album = _text(album_data) if isinstance(album_data, dict) else _text(album_data)
     duration = _duration_seconds(result)
+    thumbnail_url = _best_thumbnail(_thumbnails(result))
+    if not thumbnail_url and VIDEO_ID_PATTERN.fullmatch(video_id):
+        thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
     subtitle = " • ".join(value for value in (artist, album, _format_duration(duration)) if value)
     return {
         "result_type": result_type,
@@ -699,7 +702,7 @@ def _song_item(result: dict[str, Any], result_type: str = "song") -> dict[str, A
         "playlist_kind": "",
         "params": "",
         "duration_seconds": duration,
-        "thumbnail_url": _best_thumbnail(_thumbnails(result)),
+        "thumbnail_url": thumbnail_url,
     }
 
 

@@ -1867,12 +1867,39 @@ fn clear_list_box(list: &gtk::ListBox) {
     }
 }
 
+fn youtube_video_thumbnail_url(video_id: &str) -> Option<String> {
+    let video_id = video_id.trim();
+    (video_id.len() == 11
+        && video_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')))
+    .then(|| format!("https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"))
+}
+
 pub fn cache_items_for_browser(items: &mut [YouTubeItem]) {
     for item in items {
         item.thumbnail_url = upgrade_thumbnail_url(&item.thumbnail_url, PLAYER_COVER_SIZE);
+        let video_fallback = youtube_video_thumbnail_url(&item.video_id);
+        if item.thumbnail_url.trim().is_empty() {
+            if let Some(fallback) = video_fallback.as_ref() {
+                item.thumbnail_url = fallback.clone();
+            }
+        }
+
         if item.cover_path.is_empty() {
-            if let Some(path) = download_cover_sized(item, &item.thumbnail_url, BROWSER_COVER_SIZE)
-            {
+            let primary_url = item.thumbnail_url.clone();
+            let mut downloaded = download_cover_sized(item, &primary_url, BROWSER_COVER_SIZE);
+
+            if downloaded.is_none() {
+                if let Some(fallback) = video_fallback {
+                    if fallback != primary_url {
+                        item.thumbnail_url = fallback.clone();
+                        downloaded = download_cover_sized(item, &fallback, BROWSER_COVER_SIZE);
+                    }
+                }
+            }
+
+            if let Some(path) = downloaded {
                 item.cover_path = path.to_string_lossy().to_string();
             }
         }
