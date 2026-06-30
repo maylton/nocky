@@ -48,6 +48,7 @@ try:
     import requests
     from ytmusicapi import YTMusic
     from ytmusicapi.exceptions import YTMusicServerError, YTMusicUserError
+    from ytmusicapi.parsers import playlists as ytmusic_playlist_parsers
     try:
         from ytmusicapi.continuations import get_continuations as ytmusic_get_continuations
         from ytmusicapi.parsers.browsing import parse_mixed_content as ytmusic_parse_mixed_content
@@ -63,12 +64,43 @@ except Exception as error:  # pragma: no cover - reported to the native app
     YTMusic = None
     YTMusicServerError = RuntimeError
     YTMusicUserError = RuntimeError
+    ytmusic_playlist_parsers = None
     ytmusic_get_continuations = None
     ytmusic_parse_mixed_content = None
     ytmusicapi_setup = None
     IMPORT_ERROR = error
 else:
     IMPORT_ERROR = None
+
+
+def _install_ytmusicapi_playlist_count_compat() -> None:
+    """Prevent ytmusicapi from converting an empty playlist count with int("").
+
+    ytmusicapi 1.12.1 extracts digits from the playlist subtitle and checks the
+    resulting list with ``is not None``. An empty playlist therefore reaches
+    ``to_int("")`` and raises ValueError. Patch only the playlists parser's local
+    converter so digit-less count labels become zero while valid counts retain
+    the upstream implementation.
+    """
+
+    parser = ytmusic_playlist_parsers
+    if parser is None:
+        return
+    converter = getattr(parser, "to_int", None)
+    if not callable(converter) or getattr(converter, "_nocky_empty_count_safe", False):
+        return
+
+    def safe_playlist_count(value: Any) -> int:
+        text = str(value or "")
+        if not re.search(r"\d", text):
+            return 0
+        return converter(text)
+
+    safe_playlist_count._nocky_empty_count_safe = True  # type: ignore[attr-defined]
+    parser.to_int = safe_playlist_count
+
+
+_install_ytmusicapi_playlist_count_compat()
 
 try:
     import gi
