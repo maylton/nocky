@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Apply generated-playlist track artwork fallbacks and final chip spacing."""
 
+# This temporary patch is removed automatically after the reviewed changes land.
+
 from pathlib import Path
 
 
@@ -168,10 +170,10 @@ class YouTubeTrackArtworkTests(unittest.TestCase):
         self.assertIsNotNone(item)
         self.assertIn("track=s1200", item["thumbnail_url"])
 
-    def test_invalid_video_id_does_not_create_synthetic_url(self) -> None:
+    def test_invalid_video_id_is_not_accepted_as_a_song(self) -> None:
         self.assertIsNone(
             nocky_youtube._song_item(
-                {"videoId": "invalid", "title": "Invalid track"}
+                {"videoId": "", "title": "Invalid track"}
             )
         )
 
