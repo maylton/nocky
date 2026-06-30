@@ -1,0 +1,44 @@
+name: Apply direct InnerTube Home parser
+
+on:
+  push:
+    branches:
+      - codex/home-v2-raw-innertube-artwork
+    paths:
+      - scripts/apply-direct-innertube-home-parser.py
+      - .github/workflows/apply-direct-innertube-home-parser.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout implementation branch
+        uses: actions/checkout@v6
+        with:
+          ref: codex/home-v2-raw-innertube-artwork
+          fetch-depth: 0
+
+      - name: Apply integration patch
+        run: python3 scripts/apply-direct-innertube-home-parser.py
+
+      - name: Run direct parser tests
+        run: |
+          python3 -m unittest tests.test_youtube_innertube_home -v
+          python3 -m unittest discover -s tests -p 'test_youtube_*.py' -q
+
+      - name: Remove temporary patch machinery
+        run: |
+          rm scripts/apply-direct-innertube-home-parser.py
+          rm .github/workflows/apply-direct-innertube-home-parser.yml
+
+      - name: Commit implementation
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "feat: parse Home V2 directly from raw InnerTube renderers"
+          git push origin HEAD:codex/home-v2-raw-innertube-artwork
