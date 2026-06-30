@@ -57,7 +57,7 @@ class YouTubeHomeChipTests(unittest.TestCase):
             {"browseId": "FEmusic_home", "params": "mood-energy"},
         )
 
-    def test_filtered_home_continuation_reuses_params_and_raw_artwork(self):
+    def test_filtered_home_continuation_reuses_params_and_direct_artwork(self):
         response = {
             "contents": {
                 "singleColumnBrowseResultsRenderer": {
@@ -149,10 +149,11 @@ class YouTubeHomeChipTests(unittest.TestCase):
         self.assertEqual([row["title"] for row in rows], ["First", "More"])
         self.assertEqual(client.calls[1][1]["params"], "mood-relax")
         self.assertEqual(client.calls[1][2], continuation_params)
-        thumbnails = rows[1]["contents"][0]["rawRendererThumbnails"]
+        item = rows[1]["contents"][0]
+        self.assertEqual(item["rendererType"], "musicTwoRowItemRenderer")
+        thumbnails = item["thumbnails"]
         self.assertEqual(thumbnails[0]["width"], 240)
         self.assertIn("more=s240", thumbnails[0]["url"])
-
 
 
 if __name__ == "__main__":
