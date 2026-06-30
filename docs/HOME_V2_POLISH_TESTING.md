@@ -9,6 +9,10 @@ The PR #82 validation covers these regressions:
 - the chip carousel reserves 88 px of height plus a larger bottom inset for its horizontal scrollbar;
 - load-more appends sections without rebuilding the current Home page.
 
+The artwork smoke test must include both collection-heavy rows and playable song
+rows such as `Escolha a dedo`, because the former previously exhausted the global
+cover budget before the latter were processed.
+
 A real-account smoke test should clear the Home, library and cover caches, reopen
 Home V2, inspect the chip spacing, verify artwork in both collection and song rows,
 open generated playlists/mixes and confirm that track artwork is restored, load
