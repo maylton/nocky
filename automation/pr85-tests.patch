@@ -1,0 +1,73 @@
+diff --git a/tests/test_youtube_home_chips.py b/tests/test_youtube_home_chips.py
+index 6ddcfed..0000000 100644
+--- a/tests/test_youtube_home_chips.py
++++ b/tests/test_youtube_home_chips.py
+@@ -14,13 +14,16 @@ import nocky_youtube as helper
+ 
+ 
+ class FakeClient:
+-    def __init__(self, response):
++    def __init__(self, response, continuation_response=None):
+         self.response = response
++        self.continuation_response = continuation_response
+         self.calls = []
+ 
+     def _send_request(self, endpoint, body, additional_params=None):
+         self.calls.append((endpoint, dict(body), additional_params))
++        if additional_params is not None and self.continuation_response is not None:
++            return self.continuation_response
+         return self.response
+@@ -46,7 +49,7 @@ class YouTubeHomeChipTests(unittest.TestCase):
+         parsed = [{"title": "Energy", "contents": [{"title": "Song"}]}]
+         with (
+             mock.patch.object(helper, "ytmusic_parse_mixed_content", return_value=parsed),
+-            mock.patch.object(helper, "ytmusic_get_continuations", None),
++            mock.patch.object(helper, "ytmusic_get_continuation_params", None),
+         ):
+             rows, raw = helper._inner_tube_home_rows(client, "mood-energy", 6)
+@@ -77,22 +80,34 @@ class YouTubeHomeChipTests(unittest.TestCase):
+                 }
+             }
+         }
+-        client = FakeClient(response)
++        continuation_response = {
++            "continuationContents": {
++                "sectionListContinuation": {
++                    "contents": [{"musicCarouselShelfRenderer": {}}]
++                }
++            }
++        }
++        client = FakeClient(response, continuation_response)
+ 
+-        def continuations(section_list, key, remaining, request_func, parser):
+-            request_func({"continuation": "next"})
+-            self.assertEqual(key, "sectionListContinuation")
+-            self.assertEqual(remaining, 5)
+-            return [{"title": "More", "contents": []}]
++        def continuation_params(section_list):
++            self.assertIn("continuations", section_list)
++            return "&ctoken=next&continuation=next"
+ 
+         with (
+             mock.patch.object(
+                 helper,
+                 "ytmusic_parse_mixed_content",
+-                return_value=[{"title": "First", "contents": []}],
++                side_effect=[
++                    [{"title": "First", "contents": []}],
++                    [{"title": "More", "contents": []}],
++                ],
++            ),
++            mock.patch.object(
++                helper,
++                "ytmusic_get_continuation_params",
++                side_effect=continuation_params,
+             ),
+-            mock.patch.object(helper, "ytmusic_get_continuations", side_effect=continuations),
+         ):
+             rows, _raw = helper._inner_tube_home_rows(client, "mood-relax", 6)
+ 
+         self.assertEqual([row["title"] for row in rows], ["First", "More"])
+         self.assertEqual(client.calls[1][1]["params"], "mood-relax")
+-        self.assertEqual(client.calls[1][2], {"continuation": "next"})
++        self.assertEqual(client.calls[1][2], "&ctoken=next&continuation=next")
