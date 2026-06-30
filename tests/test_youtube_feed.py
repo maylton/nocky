@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "helpers"))
 from nocky_youtube_feed import (  # noqa: E402
     build_library_overview,
     build_structured_home,
+    enrich_inner_tube_home_rows,
     extract_inner_tube_home_chips,
     find_inner_tube_home_section_list,
     load_cached_page,
@@ -107,6 +108,168 @@ class StructuredHomeTests(unittest.TestCase):
         self.assertEqual([chip["title"] for chip in chips], ["Energize", "Relax"])
         self.assertEqual([chip["params"] for chip in chips], ["mood-energy", "mood-relax"])
         self.assertEqual(chips[0]["browse_id"], "FEmusic_home")
+
+    def test_enriches_two_row_cropped_artwork_and_watch_identity(self) -> None:
+        parsed = [{"title": "Escolha a dedo", "contents": [{"title": "Vanish Into You"}]}]
+        raw = {
+            "contents": {
+                "singleColumnBrowseResultsRenderer": {
+                    "tabs": [{
+                        "tabRenderer": {
+                            "content": {
+                                "sectionListRenderer": {
+                                    "contents": [{
+                                        "musicCarouselShelfRenderer": {
+                                            "header": {
+                                                "musicCarouselShelfBasicHeaderRenderer": {
+                                                    "title": {"runs": [{"text": "Escolha a dedo"}]}
+                                                }
+                                            },
+                                            "contents": [{
+                                                "musicTwoRowItemRenderer": {
+                                                    "title": {"runs": [{"text": "Vanish Into You"}]},
+                                                    "navigationEndpoint": {
+                                                        "watchEndpoint": {"videoId": "abc123DEF45"}
+                                                    },
+                                                    "thumbnailRenderer": {
+                                                        "croppedSquareThumbnailRenderer": {
+                                                            "thumbnail": {
+                                                                "thumbnails": [{
+                                                                    "url": "https://lh3.googleusercontent.com/cropped=s320",
+                                                                    "width": 320,
+                                                                    "height": 320,
+                                                                }]
+                                                            }
+                                                        }
+                                                    },
+                                                }
+                                            }],
+                                        }
+                                    }]
+                                }
+                            }
+                        }
+                    }]
+                }
+            }
+        }
+        enriched = enrich_inner_tube_home_rows(parsed, raw)
+        page = build_structured_home(enriched, section_limit=1)
+        item = page["sections"][0]["items"][0]
+        self.assertEqual(item["video_id"], "abc123DEF45")
+        self.assertIn("cropped=s1200", item["thumbnail_url"])
+
+    def test_enriches_responsive_overlay_with_animated_backup_artwork(self) -> None:
+        parsed = [{"title": "Apresentações ao vivo", "contents": [{"title": "Mandinga"}]}]
+        raw_contents = [{
+            "musicCarouselShelfRenderer": {
+                "header": {
+                    "musicCarouselShelfBasicHeaderRenderer": {
+                        "title": {"runs": [{"text": "Apresentações ao vivo"}]}
+                    }
+                },
+                "contents": [{
+                    "musicResponsiveListItemRenderer": {
+                        "flexColumns": [{
+                            "musicResponsiveListItemFlexColumnRenderer": {
+                                "text": {"runs": [{"text": "Mandinga"}]}
+                            }
+                        }],
+                        "overlay": {
+                            "musicItemThumbnailOverlayRenderer": {
+                                "content": {
+                                    "musicPlayButtonRenderer": {
+                                        "playNavigationEndpoint": {
+                                            "watchEndpoint": {"videoId": "ZYX987abc_1"}
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "thumbnail": {
+                            "musicAnimatedThumbnailRenderer": {
+                                "animatedThumbnail": {
+                                    "thumbnails": [{
+                                        "url": "https://example.invalid/animated.webp",
+                                        "width": 640,
+                                        "height": 640,
+                                    }]
+                                },
+                                "backupRenderer": {
+                                    "thumbnail": {
+                                        "thumbnails": [{
+                                            "url": "https://lh3.googleusercontent.com/live=s480",
+                                            "width": 480,
+                                            "height": 480,
+                                        }]
+                                    }
+                                },
+                            }
+                        },
+                    }
+                }],
+            }
+        }]
+        enriched = enrich_inner_tube_home_rows(parsed, raw_contents)
+        page = build_structured_home(enriched, section_limit=1)
+        item = page["sections"][0]["items"][0]
+        self.assertEqual(item["video_id"], "ZYX987abc_1")
+        self.assertIn("live=s1200", item["thumbnail_url"])
+        self.assertNotIn("animated", item["thumbnail_url"])
+
+    def test_enrichment_matches_reordered_items_by_title(self) -> None:
+        parsed = [{
+            "title": "Covers e remixes",
+            "contents": [
+                {"title": "Diver", "videoId": "abcdefghijk"},
+                {"title": "Toumei Datta Sekai", "videoId": "lmnopqrstuv"},
+            ],
+        }]
+        raw_contents = [{
+            "musicCarouselShelfRenderer": {
+                "header": {
+                    "musicCarouselShelfBasicHeaderRenderer": {
+                        "title": {"runs": [{"text": "Covers e remixes"}]}
+                    }
+                },
+                "contents": [
+                    {
+                        "musicTwoRowItemRenderer": {
+                            "title": {"runs": [{"text": "Toumei Datta Sekai"}]},
+                            "navigationEndpoint": {"watchEndpoint": {"videoId": "lmnopqrstuv"}},
+                            "thumbnailRenderer": {
+                                "musicThumbnailRenderer": {
+                                    "thumbnail": {"thumbnails": [{
+                                        "url": "https://lh3.googleusercontent.com/toumei=s200",
+                                        "width": 200,
+                                        "height": 200,
+                                    }]}
+                                }
+                            },
+                        }
+                    },
+                    {
+                        "musicTwoRowItemRenderer": {
+                            "title": {"runs": [{"text": "Diver"}]},
+                            "navigationEndpoint": {"watchEndpoint": {"videoId": "abcdefghijk"}},
+                            "thumbnailRenderer": {
+                                "musicThumbnailRenderer": {
+                                    "thumbnail": {"thumbnails": [{
+                                        "url": "https://lh3.googleusercontent.com/diver=s200",
+                                        "width": 200,
+                                        "height": 200,
+                                    }]}
+                                }
+                            },
+                        }
+                    },
+                ],
+            }
+        }]
+        enriched = enrich_inner_tube_home_rows(parsed, raw_contents)
+        page = build_structured_home(enriched, section_limit=1)
+        self.assertIn("diver=s1200", page["sections"][0]["items"][0]["thumbnail_url"])
+        self.assertIn("toumei=s1200", page["sections"][0]["items"][1]["thumbnail_url"])
 
     def test_extracts_nested_renderer_artwork(self) -> None:
         source = {
