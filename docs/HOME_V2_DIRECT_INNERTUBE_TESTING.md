@@ -36,3 +36,17 @@ Afterward, switch chips and load at least two continuation pages. Play/pause and
 navigation must retain the render-reuse behavior merged in PR #84. The helper logs
 an explicit per-section missing-artwork summary when a raw item has neither an
 image nor a valid video fallback.
+
+## Sanitized renderer diagnostics
+
+When a production shelf still differs from the test fixtures, start Nocky with:
+
+```bash
+NOCKY_HOME_DEBUG_DUMP=/tmp/nocky-home-renderers.json cargo run
+```
+
+The helper writes a JSON file containing the raw renderer structure, a parsed-item
+summary, renderer counts and every thumbnail-like path. Authentication headers,
+cookies, visitor data, continuation tokens and tracking fields are not included;
+URL query strings and fragments are removed. The resulting file can be attached to
+the issue to add exact support for renderer experiments used by a real account.
