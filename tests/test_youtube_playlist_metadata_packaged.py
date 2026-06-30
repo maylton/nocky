@@ -251,6 +251,65 @@ class PackagedPlaylistMetadataTests(unittest.TestCase):
                     )
         self.assertEqual(client.add_calls, [])
 
+    def test_generated_playlist_alias_is_read_only(self) -> None:
+        client = FakeClient(
+            {
+                "id": "RD-canonical",
+                "title": "Dynamic mix",
+                "owned": True,
+                "privacy": "PRIVATE",
+                "tracks": [],
+            }
+        )
+        with patch.object(
+            nocky_youtube_playlist_create.nocky_youtube,
+            "_load_session",
+            return_value={"headers": {"test": "value"}},
+        ):
+            with patch.object(
+                nocky_youtube_playlist_create.nocky_youtube,
+                "_create_client",
+                return_value=client,
+            ):
+                result = nocky_youtube_playlist_create.fetch_playlist_metadata(
+                    {"playlist_id": "RDTMAK5uy_dynamic"}
+                )
+
+        self.assertEqual(result["playlist_id"], "RDTMAK5uy_dynamic")
+        self.assertFalse(result["owned"])
+        self.assertFalse(result["editable"])
+
+    def test_generated_alias_is_still_rejected_for_mutation(self) -> None:
+        client = FakeClient(
+            {
+                "id": "RD-canonical",
+                "title": "Dynamic mix",
+                "owned": True,
+                "privacy": "PRIVATE",
+                "tracks": [],
+            }
+        )
+        with patch.object(
+            nocky_youtube_playlist_create.nocky_youtube,
+            "_load_session",
+            return_value={"headers": {"test": "value"}},
+        ):
+            with patch.object(
+                nocky_youtube_playlist_create.nocky_youtube,
+                "_create_client",
+                return_value=client,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "mismatched"):
+                    nocky_youtube_playlist_create.add_playlist_item(
+                        {
+                            "playlist_id": "RDTMAK5uy_dynamic",
+                            "video_id": "abcdefghijk",
+                            "owned": True,
+                            "editable": True,
+                        }
+                    )
+        self.assertEqual(client.add_calls, [])
+
     def test_mismatched_metadata_is_rejected(self) -> None:
         client = FakeClient(
             {

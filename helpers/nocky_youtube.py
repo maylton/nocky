@@ -48,6 +48,7 @@ try:
     import requests
     from ytmusicapi import YTMusic
     from ytmusicapi.exceptions import YTMusicServerError, YTMusicUserError
+    from ytmusicapi.parsers import playlists as ytmusic_playlist_parsers
     try:
         from ytmusicapi.continuations import get_continuations as ytmusic_get_continuations
         from ytmusicapi.parsers.browsing import parse_mixed_content as ytmusic_parse_mixed_content
@@ -63,12 +64,43 @@ except Exception as error:  # pragma: no cover - reported to the native app
     YTMusic = None
     YTMusicServerError = RuntimeError
     YTMusicUserError = RuntimeError
+    ytmusic_playlist_parsers = None
     ytmusic_get_continuations = None
     ytmusic_parse_mixed_content = None
     ytmusicapi_setup = None
     IMPORT_ERROR = error
 else:
     IMPORT_ERROR = None
+
+
+def _install_ytmusicapi_playlist_count_compat() -> None:
+    """Prevent ytmusicapi from converting an empty playlist count with int("").
+
+    ytmusicapi 1.12.1 extracts digits from the playlist subtitle and checks the
+    resulting list with ``is not None``. An empty playlist therefore reaches
+    ``to_int("")`` and raises ValueError. Patch only the playlists parser's local
+    converter so digit-less count labels become zero while valid counts retain
+    the upstream implementation.
+    """
+
+    parser = ytmusic_playlist_parsers
+    if parser is None:
+        return
+    converter = getattr(parser, "to_int", None)
+    if not callable(converter) or getattr(converter, "_nocky_empty_count_safe", False):
+        return
+
+    def safe_playlist_count(value: Any) -> int:
+        text = str(value or "")
+        if not re.search(r"\d", text):
+            return 0
+        return converter(text)
+
+    safe_playlist_count._nocky_empty_count_safe = True  # type: ignore[attr-defined]
+    parser.to_int = safe_playlist_count
+
+
+_install_ytmusicapi_playlist_count_compat()
 
 try:
     import gi
@@ -521,16 +553,53 @@ def _upgrade_thumbnail_url(url: str, size: int = 1200) -> str:
     return urlunsplit(parts._replace(path=upgraded))
 
 
+def _thumbnail_candidates(value: Any) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    visited: set[int] = set()
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            identity = id(node)
+            if identity in visited:
+                return
+            visited.add(identity)
+            url = str(node.get("url") or "").strip()
+            if url:
+                candidates.append(node)
+            for child in node.values():
+                if isinstance(child, (dict, list, tuple)):
+                    walk(child)
+        elif isinstance(node, (list, tuple)):
+            identity = id(node)
+            if identity in visited:
+                return
+            visited.add(identity)
+            for child in node:
+                walk(child)
+
+    walk(value)
+    return candidates
+
+
+def _thumbnail_area(item: dict[str, Any]) -> int:
+    try:
+        width = int(item.get("width") or 0)
+        height = int(item.get("height") or 0)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, width) * max(0, height)
+
+
 def _best_thumbnail(thumbnails: Any) -> str:
-    candidates = [item for item in (thumbnails or []) if isinstance(item, dict)]
+    candidates = _thumbnail_candidates(thumbnails)
     if not candidates:
         return ""
-    candidate = max(candidates, key=lambda item: int(item.get("width") or 0) * int(item.get("height") or 0))
+    candidate = max(candidates, key=_thumbnail_area)
     return _upgrade_thumbnail_url(str(candidate.get("url") or ""))
 
 
 def _thumbnails(result: dict[str, Any]) -> Any:
-    return result.get("thumbnails") or result.get("thumbnail") or []
+    return result
 
 
 def _text(value: Any) -> str:
@@ -618,6 +687,9 @@ def _song_item(result: dict[str, Any], result_type: str = "song") -> dict[str, A
     album_data = result.get("album") or {}
     album = _text(album_data) if isinstance(album_data, dict) else _text(album_data)
     duration = _duration_seconds(result)
+    thumbnail_url = _best_thumbnail(_thumbnails(result))
+    if not thumbnail_url and VIDEO_ID_PATTERN.fullmatch(video_id):
+        thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
     subtitle = " • ".join(value for value in (artist, album, _format_duration(duration)) if value)
     return {
         "result_type": result_type,
@@ -630,7 +702,7 @@ def _song_item(result: dict[str, Any], result_type: str = "song") -> dict[str, A
         "playlist_kind": "",
         "params": "",
         "duration_seconds": duration,
-        "thumbnail_url": _best_thumbnail(_thumbnails(result)),
+        "thumbnail_url": thumbnail_url,
     }
 
 

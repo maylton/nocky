@@ -20,6 +20,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 CONTRACT_VERSION = 2
 DEFAULT_CACHE_MAX_AGE = 12 * 60 * 60
+VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
 ItemFactory = Callable[[dict[str, Any], str], dict[str, Any] | None]
 
 
@@ -65,17 +66,56 @@ def _upgrade_thumbnail_url(url: str, size: int = 1200) -> str:
     return urlunsplit(parts._replace(path=upgraded))
 
 
+def _thumbnail_candidates(value: Any) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    visited: set[int] = set()
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            identity = id(node)
+            if identity in visited:
+                return
+            visited.add(identity)
+            url = _text(node.get("url"))
+            if url:
+                candidates.append(node)
+            for child in node.values():
+                if isinstance(child, (dict, list, tuple)):
+                    walk(child)
+        elif isinstance(node, (list, tuple)):
+            identity = id(node)
+            if identity in visited:
+                return
+            visited.add(identity)
+            for child in node:
+                walk(child)
+
+    walk(value)
+    return candidates
+
+
+def _thumbnail_area(item: dict[str, Any]) -> int:
+    try:
+        width = int(item.get("width") or 0)
+        height = int(item.get("height") or 0)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, width) * max(0, height)
+
+
 def _best_thumbnail(value: Any) -> str:
-    if isinstance(value, dict):
-        value = value.get("thumbnails") or value.get("thumbnail") or []
-    candidates = [item for item in (value or []) if isinstance(item, dict)]
+    candidates = _thumbnail_candidates(value)
     if not candidates:
         return ""
-    candidate = max(
-        candidates,
-        key=lambda item: int(item.get("width") or 0) * int(item.get("height") or 0),
-    )
+    candidate = max(candidates, key=_thumbnail_area)
     return _upgrade_thumbnail_url(_text(candidate.get("url")))
+
+
+def _video_thumbnail(video_id: str) -> str:
+    video_id = _text(video_id)
+    if not VIDEO_ID_PATTERN.fullmatch(video_id):
+        return ""
+    return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
 
 
 def _duration_seconds(result: dict[str, Any]) -> int:
@@ -184,9 +224,7 @@ def _generic_item(result: dict[str, Any], section_title: str) -> dict[str, Any] 
         ) else ("recommended" if result_type == "playlist" else ""),
         "params": _text(result.get("params")),
         "duration_seconds": duration,
-        "thumbnail_url": _best_thumbnail(
-            result.get("thumbnails") or result.get("thumbnail") or []
-        ),
+        "thumbnail_url": _best_thumbnail(result) or _video_thumbnail(video_id),
     }
 
 
@@ -393,9 +431,7 @@ def build_structured_home(
                 "id": _section_id(row, title, absolute_index),
                 "title": title,
                 "label": label,
-                "thumbnail_url": _best_thumbnail(
-                    row.get("thumbnails") or row.get("thumbnail") or []
-                ),
+                "thumbnail_url": _best_thumbnail(row),
                 "layout": _layout(row, items),
                 "endpoint": _endpoint(row),
                 "items": items,

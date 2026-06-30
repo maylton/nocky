@@ -47,7 +47,23 @@ def _authenticated_client() -> Any:
     return nocky_youtube._create_client(authenticated=True)
 
 
-def _read_metadata(client: Any, playlist_id: str, limit: int) -> dict[str, Any]:
+def _is_generated_playlist_id(playlist_id: str) -> bool:
+    """Return whether the ID represents a generated radio/mix route.
+
+    YouTube Music may canonicalize these routes on every request. They are useful
+    for read-only playback, but they must never inherit editability from an alias.
+    """
+
+    return playlist_id.startswith("RD")
+
+
+def _read_metadata(
+    client: Any,
+    playlist_id: str,
+    limit: int,
+    *,
+    allow_generated_alias: bool = False,
+) -> dict[str, Any]:
     reader = getattr(client, "get_playlist", None)
     if not callable(reader):
         raise RuntimeError("The installed YouTube Music runtime cannot inspect playlists")
@@ -57,8 +73,17 @@ def _read_metadata(client: Any, playlist_id: str, limit: int) -> dict[str, Any]:
         raise RuntimeError("YouTube Music returned an invalid playlist response")
 
     result = normalize_playlist_detail(raw_result)
-    if result.get("playlist_id") != playlist_id:
+    returned_id = str(result.get("playlist_id") or "").strip()
+    generated = _is_generated_playlist_id(playlist_id)
+    if returned_id != playlist_id and not (allow_generated_alias and generated):
         raise RuntimeError("YouTube Music returned mismatched playlist metadata")
+
+    if generated:
+        # Keep the requested route identity for native caching, but never expose a
+        # generated/canonical alias as owned or editable.
+        result["playlist_id"] = playlist_id
+        result["owned"] = False
+        result["editable"] = False
     return result
 
 
@@ -95,7 +120,12 @@ def fetch_playlist_metadata(payload: Any) -> dict[str, Any]:
     safe_limit = max(1, min(500, limit))
 
     client = _authenticated_client()
-    return _read_metadata(client, playlist_id, safe_limit)
+    return _read_metadata(
+        client,
+        playlist_id,
+        safe_limit,
+        allow_generated_alias=True,
+    )
 
 
 def add_playlist_item(payload: Any) -> dict[str, Any]:

@@ -108,6 +108,66 @@ class StructuredHomeTests(unittest.TestCase):
         self.assertEqual([chip["params"] for chip in chips], ["mood-energy", "mood-relax"])
         self.assertEqual(chips[0]["browse_id"], "FEmusic_home")
 
+    def test_extracts_nested_renderer_artwork(self) -> None:
+        source = {
+            "sections": [
+                {
+                    "title": "Albums for you",
+                    "contents": [
+                        {
+                            "resultType": "album",
+                            "title": "Nested artwork",
+                            "browseId": "MPREnested",
+                            "thumbnailRenderer": {
+                                "musicThumbnailRenderer": {
+                                    "thumbnail": {
+                                        "thumbnails": [
+                                            {
+                                                "url": "https://lh3.googleusercontent.com/example=s60",
+                                                "width": 60,
+                                                "height": 60,
+                                            },
+                                            {
+                                                "url": "https://lh3.googleusercontent.com/example=s240",
+                                                "width": 240,
+                                                "height": 240,
+                                            },
+                                        ]
+                                    }
+                                }
+                            },
+                        }
+                    ],
+                }
+            ]
+        }
+        page = build_structured_home(source, section_limit=1)
+        thumbnail = page["sections"][0]["items"][0]["thumbnail_url"]
+        self.assertIn("example=s1200", thumbnail)
+
+    def test_uses_video_thumbnail_when_playlist_artwork_is_missing(self) -> None:
+        source = {
+            "sections": [
+                {
+                    "title": "Playlists",
+                    "contents": [
+                        {
+                            "resultType": "playlist",
+                            "title": "Fallback playlist",
+                            "playlistId": "PL-fallback",
+                            "videoId": "abcdefghijk",
+                        }
+                    ],
+                }
+            ]
+        }
+        page = build_structured_home(source, section_limit=1)
+        item = page["sections"][0]["items"][0]
+        self.assertEqual(
+            item["thumbnail_url"],
+            "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg",
+        )
+
     def test_deduplicates_items_without_flattening_sections(self) -> None:
         page = build_structured_home(self.fixture, section_limit=10)
         quick_picks = page["sections"][0]
