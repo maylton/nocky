@@ -1300,37 +1300,72 @@ fn should_reuse_youtube_home(
         && mounted
 }
 
-fn update_active_home_playback_controls(
+fn home_playback_key(kind: &str, id: &str, title: &str) -> Option<String> {
+    let kind = kind.trim().to_lowercase();
+    if kind.is_empty() {
+        return None;
+    }
+    let identity = if id.trim().is_empty() {
+        title.trim().to_lowercase()
+    } else {
+        id.trim().to_lowercase()
+    };
+    (!identity.is_empty()).then(|| format!("{kind}:{identity}"))
+}
+
+fn update_home_playback_widgets(
     widget: &gtk::Widget,
+    active_key: Option<&str>,
     playing: bool,
     language: AppLanguage,
 ) -> usize {
     let mut updated = 0;
+    let widget_name = widget.widget_name();
+    if let Some(key) = widget_name.strip_prefix("home-play-card:") {
+        let active = active_key == Some(key);
+        if active {
+            widget.add_css_class("collection-card-playing");
+        } else {
+            widget.remove_css_class("collection-card-playing");
+        }
+        updated += 1;
+    }
+
     if let Ok(button) = widget.clone().downcast::<gtk::Button>() {
-        if button.has_css_class("collection-card-context-action")
-            && button.has_css_class("active")
-            && !button.has_css_class("loading")
-        {
-            button.set_icon_name(if playing {
-                "media-playback-pause-symbolic"
+        let button_name = button.widget_name();
+        if let Some(key) = button_name.strip_prefix("home-play-control:") {
+            let active = active_key == Some(key);
+            if active {
+                button.add_css_class("active");
             } else {
-                "media-playback-start-symbolic"
-            });
-            button.set_tooltip_text(Some(match (language, playing) {
-                (AppLanguage::Portuguese, true) => "Pausar coleção",
-                (AppLanguage::Portuguese, false) => "Continuar coleção",
-                (AppLanguage::English, true) => "Pause collection",
-                (AppLanguage::English, false) => "Resume collection",
-                (AppLanguage::Spanish, true) => "Pausar colección",
-                (AppLanguage::Spanish, false) => "Continuar colección",
-            }));
+                button.remove_css_class("active");
+            }
+
+            if !button.has_css_class("loading") {
+                button.set_icon_name(if active && playing {
+                    "media-playback-pause-symbolic"
+                } else {
+                    "media-playback-start-symbolic"
+                });
+                button.set_tooltip_text(Some(match (language, active, playing) {
+                    (AppLanguage::Portuguese, true, true) => "Pausar coleção",
+                    (AppLanguage::Portuguese, true, false) => "Continuar coleção",
+                    (AppLanguage::Portuguese, false, _) => "Reproduzir coleção",
+                    (AppLanguage::English, true, true) => "Pause collection",
+                    (AppLanguage::English, true, false) => "Resume collection",
+                    (AppLanguage::English, false, _) => "Play collection",
+                    (AppLanguage::Spanish, true, true) => "Pausar colección",
+                    (AppLanguage::Spanish, true, false) => "Continuar colección",
+                    (AppLanguage::Spanish, false, _) => "Reproducir colección",
+                }));
+            }
             updated += 1;
         }
     }
 
     let mut child = widget.first_child();
     while let Some(current) = child {
-        updated += update_active_home_playback_controls(&current, playing, language);
+        updated += update_home_playback_widgets(&current, active_key, playing, language);
         child = current.next_sibling();
     }
     updated
@@ -1349,6 +1384,19 @@ mod home_render_reuse_tests {
             false,
             true,
         ));
+    }
+
+    #[test]
+    fn playback_key_prefers_stable_id_and_falls_back_to_title() {
+        assert_eq!(
+            home_playback_key("playlist", "RD123", "Ignored"),
+            Some("playlist:rd123".to_string())
+        );
+        assert_eq!(
+            home_playback_key("album", "", "My Album"),
+            Some("album:my album".to_string())
+        );
+        assert_eq!(home_playback_key("", "id", "title"), None);
     }
 
     #[test]
@@ -1435,11 +1483,20 @@ impl LibraryBrowser {
         self.home_dirty.set(true);
     }
 
-    pub fn update_home_playback_state(&self, playing: bool, language: AppLanguage) -> usize {
+    pub fn update_home_playback_state(
+        &self,
+        playback: &BrowserPlaybackState,
+        language: AppLanguage,
+    ) -> usize {
         let Some(content) = self.home_stack.visible_child() else {
             return 0;
         };
-        update_active_home_playback_controls(&content, playing, language)
+        let active_key = home_playback_key(
+            &playback.collection_kind,
+            &playback.collection_id,
+            &playback.collection_title,
+        );
+        update_home_playback_widgets(&content, active_key.as_deref(), playback.playing, language)
     }
 
     fn has_mounted_youtube_home(&self) -> bool {
@@ -1986,6 +2043,7 @@ impl LibraryBrowser {
         );
         self.route.replace(route);
         if reuse_home {
+            self.update_home_playback_state(context.playback, config.language);
             self.root.set_visible_child_name("home");
             return;
         }
@@ -5712,6 +5770,7 @@ fn home_card_button(
         _ => None,
     };
 
+    let playback_key = home_playback_key(collection_kind, &collection_id, &collection_title);
     let is_active = play_event.is_some()
         && playback.matches_collection(collection_kind, &collection_id, &collection_title);
     let is_loading = play_event.is_some()
@@ -5737,6 +5796,9 @@ fn home_card_button(
 
     card_widget.add_css_class("home-card");
     card_widget.add_css_class("expressive-collection-card");
+    if let Some(key) = playback_key.as_deref() {
+        card_widget.set_widget_name(&format!("home-play-card:{key}"));
+    }
 
     if let Some((offline_collection_id, _)) = &offline_collection {
         let target_name = format!("youtube-home-offline:{offline_collection_id}");
@@ -5808,6 +5870,9 @@ fn home_card_button(
         control.set_margin_end(12);
         control.add_css_class("circular");
         control.add_css_class("collection-card-context-action");
+        if let Some(key) = playback_key.as_deref() {
+            control.set_widget_name(&format!("home-play-control:{key}"));
+        }
 
         if is_loading {
             let loading = ExpressiveLoadingIndicator::new();
@@ -5820,11 +5885,6 @@ fn home_card_button(
                 AppLanguage::Spanish => "Cargando colección…",
             }));
         } else {
-            let control_event = if is_active {
-                BrowserEvent::TogglePlayback
-            } else {
-                play_event
-            };
             let icon_name = if is_active && playback.playing {
                 "media-playback-pause-symbolic"
             } else {
@@ -5850,7 +5910,8 @@ fn home_card_button(
 
             let sender = event_tx.clone();
             control.connect_clicked(move |button| {
-                if inline_loading_on_click {
+                let active = button.has_css_class("active");
+                if inline_loading_on_click && !active {
                     let loading = ExpressiveLoadingIndicator::new();
                     button.set_child(Some(loading.widget()));
                     button.set_sensitive(false);
@@ -5862,7 +5923,12 @@ fn home_card_button(
                     }));
                 }
 
-                let _ = sender.send(control_event.clone());
+                let event = if active {
+                    BrowserEvent::TogglePlayback
+                } else {
+                    play_event.clone()
+                };
+                let _ = sender.send(event);
             });
         }
 

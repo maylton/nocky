@@ -432,7 +432,8 @@ impl AppController {
         self.footer_progress.set_playing(animate_m3);
 
         if matches!(self.browser.route(), BrowserRoute::All) {
-            self.browser.update_home_playback_state(playing, language);
+            let playback = self.browser_playback_state();
+            self.browser.update_home_playback_state(&playback, language);
         }
     }
 
