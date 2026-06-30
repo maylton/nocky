@@ -146,12 +146,13 @@ impl AppController {
 
         let sender = metadata_channel().0.clone();
         thread::spawn(move || {
-            let result = bridge
-                .playlist_metadata_access(&browse_id)
-                .map(|(diagnostic, editable)| PlaylistMetadataAccess {
-                    diagnostic,
-                    editable,
-                });
+            let result =
+                bridge
+                    .playlist_metadata_access(&browse_id)
+                    .map(|(diagnostic, editable)| PlaylistMetadataAccess {
+                        diagnostic,
+                        editable,
+                    });
             let _ = sender.send((browse_id, result));
         });
     }
