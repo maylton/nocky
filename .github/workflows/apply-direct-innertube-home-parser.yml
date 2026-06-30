@@ -7,13 +7,16 @@ on:
     paths:
       - scripts/apply-direct-innertube-home-parser.py
       - .github/workflows/apply-direct-innertube-home-parser.yml
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   apply:
-    if: github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]' && (github.event_name == 'push' || github.head_ref == 'codex/home-v2-raw-innertube-artwork')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout implementation branch
