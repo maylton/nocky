@@ -145,6 +145,29 @@ class StructuredHomeTests(unittest.TestCase):
         thumbnail = page["sections"][0]["items"][0]["thumbnail_url"]
         self.assertIn("example=s1200", thumbnail)
 
+    def test_uses_video_thumbnail_when_playlist_artwork_is_missing(self) -> None:
+        source = {
+            "sections": [
+                {
+                    "title": "Playlists",
+                    "contents": [
+                        {
+                            "resultType": "playlist",
+                            "title": "Fallback playlist",
+                            "playlistId": "PL-fallback",
+                            "videoId": "abcdefghijk",
+                        }
+                    ],
+                }
+            ]
+        }
+        page = build_structured_home(source, section_limit=1)
+        item = page["sections"][0]["items"][0]
+        self.assertEqual(
+            item["thumbnail_url"],
+            "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg",
+        )
+
     def test_deduplicates_items_without_flattening_sections(self) -> None:
         page = build_structured_home(self.fixture, section_limit=10)
         quick_picks = page["sections"][0]

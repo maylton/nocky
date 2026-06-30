@@ -1880,17 +1880,33 @@ pub fn cache_items_for_browser(items: &mut [YouTubeItem]) {
 }
 
 pub fn cache_home_page_covers(page: &mut YouTubeHomePage) {
-    const PAGE_COVER_BUDGET: usize = 24;
+    const PAGE_COVER_BUDGET: usize = 64;
     let mut remaining = PAGE_COVER_BUDGET;
 
-    for section in &mut page.sections {
-        if remaining == 0 || !structured_cards::uses_card_carousel(&section.layout) {
-            continue;
-        }
+    // Collection cards are visually dominated by their artwork and often appear
+    // after song-heavy rows. Cache them first so a fixed network budget does not
+    // leave playlists, albums and artists as placeholders farther down the feed.
+    for collection_pass in [true, false] {
+        for section in &mut page.sections {
+            if !structured_cards::uses_card_carousel(&section.layout) {
+                continue;
+            }
 
-        let count = section.items.len().min(remaining);
-        cache_items_for_browser(&mut section.items[..count]);
-        remaining -= count;
+            for item in &mut section.items {
+                if remaining == 0 {
+                    return;
+                }
+                let collection = matches!(
+                    item.result_type.as_str(),
+                    "playlist" | "album" | "artist" | "podcast"
+                );
+                if collection != collection_pass || item.thumbnail_url.trim().is_empty() {
+                    continue;
+                }
+                cache_items_for_browser(std::slice::from_mut(item));
+                remaining -= 1;
+            }
+        }
     }
 }
 

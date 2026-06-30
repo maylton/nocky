@@ -20,6 +20,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 CONTRACT_VERSION = 2
 DEFAULT_CACHE_MAX_AGE = 12 * 60 * 60
+VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
 ItemFactory = Callable[[dict[str, Any], str], dict[str, Any] | None]
 
 
@@ -108,6 +109,13 @@ def _best_thumbnail(value: Any) -> str:
         return ""
     candidate = max(candidates, key=_thumbnail_area)
     return _upgrade_thumbnail_url(_text(candidate.get("url")))
+
+
+def _video_thumbnail(video_id: str) -> str:
+    video_id = _text(video_id)
+    if not VIDEO_ID_PATTERN.fullmatch(video_id):
+        return ""
+    return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
 
 
 def _duration_seconds(result: dict[str, Any]) -> int:
@@ -216,7 +224,7 @@ def _generic_item(result: dict[str, Any], section_title: str) -> dict[str, Any] 
         ) else ("recommended" if result_type == "playlist" else ""),
         "params": _text(result.get("params")),
         "duration_seconds": duration,
-        "thumbnail_url": _best_thumbnail(result),
+        "thumbnail_url": _best_thumbnail(result) or _video_thumbnail(video_id),
     }
 
 
