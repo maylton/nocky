@@ -466,12 +466,26 @@ def _system_locale() -> str:
     return language or ""
 
 
+def _is_neutral_locale(value: str) -> bool:
+    locale_name = re.split(r"[.@]", value.strip(), maxsplit=1)[0].lower()
+    return locale_name in {"c", "posix"}
+
+
 def _locale_candidates() -> list[str]:
-    return [
-        candidate.strip().replace("-", "_")
-        for candidate in re.split(r"[:;,]", _system_locale())
-        if candidate.strip()
-    ]
+    candidates: list[str] = []
+    for key in ("LC_ALL", "LC_MESSAGES", "LANGUAGE", "LANG"):
+        for candidate in re.split(r"[:;,]", os.environ.get(key, "")):
+            normalized = candidate.strip().replace("-", "_")
+            if normalized and not _is_neutral_locale(normalized):
+                candidates.append(normalized)
+
+    if candidates:
+        return candidates
+
+    detected = _system_locale().strip().replace("-", "_")
+    if detected and not _is_neutral_locale(detected):
+        return [detected]
+    return []
 
 
 def _language() -> str:
@@ -552,7 +566,10 @@ def _upgrade_thumbnail_url(url: str, size: int = 1200) -> str:
     parts = urlsplit(url)
     path = parts.path
     upgraded = re.sub(r"=w\d+-h\d+([^/?#]*)$", f"=w{size}-h{size}\\1", path)
-    upgraded = re.sub(r"=s\d+([^/?#]*)$", f"=s{size}\\1", upgraded)
+    if parts.netloc == "yt3.ggpht.com":
+        upgraded = re.sub(r"=s\d+([^/?#]*)$", f"=w{size}-h{size}-p-l90-rj", upgraded)
+    else:
+        upgraded = re.sub(r"=s\d+([^/?#]*)$", f"=s{size}\\1", upgraded)
     if upgraded == path and "googleusercontent.com" in parts.netloc and "=" not in path.rsplit("/", 1)[-1]:
         upgraded = f"{path}=s{size}"
     return urlunsplit(parts._replace(path=upgraded))

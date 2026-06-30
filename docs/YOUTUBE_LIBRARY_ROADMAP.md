@@ -42,6 +42,20 @@ headers come from the structured YouTube Music feed.
 | 13. Native InnerTube backend | Research track | later |
 | 14. Release hardening and observability | Planned | before stable release |
 
+Latest checkpoint:
+
+- PR #85 follow-up restores Home V2 artwork for raw InnerTube renderer rows that
+  are rendered by the GTK Home but are not card-carousel sections, including
+  Shorts, live presentations and long mixes.
+- The desktop Home now reuses any already-cached artwork immediately, renders
+  recommendations before fresh cover downloads finish and applies a silent cover
+  update when the cache pass completes.
+- Opening YouTube playlists similarly returns the track list after the first
+  visible block is prepared, then refreshes cached covers in the background.
+- Temporary artwork probes, debug binaries and trace logging were removed from
+  the final patch; only fixture-backed parser/cache behavior and production
+  first-paint changes remain.
+
 ## Source and page model
 
 Nocky has one **Home** route, but its content is source-aware:
@@ -281,6 +295,10 @@ Acceptance criteria:
 - Local Home history controls do not appear in YouTube Home.
 - Albums, artists, playlists and playable rows keep existing native routing.
 - Narrow-window horizontal usability and keyboard activation remain intact.
+- Artwork appears for rendered Home sections even when the section layout is not
+  `carousel`, as long as the item has a usable thumbnail or `videoId` fallback.
+- Recommendations and playlists render their initial content before the full
+  browser-cover cache pass completes.
 
 ## Phase 11 — Assisted browser login and onboarding
 

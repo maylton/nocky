@@ -56,7 +56,10 @@ def _upgrade_thumbnail_url(url: str, size: int = 1200) -> str:
     parts = urlsplit(url)
     path = parts.path
     upgraded = re.sub(r"=w\d+-h\d+([^/?#]*)$", f"=w{size}-h{size}\\1", path)
-    upgraded = re.sub(r"=s\d+([^/?#]*)$", f"=s{size}\\1", upgraded)
+    if parts.netloc == "yt3.ggpht.com":
+        upgraded = re.sub(r"=s\d+([^/?#]*)$", f"=w{size}-h{size}-p-l90-rj", upgraded)
+    else:
+        upgraded = re.sub(r"=s\d+([^/?#]*)$", f"=s{size}\\1", upgraded)
     if (
         upgraded == path
         and "googleusercontent.com" in parts.netloc

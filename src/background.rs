@@ -67,6 +67,11 @@ pub(crate) enum BackgroundMessage {
         playlist: YouTubeItem,
         result: Result<Vec<YouTubeItem>, String>,
     },
+    YouTubeBrowserPlaylistCoversCached {
+        request_id: u64,
+        playlist: YouTubeItem,
+        items: Vec<YouTubeItem>,
+    },
     YouTubeBrowserCollection {
         item: YouTubeItem,
         key: String,
@@ -88,6 +93,13 @@ pub(crate) enum BackgroundMessage {
         home: bool,
         append: bool,
         result: Result<YouTubeHomePage, String>,
+    },
+    YouTubeStructuredPageCoversCached {
+        request_id: u64,
+        title: String,
+        home: bool,
+        append: bool,
+        page: YouTubeHomePage,
     },
     YouTubeGlobalSearch {
         request_id: u64,

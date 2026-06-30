@@ -43,6 +43,34 @@ class StructuredHomeTests(unittest.TestCase):
         ])
         self.assertEqual([chip["title"] for chip in page["chips"]], ["Energize", "Relax"])
 
+    def test_yt3_ggpht_thumbnail_uses_width_height_parameters(self) -> None:
+        page = build_structured_home(
+            [
+                {
+                    "title": "Artists",
+                    "contents": [
+                        {
+                            "resultType": "artist",
+                            "title": "Artist",
+                            "browseId": "UCabcdef",
+                            "thumbnails": [
+                                {
+                                    "url": "https://yt3.ggpht.com/avatar=s88",
+                                    "width": 88,
+                                    "height": 88,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+            section_limit=1,
+        )
+        self.assertEqual(
+            page["sections"][0]["items"][0]["thumbnail_url"],
+            "https://yt3.ggpht.com/avatar=w1200-h1200-p-l90-rj",
+        )
+
     def test_extracts_real_inner_tube_chip_cloud(self) -> None:
         response = {
             "contents": {

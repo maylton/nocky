@@ -656,6 +656,31 @@ impl AppController {
                         }
                     }
                 },
+                BackgroundMessage::YouTubeBrowserPlaylistCoversCached {
+                    request_id,
+                    playlist,
+                    items,
+                } => {
+                    if request_id != self.youtube_playlist_request_id.get() {
+                        continue;
+                    }
+
+                    let browse_id = playlist.browse_id.clone();
+                    if browse_id.is_empty() || items.is_empty() {
+                        continue;
+                    }
+
+                    self.youtube_library
+                        .borrow_mut()
+                        .playlist_tracks
+                        .insert(browse_id.clone(), items);
+                    if cacheable_youtube_playlist(&playlist) {
+                        if let Err(error) = queue_library_cache_save(&self.youtube_library.borrow())
+                        {
+                            eprintln!("Could not save the YouTube playlist cache: {error}");
+                        }
+                    }
+                }
                 BackgroundMessage::YouTubeArtistOverview { key, result } => {
                     self.youtube_library
                         .borrow_mut()
@@ -1002,6 +1027,34 @@ impl AppController {
                         }
                     }
                 }
+                BackgroundMessage::YouTubeStructuredPageCoversCached {
+                    request_id,
+                    title,
+                    home,
+                    append,
+                    page,
+                } if youtube_home_response_is_current(
+                    home,
+                    request_id,
+                    self.youtube_home_request_id.get(),
+                ) =>
+                {
+                    if home {
+                        let changed = self
+                            .youtube_home_page
+                            .borrow_mut()
+                            .update_cover_paths(&page);
+                        if changed
+                            && self.config.borrow().startup_source == Some(StartupSource::YouTube)
+                        {
+                            self.refresh_browser();
+                        }
+                    }
+                    if !append {
+                        self.youtube_page.show_structured_page(&title, page, false);
+                    }
+                }
+                BackgroundMessage::YouTubeStructuredPageCoversCached { .. } => {}
                 BackgroundMessage::YouTubeStructuredPage { .. } => {}
                 BackgroundMessage::YouTubeRecoveryRetry {
                     generation,

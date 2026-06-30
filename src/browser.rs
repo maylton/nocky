@@ -1009,6 +1009,7 @@ pub struct LibraryBrowser {
     search_artist_limit: Rc<Cell<usize>>,
     search_playlist_limit: Rc<Cell<usize>>,
     queue: gtk::ListBox,
+    queue_scroll: gtk::ScrolledWindow,
     queue_title: gtk::Label,
     queue_context_header: gtk::Box,
     albums_grid: gtk::FlowBox,
@@ -1479,6 +1480,27 @@ impl LibraryBrowser {
         });
     }
 
+    pub fn queue_scroll_position(&self) -> f64 {
+        self.queue_scroll.vadjustment().value()
+    }
+
+    pub fn restore_queue_scroll_position(&self, value: f64) {
+        let queue_scroll = self.queue_scroll.clone();
+        glib::idle_add_local_once(move || {
+            let adjustment = queue_scroll.vadjustment();
+            let maximum = (adjustment.upper() - adjustment.page_size()).max(adjustment.lower());
+            adjustment.set_value(value.clamp(adjustment.lower(), maximum));
+        });
+    }
+
+    pub fn reset_queue_scroll_position(&self) {
+        let queue_scroll = self.queue_scroll.clone();
+        glib::idle_add_local_once(move || {
+            let adjustment = queue_scroll.vadjustment();
+            adjustment.set_value(adjustment.lower());
+        });
+    }
+
     pub fn mark_home_dirty(&self) {
         self.home_dirty.set(true);
     }
@@ -1908,6 +1930,7 @@ impl LibraryBrowser {
             search_artist_limit,
             search_playlist_limit,
             queue,
+            queue_scroll,
             queue_title,
             queue_context_header,
             albums_grid,
@@ -7855,18 +7878,25 @@ fn youtube_collection_page_header(
 ) -> Option<CollectionPageHeaderData> {
     match route {
         BrowserRoute::YouTubeAlbum(collection) => {
-            let entry = youtube_collection_entry_for_route(&youtube.albums, collection)?;
+            let entry = youtube_collection_entry_for_route(&youtube.albums, collection);
             let track_count = youtube
                 .collection_tracks
                 .get(&collection.key)
                 .map(Vec::len)
-                .unwrap_or(entry.item_count);
+                .or_else(|| entry.map(|entry| entry.item_count))
+                .unwrap_or_default();
 
             Some(CollectionPageHeaderData {
-                cover_path: entry.cached_cover().map(Path::to_path_buf),
+                cover_path: entry
+                    .and_then(YouTubeCollectionEntry::cached_cover)
+                    .map(Path::to_path_buf),
                 eyebrow: localized_collection_eyebrow(language, true, "album"),
-                title: entry.title.clone(),
-                subtitle: entry.subtitle.clone(),
+                title: entry
+                    .map(|entry| entry.title.clone())
+                    .unwrap_or_else(|| collection.title.clone()),
+                subtitle: entry
+                    .map(|entry| entry.subtitle.clone())
+                    .unwrap_or_else(|| collection.artist.clone()),
                 detail: format_track_count(language, track_count),
                 online: true,
                 artist: false,

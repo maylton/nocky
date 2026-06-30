@@ -42,6 +42,12 @@ class YouTubeTrackArtworkTests(unittest.TestCase):
         self.assertIsNotNone(item)
         self.assertIn("track=s1200", item["thumbnail_url"])
 
+    def test_yt3_ggpht_thumbnail_uses_width_height_parameters(self) -> None:
+        self.assertEqual(
+            nocky_youtube._upgrade_thumbnail_url("https://yt3.ggpht.com/avatar=s88", 544),
+            "https://yt3.ggpht.com/avatar=w544-h544-p-l90-rj",
+        )
+
     def test_invalid_video_id_is_not_accepted_as_a_song(self) -> None:
         self.assertIsNone(
             nocky_youtube._song_item(

@@ -6,7 +6,7 @@
 
 <!-- roadmap_rebaseline_2026_06_24_v2 -->
 
-> Last updated: 2026-06-26  
+> Last updated: 2026-06-30
 > Status legend: ✅ completed · 🟡 in progress · ⬜ planned  
 > Current development priority: **YouTube Music Home — Android-parity feed sections**
 
@@ -153,6 +153,15 @@ locally invented category filters.
 - Home sections based on listening behavior.
 - ✅ Suggested playlists, mixtapes and YouTube sync hints hidden from local-only Home.
 - YouTube recommendations kept separate from local statistics.
+- ✅ YouTube Music Home renders server-provided `home_v2` chips, section
+  headers, labels, thumbnails and continuation endpoints.
+- ✅ YouTube Music Home preserves the structured feed order while keeping
+  Local Home history controls out of the YouTube source.
+- ✅ Home V2 artwork now covers raw InnerTube renderer rows, Shorts, live
+  sections, mixes and other non-carousel sections rendered by the GTK Home.
+- ✅ YouTube Home and playlist first paint no longer block on full artwork
+  downloads; cached artwork is reused immediately and fresh covers update
+  afterward.
 
 ### Remaining
 
@@ -167,9 +176,6 @@ locally invented category filters.
 - Better deduplication when metadata differs only slightly.
 - Optional time-window filters for local personalized history, outside the
   primary YouTube feed.
-- YouTube Music Home should render feed chips from `home_v2`.
-- YouTube Music Home should preserve YouTube section titles, labels,
-  thumbnails and continuation endpoints.
 - YouTube Music Home ordering should follow the feed contract, with only small
   Nocky-specific pinned sections when they are clearly source-aware.
 - Avoid adding artificial history-window chips to the YouTube Home.
@@ -238,6 +244,8 @@ locally invented category filters.
 - Redacted stream URLs in diagnostic messages.
 - User-facing playback error messages.
 - Request-generation protection for stale responses.
+- Home and playlist first-paint updates that avoid waiting for every browser
+  cover download before rendering remote content.
 
 ### Remaining
 

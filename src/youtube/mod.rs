@@ -540,6 +540,41 @@ impl YouTubeLibraryCache {
         merge_suggested_collections(&mut self.artists, &self.suggested_artists, "artist");
     }
 
+    pub fn remember_collection_reference(&mut self, item: YouTubeItem) -> bool {
+        let result_type = item.result_type.trim();
+        if !matches!(result_type, "album" | "artist") || item.title.trim().is_empty() {
+            return false;
+        }
+
+        let suggestions = if result_type == "artist" {
+            &mut self.suggested_artists
+        } else {
+            &mut self.suggested_albums
+        };
+        let key = youtube_collection_cache_key(&item);
+        let mut changed = false;
+
+        if let Some(existing) = suggestions.iter_mut().find(|candidate| {
+            youtube_collection_cache_key(candidate) == key
+                || candidate.title.eq_ignore_ascii_case(item.title.trim())
+        }) {
+            let mut next = item;
+            preserve_cached_item_fields(&mut next, existing);
+            if *existing != next {
+                *existing = next;
+                changed = true;
+            }
+        } else {
+            suggestions.insert(0, item);
+            changed = true;
+        }
+
+        if changed {
+            self.rebuild_collections();
+        }
+        changed
+    }
+
     pub fn observe_playback(&mut self, item: &YouTubeItem) -> bool {
         if item.video_id.trim().is_empty() {
             return false;
@@ -1063,6 +1098,20 @@ impl YouTubeBridge {
             .take(limit)
         {
             if item.video_id.is_empty() || !seen.insert(item.video_id.clone()) {
+                continue;
+            }
+            let _ = self.resolve(&item.video_id, false);
+        }
+    }
+
+    pub fn preload_items(&self, items: &[YouTubeItem], limit: usize) {
+        if items.is_empty() || limit == 0 {
+            return;
+        }
+
+        let mut seen = HashSet::new();
+        for item in items.iter().filter(|item| item.playable()).take(limit) {
+            if !seen.insert(item.video_id.clone()) {
                 continue;
             }
             let _ = self.resolve(&item.video_id, false);
@@ -1878,46 +1927,82 @@ fn youtube_video_thumbnail_url(video_id: &str) -> Option<String> {
 
 pub fn cache_items_for_browser(items: &mut [YouTubeItem]) {
     for item in items {
-        item.thumbnail_url = upgrade_thumbnail_url(&item.thumbnail_url, PLAYER_COVER_SIZE);
-        let video_fallback = youtube_video_thumbnail_url(&item.video_id);
-        if item.thumbnail_url.trim().is_empty() {
-            if let Some(fallback) = video_fallback.as_ref() {
-                item.thumbnail_url = fallback.clone();
+        cache_item_for_browser(item);
+    }
+}
+
+pub fn cache_first_items_for_browser(items: &mut [YouTubeItem], limit: usize) {
+    for item in items.iter_mut().take(limit) {
+        cache_item_for_browser(item);
+    }
+    let cached_start = limit.min(items.len());
+    repair_cached_cover_paths_for_items(&mut items[cached_start..]);
+}
+
+pub fn repair_cached_cover_paths_for_items(items: &mut [YouTubeItem]) {
+    for item in items {
+        repair_cached_cover_path_for_item(item);
+    }
+}
+
+pub fn repair_home_page_cover_paths(page: &mut YouTubeHomePage) {
+    for section in &mut page.sections {
+        repair_cached_cover_paths_for_items(&mut section.items);
+    }
+}
+
+fn repair_cached_cover_path_for_item(item: &mut YouTubeItem) {
+    item.thumbnail_url = upgrade_thumbnail_url(&item.thumbnail_url, PLAYER_COVER_SIZE);
+    if item.thumbnail_url.trim().is_empty() {
+        if let Some(fallback) = youtube_video_thumbnail_url(&item.video_id) {
+            item.thumbnail_url = fallback;
+        }
+    }
+    if item.cover_path.is_empty() {
+        if let Some(path) = cached_cover_for_item(item) {
+            item.cover_path = path.to_string_lossy().into_owned();
+        }
+    }
+}
+
+fn cache_item_for_browser(item: &mut YouTubeItem) {
+    item.thumbnail_url = upgrade_thumbnail_url(&item.thumbnail_url, PLAYER_COVER_SIZE);
+    let video_fallback = youtube_video_thumbnail_url(&item.video_id);
+    if item.thumbnail_url.trim().is_empty() {
+        if let Some(fallback) = video_fallback.as_ref() {
+            item.thumbnail_url = fallback.clone();
+        }
+    }
+
+    if item.cover_path.is_empty() {
+        let primary_url = item.thumbnail_url.clone();
+        let mut downloaded = download_cover_sized(item, &primary_url, BROWSER_COVER_SIZE);
+
+        if downloaded.is_none() {
+            if let Some(fallback) = video_fallback {
+                if fallback != primary_url {
+                    item.thumbnail_url = fallback.clone();
+                    downloaded = download_cover_sized(item, &fallback, BROWSER_COVER_SIZE);
+                }
             }
         }
 
-        if item.cover_path.is_empty() {
-            let primary_url = item.thumbnail_url.clone();
-            let mut downloaded = download_cover_sized(item, &primary_url, BROWSER_COVER_SIZE);
-
-            if downloaded.is_none() {
-                if let Some(fallback) = video_fallback {
-                    if fallback != primary_url {
-                        item.thumbnail_url = fallback.clone();
-                        downloaded = download_cover_sized(item, &fallback, BROWSER_COVER_SIZE);
-                    }
-                }
-            }
-
-            if let Some(path) = downloaded {
-                item.cover_path = path.to_string_lossy().to_string();
-            }
+        if let Some(path) = downloaded {
+            item.cover_path = path.to_string_lossy().to_string();
         }
     }
 }
 
 fn home_cover_cache_targets(page: &YouTubeHomePage) -> Vec<(usize, usize)> {
     const PAGE_COVER_BUDGET: usize = 96;
-    const PER_SECTION_VISIBLE_BUDGET: usize = 12;
+    const PER_SECTION_VISIBLE_BUDGET: usize = 18;
 
     let mut targets = Vec::new();
     // Walk rows in round-robin order. This guarantees that a collection-heavy
     // section cannot consume the entire budget before song rows are reached.
     for item_index in 0..PER_SECTION_VISIBLE_BUDGET {
         for (section_index, section) in page.sections.iter().enumerate() {
-            if !structured_cards::uses_card_carousel(&section.layout)
-                || item_index >= section.items.len()
-            {
+            if item_index >= section.items.len() {
                 continue;
             }
             targets.push((section_index, item_index));
@@ -1931,16 +2016,15 @@ fn home_cover_cache_targets(page: &YouTubeHomePage) -> Vec<(usize, usize)> {
 
 pub fn cache_home_page_covers(page: &mut YouTubeHomePage) {
     for (section_index, item_index) in home_cover_cache_targets(page) {
-        let Some(item) = page
-            .sections
-            .get_mut(section_index)
-            .and_then(|section| section.items.get_mut(item_index))
-        else {
+        let Some(section) = page.sections.get_mut(section_index) else {
+            continue;
+        };
+        let Some(item) = section.items.get_mut(item_index) else {
             continue;
         };
         // Do not skip empty thumbnail URLs here. cache_items_for_browser can
         // synthesize a canonical image from a valid video ID.
-        cache_items_for_browser(std::slice::from_mut(item));
+        cache_item_for_browser(item);
     }
 }
 
@@ -1993,6 +2077,52 @@ mod home_cover_cache_tests {
             ..YouTubeHomePage::default()
         };
         assert_eq!(home_cover_cache_targets(&page), vec![(0, 0)]);
+    }
+
+    #[test]
+    fn cover_targets_include_every_visible_home_card() {
+        let page = YouTubeHomePage {
+            sections: vec![section("albums", "album", 30)],
+            ..YouTubeHomePage::default()
+        };
+        let targets = home_cover_cache_targets(&page);
+        assert_eq!(targets.len(), 18);
+        assert!(targets.contains(&(0, 17)));
+        assert!(!targets.contains(&(0, 18)));
+    }
+
+    #[test]
+    fn cover_targets_include_non_carousel_sections_rendered_by_browser_home() {
+        let mut live = section("live", "song", 3);
+        live.layout = "list".to_string();
+        let page = YouTubeHomePage {
+            sections: vec![live],
+            ..YouTubeHomePage::default()
+        };
+
+        assert_eq!(
+            home_cover_cache_targets(&page),
+            vec![(0, 0), (0, 1), (0, 2)]
+        );
+    }
+
+    #[test]
+    fn yt3_ggpht_thumbnail_uses_width_height_parameters() {
+        assert_eq!(
+            upgrade_thumbnail_url("https://yt3.ggpht.com/avatar=s88", 544),
+            "https://yt3.ggpht.com/avatar=w544-h544-p-l90-rj"
+        );
+    }
+
+    #[test]
+    fn yt3_googleusercontent_width_height_thumbnail_is_resized() {
+        assert_eq!(
+            upgrade_thumbnail_url(
+                "https://yt3.googleusercontent.com/_zDuDZFnSKmuQwDX=w60-h60-l90-rj",
+                544
+            ),
+            "https://yt3.googleusercontent.com/_zDuDZFnSKmuQwDX=w544-h544-l90-rj"
+        );
     }
 }
 
@@ -2293,12 +2423,17 @@ pub fn upgrade_thumbnail_url(url: &str, size: u32) -> String {
     if let Some(relative_equal) = output[slash..path_end].rfind('=') {
         let equal = slash + relative_equal;
         let suffix = &output[equal + 1..path_end];
+        let is_yt3_ggpht = output[..path_end].starts_with("https://yt3.ggpht.com/");
         let replacement = if let Some(rest) = suffix.strip_prefix('s') {
             let digits = rest
                 .chars()
                 .take_while(|character| character.is_ascii_digit())
                 .count();
-            (digits > 0).then(|| format!("s{}{}", size, &rest[digits..]))
+            if digits > 0 && is_yt3_ggpht {
+                Some(format!("w{size}-h{size}-p-l90-rj"))
+            } else {
+                (digits > 0).then(|| format!("s{}{}", size, &rest[digits..]))
+            }
         } else if let Some(rest) = suffix.strip_prefix('w') {
             let width_digits = rest
                 .chars()
@@ -2919,6 +3054,39 @@ mod stable_collection_identity_tests {
             youtube_collection_cache_key(&first),
             youtube_collection_cache_key(&second)
         );
+    }
+
+    #[test]
+    fn remembers_home_collection_reference_for_immediate_headers() {
+        let mut cache = YouTubeLibraryCache::default();
+        let album = collection("album", "Home Album", "Home Artist", "MPREb_home");
+
+        assert!(cache.remember_collection_reference(album.clone()));
+        assert_eq!(cache.suggested_albums.len(), 1);
+        assert_eq!(cache.albums.len(), 1);
+        assert_eq!(cache.albums[0].title, "Home Album");
+        assert_eq!(cache.albums[0].source.browse_id, "MPREb_home");
+
+        let updated = YouTubeItem {
+            subtitle: "Updated subtitle".to_string(),
+            ..album
+        };
+        assert!(cache.remember_collection_reference(updated));
+        assert_eq!(cache.suggested_albums.len(), 1);
+        assert_eq!(cache.albums.len(), 1);
+        assert_eq!(cache.albums[0].subtitle, "Updated subtitle");
+    }
+
+    #[test]
+    fn remembers_home_artist_reference_for_immediate_headers() {
+        let mut cache = YouTubeLibraryCache::default();
+        let artist = collection("artist", "Home Artist", "", "UC_home_artist");
+
+        assert!(cache.remember_collection_reference(artist));
+        assert_eq!(cache.suggested_artists.len(), 1);
+        assert_eq!(cache.artists.len(), 1);
+        assert_eq!(cache.artists[0].title, "Home Artist");
+        assert_eq!(cache.artists[0].source.browse_id, "UC_home_artist");
     }
 }
 
