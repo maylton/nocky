@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Prevent collection-heavy Home feeds from starving song artwork downloads."""
 
+# Temporary reviewed patch; removed automatically after it is applied.
+
 from pathlib import Path
 
 
