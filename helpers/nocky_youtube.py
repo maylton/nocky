@@ -34,6 +34,7 @@ from nocky_youtube_feed import (
     load_cached_page,
     save_cached_page,
 )
+from nocky_youtube_home_debug import write_home_debug_dump
 from nocky_youtube_innertube_home import (
     missing_artwork_by_section,
     parse_inner_tube_home_sections,
@@ -1559,6 +1560,7 @@ def _inner_tube_home_rows(
     limit: int,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     body, response = _inner_tube_home_response(client, params)
+    debug_pages: list[dict[str, Any]] = [{"kind": "root", "response": response}]
     section_list = find_inner_tube_home_section_list(response)
     contents = section_list.get("contents") if isinstance(section_list.get("contents"), list) else []
     if not contents:
@@ -1588,6 +1590,8 @@ def _inner_tube_home_rows(
             break
         seen_continuations.add(additional_params)
         continuation_response = sender("browse", body, additional_params)
+        if isinstance(continuation_response, dict):
+            debug_pages.append({"kind": "continuation", "response": continuation_response})
         continuation_contents = continuation_response.get("continuationContents")
         if not isinstance(continuation_contents, dict):
             break
@@ -1614,6 +1618,22 @@ def _inner_tube_home_rows(
             f"Nocky YouTube raw Home items still missing artwork: {summary}",
             file=sys.stderr,
         )
+
+    debug_destination = str(os.environ.get("NOCKY_HOME_DEBUG_DUMP") or "").strip()
+    if debug_destination:
+        try:
+            debug_path = write_home_debug_dump(
+                debug_destination,
+                pages=debug_pages,
+                rows=rows,
+                selected_params=params,
+            )
+            print(f"Nocky YouTube Home renderer diagnostics: {debug_path}", file=sys.stderr)
+        except Exception as debug_error:
+            print(
+                f"Nocky YouTube Home renderer diagnostics failed: {debug_error}",
+                file=sys.stderr,
+            )
     return rows, response
 
 
