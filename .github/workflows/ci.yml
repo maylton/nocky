@@ -11,44 +11,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  apply-home-cover-clippy-fix:
-    if: github.event_name == 'pull_request' && github.head_ref == 'codex/home-v2-polish-and-dynamic-playlists'
-    name: Apply Home cover test cleanup
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout branch
-        uses: actions/checkout@v6
-        with:
-          ref: codex/home-v2-polish-and-dynamic-playlists
-          fetch-depth: 0
-
-      - name: Apply Clippy cleanup
-        run: python3 scripts/apply-home-cover-clippy-fix.py
-
-      - name: Format Rust
-        run: cargo fmt --all
-
-      - name: Restore workflow and remove diagnostics
-        run: |
-          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
-          rm -f scripts/apply-home-cover-clippy-fix.py
-          rm -f docs/CI_FAILURE.txt
-
-      - name: Commit final cleanup
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -A
-          git commit -m "test: satisfy Clippy in Home cover scheduling fixture"
-          git push origin HEAD:codex/home-v2-polish-and-dynamic-playlists
-
   quality:
     name: Rust quality gate
     runs-on: ubuntu-latest

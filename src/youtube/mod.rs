@@ -1957,9 +1957,11 @@ mod home_cover_cache_tests {
                 .map(|index| YouTubeItem {
                     result_type: result_type.to_string(),
                     title: format!("{id}-{index}"),
-                    video_id: (result_type == "song")
-                        .then(|| format!("song{index:07}"))
-                        .unwrap_or_default(),
+                    video_id: if result_type == "song" {
+                        format!("song{index:07}")
+                    } else {
+                        String::new()
+                    },
                     ..YouTubeItem::default()
                 })
                 .collect(),
