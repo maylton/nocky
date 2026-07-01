@@ -44,8 +44,8 @@ pub(super) fn apply_card(root: &gtk::Widget) {
         }
     }
 
-    let Some(card) = find_class(root, "home-card")
-        .and_then(|widget| widget.downcast::<gtk::Box>().ok())
+    let Some(card) =
+        find_class(root, "home-card").and_then(|widget| widget.downcast::<gtk::Box>().ok())
     else {
         return;
     };
