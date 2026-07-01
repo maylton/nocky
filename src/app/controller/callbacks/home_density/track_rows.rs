@@ -44,9 +44,16 @@ pub(super) fn apply_card(root: &gtk::Widget) {
         }
     }
 
-    let Some(card) = find_class(root, "home-card") else {
+    let Some(card) = find_class(root, "home-card")
+        .and_then(|widget| widget.downcast::<gtk::Box>().ok())
+    else {
         return;
     };
+
+    if !card.has_css_class("home-track-card") {
+        arrange_content(&card);
+    }
+
     card.set_size_request(ROW_MIN_WIDTH - 20, CARD_HEIGHT);
     card.set_hexpand(true);
     card.set_vexpand(false);
@@ -80,6 +87,47 @@ fn card_is_track(root: &gtk::Widget) -> bool {
 
 fn is_track_playback_name(name: &str) -> bool {
     name.starts_with("home-play-card:") && name.contains("track:")
+}
+
+fn arrange_content(card: &gtk::Box) {
+    let card_widget: gtk::Widget = card.clone().upcast();
+    let children = direct_children(&card_widget);
+    let Some(artwork) = children.first().cloned() else {
+        return;
+    };
+
+    artwork.set_size_request(ARTWORK_SIZE, ARTWORK_SIZE);
+    artwork.set_hexpand(false);
+    artwork.set_vexpand(false);
+    artwork.set_halign(gtk::Align::Start);
+    artwork.set_valign(gtk::Align::Center);
+
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    text.set_hexpand(true);
+    text.set_halign(gtk::Align::Fill);
+    text.set_valign(gtk::Align::Center);
+    text.add_css_class("home-track-card-text");
+
+    for child in children.into_iter().skip(1) {
+        card.remove(&child);
+
+        if child.has_css_class("collection-card-detail") {
+            child.set_visible(false);
+        }
+
+        if let Ok(label) = child.clone().downcast::<gtk::Label>() {
+            label.set_width_chars(18);
+            label.set_max_width_chars(36);
+            label.set_xalign(0.0);
+            label.set_single_line_mode(true);
+        }
+
+        text.append(&child);
+    }
+
+    card.set_orientation(gtk::Orientation::Horizontal);
+    card.set_spacing(10);
+    card.append(&text);
 }
 
 fn resize_artwork(artwork: &gtk::Widget, size: i32) {
