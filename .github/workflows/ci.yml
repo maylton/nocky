@@ -75,22 +75,43 @@ jobs:
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Apply one-shot performance pass
+        id: apply
         shell: bash
         run: |
           payload="$(sed -n 's/^          \(H4sI.*\)$/\1/p' .github/workflows/apply-performance-pass.yml)"
           test -n "$payload"
           printf '%s' "$payload" | base64 -d | gzip -d > /tmp/apply_performance_pass.py
           python3 -m py_compile /tmp/apply_performance_pass.py
-          python3 /tmp/apply_performance_pass.py
-          git show HEAD^:.github/workflows/ci.yml > .github/workflows/ci.yml
-          cargo fmt --all
-          git diff --check
+          set +e
+          python3 /tmp/apply_performance_pass.py > /tmp/performance-pass.log 2>&1
+          status=$?
+          set -e
+          printf 'exit_status=%s\n' "$status" >> /tmp/performance-pass.log
+          if [ "$status" -eq 0 ]; then
+            git show HEAD^:.github/workflows/ci.yml > .github/workflows/ci.yml
+            cargo fmt --all >> /tmp/performance-pass.log 2>&1
+            git diff --check >> /tmp/performance-pass.log 2>&1
+            echo "success=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "success=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload transformation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nocky-performance-diagnostics
+          path: /tmp/performance-pass.log
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Run quality gate
+        if: steps.apply.outputs.success == 'true'
         shell: bash
         run: bash ./scripts/quality-gate.sh
 
       - name: Package validated source files
+        if: steps.apply.outputs.success == 'true'
         shell: bash
         run: |
           tar -czf /tmp/nocky-performance-pass.tar.gz \
@@ -109,6 +130,7 @@ jobs:
             src/youtube/mod.rs
 
       - name: Upload validated source files
+        if: steps.apply.outputs.success == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: nocky-performance-pass
