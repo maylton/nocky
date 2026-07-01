@@ -1558,11 +1558,14 @@ impl LibraryBrowser {
             if cards.is_empty() {
                 continue;
             }
+            let presentation = youtube_home_section_semantic_presentation(section)
+                .unwrap_or(HomeSectionPresentation::Compact);
             home.append(&home_section(
                 &section.title,
                 &section.label,
                 copy.waiting_content,
                 cards,
+                presentation,
                 playback,
                 config,
                 &self.event_tx,
@@ -3013,7 +3016,8 @@ impl LibraryBrowser {
             if youtube_home_loading {
                 next_home.append(&youtube_home_loading_banner(youtube_home_page, language));
             }
-            for section in &youtube_home_page.sections {
+            let presentations = youtube_home_section_presentations(&youtube_home_page.sections);
+            for (section, presentation) in youtube_home_page.sections.iter().zip(presentations) {
                 let cards = youtube_feed_section_cards(section, language);
                 if cards.is_empty() {
                     continue;
@@ -3023,6 +3027,7 @@ impl LibraryBrowser {
                     &section.label,
                     copy.waiting_content,
                     cards,
+                    presentation,
                     playback,
                     config,
                     &self.event_tx,
@@ -3081,6 +3086,7 @@ impl LibraryBrowser {
                 copy.mixtapes_subtitle,
                 copy.mixtapes_empty,
                 mixes,
+                HomeSectionPresentation::Featured,
                 playback,
                 config,
                 &self.event_tx,
@@ -3094,6 +3100,7 @@ impl LibraryBrowser {
                 copy.local_mixes_subtitle,
                 copy.local_mixes_empty,
                 mixes,
+                HomeSectionPresentation::Featured,
                 playback,
                 config,
                 &self.event_tx,
@@ -3124,6 +3131,7 @@ impl LibraryBrowser {
                 copy.recently_added_subtitle,
                 copy.recently_added_empty,
                 recently_added,
+                HomeSectionPresentation::Compact,
                 playback,
                 config,
                 &self.event_tx,
@@ -3137,6 +3145,7 @@ impl LibraryBrowser {
             copy.albums_subtitle,
             copy.albums_empty,
             ranked_home_album_cards(tracks, youtube, history, active_source, language),
+            HomeSectionPresentation::Compact,
             playback,
             config,
             &self.event_tx,
@@ -3149,6 +3158,7 @@ impl LibraryBrowser {
             copy.artists_subtitle,
             copy.artists_empty,
             ranked_home_artist_cards(tracks, youtube, history, active_source, language),
+            HomeSectionPresentation::Compact,
             playback,
             config,
             &self.event_tx,
@@ -3182,6 +3192,7 @@ impl LibraryBrowser {
             copy.playlists_subtitle,
             copy.playlists_empty,
             playlist_cards,
+            HomeSectionPresentation::Compact,
             playback,
             config,
             &self.event_tx,
@@ -4868,36 +4879,134 @@ fn search_result_artwork(cover_path: Option<&Path>, icon_name: &str) -> gtk::Sta
     stack
 }
 
-const DEFAULT_HOME_COLUMNS: u32 = 6;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HomeSectionPresentation {
+    Featured,
+    Compact,
+    TrackRows,
+}
 
-fn responsive_home_columns(width: i32) -> u32 {
+impl HomeSectionPresentation {
+    fn css_class(self) -> &'static str {
+        match self {
+            Self::Featured => "home-section-featured",
+            Self::Compact => "home-section-compact",
+            Self::TrackRows => "home-section-track-rows",
+        }
+    }
+
+    fn artwork_size(self) -> i32 {
+        match self {
+            Self::Featured => 208,
+            Self::Compact => 128,
+            Self::TrackRows => 54,
+        }
+    }
+
+    fn card_width(self) -> i32 {
+        match self {
+            Self::Featured => 232,
+            Self::Compact => 156,
+            Self::TrackRows => 300,
+        }
+    }
+
+    fn card_height(self) -> i32 {
+        match self {
+            Self::Featured => 292,
+            Self::Compact => 190,
+            Self::TrackRows => 72,
+        }
+    }
+
+    fn outer_width(self) -> i32 {
+        match self {
+            Self::Featured => 248,
+            Self::Compact => 164,
+            Self::TrackRows => 320,
+        }
+    }
+
+    fn outer_height(self) -> i32 {
+        match self {
+            Self::Featured => 312,
+            Self::Compact => 206,
+            Self::TrackRows => 76,
+        }
+    }
+
+    fn columns(self, width: i32) -> u32 {
+        match self {
+            Self::Featured => featured_home_columns(width),
+            Self::Compact => compact_home_columns(width),
+            Self::TrackRows => track_row_home_columns(width),
+        }
+    }
+}
+
+fn featured_home_columns(width: i32) -> u32 {
     match width {
-        ..=639 => 2,
-        640..=899 => 3,
-        900..=1199 => 4,
-        1200..=1599 => DEFAULT_HOME_COLUMNS,
-        1600..=1999 => 8,
+        ..=599 => 2,
+        600..=999 => 3,
+        1000..=1399 => 4,
+        1400..=1899 => 5,
+        _ => 6,
+    }
+}
+
+fn compact_home_columns(width: i32) -> u32 {
+    match width {
+        ..=479 => 2,
+        480..=679 => 3,
+        680..=899 => 4,
+        900..=1119 => 5,
+        1120..=1359 => 6,
+        1360..=1599 => 7,
+        1600..=1799 => 8,
+        1800..=2099 => 9,
         _ => 10,
     }
 }
 
-fn responsive_home_grid() -> gtk::FlowBox {
+fn track_row_home_columns(width: i32) -> u32 {
+    match width {
+        ..=699 => 1,
+        700..=1399 => 2,
+        _ => 3,
+    }
+}
+
+fn responsive_home_grid(presentation: HomeSectionPresentation) -> gtk::FlowBox {
     let grid = gtk::FlowBox::new();
     grid.set_selection_mode(gtk::SelectionMode::None);
     grid.set_activate_on_single_click(false);
-    grid.set_column_spacing(14);
-    grid.set_row_spacing(14);
-    grid.set_homogeneous(false);
-    grid.set_min_children_per_line(1);
-    grid.set_max_children_per_line(DEFAULT_HOME_COLUMNS);
+    grid.set_column_spacing(match presentation {
+        HomeSectionPresentation::Featured => 14,
+        HomeSectionPresentation::Compact => 12,
+        HomeSectionPresentation::TrackRows => 14,
+    });
+    grid.set_row_spacing(match presentation {
+        HomeSectionPresentation::Featured => 16,
+        HomeSectionPresentation::Compact => 14,
+        HomeSectionPresentation::TrackRows => 8,
+    });
+    grid.set_homogeneous(presentation == HomeSectionPresentation::TrackRows);
+    grid.set_min_children_per_line(match presentation {
+        HomeSectionPresentation::Featured | HomeSectionPresentation::Compact => 2,
+        HomeSectionPresentation::TrackRows => 1,
+    });
+    grid.set_max_children_per_line(presentation.columns(1));
     grid.set_hexpand(true);
-    grid.set_halign(gtk::Align::Fill);
+    grid.set_halign(match presentation {
+        HomeSectionPresentation::Compact => gtk::Align::Start,
+        HomeSectionPresentation::Featured | HomeSectionPresentation::TrackRows => gtk::Align::Fill,
+    });
     grid.set_valign(gtk::Align::Start);
     grid.add_css_class("home-card-grid");
 
-    let current_columns = Rc::new(Cell::new(DEFAULT_HOME_COLUMNS));
+    let current_columns = Rc::new(Cell::new(presentation.columns(1)));
     grid.connect_notify_local(Some("width"), move |grid, _| {
-        let columns = responsive_home_columns(grid.width());
+        let columns = presentation.columns(grid.width());
         if current_columns.replace(columns) != columns {
             grid.set_max_children_per_line(columns);
         }
@@ -4908,16 +5017,35 @@ fn responsive_home_grid() -> gtk::FlowBox {
 
 #[cfg(test)]
 mod responsive_home_grid_tests {
-    use super::responsive_home_columns;
+    use super::{compact_home_columns, featured_home_columns, track_row_home_columns};
 
     #[test]
-    fn adapts_home_columns_to_available_width() {
-        assert_eq!(responsive_home_columns(480), 2);
-        assert_eq!(responsive_home_columns(800), 3);
-        assert_eq!(responsive_home_columns(1024), 4);
-        assert_eq!(responsive_home_columns(1280), 6);
-        assert_eq!(responsive_home_columns(1700), 8);
-        assert_eq!(responsive_home_columns(2200), 10);
+    fn featured_breakpoints_scale_with_grid_width() {
+        assert_eq!(featured_home_columns(420), 2);
+        assert_eq!(featured_home_columns(800), 3);
+        assert_eq!(featured_home_columns(1200), 4);
+        assert_eq!(featured_home_columns(1600), 5);
+        assert_eq!(featured_home_columns(2200), 6);
+    }
+
+    #[test]
+    fn compact_breakpoints_scale_with_grid_width() {
+        assert_eq!(compact_home_columns(420), 2);
+        assert_eq!(compact_home_columns(600), 3);
+        assert_eq!(compact_home_columns(800), 4);
+        assert_eq!(compact_home_columns(1000), 5);
+        assert_eq!(compact_home_columns(1200), 6);
+        assert_eq!(compact_home_columns(1500), 7);
+        assert_eq!(compact_home_columns(1700), 8);
+        assert_eq!(compact_home_columns(1900), 9);
+        assert_eq!(compact_home_columns(2200), 10);
+    }
+
+    #[test]
+    fn track_row_breakpoints_scale_with_grid_width() {
+        assert_eq!(track_row_home_columns(600), 1);
+        assert_eq!(track_row_home_columns(1000), 2);
+        assert_eq!(track_row_home_columns(1800), 3);
     }
 }
 
@@ -4930,6 +5058,18 @@ fn home_history_section(
     language: AppLanguage,
     _card_effects: bool,
 ) -> gtk::Box {
+    let presentation = if !entries.is_empty()
+        && entries.iter().all(|entry| {
+            matches!(
+                entry,
+                HomeHistoryTrack::LocalTrack { .. } | HomeHistoryTrack::YouTubeTrack { .. }
+            )
+        }) {
+        HomeSectionPresentation::TrackRows
+    } else {
+        HomeSectionPresentation::Compact
+    };
+
     let title_label = gtk::Label::new(Some(title));
     title_label.set_xalign(0.0);
     title_label.add_css_class("home-section-title");
@@ -4943,7 +5083,7 @@ fn home_history_section(
     heading.append(&title_label);
     heading.append(&subtitle_label);
 
-    let grid = responsive_home_grid();
+    let grid = responsive_home_grid(presentation);
 
     if entries.is_empty() {
         grid.insert(&home_empty_card(language, empty_detail), -1);
@@ -4976,12 +5116,13 @@ fn home_history_section(
                     BrowserEvent::TrackActivated(index)
                 };
                 (
-                    collection_card(
+                    home_collection_card(
                         track.cover_path.as_deref(),
                         &track.title,
                         &track.artist,
                         &detail,
                         false,
+                        presentation,
                     ),
                     event,
                 )
@@ -5014,18 +5155,19 @@ fn home_history_section(
                     }
                 };
                 (
-                    collection_card(
+                    home_collection_card(
                         item.cached_cover(),
                         &item.title,
                         &item.artist,
                         &detail,
                         true,
+                        presentation,
                     ),
                     event,
                 )
             }
             HomeHistoryTrack::LocalAlbum(title) => (
-                collection_card(
+                home_collection_card(
                     None,
                     &title,
                     match language {
@@ -5035,6 +5177,7 @@ fn home_history_section(
                     },
                     "Local",
                     false,
+                    presentation,
                 ),
                 BrowserEvent::Navigate(BrowserRoute::Album(title)),
             ),
@@ -5043,7 +5186,7 @@ fn home_history_section(
                 cover_path,
                 indices,
             } => (
-                collection_card(
+                home_collection_card(
                     cover_path.as_deref(),
                     &title,
                     match language {
@@ -5053,11 +5196,12 @@ fn home_history_section(
                     },
                     "Local",
                     false,
+                    presentation,
                 ),
                 BrowserEvent::PlayLocalMix { title, indices },
             ),
             HomeHistoryTrack::LocalPlaylist(title) => (
-                collection_card(
+                home_collection_card(
                     None,
                     &title,
                     match language {
@@ -5067,11 +5211,12 @@ fn home_history_section(
                     },
                     "Local",
                     false,
+                    presentation,
                 ),
                 BrowserEvent::Navigate(BrowserRoute::Playlist(title)),
             ),
             HomeHistoryTrack::YouTubeAlbum { item, cover_path } => (
-                collection_card(
+                home_collection_card(
                     cover_path.as_deref().or_else(|| item.cached_cover()),
                     &item.title,
                     match language {
@@ -5081,11 +5226,12 @@ fn home_history_section(
                     },
                     "YouTube Music",
                     true,
+                    presentation,
                 ),
                 BrowserEvent::OpenYouTubeCollection(item),
             ),
             HomeHistoryTrack::YouTubePlaylist(item) => (
-                collection_card(
+                home_collection_card(
                     item.cached_cover(),
                     &item.title,
                     match language {
@@ -5095,6 +5241,7 @@ fn home_history_section(
                     },
                     "YouTube Music",
                     true,
+                    presentation,
                 ),
                 BrowserEvent::OpenYouTubePlaylist(item),
             ),
@@ -5107,6 +5254,7 @@ fn home_history_section(
 
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
     section.add_css_class("home-section");
+    section.add_css_class(presentation.css_class());
     section.append(&heading);
     section.append(&grid);
     section
@@ -5262,6 +5410,215 @@ fn youtube_feed_section_cards(
         .collect()
 }
 
+fn youtube_home_section_presentations(
+    sections: &[YouTubeHomeSection],
+) -> Vec<HomeSectionPresentation> {
+    let semantic = sections
+        .iter()
+        .map(youtube_home_section_semantic_presentation)
+        .collect::<Vec<_>>();
+    let has_featured = semantic.contains(&Some(HomeSectionPresentation::Featured));
+    let fallback_featured = if has_featured {
+        None
+    } else {
+        semantic
+            .iter()
+            .position(|presentation| *presentation == Some(HomeSectionPresentation::Compact))
+    };
+
+    sections
+        .iter()
+        .enumerate()
+        .map(|(index, _)| {
+            if fallback_featured == Some(index) {
+                HomeSectionPresentation::Featured
+            } else {
+                semantic[index].unwrap_or(HomeSectionPresentation::Compact)
+            }
+        })
+        .collect()
+}
+
+fn youtube_home_section_semantic_presentation(
+    section: &YouTubeHomeSection,
+) -> Option<HomeSectionPresentation> {
+    if youtube_home_section_is_track_rows(section) {
+        return Some(HomeSectionPresentation::TrackRows);
+    }
+    if youtube_home_section_is_featured_mix(section) {
+        return Some(HomeSectionPresentation::Featured);
+    }
+    if youtube_home_section_is_collection(section) {
+        return Some(HomeSectionPresentation::Compact);
+    }
+    None
+}
+
+fn youtube_home_section_is_track_rows(section: &YouTubeHomeSection) -> bool {
+    !section.items.is_empty()
+        && section.items.iter().all(|item| {
+            item.playable() && matches!(item.result_type.as_str(), "song" | "video" | "episode")
+        })
+}
+
+fn youtube_home_section_is_featured_mix(section: &YouTubeHomeSection) -> bool {
+    let haystack = [
+        section.id.as_str(),
+        section.layout.as_str(),
+        section.endpoint.browse_id.as_str(),
+        section.endpoint.params.as_str(),
+    ]
+    .join(" ")
+    .to_ascii_lowercase();
+
+    if contains_mix_signal(&haystack) {
+        return true;
+    }
+
+    let playlist_items = section
+        .items
+        .iter()
+        .filter(|item| item.result_type == "playlist")
+        .collect::<Vec<_>>();
+    !playlist_items.is_empty()
+        && playlist_items
+            .iter()
+            .any(|item| item.playlist_kind == "mix" || contains_mix_signal(&item_text_signal(item)))
+}
+
+fn youtube_home_section_is_collection(section: &YouTubeHomeSection) -> bool {
+    section.items.iter().any(|item| {
+        matches!(
+            item.result_type.as_str(),
+            "playlist" | "album" | "artist" | "station"
+        ) || !item.browse_id.trim().is_empty()
+    })
+}
+
+fn item_text_signal(item: &YouTubeItem) -> String {
+    [
+        item.result_type.as_str(),
+        item.playlist_kind.as_str(),
+        item.browse_id.as_str(),
+        item.title.as_str(),
+        item.subtitle.as_str(),
+        item.album.as_str(),
+        item.artist.as_str(),
+    ]
+    .join(" ")
+    .to_ascii_lowercase()
+}
+
+fn contains_mix_signal(value: &str) -> bool {
+    value.contains("mix")
+        || value.contains("mixtape")
+        || value.contains("radio")
+        || value.contains("supermix")
+        || value.contains("quick_picks")
+        || value.contains("made_for_you")
+        || value.contains("personal")
+}
+
+#[cfg(test)]
+mod youtube_home_section_presentation_tests {
+    use super::{
+        youtube_home_section_presentations, HomeSectionPresentation, YouTubeHomeSection,
+        YouTubeItem,
+    };
+
+    fn item(result_type: &str) -> YouTubeItem {
+        YouTubeItem {
+            result_type: result_type.to_string(),
+            title: format!("{result_type} title"),
+            subtitle: "subtitle".to_string(),
+            video_id: if matches!(result_type, "song" | "video" | "episode") {
+                "video123".to_string()
+            } else {
+                String::new()
+            },
+            browse_id: format!("browse-{result_type}"),
+            ..YouTubeItem::default()
+        }
+    }
+
+    fn section(id: &str, layout: &str, items: Vec<YouTubeItem>) -> YouTubeHomeSection {
+        YouTubeHomeSection {
+            id: id.to_string(),
+            title: id.to_string(),
+            layout: layout.to_string(),
+            items,
+            ..YouTubeHomeSection::default()
+        }
+    }
+
+    #[test]
+    fn classifies_mixes_as_featured() {
+        let mut mix = item("playlist");
+        mix.playlist_kind = "mix".to_string();
+        let sections = vec![section("personal-mixes", "carousel", vec![mix])];
+
+        assert_eq!(
+            youtube_home_section_presentations(&sections),
+            vec![HomeSectionPresentation::Featured]
+        );
+    }
+
+    #[test]
+    fn classifies_suggested_playlists_as_compact() {
+        let mut playlist = item("playlist");
+        playlist.playlist_kind = "recommended".to_string();
+        let sections = vec![
+            section(
+                "made-for-you-radio",
+                "carousel",
+                vec![{
+                    let mut mix = item("playlist");
+                    mix.playlist_kind = "mix".to_string();
+                    mix
+                }],
+            ),
+            section("suggested-playlists", "carousel", vec![playlist]),
+        ];
+
+        assert_eq!(
+            youtube_home_section_presentations(&sections)[1],
+            HomeSectionPresentation::Compact
+        );
+    }
+
+    #[test]
+    fn classifies_track_sections_as_track_rows() {
+        let sections = vec![section(
+            "recently-played",
+            "quick_picks",
+            vec![item("song")],
+        )];
+
+        assert_eq!(
+            youtube_home_section_presentations(&sections),
+            vec![HomeSectionPresentation::TrackRows]
+        );
+    }
+
+    #[test]
+    fn falls_back_to_first_collection_when_no_featured_exists() {
+        let sections = vec![
+            section("songs", "list", vec![item("song")]),
+            section("albums", "carousel", vec![item("album")]),
+            section("artists", "carousel", vec![item("artist")]),
+        ];
+
+        assert_eq!(
+            youtube_home_section_presentations(&sections),
+            vec![
+                HomeSectionPresentation::TrackRows,
+                HomeSectionPresentation::Featured,
+                HomeSectionPresentation::Compact,
+            ]
+        );
+    }
+}
+
 fn youtube_feed_item_card(
     item: &YouTubeItem,
     queue: &[YouTubeItem],
@@ -5318,6 +5675,7 @@ fn home_section(
     subtitle: &str,
     empty_detail: &str,
     cards: Vec<HomeCard>,
+    presentation: HomeSectionPresentation,
     playback: &BrowserPlaybackState,
     config: &AppConfig,
     event_tx: &Sender<BrowserEvent>,
@@ -5336,19 +5694,28 @@ fn home_section(
     heading.append(&title_label);
     heading.append(&subtitle_label);
 
-    let grid = responsive_home_grid();
+    let grid = responsive_home_grid(presentation);
 
     if cards.is_empty() {
         grid.insert(&home_empty_card(language, empty_detail), -1);
     } else {
         for card in cards {
-            let button = home_card_button(card, playback, config, event_tx, language, card_effects);
+            let button = home_card_button(
+                card,
+                presentation,
+                playback,
+                config,
+                event_tx,
+                language,
+                card_effects,
+            );
             grid.insert(&button, -1);
         }
     }
 
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
     section.add_css_class("home-section");
+    section.add_css_class(presentation.css_class());
     section.append(&heading);
     section.append(&grid);
     section
@@ -5394,6 +5761,7 @@ fn home_edge_lerp(start: f64, end: f64, progress: f64) -> f64 {
 
 fn home_card_button(
     card: HomeCard,
+    presentation: HomeSectionPresentation,
     playback: &BrowserPlaybackState,
     config: &AppConfig,
     event_tx: &Sender<BrowserEvent>,
@@ -5539,15 +5907,7 @@ fn home_card_button(
             HomeCard::YouTubeAlbum { .. } | HomeCard::YouTubePlaylist(_)
         );
 
-    let card_widget = collection_card_with_placeholder(
-        descriptor.cover_path,
-        descriptor.title,
-        descriptor.subtitle,
-        descriptor.detail,
-        descriptor.online,
-        descriptor.placeholder_icon,
-        descriptor.placeholder_class,
-    );
+    let card_widget = home_collection_card_with_placeholder(&descriptor, presentation);
     if descriptor.artist {
         card_widget.add_css_class("artist-collection-card");
     }
@@ -5591,6 +5951,13 @@ fn home_card_button(
     }
 
     let main_button = gtk::Button::new();
+    main_button.set_size_request(presentation.outer_width(), presentation.outer_height());
+    main_button.set_hexpand(presentation == HomeSectionPresentation::TrackRows);
+    main_button.set_halign(match presentation {
+        HomeSectionPresentation::TrackRows => gtk::Align::Fill,
+        HomeSectionPresentation::Featured => gtk::Align::Fill,
+        HomeSectionPresentation::Compact => gtk::Align::Start,
+    });
     main_button.add_css_class("flat");
     main_button.add_css_class("home-card-button");
     main_button.add_css_class("expressive-collection-button");
@@ -5617,15 +5984,32 @@ fn home_card_button(
     }
 
     let overlay = gtk::Overlay::new();
+    overlay.set_size_request(presentation.outer_width(), presentation.outer_height());
+    overlay.set_hexpand(presentation == HomeSectionPresentation::TrackRows);
+    overlay.set_halign(match presentation {
+        HomeSectionPresentation::TrackRows => gtk::Align::Fill,
+        HomeSectionPresentation::Featured => gtk::Align::Fill,
+        HomeSectionPresentation::Compact => gtk::Align::Start,
+    });
     overlay.set_child(Some(&main_button));
     overlay.add_css_class("home-card-context-overlay");
 
     if let Some(play_event) = play_event {
         let control = gtk::Button::new();
-        control.set_halign(gtk::Align::End);
+        control.set_halign(match presentation {
+            HomeSectionPresentation::TrackRows => gtk::Align::Start,
+            HomeSectionPresentation::Featured | HomeSectionPresentation::Compact => gtk::Align::End,
+        });
         control.set_valign(gtk::Align::Start);
-        control.set_margin_top(12);
-        control.set_margin_end(12);
+        control.set_margin_top(match presentation {
+            HomeSectionPresentation::TrackRows => 9,
+            _ => 10,
+        });
+        control.set_margin_start(match presentation {
+            HomeSectionPresentation::TrackRows => 30,
+            _ => 0,
+        });
+        control.set_margin_end(10);
         control.add_css_class("circular");
         control.add_css_class("collection-card-context-action");
         if let Some(key) = playback_key.as_deref() {
@@ -5704,8 +6088,8 @@ fn home_card_button(
             .build();
         menu_button.set_halign(gtk::Align::Start);
         menu_button.set_valign(gtk::Align::Start);
-        menu_button.set_margin_top(12);
-        menu_button.set_margin_start(12);
+        menu_button.set_margin_top(10);
+        menu_button.set_margin_start(10);
         menu_button.add_css_class("circular");
         menu_button.add_css_class("collection-card-overflow-button");
         menu_button.set_sensitive(!is_loading);
@@ -5871,6 +6255,183 @@ fn home_card_button(
     }
 
     overlay.upcast()
+}
+
+fn home_collection_card_with_placeholder(
+    descriptor: &CollectionCardDescriptor<'_>,
+    presentation: HomeSectionPresentation,
+) -> gtk::Box {
+    let card = home_collection_card(
+        descriptor.cover_path,
+        descriptor.title,
+        descriptor.subtitle,
+        descriptor.detail,
+        descriptor.online,
+        presentation,
+    );
+
+    if descriptor.cover_path.is_none() {
+        if let Some(artwork) = card
+            .first_child()
+            .and_then(|child| child.downcast::<gtk::Overlay>().ok())
+            .and_then(|overlay| overlay.child())
+            .and_then(|child| child.downcast::<gtk::Stack>().ok())
+        {
+            artwork.add_css_class("typed-collection-placeholder");
+            artwork.add_css_class(descriptor.placeholder_class);
+
+            if let Some(icon) = artwork
+                .first_child()
+                .and_then(|child| child.downcast::<gtk::Image>().ok())
+            {
+                icon.set_icon_name(Some(descriptor.placeholder_icon));
+                icon.add_css_class("typed-placeholder-icon");
+            }
+        }
+    }
+
+    card
+}
+
+fn home_collection_card(
+    cover_path: Option<&Path>,
+    title: &str,
+    subtitle: &str,
+    detail: &str,
+    online: bool,
+    presentation: HomeSectionPresentation,
+) -> gtk::Box {
+    let artwork_size = presentation.artwork_size();
+    let artwork = artwork(cover_path, artwork_size);
+    let artwork_overlay = gtk::Overlay::new();
+    artwork_overlay.set_size_request(artwork_size, artwork_size);
+    artwork_overlay.set_halign(match presentation {
+        HomeSectionPresentation::TrackRows => gtk::Align::Start,
+        _ => gtk::Align::Center,
+    });
+    artwork_overlay.set_valign(gtk::Align::Start);
+    artwork_overlay.set_child(Some(&artwork));
+    if online {
+        if let Some(cache_indicator) = youtube_cache_indicator(AppLanguage::Portuguese) {
+            cache_indicator.set_halign(gtk::Align::End);
+            cache_indicator.set_valign(gtk::Align::End);
+            cache_indicator.set_margin_end(8);
+            cache_indicator.set_margin_bottom(8);
+            artwork_overlay.add_overlay(&cache_indicator);
+        }
+    }
+
+    let title_label = home_card_label(
+        title,
+        "collection-card-title",
+        match presentation {
+            HomeSectionPresentation::Featured => 24,
+            HomeSectionPresentation::Compact => 16,
+            HomeSectionPresentation::TrackRows => 28,
+        },
+    );
+    title_label.add_css_class("expressive-card-title");
+
+    let subtitle_label = home_card_label(
+        subtitle,
+        "expressive-card-subtitle",
+        match presentation {
+            HomeSectionPresentation::Featured => 24,
+            HomeSectionPresentation::Compact => 16,
+            HomeSectionPresentation::TrackRows => 32,
+        },
+    );
+    subtitle_label.add_css_class("dim-label");
+
+    let detail_label = home_card_label(
+        detail,
+        "collection-card-detail",
+        match presentation {
+            HomeSectionPresentation::Featured => 24,
+            HomeSectionPresentation::Compact => 16,
+            HomeSectionPresentation::TrackRows => 32,
+        },
+    );
+    detail_label.add_css_class("dim-label");
+    detail_label.add_css_class("expressive-card-detail");
+    if presentation == HomeSectionPresentation::Compact {
+        detail_label.set_visible(false);
+    }
+
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 3);
+    text.set_hexpand(presentation == HomeSectionPresentation::TrackRows);
+    text.set_halign(gtk::Align::Fill);
+    text.set_valign(match presentation {
+        HomeSectionPresentation::TrackRows => gtk::Align::Center,
+        _ => gtk::Align::Start,
+    });
+    text.append(&title_label);
+    if !subtitle.is_empty() {
+        text.append(&subtitle_label);
+    }
+    if !detail.is_empty() {
+        text.append(&detail_label);
+    }
+
+    let card = gtk::Box::new(
+        match presentation {
+            HomeSectionPresentation::TrackRows => gtk::Orientation::Horizontal,
+            HomeSectionPresentation::Featured | HomeSectionPresentation::Compact => {
+                gtk::Orientation::Vertical
+            }
+        },
+        match presentation {
+            HomeSectionPresentation::TrackRows => 10,
+            HomeSectionPresentation::Featured => 7,
+            HomeSectionPresentation::Compact => 5,
+        },
+    );
+    card.set_size_request(presentation.card_width(), presentation.card_height());
+    card.set_hexpand(presentation == HomeSectionPresentation::TrackRows);
+    card.set_vexpand(false);
+    card.set_halign(match presentation {
+        HomeSectionPresentation::TrackRows => gtk::Align::Fill,
+        HomeSectionPresentation::Featured => gtk::Align::Fill,
+        HomeSectionPresentation::Compact => gtk::Align::Start,
+    });
+    card.set_valign(match presentation {
+        HomeSectionPresentation::TrackRows => gtk::Align::Center,
+        _ => gtk::Align::Start,
+    });
+    card.set_margin_top(match presentation {
+        HomeSectionPresentation::TrackRows => 2,
+        _ => 8,
+    });
+    card.set_margin_bottom(match presentation {
+        HomeSectionPresentation::TrackRows => 2,
+        _ => 8,
+    });
+    card.set_margin_start(8);
+    card.set_margin_end(8);
+    card.append(&artwork_overlay);
+    card.append(&text);
+    card.add_css_class("collection-card");
+    card.add_css_class("expressive-collection-card");
+    match presentation {
+        HomeSectionPresentation::Featured => card.add_css_class("home-card-featured"),
+        HomeSectionPresentation::Compact => card.add_css_class("home-card-compact"),
+        HomeSectionPresentation::TrackRows => card.add_css_class("home-track-card"),
+    }
+    if online {
+        card.add_css_class("youtube-collection-card");
+    }
+    card
+}
+
+fn home_card_label(text: &str, class_name: &str, max_width_chars: i32) -> gtk::Label {
+    let label = gtk::Label::new(Some(text));
+    label.set_xalign(0.0);
+    label.set_single_line_mode(true);
+    label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    label.set_width_chars(max_width_chars);
+    label.set_max_width_chars(max_width_chars);
+    label.add_css_class(class_name);
+    label
 }
 
 fn home_empty_card(language: AppLanguage, detail: &str) -> gtk::Box {
@@ -6379,38 +6940,6 @@ fn collection_card(
         card.append(&detail_label);
     }
     bind_responsive_collection_artwork(&card, &artwork, cover_path.map(Path::to_path_buf));
-    card
-}
-
-fn collection_card_with_placeholder(
-    cover_path: Option<&Path>,
-    title: &str,
-    subtitle: &str,
-    detail: &str,
-    online: bool,
-    placeholder_icon: &str,
-    placeholder_class: &str,
-) -> gtk::Box {
-    let card = collection_card(cover_path, title, subtitle, detail, online);
-
-    if cover_path.is_none() {
-        if let Some(artwork) = card
-            .first_child()
-            .and_then(|child| child.downcast::<gtk::Stack>().ok())
-        {
-            artwork.add_css_class("typed-collection-placeholder");
-            artwork.add_css_class(placeholder_class);
-
-            if let Some(icon) = artwork
-                .first_child()
-                .and_then(|child| child.downcast::<gtk::Image>().ok())
-            {
-                icon.set_icon_name(Some(placeholder_icon));
-                icon.add_css_class("typed-placeholder-icon");
-            }
-        }
-    }
-
     card
 }
 
