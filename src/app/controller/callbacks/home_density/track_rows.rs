@@ -1,5 +1,11 @@
 use gtk::prelude::*;
 
+const ROW_MIN_WIDTH: i32 = 300;
+const ROW_HEIGHT: i32 = 82;
+const CARD_HEIGHT: i32 = 72;
+const ARTWORK_SIZE: i32 = 56;
+const ACTION_SIZE: i32 = 36;
+
 pub(super) fn section_is_track_only(cards: &[gtk::Widget]) -> bool {
     !cards.is_empty() && cards.iter().all(card_is_track)
 }
@@ -13,7 +19,49 @@ pub(super) fn configure_grid(grid: &gtk::FlowBox, width: i32) {
     grid.set_halign(gtk::Align::Fill);
 }
 
-pub(super) fn apply_card(_root: &gtk::Widget) {}
+pub(super) fn apply_card(root: &gtk::Widget) {
+    root.set_size_request(ROW_MIN_WIDTH, ROW_HEIGHT);
+    root.set_hexpand(true);
+    root.set_halign(gtk::Align::Fill);
+
+    for widget in descendants(root) {
+        if widget.has_css_class("home-card-context-overlay")
+            || widget.has_css_class("home-card-button")
+        {
+            widget.set_size_request(ROW_MIN_WIDTH, ROW_HEIGHT);
+            widget.set_hexpand(true);
+            widget.set_halign(gtk::Align::Fill);
+        }
+
+        if widget.has_css_class("collection-card-context-action")
+            || widget.has_css_class("collection-card-overflow-button")
+        {
+            widget.set_size_request(ACTION_SIZE, ACTION_SIZE);
+            widget.set_margin_top(0);
+            widget.set_margin_start(8);
+            widget.set_margin_end(8);
+            widget.set_valign(gtk::Align::Center);
+        }
+    }
+
+    let Some(card) = find_class(root, "home-card") else {
+        return;
+    };
+    card.set_size_request(ROW_MIN_WIDTH - 20, CARD_HEIGHT);
+    card.set_hexpand(true);
+    card.set_vexpand(false);
+    card.set_halign(gtk::Align::Fill);
+    card.set_valign(gtk::Align::Center);
+    card.set_margin_top(4);
+    card.set_margin_bottom(4);
+    card.set_margin_start(6);
+    card.set_margin_end(ACTION_SIZE + 12);
+    card.add_css_class("home-track-card");
+
+    if let Some(artwork) = find_class(root, "collection-artwork") {
+        resize_artwork(&artwork, ARTWORK_SIZE);
+    }
+}
 
 fn columns(width: i32) -> u32 {
     match width {
@@ -34,6 +82,28 @@ fn is_track_playback_name(name: &str) -> bool {
     name.starts_with("home-play-card:") && name.contains("track:")
 }
 
+fn resize_artwork(artwork: &gtk::Widget, size: i32) {
+    artwork.set_size_request(size, size);
+    artwork.set_hexpand(false);
+    artwork.set_vexpand(false);
+
+    for child in direct_children(artwork) {
+        child.set_size_request(size, size);
+        if let Ok(image) = child.clone().downcast::<gtk::Image>() {
+            image.set_pixel_size(size / 3);
+        }
+        if let Ok(picture) = child.downcast::<gtk::Picture>() {
+            picture.set_size_request(size, size);
+        }
+    }
+}
+
+fn find_class(root: &gtk::Widget, class_name: &str) -> Option<gtk::Widget> {
+    descendants(root)
+        .into_iter()
+        .find(|widget| widget.has_css_class(class_name))
+}
+
 fn descendants(root: &gtk::Widget) -> Vec<gtk::Widget> {
     let mut result = Vec::new();
     let mut pending = vec![root.clone()];
@@ -45,6 +115,18 @@ fn descendants(root: &gtk::Widget) -> Vec<gtk::Widget> {
             pending.push(current);
         }
         result.push(widget);
+    }
+
+    result
+}
+
+fn direct_children(root: &gtk::Widget) -> Vec<gtk::Widget> {
+    let mut result = Vec::new();
+    let mut child = root.first_child();
+
+    while let Some(current) = child {
+        child = current.next_sibling();
+        result.push(current);
     }
 
     result
