@@ -37,9 +37,7 @@ pub(super) fn install(controller: &Rc<AppController>) {
             return glib::ControlFlow::Continue;
         }
 
-        durable
-            .borrow_mut()
-            .persist_if_changed(&browse_id, &items);
+        durable.borrow_mut().persist_if_changed(&browse_id, &items);
 
         let now = std::time::Instant::now();
         let state = controller
