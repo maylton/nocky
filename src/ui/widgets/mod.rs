@@ -5,6 +5,10 @@ mod compact_volume_motion;
 mod cover;
 mod expressive_loading;
 mod expressive_transport;
+// The class contract lands before its first migrated call sites.
+// Remove this allowance when the Settings pilot consumes the helper.
+#[allow(dead_code)]
+pub(crate) mod material_button;
 mod wave_progress;
 
 pub(crate) use animated_page_switcher::{AnimatedPageSpec, AnimatedPageSwitcher, TopPage};
