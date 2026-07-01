@@ -604,10 +604,6 @@ impl AppController {
                             .remove(&browse_id);
 
                         if items.is_empty() {
-                            self.youtube_library
-                                .borrow_mut()
-                                .playlist_tracks
-                                .remove(&browse_id);
                             if self.is_open_youtube_playlist(&browse_id) {
                                 self.refresh_browser();
                             }
@@ -656,6 +652,59 @@ impl AppController {
                         }
                     }
                 },
+                BackgroundMessage::YouTubeBrowserPlaylistRevalidated { playlist, result } => {
+                    let browse_id = playlist.browse_id.clone();
+                    if browse_id.trim().is_empty() {
+                        continue;
+                    }
+
+                    self.youtube_library
+                        .borrow_mut()
+                        .playlist_loading
+                        .remove(&browse_id);
+
+                    match result {
+                        Ok(items) if !items.is_empty() => {
+                            self.youtube_library
+                                .borrow_mut()
+                                .playlist_tracks
+                                .insert(browse_id.clone(), items);
+                            self.mark_youtube_playlist_revalidation_succeeded(&browse_id);
+
+                            if cacheable_youtube_playlist(&playlist) {
+                                if let Err(error) =
+                                    queue_library_cache_save(&self.youtube_library.borrow())
+                                {
+                                    eprintln!(
+                                        "Could not save the revalidated YouTube playlist cache: {error}"
+                                    );
+                                }
+                            }
+
+                            if self.is_open_youtube_playlist(&browse_id) {
+                                self.refresh_browser();
+                            }
+                        }
+                        Ok(_) => {
+                            self.schedule_youtube_playlist_revalidation_retry(&browse_id);
+                            if self.is_open_youtube_playlist(&browse_id) {
+                                self.refresh_browser();
+                            }
+                            eprintln!(
+                                "YouTube playlist revalidation returned no playable tracks; preserving cached playlist {browse_id}"
+                            );
+                        }
+                        Err(error) => {
+                            self.schedule_youtube_playlist_revalidation_retry(&browse_id);
+                            if self.is_open_youtube_playlist(&browse_id) {
+                                self.refresh_browser();
+                            }
+                            eprintln!(
+                                "Could not revalidate YouTube playlist {browse_id}; preserving cached tracks: {error}"
+                            );
+                        }
+                    }
+                }
                 BackgroundMessage::YouTubeBrowserPlaylistCoversCached {
                     request_id,
                     playlist,

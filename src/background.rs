@@ -72,6 +72,10 @@ pub(crate) enum BackgroundMessage {
         playlist: YouTubeItem,
         items: Vec<YouTubeItem>,
     },
+    YouTubeBrowserPlaylistRevalidated {
+        playlist: YouTubeItem,
+        result: Result<Vec<YouTubeItem>, String>,
+    },
     YouTubeBrowserCollection {
         item: YouTubeItem,
         key: String,

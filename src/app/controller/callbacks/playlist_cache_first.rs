@@ -1,23 +1,12 @@
-use super::super::AppController;
-use crate::{
-    browser::BrowserRoute,
-    youtube::{queue_library_cache_save, YouTubeItem},
-};
+use super::super::{youtube_playlist_revalidation_can_start, AppController};
+use crate::{browser::BrowserRoute, youtube::YouTubeItem};
 use gtk::glib;
-use std::{
-    cell::RefCell,
-    collections::{HashMap, HashSet},
-    rc::Rc,
-    time::Duration,
-};
+use std::{rc::Rc, time::Duration};
 
 const REVALIDATION_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 pub(super) fn install(controller: &Rc<AppController>) {
     let weak = Rc::downgrade(controller);
-    let active_route = Rc::new(RefCell::new(None::<String>));
-    let revalidated = Rc::new(RefCell::new(HashSet::<String>::new()));
-    let fallbacks = Rc::new(RefCell::new(HashMap::<String, Vec<YouTubeItem>>::new()));
 
     glib::timeout_add_local(REVALIDATION_POLL_INTERVAL, move || {
         let Some(controller) = weak.upgrade() else {
@@ -26,38 +15,20 @@ pub(super) fn install(controller: &Rc<AppController>) {
 
         let route = controller.browser.route();
         let BrowserRoute::YouTubePlaylist { title, browse_id } = route else {
-            active_route.borrow_mut().take();
             return glib::ControlFlow::Continue;
         };
 
-        if browse_id.trim().is_empty() {
+        if browse_id.trim().is_empty() || !playlist_has_cache(&controller, &browse_id) {
             return glib::ControlFlow::Continue;
         }
 
-        restore_fallback_after_revalidation(&controller, &browse_id, &fallbacks);
-
-        let route_changed = active_route.borrow().as_deref() != Some(browse_id.as_str());
-        if !route_changed {
-            return glib::ControlFlow::Continue;
-        }
-        active_route.borrow_mut().replace(browse_id.clone());
-
-        let loading = controller.youtube_playlist_loading.get()
-            || controller
-                .youtube_library
-                .borrow()
-                .playlist_loading
-                .contains(&browse_id);
-        let cached_items = controller
-            .youtube_library
+        let now = std::time::Instant::now();
+        let state = controller
+            .youtube_playlist_revalidation
             .borrow()
-            .playlist_tracks
             .get(&browse_id)
-            .cloned()
-            .unwrap_or_default();
-        let already_revalidated = revalidated.borrow().contains(&browse_id);
-
-        if !should_revalidate(!cached_items.is_empty(), loading, already_revalidated) {
+            .cloned();
+        if !youtube_playlist_revalidation_can_start(state.as_ref(), now) {
             return glib::ControlFlow::Continue;
         }
 
@@ -76,85 +47,84 @@ pub(super) fn install(controller: &Rc<AppController>) {
                 ..YouTubeItem::default()
             });
 
-        revalidated.borrow_mut().insert(browse_id.clone());
-        fallbacks
-            .borrow_mut()
-            .insert(browse_id.clone(), cached_items.clone());
-
-        controller
-            .youtube_library
-            .borrow_mut()
-            .playlist_tracks
-            .remove(&browse_id);
-        controller.load_youtube_playlist_for_browser(playlist);
-
-        {
-            let mut library = controller.youtube_library.borrow_mut();
-            library
-                .playlist_tracks
-                .insert(browse_id.clone(), cached_items);
-            library.playlist_loading.remove(&browse_id);
-        }
-        controller.refresh_browser();
-
+        controller.revalidate_youtube_playlist_for_browser(playlist);
         glib::ControlFlow::Continue
     });
 }
 
-fn restore_fallback_after_revalidation(
-    controller: &AppController,
-    browse_id: &str,
-    fallbacks: &Rc<RefCell<HashMap<String, Vec<YouTubeItem>>>>,
-) {
-    let finished = !controller.youtube_playlist_loading.get()
-        && !controller
-            .youtube_library
-            .borrow()
-            .playlist_loading
-            .contains(browse_id);
-    if !finished {
-        return;
-    }
-
-    let Some(fallback) = fallbacks.borrow_mut().remove(browse_id) else {
-        return;
-    };
-
-    let needs_restore = controller
+fn playlist_has_cache(controller: &AppController, browse_id: &str) -> bool {
+    controller
         .youtube_library
         .borrow()
         .playlist_tracks
         .get(browse_id)
-        .map(Vec::is_empty)
-        .unwrap_or(true);
-    if !needs_restore || fallback.is_empty() {
-        return;
-    }
-
-    controller
-        .youtube_library
-        .borrow_mut()
-        .playlist_tracks
-        .insert(browse_id.to_string(), fallback);
-    if let Err(error) = queue_library_cache_save(&controller.youtube_library.borrow()) {
-        eprintln!("Could not restore the last valid YouTube playlist cache: {error}");
-    }
-    controller.refresh_browser();
-}
-
-fn should_revalidate(has_cache: bool, loading: bool, already_revalidated: bool) -> bool {
-    has_cache && !loading && !already_revalidated
+        .map(|items| !items.is_empty())
+        .unwrap_or(false)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::should_revalidate;
+    use super::youtube_playlist_revalidation_can_start;
+    use crate::app::controller::{youtube_playlist_revalidation_delay, PlaylistRevalidationState};
+    use std::time::{Duration, Instant};
 
     #[test]
-    fn cached_playlist_revalidates_once_without_blocking() {
-        assert!(should_revalidate(true, false, false));
-        assert!(!should_revalidate(false, false, false));
-        assert!(!should_revalidate(true, true, false));
-        assert!(!should_revalidate(true, false, true));
+    fn retry_is_allowed_after_failure_window() {
+        let now = Instant::now();
+        let state = PlaylistRevalidationState::RetryAt {
+            when: now - Duration::from_secs(1),
+            attempt: 1,
+        };
+
+        assert!(youtube_playlist_revalidation_can_start(Some(&state), now));
+    }
+
+    #[test]
+    fn retry_is_blocked_while_loading_or_succeeded() {
+        let now = Instant::now();
+
+        assert!(!youtube_playlist_revalidation_can_start(
+            Some(&PlaylistRevalidationState::Loading { attempt: 0 }),
+            now
+        ));
+        assert!(!youtube_playlist_revalidation_can_start(
+            Some(&PlaylistRevalidationState::Succeeded),
+            now
+        ));
+    }
+
+    #[test]
+    fn retry_waits_until_retry_at() {
+        let now = Instant::now();
+        let state = PlaylistRevalidationState::RetryAt {
+            when: now + Duration::from_secs(1),
+            attempt: 1,
+        };
+
+        assert!(!youtube_playlist_revalidation_can_start(Some(&state), now));
+    }
+
+    #[test]
+    fn backoff_increases_and_is_capped() {
+        assert_eq!(
+            youtube_playlist_revalidation_delay(1),
+            Duration::from_secs(5)
+        );
+        assert_eq!(
+            youtube_playlist_revalidation_delay(2),
+            Duration::from_secs(15)
+        );
+        assert_eq!(
+            youtube_playlist_revalidation_delay(3),
+            Duration::from_secs(30)
+        );
+        assert_eq!(
+            youtube_playlist_revalidation_delay(4),
+            Duration::from_secs(60)
+        );
+        assert_eq!(
+            youtube_playlist_revalidation_delay(9),
+            Duration::from_secs(60)
+        );
     }
 }

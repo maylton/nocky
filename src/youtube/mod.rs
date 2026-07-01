@@ -2523,16 +2523,12 @@ fn rekey_collection_map<'a, T>(
 pub fn load_library_cache() -> YouTubeLibraryCache {
     let path = youtube_library_cache_path();
     let Ok(raw) = fs::read_to_string(path) else {
-        {
-            set_youtube_cache_visual_state(YouTubeCacheVisualState::Hidden);
-            return YouTubeLibraryCache::default();
-        }
+        set_youtube_cache_visual_state(YouTubeCacheVisualState::Hidden);
+        return YouTubeLibraryCache::default();
     };
-    let Ok(mut cache) = serde_json::from_str::<PersistedYouTubeLibraryCache>(&raw) else {
-        {
-            set_youtube_cache_visual_state(YouTubeCacheVisualState::Hidden);
-            return YouTubeLibraryCache::default();
-        }
+    let Ok(cache) = serde_json::from_str::<PersistedYouTubeLibraryCache>(&raw) else {
+        set_youtube_cache_visual_state(YouTubeCacheVisualState::Hidden);
+        return YouTubeLibraryCache::default();
     };
     if !matches!(
         cache.version,
@@ -2542,13 +2538,25 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
             "Ignoring incompatible YouTube library cache version {} (expected {} or {})",
             cache.version, LIBRARY_CACHE_COMPAT_VERSION, LIBRARY_CACHE_VERSION
         );
-        {
-            set_youtube_cache_visual_state(YouTubeCacheVisualState::Hidden);
-            return YouTubeLibraryCache::default();
-        }
+        set_youtube_cache_visual_state(YouTubeCacheVisualState::Hidden);
+        return YouTubeLibraryCache::default();
     }
 
-    let now = unix_now_seconds();
+    let (mut library, should_save) = library_cache_from_persisted(cache, unix_now_seconds());
+    let repaired_covers = library.repair_recent_cover_paths();
+    if library.albums.is_empty() || library.artists.is_empty() {
+        library.rebuild_collections();
+    }
+    if repaired_covers || should_save {
+        let _ = save_library_cache(&library);
+    }
+    library
+}
+
+fn library_cache_from_persisted(
+    mut cache: PersistedYouTubeLibraryCache,
+    now: u64,
+) -> (YouTubeLibraryCache, bool) {
     let freshness = youtube_cache_freshness(cache.saved_at, now);
     set_youtube_cache_visual_state(match freshness {
         YouTubeCacheFreshness::Fresh => YouTubeCacheVisualState::Fresh,
@@ -2557,20 +2565,12 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
         }
     });
     let suggestions_expired =
-        cache_is_expired(cache.saved_at, now, YOUTUBE_CACHE_SUGGESTION_TTL_SECS);
+        cache_is_expired(cache.saved_at, now, YOUTUBE_CACHE_SUGGESTION_TTL_SECS)
+            && (!cache.suggested_albums.is_empty() || !cache.suggested_artists.is_empty());
 
     if suggestions_expired {
         cache.suggested_albums.clear();
         cache.suggested_artists.clear();
-    }
-
-    if freshness != YouTubeCacheFreshness::Fresh {
-        cache.playlist_tracks.clear();
-        cache.collection_tracks.clear();
-        cache.artist_profiles.clear();
-        cache.artist_albums.clear();
-        cache.albums.clear();
-        cache.artists.clear();
     }
 
     if freshness == YouTubeCacheFreshness::StaleDetails {
@@ -2602,7 +2602,7 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
     let artist_profiles = rekey_collection_map(cache.artist_profiles, artist_entries.iter());
     let artist_albums = rekey_collection_map(cache.artist_albums, artist_entries.iter());
 
-    let mut library = YouTubeLibraryCache {
+    let library = YouTubeLibraryCache {
         search: Default::default(),
         connected: false,
         syncing: false,
@@ -2624,18 +2624,8 @@ pub fn load_library_cache() -> YouTubeLibraryCache {
         albums: cache.albums,
         artists: cache.artists,
     };
-    let repaired_covers = library.repair_recent_cover_paths();
-    if library.albums.is_empty() || library.artists.is_empty() {
-        library.rebuild_collections();
-    }
-    if repaired_covers
-        || cache.version < LIBRARY_CACHE_VERSION
-        || freshness != YouTubeCacheFreshness::Fresh
-        || suggestions_expired
-    {
-        let _ = save_library_cache(&library);
-    }
-    library
+    let should_save = cache.version < LIBRARY_CACHE_VERSION || suggestions_expired;
+    (library, should_save)
 }
 
 pub fn save_library_cache(cache: &YouTubeLibraryCache) -> Result<(), String> {
@@ -2869,6 +2859,45 @@ fn find_in_path(name: &str) -> Option<PathBuf> {
 mod youtube_cache_expiration_tests {
     use super::*;
 
+    fn playlist(id: &str) -> YouTubeItem {
+        YouTubeItem {
+            result_type: "playlist".to_string(),
+            browse_id: id.to_string(),
+            title: "Cached playlist".to_string(),
+            playlist_kind: "library".to_string(),
+            ..YouTubeItem::default()
+        }
+    }
+
+    fn track(id: &str) -> YouTubeItem {
+        YouTubeItem {
+            result_type: "song".to_string(),
+            video_id: id.to_string(),
+            title: "Cached track".to_string(),
+            artist: "Artist".to_string(),
+            ..YouTubeItem::default()
+        }
+    }
+
+    fn persisted_cache(saved_at: u64) -> PersistedYouTubeLibraryCache {
+        PersistedYouTubeLibraryCache {
+            version: LIBRARY_CACHE_VERSION,
+            saved_at,
+            playlists: vec![playlist("VLcached")],
+            suggested_albums: vec![YouTubeItem {
+                result_type: "album".to_string(),
+                browse_id: "MPREalbum".to_string(),
+                title: "Suggestion".to_string(),
+                ..YouTubeItem::default()
+            }],
+            playlist_tracks: HashMap::from([(
+                "VLcached".to_string(),
+                vec![track("video-1"), track("video-2")],
+            )]),
+            ..PersistedYouTubeLibraryCache::default()
+        }
+    }
+
     #[test]
     fn fresh_cache_keeps_remote_details() {
         let now = 100_000;
@@ -2932,6 +2961,63 @@ mod youtube_cache_expiration_tests {
             now,
             YOUTUBE_CACHE_SUGGESTION_TTL_SECS
         ));
+    }
+
+    #[test]
+    fn fresh_cache_restores_playlist_tracks() {
+        let now = 200_000;
+        let (cache, should_save) = library_cache_from_persisted(persisted_cache(now - 60), now);
+
+        assert!(!should_save);
+        assert_eq!(cache.playlist_tracks["VLcached"].len(), 2);
+    }
+
+    #[test]
+    fn stale_cache_keeps_playlist_tracks_for_offline_fallback() {
+        let now = 200_000;
+        let mut persisted = persisted_cache(now - YOUTUBE_CACHE_REVALIDATE_SECS);
+        persisted.suggested_albums.clear();
+        persisted.suggested_artists.clear();
+        let (cache, should_save) = library_cache_from_persisted(persisted, now);
+
+        assert!(!should_save);
+        assert_eq!(cache.playlist_tracks["VLcached"].len(), 2);
+    }
+
+    #[test]
+    fn expired_suggestions_do_not_remove_playlist_tracks() {
+        let now = 200_000;
+        let (cache, should_save) = library_cache_from_persisted(
+            persisted_cache(now - YOUTUBE_CACHE_SUGGESTION_TTL_SECS),
+            now,
+        );
+
+        assert!(should_save);
+        assert!(cache.suggested_albums.is_empty());
+        assert_eq!(cache.playlist_tracks["VLcached"].len(), 2);
+    }
+
+    #[test]
+    fn incompatible_cache_version_is_rejected_before_runtime_conversion() {
+        let raw = serde_json::json!({
+            "version": 1,
+            "saved_at": 1,
+            "playlists": [playlist("VLcached")],
+            "playlist_tracks": {"VLcached": [track("video-1")]}
+        });
+        let cache: PersistedYouTubeLibraryCache = serde_json::from_value(raw).unwrap();
+
+        assert!(!matches!(
+            cache.version,
+            LIBRARY_CACHE_COMPAT_VERSION | LIBRARY_CACHE_VERSION
+        ));
+    }
+
+    #[test]
+    fn corrupt_cache_payload_is_rejected_by_deserializer() {
+        let raw = br#"{"version":7,"saved_at":"not-a-number"}"#;
+
+        assert!(serde_json::from_slice::<PersistedYouTubeLibraryCache>(raw).is_err());
     }
 }
 
