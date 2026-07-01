@@ -1,5 +1,7 @@
 #[path = "home_density/presentation.rs"]
 mod presentation;
+#[path = "home_density/track_rows.rs"]
+mod track_rows;
 
 use gtk::{glib, prelude::*};
 use std::rc::Rc;
