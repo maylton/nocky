@@ -6,7 +6,7 @@ mod persistence;
 use self::{home_snapshot::DurableHomeSnapshot, persistence::DurablePlaylistCache};
 use super::super::{youtube_playlist_revalidation_can_start, AppController};
 use crate::{browser::BrowserRoute, youtube::YouTubeItem};
-use gtk::glib;
+use gtk::{glib, prelude::*};
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 const REVALIDATION_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -14,8 +14,22 @@ const REVALIDATION_POLL_INTERVAL: Duration = Duration::from_millis(250);
 pub(super) fn install(controller: &Rc<AppController>) {
     let home_snapshot = Rc::new(RefCell::new(DurableHomeSnapshot::load(controller)));
     let durable = Rc::new(RefCell::new(DurablePlaylistCache::load(controller)));
-    let weak = Rc::downgrade(controller);
 
+    {
+        let weak = Rc::downgrade(controller);
+        let home_snapshot = home_snapshot.clone();
+        controller.window.connect_close_request(move |_| {
+            if let Some(controller) = weak.upgrade() {
+                let current_home = controller.youtube_home_page.borrow().clone();
+                home_snapshot
+                    .borrow_mut()
+                    .persist_if_changed(&current_home);
+            }
+            glib::Propagation::Proceed
+        });
+    }
+
+    let weak = Rc::downgrade(controller);
     glib::timeout_add_local(REVALIDATION_POLL_INTERVAL, move || {
         let Some(controller) = weak.upgrade() else {
             return glib::ControlFlow::Break;
