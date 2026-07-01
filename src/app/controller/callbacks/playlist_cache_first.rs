@@ -1,11 +1,16 @@
+#[path = "playlist_cache_persistence.rs"]
+mod persistence;
+
+use self::persistence::DurablePlaylistCache;
 use super::super::{youtube_playlist_revalidation_can_start, AppController};
 use crate::{browser::BrowserRoute, youtube::YouTubeItem};
 use gtk::glib;
-use std::{rc::Rc, time::Duration};
+use std::{cell::RefCell, rc::Rc, time::Duration};
 
 const REVALIDATION_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 pub(super) fn install(controller: &Rc<AppController>) {
+    let durable = Rc::new(RefCell::new(DurablePlaylistCache::load(controller)));
     let weak = Rc::downgrade(controller);
 
     glib::timeout_add_local(REVALIDATION_POLL_INTERVAL, move || {
@@ -18,9 +23,23 @@ pub(super) fn install(controller: &Rc<AppController>) {
             return glib::ControlFlow::Continue;
         };
 
-        if browse_id.trim().is_empty() || !playlist_has_cache(&controller, &browse_id) {
+        if browse_id.trim().is_empty() {
             return glib::ControlFlow::Continue;
         }
+
+        let (items, restored) = durable
+            .borrow()
+            .items_with_fallback(&controller, browse_id.as_str());
+        if restored {
+            controller.refresh_browser();
+        }
+        if items.is_empty() {
+            return glib::ControlFlow::Continue;
+        }
+
+        durable
+            .borrow_mut()
+            .persist_if_changed(&browse_id, &items);
 
         let now = std::time::Instant::now();
         let state = controller
@@ -43,23 +62,12 @@ pub(super) fn install(controller: &Rc<AppController>) {
                 result_type: "playlist".to_string(),
                 title,
                 browse_id: browse_id.clone(),
-                playlist_kind: "library".to_string(),
                 ..YouTubeItem::default()
             });
 
         controller.revalidate_youtube_playlist_for_browser(playlist);
         glib::ControlFlow::Continue
     });
-}
-
-fn playlist_has_cache(controller: &AppController, browse_id: &str) -> bool {
-    controller
-        .youtube_library
-        .borrow()
-        .playlist_tracks
-        .get(browse_id)
-        .map(|items| !items.is_empty())
-        .unwrap_or(false)
 }
 
 #[cfg(test)]
