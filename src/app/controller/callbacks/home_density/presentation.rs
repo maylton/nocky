@@ -1,3 +1,4 @@
+use super::track_rows;
 use gtk::prelude::*;
 
 const COMPACT_OUTER_WIDTH: i32 = 172;
@@ -22,32 +23,57 @@ pub(super) fn apply(root: &gtk::Stack) {
         let Some(grid) = direct_flow_box(&section) else {
             continue;
         };
-        if grid.first_child().is_none() {
+        let grid_widget: gtk::Widget = grid.clone().upcast();
+        let cards = direct_children(&grid_widget)
+            .into_iter()
+            .filter(|child| find_class(child, "home-card-button").is_some())
+            .collect::<Vec<_>>();
+
+        if cards.is_empty() {
+            continue;
+        }
+
+        clear_presentation_classes(&section);
+
+        if track_rows::section_is_track_only(&cards) {
+            section.add_css_class("home-section-track-rows");
+            track_rows::configure_grid(&grid, width);
+            for card in cards {
+                track_rows::apply_card(&card);
+            }
             continue;
         }
 
         if !featured_assigned {
             featured_assigned = true;
             section.add_css_class("home-section-featured");
-            section.remove_css_class("home-section-compact");
             continue;
         }
 
-        section.remove_css_class("home-section-featured");
         section.add_css_class("home-section-compact");
-        grid.set_homogeneous(false);
-        grid.set_min_children_per_line(2);
-        grid.set_max_children_per_line(compact_columns(width));
-        grid.set_column_spacing(12);
-        grid.set_row_spacing(14);
-
-        let grid_widget: gtk::Widget = grid.clone().upcast();
-        for child in direct_children(&grid_widget) {
-            if find_class(&child, "home-card-button").is_some() {
-                compact_card(&child);
-            }
+        configure_compact_grid(&grid, width);
+        for card in cards {
+            compact_card(&card);
         }
     }
+}
+
+fn clear_presentation_classes(section: &gtk::Widget) {
+    for class_name in [
+        "home-section-featured",
+        "home-section-compact",
+        "home-section-track-rows",
+    ] {
+        section.remove_css_class(class_name);
+    }
+}
+
+fn configure_compact_grid(grid: &gtk::FlowBox, width: i32) {
+    grid.set_homogeneous(false);
+    grid.set_min_children_per_line(2);
+    grid.set_max_children_per_line(compact_columns(width));
+    grid.set_column_spacing(12);
+    grid.set_row_spacing(14);
 }
 
 fn compact_columns(width: i32) -> u32 {
