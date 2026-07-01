@@ -174,8 +174,7 @@ impl AppController {
         // A local queue may currently be active. Preserve it while still
         // removing the separately persisted YouTube queue and playback session.
         let empty_queue = PlaybackQueue::new().snapshot();
-        if let Err(error) =
-            crate::playback::queue::save_for(QueueSourceKind::YouTube, &empty_queue)
+        if let Err(error) = crate::playback::queue::save_for(QueueSourceKind::YouTube, &empty_queue)
         {
             eprintln!("Could not clear saved YouTube Queue 2.0 state: {error}");
         }
