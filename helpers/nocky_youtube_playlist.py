@@ -33,6 +33,29 @@ def normalize_playlist_id(value: str) -> str:
     return playlist_id
 
 
+def _is_generated_playlist_id(playlist_id: str) -> bool:
+    """Return whether the ID represents a generated radio/mix route."""
+
+    return playlist_id.startswith("RD")
+
+
+def _normalize_metadata_for_route(
+    metadata: dict[str, Any],
+    requested_id: str,
+) -> dict[str, Any]:
+    returned_id = str(metadata.get("playlist_id") or "").strip()
+    generated = _is_generated_playlist_id(requested_id)
+    if returned_id != requested_id and not generated:
+        raise RuntimeError("YouTube Music returned mismatched playlist metadata")
+
+    if generated:
+        metadata = dict(metadata)
+        metadata["playlist_id"] = requested_id
+        metadata["owned"] = False
+        metadata["editable"] = False
+    return metadata
+
+
 def fetch_playlist_metadata(playlist_id: str, limit: int = 500) -> dict[str, Any]:
     session = nocky_youtube._load_session()
     headers = session.get("headers")
@@ -45,7 +68,10 @@ def fetch_playlist_metadata(playlist_id: str, limit: int = 500) -> dict[str, Any
     response = client.get_playlist(normalized_id, limit=safe_limit)
     if not isinstance(response, dict):
         raise RuntimeError("YouTube Music returned an invalid playlist response")
-    return normalize_playlist_detail(response)
+    return _normalize_metadata_for_route(
+        normalize_playlist_detail(response),
+        normalized_id,
+    )
 
 
 def _arguments(argv: list[str]) -> tuple[str, int]:

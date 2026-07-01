@@ -128,6 +128,61 @@ class YouTubePlaylistHelperTests(unittest.TestCase):
         self.assertEqual(result["tracks"][0]["set_video_id"], "set-video-1")
         self.assertNotIn("private_field", str(result))
 
+    def test_generated_playlist_alias_is_read_only(self) -> None:
+        client = FakeClient(
+            {
+                "id": "RD-canonical",
+                "title": "Dynamic mix",
+                "owned": True,
+                "privacy": "PRIVATE",
+                "tracks": [],
+            }
+        )
+
+        with patch.object(
+            nocky_youtube_playlist.nocky_youtube,
+            "_load_session",
+            return_value={"headers": {"test_header": "value"}},
+        ):
+            with patch.object(
+                nocky_youtube_playlist.nocky_youtube,
+                "_create_client",
+                return_value=client,
+            ):
+                result = nocky_youtube_playlist.fetch_playlist_metadata(
+                    "RDTMAK5uy_dynamic",
+                    500,
+                )
+
+        self.assertEqual(client.calls, [("RDTMAK5uy_dynamic", 500)])
+        self.assertEqual(result["playlist_id"], "RDTMAK5uy_dynamic")
+        self.assertFalse(result["owned"])
+        self.assertFalse(result["editable"])
+
+    def test_stable_playlist_mismatch_is_rejected(self) -> None:
+        client = FakeClient(
+            {
+                "id": "PL-different",
+                "title": "Different",
+                "owned": True,
+                "privacy": "PRIVATE",
+                "tracks": [],
+            }
+        )
+
+        with patch.object(
+            nocky_youtube_playlist.nocky_youtube,
+            "_load_session",
+            return_value={"headers": {"test_header": "value"}},
+        ):
+            with patch.object(
+                nocky_youtube_playlist.nocky_youtube,
+                "_create_client",
+                return_value=client,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "mismatched"):
+                    nocky_youtube_playlist.fetch_playlist_metadata("PL-owned")
+
     def test_rejects_invalid_remote_response(self) -> None:
         client = FakeClient([])
         with patch.object(
