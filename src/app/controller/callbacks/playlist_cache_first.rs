@@ -168,7 +168,6 @@ impl AppController {
 
         if self.active_queue_source.get() == QueueSourceKind::YouTube {
             self.clear_playback_queue();
-            self.refresh_queue_page();
             return;
         }
 
