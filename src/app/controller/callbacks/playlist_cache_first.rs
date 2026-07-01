@@ -1,3 +1,4 @@
+#[path = "playlist_cache_first/persistence.rs"]
 mod persistence;
 
 use self::persistence::DurablePlaylistCache;
