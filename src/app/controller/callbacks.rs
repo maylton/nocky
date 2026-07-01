@@ -2,6 +2,8 @@
 
 #[path = "callbacks/home_density.rs"]
 mod home_density;
+#[path = "callbacks/playlist_cache_first.rs"]
+mod playlist_cache_first;
 
 use super::AppController;
 use gtk::{glib, prelude::*};
@@ -21,6 +23,7 @@ impl AppController {
             ));
         self.publish_mpris_capabilities();
         home_density::install(self.browser.root());
+        playlist_cache_first::install(self);
 
         {
             self.window
