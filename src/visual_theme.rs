@@ -14,6 +14,25 @@ use std::{
 
 const PALETTE_TRANSITION_MS: u64 = 520;
 const PALETTE_FRAME_MS: u64 = 32;
+const LOADING_INDICATOR_PALETTE_CSS: &str = r#"
+window.theme-material-expressive .material-loading-indicator.contained {
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  border-radius: 999px;
+}
+
+window.theme-frosted-glass .material-loading-indicator.contained {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.72);
+  border-color: alpha(@m3_primary, 0.32);
+}
+
+button .material-loading-indicator.contained {
+  color: inherit;
+  background-color: transparent;
+  border-color: transparent;
+}
+"#;
 
 pub struct VisualThemeManager {
     _provider: gtk::CssProvider,
@@ -150,6 +169,7 @@ impl VisualThemeManager {
             let _ = sender.send((generation, palette));
         });
     }
+
     fn transition_to_palette(self: &Rc<Self>, target: MaterialPalette) {
         let start = self.current_palette.get();
         let token = self.palette_animation_generation.get().wrapping_add(1);
@@ -199,7 +219,9 @@ impl VisualThemeManager {
     }
 
     fn apply_palette(&self, palette: MaterialPalette) {
-        self.palette_provider.load_from_string(&palette.to_css());
+        let mut css = palette.to_css();
+        css.push_str(LOADING_INDICATOR_PALETTE_CSS);
+        self.palette_provider.load_from_string(&css);
     }
 }
 
@@ -216,5 +238,17 @@ mod tests {
         assert_eq!(emphasized_decelerate(0.0), 0.0);
         assert_eq!(emphasized_decelerate(1.0), 1.0);
         assert!(emphasized_decelerate(0.5) > 0.5);
+    }
+
+    #[test]
+    fn dynamic_palette_keeps_loading_indicator_roles() {
+        for required in [
+            ".material-loading-indicator.contained",
+            "@m3_on_primary_container",
+            "@m3_primary_container",
+            ".theme-frosted-glass",
+        ] {
+            assert!(LOADING_INDICATOR_PALETTE_CSS.contains(required));
+        }
     }
 }
