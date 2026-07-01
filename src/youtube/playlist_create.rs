@@ -97,7 +97,7 @@ impl YouTubeBridge {
     }
 
     pub fn playlist_metadata_access(&self, playlist_id: &str) -> Result<(String, bool), String> {
-        let metadata: YouTubePlaylistMetadata = self.run_playlist_helper(
+        let mut metadata: YouTubePlaylistMetadata = self.run_playlist_helper(
             json!({
                 "operation": "metadata",
                 "playlist_id": playlist_id,
@@ -106,9 +106,7 @@ impl YouTubeBridge {
             "metadata",
         )?;
 
-        if metadata.playlist_id.trim() != playlist_id.trim().trim_start_matches("VL") {
-            return Err("The YouTube playlist helper returned mismatched metadata".to_string());
-        }
+        normalize_metadata_for_playlist_route(&mut metadata, playlist_id)?;
 
         let editable = metadata.can_edit();
         Ok((format_playlist_metadata_diagnostic(&metadata), editable))
@@ -137,6 +135,36 @@ impl YouTubeBridge {
             "item addition",
         )
     }
+}
+
+fn normalized_playlist_route_id(playlist_id: &str) -> String {
+    playlist_id.trim().trim_start_matches("VL").to_string()
+}
+
+fn generated_playlist_route(playlist_id: &str) -> bool {
+    playlist_id.starts_with("RD")
+}
+
+fn normalize_metadata_for_playlist_route(
+    metadata: &mut YouTubePlaylistMetadata,
+    playlist_id: &str,
+) -> Result<(), String> {
+    let requested_id = normalized_playlist_route_id(playlist_id);
+    if metadata.playlist_id.trim() != requested_id {
+        if generated_playlist_route(&requested_id) {
+            metadata.playlist_id = requested_id;
+            metadata.owned = false;
+            metadata.editable = false;
+        } else {
+            return Err("The YouTube playlist helper returned mismatched metadata".to_string());
+        }
+    }
+
+    if metadata.playlist_id.trim().is_empty() {
+        return Err("The YouTube playlist helper returned mismatched metadata".to_string());
+    }
+
+    Ok(())
 }
 
 fn format_playlist_metadata_diagnostic(metadata: &YouTubePlaylistMetadata) -> String {
@@ -345,9 +373,9 @@ impl YouTubePage {
 mod tests {
     use super::playlist_metadata_model::{YouTubePlaylistMetadata, YouTubePlaylistTrackMetadata};
     use super::{
-        format_playlist_metadata_diagnostic, playlist_add_error_message,
-        playlist_creation_error_message, privacy_code, YouTubePlaylistAddition,
-        YouTubePlaylistCreation,
+        format_playlist_metadata_diagnostic, normalize_metadata_for_playlist_route,
+        playlist_add_error_message, playlist_creation_error_message, privacy_code,
+        YouTubePlaylistAddition, YouTubePlaylistCreation,
     };
 
     #[test]
@@ -437,5 +465,39 @@ mod tests {
             format_playlist_metadata_diagnostic(&metadata),
             "Playlist compartilhada • não listada • somente leitura"
         );
+    }
+
+    #[test]
+    fn generated_playlist_alias_is_forced_read_only_for_metadata() {
+        let mut metadata = YouTubePlaylistMetadata {
+            playlist_id: "RD-canonical".to_string(),
+            owned: true,
+            editable: true,
+            privacy: "PRIVATE".to_string(),
+            ..YouTubePlaylistMetadata::default()
+        };
+
+        normalize_metadata_for_playlist_route(&mut metadata, "RDTMAK5uy_dynamic")
+            .expect("generated aliases are accepted for read-only metadata");
+
+        assert_eq!(metadata.playlist_id, "RDTMAK5uy_dynamic");
+        assert!(!metadata.owned);
+        assert!(!metadata.editable);
+    }
+
+    #[test]
+    fn stable_playlist_metadata_mismatch_is_rejected() {
+        let mut metadata = YouTubePlaylistMetadata {
+            playlist_id: "PL-different".to_string(),
+            owned: true,
+            editable: true,
+            privacy: "PRIVATE".to_string(),
+            ..YouTubePlaylistMetadata::default()
+        };
+
+        assert!(normalize_metadata_for_playlist_route(&mut metadata, "PL-owned").is_err());
+        assert_eq!(metadata.playlist_id, "PL-different");
+        assert!(metadata.owned);
+        assert!(metadata.editable);
     }
 }
