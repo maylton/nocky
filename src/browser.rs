@@ -4950,6 +4950,15 @@ impl HomeSectionPresentation {
         }
     }
 
+    fn rail_rows(self, width: i32, item_count: usize) -> i32 {
+        match self {
+            Self::Featured => 1,
+            Self::Compact if width <= 760 && item_count > 2 => 2,
+            Self::Compact => 1,
+            Self::TrackRows => self.track_rows(item_count),
+        }
+    }
+
     fn play_control_margin_start(self) -> i32 {
         match self {
             Self::Featured => 140,
@@ -4966,6 +4975,20 @@ fn metrolist_home_rail(presentation: HomeSectionPresentation) -> gtk::Box {
     rail.set_hexpand(false);
     rail.add_css_class("home-card-grid");
     rail
+}
+
+fn attach_home_grid_cards(grid: &gtk::Grid, cards: &[gtk::Widget], rows: i32) {
+    let mut child = grid.first_child();
+    while let Some(current) = child {
+        child = current.next_sibling();
+        grid.remove(&current);
+    }
+
+    for (index, card) in cards.iter().enumerate() {
+        let row = (index as i32) % rows;
+        let column = (index as i32) / rows;
+        grid.attach(card, column, row, 1, 1);
+    }
 }
 
 fn metrolist_home_scroller(child: &impl IsA<gtk::Widget>, min_height: i32) -> gtk::ScrolledWindow {
@@ -5010,13 +5033,52 @@ fn metrolist_home_section_content(
         grid.set_halign(gtk::Align::Start);
         grid.set_valign(gtk::Align::Start);
         grid.add_css_class("home-card-grid");
-        for (index, card) in cards.into_iter().enumerate() {
-            let row = (index as i32) % rows;
-            let column = (index as i32) / rows;
-            grid.attach(&card, column, row, 1, 1);
-        }
+        attach_home_grid_cards(&grid, &cards, rows);
         let height = rows * presentation.outer_height() + (rows - 1).max(0) * 8;
         metrolist_home_scroller(&grid, height)
+    } else if presentation == HomeSectionPresentation::Compact {
+        let grid = gtk::Grid::new();
+        grid.set_column_spacing(presentation.rail_spacing() as u32);
+        grid.set_row_spacing(presentation.rail_spacing() as u32);
+        grid.set_halign(gtk::Align::Start);
+        grid.set_valign(gtk::Align::Start);
+        grid.add_css_class("home-card-grid");
+
+        let cards = Rc::new(cards);
+        let current_rows = Rc::new(Cell::new(0_i32));
+        let scroll = metrolist_home_scroller(&grid, presentation.outer_height());
+        let reflow: Rc<dyn Fn(i32)> = {
+            let grid = grid.clone();
+            let scroll = scroll.clone();
+            let cards = cards.clone();
+            let current_rows = current_rows.clone();
+            Rc::new(move |width| {
+                let rows = presentation.rail_rows(width, cards.len());
+                if current_rows.replace(rows) == rows {
+                    return;
+                }
+                attach_home_grid_cards(&grid, &cards, rows);
+                let height = rows * presentation.outer_height()
+                    + (rows - 1).max(0) * presentation.rail_spacing();
+                scroll.set_min_content_height(height);
+            })
+        };
+
+        reflow(1);
+        {
+            let reflow = reflow.clone();
+            let scroll = scroll.clone();
+            glib::idle_add_local_once(move || {
+                reflow(scroll.width());
+            });
+        }
+        {
+            let reflow = reflow.clone();
+            scroll.connect_notify_local(Some("width"), move |scroll, _| {
+                reflow(scroll.width());
+            });
+        }
+        scroll
     } else {
         let rail = metrolist_home_rail(presentation);
         for card in cards {
@@ -5053,6 +5115,13 @@ mod responsive_home_grid_tests {
         assert_eq!(HomeSectionPresentation::TrackRows.track_rows(0), 1);
         assert_eq!(HomeSectionPresentation::TrackRows.track_rows(2), 2);
         assert_eq!(HomeSectionPresentation::TrackRows.track_rows(12), 4);
+    }
+
+    #[test]
+    fn compact_rail_wraps_on_narrow_sections() {
+        assert_eq!(HomeSectionPresentation::Compact.rail_rows(900, 8), 1);
+        assert_eq!(HomeSectionPresentation::Compact.rail_rows(760, 8), 2);
+        assert_eq!(HomeSectionPresentation::Compact.rail_rows(480, 2), 1);
     }
 }
 
@@ -5991,78 +6060,83 @@ fn home_card_button(
     overlay.set_child(Some(&main_button));
     overlay.add_css_class("home-card-context-overlay");
 
-    if let Some(play_event) = play_event {
-        let control = gtk::Button::new();
-        control.set_halign(gtk::Align::Start);
-        control.set_valign(gtk::Align::Start);
-        control.set_margin_top(10);
-        control.set_margin_start(presentation.play_control_margin_start());
-        control.set_margin_end(0);
-        control.add_css_class("circular");
-        control.add_css_class("collection-card-context-action");
-        if let Some(key) = playback_key.as_deref() {
-            control.set_widget_name(&format!("home-play-control:{key}"));
-        }
+    let show_inline_play_control =
+        !(presentation == HomeSectionPresentation::TrackRows && collection_kind == "track");
 
-        if is_loading {
-            let loading = ExpressiveLoadingIndicator::new();
-            control.set_child(Some(loading.widget()));
-            control.set_sensitive(false);
-            control.add_css_class("loading");
-            control.set_tooltip_text(Some(match language {
-                AppLanguage::Portuguese => "Carregando coleção…",
-                AppLanguage::English => "Loading collection…",
-                AppLanguage::Spanish => "Cargando colección…",
-            }));
-        } else {
-            let icon_name = if is_active && playback.playing {
-                "media-playback-pause-symbolic"
-            } else {
-                "media-playback-start-symbolic"
-            };
-            let tooltip = match (language, is_active, playback.playing) {
-                (AppLanguage::Portuguese, true, true) => "Pausar coleção",
-                (AppLanguage::Portuguese, true, false) => "Continuar coleção",
-                (AppLanguage::Portuguese, false, _) => "Reproduzir coleção",
-                (AppLanguage::English, true, true) => "Pause collection",
-                (AppLanguage::English, true, false) => "Resume collection",
-                (AppLanguage::English, false, _) => "Play collection",
-                (AppLanguage::Spanish, true, true) => "Pausar colección",
-                (AppLanguage::Spanish, true, false) => "Continuar colección",
-                (AppLanguage::Spanish, false, _) => "Reproducir colección",
-            };
-
-            control.set_icon_name(icon_name);
-            control.set_tooltip_text(Some(tooltip));
-            if is_active {
-                control.add_css_class("active");
+    if show_inline_play_control {
+        if let Some(play_event) = play_event {
+            let control = gtk::Button::new();
+            control.set_halign(gtk::Align::Start);
+            control.set_valign(gtk::Align::Start);
+            control.set_margin_top(10);
+            control.set_margin_start(presentation.play_control_margin_start());
+            control.set_margin_end(0);
+            control.add_css_class("circular");
+            control.add_css_class("collection-card-context-action");
+            if let Some(key) = playback_key.as_deref() {
+                control.set_widget_name(&format!("home-play-control:{key}"));
             }
 
-            let sender = event_tx.clone();
-            control.connect_clicked(move |button| {
-                let active = button.has_css_class("active");
-                if inline_loading_on_click && !active {
-                    let loading = ExpressiveLoadingIndicator::new();
-                    button.set_child(Some(loading.widget()));
-                    button.set_sensitive(false);
-                    button.add_css_class("loading");
-                    button.set_tooltip_text(Some(match language {
-                        AppLanguage::Portuguese => "Carregando coleção…",
-                        AppLanguage::English => "Loading collection…",
-                        AppLanguage::Spanish => "Cargando colección…",
-                    }));
+            if is_loading {
+                let loading = ExpressiveLoadingIndicator::new();
+                control.set_child(Some(loading.widget()));
+                control.set_sensitive(false);
+                control.add_css_class("loading");
+                control.set_tooltip_text(Some(match language {
+                    AppLanguage::Portuguese => "Carregando coleção…",
+                    AppLanguage::English => "Loading collection…",
+                    AppLanguage::Spanish => "Cargando colección…",
+                }));
+            } else {
+                let icon_name = if is_active && playback.playing {
+                    "media-playback-pause-symbolic"
+                } else {
+                    "media-playback-start-symbolic"
+                };
+                let tooltip = match (language, is_active, playback.playing) {
+                    (AppLanguage::Portuguese, true, true) => "Pausar coleção",
+                    (AppLanguage::Portuguese, true, false) => "Continuar coleção",
+                    (AppLanguage::Portuguese, false, _) => "Reproduzir coleção",
+                    (AppLanguage::English, true, true) => "Pause collection",
+                    (AppLanguage::English, true, false) => "Resume collection",
+                    (AppLanguage::English, false, _) => "Play collection",
+                    (AppLanguage::Spanish, true, true) => "Pausar colección",
+                    (AppLanguage::Spanish, true, false) => "Continuar colección",
+                    (AppLanguage::Spanish, false, _) => "Reproducir colección",
+                };
+
+                control.set_icon_name(icon_name);
+                control.set_tooltip_text(Some(tooltip));
+                if is_active {
+                    control.add_css_class("active");
                 }
 
-                let event = if active {
-                    BrowserEvent::TogglePlayback
-                } else {
-                    play_event.clone()
-                };
-                let _ = sender.send(event);
-            });
-        }
+                let sender = event_tx.clone();
+                control.connect_clicked(move |button| {
+                    let active = button.has_css_class("active");
+                    if inline_loading_on_click && !active {
+                        let loading = ExpressiveLoadingIndicator::new();
+                        button.set_child(Some(loading.widget()));
+                        button.set_sensitive(false);
+                        button.add_css_class("loading");
+                        button.set_tooltip_text(Some(match language {
+                            AppLanguage::Portuguese => "Carregando coleção…",
+                            AppLanguage::English => "Loading collection…",
+                            AppLanguage::Spanish => "Cargando colección…",
+                        }));
+                    }
 
-        overlay.add_overlay(&control);
+                    let event = if active {
+                        BrowserEvent::TogglePlayback
+                    } else {
+                        play_event.clone()
+                    };
+                    let _ = sender.send(event);
+                });
+            }
+
+            overlay.add_overlay(&control);
+        }
     }
 
     if let Some((play_next_event, append_event)) = queue_events {
