@@ -81,6 +81,27 @@ jobs:
           payload="$(sed -n 's/^          \(H4sI.*\)$/\1/p' .github/workflows/apply-performance-pass.yml)"
           test -n "$payload"
           printf '%s' "$payload" | base64 -d | gzip -d > /tmp/apply_performance_pass.py
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('/tmp/apply_performance_pass.py')
+          source = path.read_text(encoding='utf-8')
+          old = '''browser = replace_once(
+              browser,
+              "    card_effects: bool,\\n) -> gtk::Box {\\n    let title_label = gtk::Label::new(Some(title));\\n",
+              "    _card_effects: bool,\\n) -> gtk::Box {\\n    let title_label = gtk::Label::new(Some(title));\\n",
+              "history unused motion parameter",
+          )'''
+          new = '''browser = replace_once(
+              browser,
+              "fn home_history_section(\\n    title: &str,\\n    subtitle: &str,\\n    empty_detail: &str,\\n    entries: Vec<HomeHistoryTrack>,\\n    event_tx: &Sender<BrowserEvent>,\\n    language: AppLanguage,\\n    card_effects: bool,\\n) -> gtk::Box {\\n",
+              "fn home_history_section(\\n    title: &str,\\n    subtitle: &str,\\n    empty_detail: &str,\\n    entries: Vec<HomeHistoryTrack>,\\n    event_tx: &Sender<BrowserEvent>,\\n    language: AppLanguage,\\n    _card_effects: bool,\\n) -> gtk::Box {\\n",
+              "history unused motion parameter",
+          )'''
+          if source.count(old) != 1:
+              raise SystemExit('could not specialize home_history_section transform')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PY
           python3 -m py_compile /tmp/apply_performance_pass.py
           set +e
           python3 /tmp/apply_performance_pass.py > /tmp/performance-pass.log 2>&1
