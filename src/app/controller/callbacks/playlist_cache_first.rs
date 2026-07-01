@@ -1,7 +1,9 @@
+#[path = "playlist_cache_first/home_snapshot.rs"]
+mod home_snapshot;
 #[path = "playlist_cache_first/persistence.rs"]
 mod persistence;
 
-use self::persistence::DurablePlaylistCache;
+use self::{home_snapshot::DurableHomeSnapshot, persistence::DurablePlaylistCache};
 use super::super::{youtube_playlist_revalidation_can_start, AppController};
 use crate::{browser::BrowserRoute, youtube::YouTubeItem};
 use gtk::glib;
@@ -10,6 +12,7 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 const REVALIDATION_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 pub(super) fn install(controller: &Rc<AppController>) {
+    let home_snapshot = Rc::new(RefCell::new(DurableHomeSnapshot::load(controller)));
     let durable = Rc::new(RefCell::new(DurablePlaylistCache::load(controller)));
     let weak = Rc::downgrade(controller);
 
@@ -17,6 +20,11 @@ pub(super) fn install(controller: &Rc<AppController>) {
         let Some(controller) = weak.upgrade() else {
             return glib::ControlFlow::Break;
         };
+
+        let current_home = controller.youtube_home_page.borrow().clone();
+        home_snapshot
+            .borrow_mut()
+            .persist_if_changed(&current_home);
 
         let route = controller.browser.route();
         let BrowserRoute::YouTubePlaylist { title, browse_id } = route else {
