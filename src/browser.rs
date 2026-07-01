@@ -4868,6 +4868,59 @@ fn search_result_artwork(cover_path: Option<&Path>, icon_name: &str) -> gtk::Sta
     stack
 }
 
+const DEFAULT_HOME_COLUMNS: u32 = 6;
+
+fn responsive_home_columns(width: i32) -> u32 {
+    match width {
+        ..=639 => 2,
+        640..=899 => 3,
+        900..=1199 => 4,
+        1200..=1599 => DEFAULT_HOME_COLUMNS,
+        1600..=1999 => 8,
+        _ => 10,
+    }
+}
+
+fn responsive_home_grid() -> gtk::FlowBox {
+    let grid = gtk::FlowBox::new();
+    grid.set_selection_mode(gtk::SelectionMode::None);
+    grid.set_activate_on_single_click(false);
+    grid.set_column_spacing(14);
+    grid.set_row_spacing(14);
+    grid.set_homogeneous(false);
+    grid.set_min_children_per_line(1);
+    grid.set_max_children_per_line(DEFAULT_HOME_COLUMNS);
+    grid.set_hexpand(true);
+    grid.set_halign(gtk::Align::Fill);
+    grid.set_valign(gtk::Align::Start);
+    grid.add_css_class("home-card-grid");
+
+    let current_columns = Rc::new(Cell::new(DEFAULT_HOME_COLUMNS));
+    grid.connect_notify_local(Some("width"), move |grid, _| {
+        let columns = responsive_home_columns(grid.width());
+        if current_columns.replace(columns) != columns {
+            grid.set_max_children_per_line(columns);
+        }
+    });
+
+    grid
+}
+
+#[cfg(test)]
+mod responsive_home_grid_tests {
+    use super::responsive_home_columns;
+
+    #[test]
+    fn adapts_home_columns_to_available_width() {
+        assert_eq!(responsive_home_columns(480), 2);
+        assert_eq!(responsive_home_columns(800), 3);
+        assert_eq!(responsive_home_columns(1024), 4);
+        assert_eq!(responsive_home_columns(1280), 6);
+        assert_eq!(responsive_home_columns(1700), 8);
+        assert_eq!(responsive_home_columns(2200), 10);
+    }
+}
+
 fn home_history_section(
     title: &str,
     subtitle: &str,
@@ -4875,7 +4928,7 @@ fn home_history_section(
     entries: Vec<HomeHistoryTrack>,
     event_tx: &Sender<BrowserEvent>,
     language: AppLanguage,
-    card_effects: bool,
+    _card_effects: bool,
 ) -> gtk::Box {
     let title_label = gtk::Label::new(Some(title));
     title_label.set_xalign(0.0);
@@ -4890,11 +4943,10 @@ fn home_history_section(
     heading.append(&title_label);
     heading.append(&subtitle_label);
 
-    let rail = gtk::Box::new(gtk::Orientation::Horizontal, 14);
-    rail.add_css_class("home-carousel");
+    let grid = responsive_home_grid();
 
     if entries.is_empty() {
-        rail.append(&home_empty_card(language, empty_detail));
+        grid.insert(&home_empty_card(language, empty_detail), -1);
     }
 
     for entry in entries {
@@ -5050,33 +5102,13 @@ fn home_history_section(
 
         let button = collection_event_button(card, event, event_tx);
         button.add_css_class("home-card-button");
-        rail.append(&button);
-    }
-
-    let item_count = rail.observe_children().n_items();
-    let scroll = gtk::ScrolledWindow::new();
-    scroll.set_policy(
-        if item_count > 1 {
-            gtk::PolicyType::Always
-        } else {
-            gtk::PolicyType::Never
-        },
-        gtk::PolicyType::Never,
-    );
-    scroll.set_min_content_height(190);
-    scroll.set_child(Some(&rail));
-    scroll.add_css_class("home-carousel-scroll");
-    scroll.add_css_class("material-carousel-scroll");
-    scroll.set_overlay_scrolling(false);
-
-    if item_count > 1 {
-        install_home_carousel_edge_spring(&scroll, &rail, card_effects);
+        grid.insert(&button, -1);
     }
 
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
     section.add_css_class("home-section");
     section.append(&heading);
-    section.append(&scroll);
+    section.append(&grid);
     section
 }
 
@@ -5304,319 +5336,22 @@ fn home_section(
     heading.append(&title_label);
     heading.append(&subtitle_label);
 
-    let rail = gtk::Box::new(gtk::Orientation::Horizontal, 14);
-    rail.add_css_class("home-carousel");
+    let grid = responsive_home_grid();
 
     if cards.is_empty() {
-        rail.append(&home_empty_card(language, empty_detail));
+        grid.insert(&home_empty_card(language, empty_detail), -1);
     } else {
         for card in cards {
-            rail.append(&home_card_button(
-                card,
-                playback,
-                config,
-                event_tx,
-                language,
-                card_effects,
-            ));
+            let button = home_card_button(card, playback, config, event_tx, language, card_effects);
+            grid.insert(&button, -1);
         }
     }
-
-    let scroll = gtk::ScrolledWindow::new();
-    // Keep the thin Material position indicator visible whenever the
-    // carousel is presented, instead of relying on GTK auto-hide.
-    scroll.set_policy(gtk::PolicyType::Always, gtk::PolicyType::Never);
-    scroll.set_min_content_height(190);
-    scroll.set_child(Some(&rail));
-    scroll.add_css_class("home-carousel-scroll");
-    scroll.add_css_class("material-carousel-scroll");
-    scroll.set_overlay_scrolling(false);
-    install_home_carousel_edge_spring(&scroll, &rail, card_effects);
 
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
     section.add_css_class("home-section");
     section.append(&heading);
-    section.append(&scroll);
+    section.append(&grid);
     section
-}
-
-#[derive(Clone)]
-struct HomeCarouselEdgeCard {
-    button: gtk::Widget,
-    surface: Option<gtk::Widget>,
-    original_button_width_request: i32,
-    original_surface_width_request: Option<i32>,
-    base_button_width: i32,
-    base_surface_width: i32,
-}
-
-type HomeCarouselEdgeCards = Rc<RefCell<Vec<HomeCarouselEdgeCard>>>;
-
-fn home_card_surface(widget: &gtk::Widget) -> Option<gtk::Widget> {
-    let first = widget.first_child()?;
-    if first.has_css_class("collection-card") {
-        return Some(first);
-    }
-
-    let second = first.first_child()?;
-    if second.has_css_class("collection-card") {
-        return Some(second);
-    }
-
-    let third = second.first_child()?;
-    third.has_css_class("collection-card").then_some(third)
-}
-
-fn install_home_carousel_edge_spring(scroll: &gtk::ScrolledWindow, rail: &gtk::Box, enabled: bool) {
-    if !enabled {
-        return;
-    }
-
-    scroll.set_kinetic_scrolling(true);
-
-    let ready = Rc::new(Cell::new(false));
-    let active = Rc::new(Cell::new(false));
-    let generation = Rc::new(Cell::new(0_u64));
-    let active_cards: HomeCarouselEdgeCards = Rc::new(RefCell::new(Vec::new()));
-
-    let trigger: Rc<dyn Fn(gtk::PositionType)> = {
-        let scroll_weak = scroll.downgrade();
-        let rail_weak = rail.downgrade();
-        let ready = ready.clone();
-        let active = active.clone();
-        let generation = generation.clone();
-        let active_cards = active_cards.clone();
-
-        Rc::new(move |position| {
-            if !ready.get() || active.replace(true) {
-                return;
-            }
-
-            let from_start = match position {
-                gtk::PositionType::Left => true,
-                gtk::PositionType::Right => false,
-                _ => {
-                    active.set(false);
-                    return;
-                }
-            };
-
-            let Some(scroll) = scroll_weak.upgrade() else {
-                active.set(false);
-                return;
-            };
-            let Some(rail) = rail_weak.upgrade() else {
-                active.set(false);
-                return;
-            };
-
-            let cards = home_carousel_edge_cards(&rail, from_start, 3);
-            if cards.is_empty() {
-                active.set(false);
-                return;
-            }
-
-            let token = generation.get().wrapping_add(1);
-            generation.set(token);
-
-            {
-                let mut stored = active_cards.borrow_mut();
-                stored.clear();
-
-                for button in cards {
-                    let surface = home_card_surface(&button);
-
-                    let base_button_width = button.width().max(COLLECTION_CARD_MAX_WIDTH);
-                    let base_surface_width = surface
-                        .as_ref()
-                        .map(|surface| surface.width())
-                        .unwrap_or(base_button_width)
-                        .max(COLLECTION_CARD_MAX_WIDTH);
-
-                    button.add_css_class("home-card-edge-spring");
-                    if let Some(surface) = surface.as_ref() {
-                        surface.add_css_class("home-card-edge-spring-surface");
-                    }
-
-                    stored.push(HomeCarouselEdgeCard {
-                        button: button.clone(),
-                        surface: surface.clone(),
-                        original_button_width_request: button.width_request(),
-                        original_surface_width_request: surface
-                            .as_ref()
-                            .map(|surface| surface.width_request()),
-                        base_button_width,
-                        base_surface_width,
-                    });
-                }
-            }
-
-            let started_at = Rc::new(Cell::new(0_i64));
-            let active = active.clone();
-            let generation = generation.clone();
-            let active_cards = active_cards.clone();
-
-            scroll.add_tick_callback(move |scroll, frame_clock| {
-                if generation.get() != token {
-                    restore_home_carousel_edge_cards(&active_cards);
-                    active.set(false);
-                    return glib::ControlFlow::Break;
-                }
-
-                let now = frame_clock.frame_time();
-                let start = started_at.get();
-
-                if start == 0 {
-                    started_at.set(now);
-                    return glib::ControlFlow::Continue;
-                }
-
-                let progress = ((now - start) as f64 / 520_000.0).clamp(0.0, 1.0);
-                let displacement = home_carousel_spring_displacement(progress);
-                let strengths: [f64; 3] = [1.0, 0.60, 0.32];
-
-                {
-                    let stored = active_cards.borrow();
-                    for (index, card) in stored.iter().enumerate() {
-                        let stretch = (displacement * strengths[index.min(2)]).round() as i32;
-
-                        card.button.set_width_request(
-                            (card.base_button_width + stretch).max(COLLECTION_CARD_MIN_WIDTH),
-                        );
-
-                        if let Some(surface) = card.surface.as_ref() {
-                            surface.set_width_request(
-                                (card.base_surface_width + stretch).max(COLLECTION_CARD_MIN_WIDTH),
-                            );
-                        }
-                    }
-                }
-
-                if !from_start {
-                    let adjustment = scroll.hadjustment();
-                    let end = (adjustment.upper() - adjustment.page_size()).max(adjustment.lower());
-                    adjustment.set_value(end);
-                }
-
-                if progress >= 1.0 {
-                    restore_home_carousel_edge_cards(&active_cards);
-                    active.set(false);
-                    glib::ControlFlow::Break
-                } else {
-                    glib::ControlFlow::Continue
-                }
-            });
-        })
-    };
-
-    {
-        let ready = ready.clone();
-        scroll.connect_map(move |scroll| {
-            ready.set(false);
-            let ready = ready.clone();
-            let weak_scroll = scroll.downgrade();
-
-            glib::timeout_add_local_once(Duration::from_millis(180), move || {
-                if weak_scroll.upgrade().is_some() {
-                    ready.set(true);
-                }
-            });
-        });
-    }
-
-    {
-        let trigger = trigger.clone();
-        scroll.connect_edge_reached(move |_, position| {
-            trigger(position);
-        });
-    }
-
-    {
-        let trigger = trigger.clone();
-        scroll.connect_edge_overshot(move |_, position| {
-            trigger(position);
-        });
-    }
-
-    {
-        let adjustment = scroll.hadjustment();
-        let last_value = Rc::new(Cell::new(adjustment.value()));
-        let ready = ready.clone();
-        let trigger = trigger.clone();
-
-        adjustment.connect_value_changed(move |adjustment| {
-            let value = adjustment.value();
-            let previous = last_value.replace(value);
-
-            if !ready.get() {
-                return;
-            }
-
-            let lower = adjustment.lower();
-            let upper = (adjustment.upper() - adjustment.page_size()).max(lower);
-            const EDGE_EPSILON: f64 = 0.75;
-
-            if value <= lower + EDGE_EPSILON && previous > value + EDGE_EPSILON {
-                trigger(gtk::PositionType::Left);
-            } else if value >= upper - EDGE_EPSILON && previous < value - EDGE_EPSILON {
-                trigger(gtk::PositionType::Right);
-            }
-        });
-    }
-
-    {
-        let ready = ready.clone();
-        let active = active.clone();
-        let generation = generation.clone();
-        let active_cards = active_cards.clone();
-
-        scroll.connect_unmap(move |_| {
-            ready.set(false);
-            generation.set(generation.get().wrapping_add(1));
-            restore_home_carousel_edge_cards(&active_cards);
-            active.set(false);
-        });
-    }
-}
-
-fn home_carousel_edge_cards(rail: &gtk::Box, from_start: bool, limit: usize) -> Vec<gtk::Widget> {
-    let mut cards = Vec::new();
-    let mut current = if from_start {
-        rail.first_child()
-    } else {
-        rail.last_child()
-    };
-
-    while let Some(card) = current {
-        let next = if from_start {
-            card.next_sibling()
-        } else {
-            card.prev_sibling()
-        };
-
-        cards.push(card);
-
-        if cards.len() == limit {
-            break;
-        }
-
-        current = next;
-    }
-
-    cards
-}
-
-fn restore_home_carousel_edge_cards(cards: &HomeCarouselEdgeCards) {
-    for card in cards.borrow_mut().drain(..) {
-        card.button
-            .set_width_request(card.original_button_width_request);
-        card.button.remove_css_class("home-card-edge-spring");
-
-        if let Some(surface) = card.surface {
-            surface.set_width_request(card.original_surface_width_request.unwrap_or(-1));
-            surface.remove_css_class("home-card-edge-spring-surface");
-        }
-    }
 }
 
 fn home_carousel_spring_displacement(progress: f64) -> f64 {
