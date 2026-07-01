@@ -65,6 +65,10 @@ const MATERIAL_EXPRESSIVE_MODULES: &[(&str, &str)] = &[
         "099-loading-indicator.css",
         include_str!("../assets/themes/material-expressive/099-loading-indicator.css"),
     ),
+    (
+        "100-buttons.css",
+        include_str!("../assets/themes/material-expressive/100-buttons.css"),
+    ),
 ];
 
 pub(crate) fn frosted_glass_css() -> &'static str {
@@ -108,6 +112,12 @@ mod tests {
             ".header-view-switcher",
             ".queue2-page",
             ".material-loading-indicator.contained",
+            ".material-button-filled",
+            ".material-button-filled-tonal",
+            ".material-button-elevated",
+            ".material-button-outlined",
+            ".material-button-text",
+            ".material-button-loading",
         ] {
             assert!(css.contains(required), "missing required CSS: {required}");
         }
