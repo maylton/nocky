@@ -28,6 +28,28 @@ pub struct YouTubePlaylistAddition {
     pub reconciliation_required: bool,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+#[allow(dead_code)]
+pub struct YouTubePlaylistMetadataEdit {
+    pub playlist_id: String,
+    pub title: String,
+    pub description: String,
+    pub privacy: String,
+    pub reconciliation_required: bool,
+}
+
+#[allow(dead_code)]
+pub struct YouTubePlaylistMetadataEditRequest<'a> {
+    pub playlist_id: &'a str,
+    pub current_title: &'a str,
+    pub current_description: &'a str,
+    pub current_privacy: &'a str,
+    pub title: Option<&'a str>,
+    pub description: Option<&'a str>,
+    pub privacy: Option<&'a str>,
+}
+
 impl YouTubeBridge {
     fn playlist_helper_path(&self) -> Result<PathBuf, String> {
         self.helper
@@ -133,6 +155,30 @@ impl YouTubeBridge {
                 "duplicates": false,
             }),
             "item addition",
+        )
+    }
+
+    #[allow(dead_code)]
+    pub fn edit_playlist_metadata(
+        &self,
+        request: YouTubePlaylistMetadataEditRequest<'_>,
+    ) -> Result<YouTubePlaylistMetadataEdit, String> {
+        self.run_playlist_helper(
+            json!({
+                "operation": "edit_metadata",
+                "playlist_id": request.playlist_id,
+                "owned": true,
+                "editable": true,
+                "current": {
+                    "title": request.current_title,
+                    "description": request.current_description,
+                    "privacy": request.current_privacy,
+                },
+                "title": request.title,
+                "description": request.description,
+                "privacy": request.privacy,
+            }),
+            "metadata edit",
         )
     }
 }
@@ -251,6 +297,38 @@ pub fn playlist_add_error_message(error: &str) -> &'static str {
         "A música ou a playlist não possui um identificador válido."
     } else {
         "Não foi possível adicionar a música à playlist."
+    }
+}
+
+#[allow(dead_code)]
+pub fn playlist_metadata_edit_error_message(error: &str) -> &'static str {
+    let normalized = error.to_lowercase();
+    if normalized.contains("session")
+        || normalized.contains("authentication")
+        || normalized.contains("unauthorized")
+        || normalized.contains("401")
+    {
+        "A sessão do YouTube Music expirou. Reconecte sua conta para editar playlists."
+    } else if normalized.contains("ownership")
+        || normalized.contains("editability")
+        || normalized.contains("permission")
+        || normalized.contains("forbidden")
+        || normalized.contains("403")
+    {
+        "Esta playlist não está disponível para edição nesta conta."
+    } else if normalized.contains("metadata changed") || normalized.contains("no changes") {
+        "A playlist mudou no YouTube Music. Recarregue antes de editar novamente."
+    } else if normalized.contains("network")
+        || normalized.contains("offline")
+        || normalized.contains("timed out")
+        || normalized.contains("timeout")
+        || normalized.contains("connect")
+    {
+        "Não foi possível confirmar a edição. A playlist não foi alterada no Nocky."
+    } else if normalized.contains("title") || normalized.contains("privacy") {
+        "Revise o título e a privacidade da playlist."
+    } else {
+        "Não foi possível editar a playlist no YouTube Music."
     }
 }
 
@@ -374,8 +452,9 @@ mod tests {
     use super::playlist_metadata_model::{YouTubePlaylistMetadata, YouTubePlaylistTrackMetadata};
     use super::{
         format_playlist_metadata_diagnostic, normalize_metadata_for_playlist_route,
-        playlist_add_error_message, playlist_creation_error_message, privacy_code,
-        YouTubePlaylistAddition, YouTubePlaylistCreation,
+        playlist_add_error_message, playlist_creation_error_message,
+        playlist_metadata_edit_error_message, privacy_code, YouTubePlaylistAddition,
+        YouTubePlaylistCreation, YouTubePlaylistMetadataEdit,
     };
 
     #[test]
@@ -417,6 +496,23 @@ mod tests {
     }
 
     #[test]
+    fn metadata_edit_result_accepts_the_sanitized_contract() {
+        let result: YouTubePlaylistMetadataEdit = serde_json::from_value(serde_json::json!({
+            "playlist_id": "PL_owned",
+            "title": "Deep Focus",
+            "privacy": "UNLISTED",
+            "reconciliation_required": true
+        }))
+        .unwrap();
+
+        assert_eq!(result.playlist_id, "PL_owned");
+        assert_eq!(result.title, "Deep Focus");
+        assert_eq!(result.description, "");
+        assert_eq!(result.privacy, "UNLISTED");
+        assert!(result.reconciliation_required);
+    }
+
+    #[test]
     fn creation_errors_are_actionable_without_raw_details() {
         assert!(playlist_creation_error_message("401 unauthorized").contains("expirou"));
         assert!(playlist_creation_error_message("network timeout").contains("Sem conexão"));
@@ -428,6 +524,13 @@ mod tests {
         assert!(playlist_add_error_message("401 unauthorized").contains("expirou"));
         assert!(playlist_add_error_message("ownership missing").contains("não está disponível"));
         assert!(playlist_add_error_message("network timeout").contains("não foi alterada"));
+    }
+
+    #[test]
+    fn metadata_edit_errors_are_actionable_without_raw_details() {
+        assert!(playlist_metadata_edit_error_message("401 unauthorized").contains("expirou"));
+        assert!(playlist_metadata_edit_error_message("metadata changed").contains("Recarregue"));
+        assert!(playlist_metadata_edit_error_message("invalid privacy").contains("título"));
     }
 
     #[test]

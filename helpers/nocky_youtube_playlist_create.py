@@ -17,10 +17,12 @@ import nocky_youtube
 from nocky_playlist_mutations import (
     normalize_add_request,
     normalize_create_request,
+    normalize_metadata_edit_request,
     normalize_playlist_detail,
     normalize_playlist_id,
     sanitize_add_result,
     sanitize_create_result,
+    sanitize_metadata_edit_result,
 )
 
 
@@ -155,6 +157,38 @@ def add_playlist_item(payload: Any) -> dict[str, Any]:
     )
 
 
+def edit_playlist_metadata(payload: Any) -> dict[str, Any]:
+    request = normalize_metadata_edit_request(payload)
+    client = _authenticated_client()
+
+    metadata = _read_metadata(client, request["playlist_id"], 1)
+    if metadata.get("owned") is not True or metadata.get("editable") is not True:
+        raise RuntimeError("YouTube Music did not confirm playlist ownership and editability")
+
+    current = request["current"]
+    if current["title"] and metadata.get("title") != current["title"]:
+        raise RuntimeError("YouTube Music playlist metadata changed before editing")
+    if current["privacy"] and metadata.get("privacy") != current["privacy"]:
+        raise RuntimeError("YouTube Music playlist metadata changed before editing")
+
+    editor = getattr(client, "edit_playlist", None)
+    if not callable(editor):
+        raise RuntimeError("The installed YouTube Music runtime cannot edit playlists")
+
+    changes = request["changes"]
+    raw_result = editor(
+        request["playlist_id"],
+        title=changes.get("title"),
+        description=changes.get("description"),
+        privacyStatus=changes.get("privacy"),
+    )
+    return sanitize_metadata_edit_result(
+        raw_result,
+        playlist_id=request["playlist_id"],
+        changes=changes,
+    )
+
+
 def execute(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise RuntimeError("Expected a playlist helper object")
@@ -165,6 +199,8 @@ def execute(payload: Any) -> dict[str, Any]:
         return fetch_playlist_metadata(payload)
     if operation == "add":
         return add_playlist_item(payload)
+    if operation == "edit_metadata":
+        return edit_playlist_metadata(payload)
     raise RuntimeError("Unsupported playlist helper operation")
 
 
