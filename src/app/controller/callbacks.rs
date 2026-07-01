@@ -1,5 +1,8 @@
 //! GTK signal and timer callbacks for `AppController`.
 
+#[path = "callbacks/home_grid.rs"]
+mod home_grid;
+
 use super::AppController;
 use gtk::{glib, prelude::*};
 use std::{cell::RefCell, rc::Rc, time::Duration};
@@ -17,6 +20,7 @@ impl AppController {
                 self.shuffle_button.is_active(),
             ));
         self.publish_mpris_capabilities();
+        home_grid::install(self.browser.root());
 
         {
             self.window
