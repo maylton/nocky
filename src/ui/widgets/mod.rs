@@ -1,6 +1,7 @@
 //! Shared UI widgets.
 
 mod animated_page_switcher;
+mod artwork_cache;
 mod compact_volume_motion;
 mod cover;
 mod expressive_loading;
