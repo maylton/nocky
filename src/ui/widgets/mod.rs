@@ -10,6 +10,10 @@ mod wave_progress;
 pub(crate) use animated_page_switcher::{AnimatedPageSpec, AnimatedPageSwitcher, TopPage};
 pub(crate) use compact_volume_motion::{run_compact_volume_spring, CompactVolumeSpring};
 pub(crate) use cover::{build_cover, CoverView};
-pub(crate) use expressive_loading::ExpressiveLoadingIndicator;
+pub(crate) use expressive_loading::MaterialLoadingIndicator;
+#[cfg(feature = "assisted-login")]
+pub(crate) use expressive_loading::{
+    LoadingIndicatorMode, LoadingIndicatorPresentation, LoadingIndicatorSize,
+};
 pub(crate) use expressive_transport::{ExpressiveTransport, TransportVariant};
 pub(crate) use wave_progress::WaveProgress;

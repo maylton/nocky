@@ -3,12 +3,18 @@ use crate::config::AppLanguage;
 #[cfg(feature = "assisted-login")]
 mod implementation {
     use super::AppLanguage;
-    use crate::youtube::{
-        login_policy::{
-            is_post_login_sync_uri, is_youtube_music_uri, navigation_disposition, navigation_host,
-            NavigationDisposition,
+    use crate::{
+        ui::widgets::{
+            LoadingIndicatorMode, LoadingIndicatorPresentation, LoadingIndicatorSize,
+            MaterialLoadingIndicator,
         },
-        YouTubeBridge,
+        youtube::{
+            login_policy::{
+                is_post_login_sync_uri, is_youtube_music_uri, navigation_disposition,
+                navigation_host, NavigationDisposition,
+            },
+            YouTubeBridge,
+        },
     };
     use adw::prelude::*;
     use gtk::{gio, glib};
@@ -178,15 +184,21 @@ mod implementation {
         description.add_css_class("dim-label");
 
         let status_row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-        let spinner = gtk::Spinner::new();
-        spinner.start();
+        let loading = MaterialLoadingIndicator::with_options(
+            LoadingIndicatorSize::Compact,
+            LoadingIndicatorPresentation::Contained,
+            LoadingIndicatorMode::Indeterminate,
+        );
+        loading
+            .widget()
+            .update_property(&[gtk::accessible::Property::Label(text.loading)]);
         let status = gtk::Label::new(Some(text.loading));
         status.set_xalign(0.0);
         status.set_hexpand(true);
         status.add_css_class("dim-label");
         let cancel = gtk::Button::with_label(text.cancel);
         cancel.add_css_class("flat");
-        status_row.append(&spinner);
+        status_row.append(loading.widget());
         status_row.append(&status);
         status_row.append(&cancel);
 
@@ -268,7 +280,7 @@ mod implementation {
         {
             let window = window.clone();
             let status = status.clone();
-            let spinner = spinner.clone();
+            let loading = loading.clone();
             let cookie_manager = cookie_manager.clone();
             let callback = callback.clone();
             let validating = validating.clone();
@@ -287,19 +299,19 @@ mod implementation {
                     returning_to_music.set(false);
                 } else if is_post_login_sync_uri(&uri) {
                     status.set_text(text.finalizing);
-                    spinner.start();
+                    loading.widget().set_visible(true);
                 } else if let Some(host) = navigation_host(&uri) {
-                    spinner.start();
+                    loading.widget().set_visible(true);
                     status.set_text(&format!("{} {host}", text.waiting_host));
                 } else {
-                    spinner.start();
+                    loading.widget().set_visible(true);
                     status.set_text(text.waiting);
                 }
 
                 let window = window.clone();
                 let web_view = web_view.clone();
                 let status = status.clone();
-                let spinner = spinner.clone();
+                let loading = loading.clone();
                 let cookie_manager = cookie_manager.clone();
                 let callback = callback.clone();
                 let validating = validating.clone();
@@ -330,7 +342,7 @@ mod implementation {
 
                             if !has_sapisid || pairs.is_empty() {
                                 if on_youtube_music && !validating.get() {
-                                    spinner.stop();
+                                    loading.widget().set_visible(false);
                                     status.set_text(text.missing_session);
                                 }
                                 return;
@@ -338,7 +350,7 @@ mod implementation {
 
                             if !on_youtube_music {
                                 status.set_text(text.finalizing);
-                                spinner.start();
+                                loading.widget().set_visible(true);
                                 if !returning_to_music.replace(true) {
                                     web_view.load_uri(YOUTUBE_MUSIC_URI);
                                 }
@@ -350,7 +362,7 @@ mod implementation {
                             }
 
                             status.set_text(text.capturing);
-                            spinner.start();
+                            loading.widget().set_visible(true);
                             finish_callback(&callback, format!("Cookie: {}", pairs.join("; ")));
 
                             let (validation_tx, validation_rx) = mpsc::channel();
@@ -366,7 +378,7 @@ mod implementation {
                                     }
                                     Ok(Err(_)) | Err(TryRecvError::Disconnected) => {
                                         validating.set(false);
-                                        spinner.stop();
+                                        loading.widget().set_visible(false);
                                         status.set_text(text.invalid_session);
                                         glib::ControlFlow::Break
                                     }
@@ -376,7 +388,7 @@ mod implementation {
                         }
                         Err(_) => {
                             if on_youtube_music && !validating.get() {
-                                spinner.stop();
+                                loading.widget().set_visible(false);
                                 status.set_text(text.cookie_error);
                             }
                         }
@@ -387,11 +399,11 @@ mod implementation {
 
         web_view.connect_load_failed({
             let status = status.clone();
-            let spinner = spinner.clone();
+            let loading = loading.clone();
             let returning_to_music = returning_to_music.clone();
             move |_, _, _, _| {
                 returning_to_music.set(false);
-                spinner.stop();
+                loading.widget().set_visible(false);
                 status.set_text(text.waiting);
                 false
             }

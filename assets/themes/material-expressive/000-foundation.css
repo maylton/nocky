@@ -48,10 +48,12 @@ window.theme-material-expressive .shell-play-button {
   color: @m3_on_primary;
 }
 
+window.theme-material-expressive .material-loading-indicator,
 window.theme-material-expressive .expressive-loading-indicator {
   color: @m3_primary;
 }
 
+window.theme-material-expressive button .material-loading-indicator,
 window.theme-material-expressive button .expressive-loading-indicator {
   color: inherit;
 }

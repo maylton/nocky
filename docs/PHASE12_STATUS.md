@@ -25,6 +25,10 @@ be updated whenever a Phase 12 slice is merged.
 
 ### Remote playlist metadata edits
 
+This remains the next Phase 12 playlist-mutation checkpoint, but the immediate
+product priority has temporarily moved to Material 3 Expressive visual-system
+consolidation.
+
 The next checkpoint changes playlist properties rather than playlist
 membership. It must preserve the same mutation boundary as the shipped
 creation/addition slices:

@@ -61,6 +61,10 @@ const MATERIAL_EXPRESSIVE_MODULES: &[(&str, &str)] = &[
         "098-cache-indicators.css",
         include_str!("../assets/themes/material-expressive/098-cache-indicators.css"),
     ),
+    (
+        "099-loading-indicator.css",
+        include_str!("../assets/themes/material-expressive/099-loading-indicator.css"),
+    ),
 ];
 
 pub(crate) fn frosted_glass_css() -> &'static str {
@@ -103,6 +107,7 @@ mod tests {
             ".expressive-player-card",
             ".header-view-switcher",
             ".queue2-page",
+            ".material-loading-indicator.contained",
         ] {
             assert!(css.contains(required), "missing required CSS: {required}");
         }

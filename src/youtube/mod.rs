@@ -13,7 +13,7 @@ mod routing;
 mod structured_cards;
 
 use crate::search_text::{normalize_search_text, search_matches, search_score};
-use crate::ui::widgets::ExpressiveLoadingIndicator;
+use crate::ui::widgets::MaterialLoadingIndicator;
 use adw::prelude::*;
 use gtk::glib;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -1172,7 +1172,7 @@ pub struct YouTubePage {
     search_entry: gtk::SearchEntry,
     filter: gtk::DropDown,
     heading: gtk::Label,
-    loading: ExpressiveLoadingIndicator,
+    loading: MaterialLoadingIndicator,
     results: gtk::ListBox,
     results_scroll: gtk::ScrolledWindow,
     host_dialog: RefCell<Option<adw::Dialog>>,
@@ -1322,7 +1322,7 @@ impl YouTubePage {
         heading.set_xalign(0.0);
         heading.set_hexpand(true);
         heading.add_css_class("title-3");
-        let loading = ExpressiveLoadingIndicator::new();
+        let loading = MaterialLoadingIndicator::new();
         loading.widget().set_visible(false);
         let results_header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         results_header.append(&heading);
@@ -1601,6 +1601,11 @@ impl YouTubePage {
 
     pub fn set_loading(&self, loading: bool, title: &str) {
         self.heading.set_text(title);
+        if loading {
+            self.loading
+                .widget()
+                .update_property(&[gtk::accessible::Property::Label(title)]);
+        }
         self.loading.widget().set_visible(loading);
     }
 
