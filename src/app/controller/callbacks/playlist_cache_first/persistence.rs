@@ -41,6 +41,22 @@ impl DurablePlaylistCache {
         Self { path, playlists }
     }
 
+    pub(super) fn clear(&mut self) {
+        self.playlists.clear();
+
+        let temporary = self.path.with_extension("json.tmp");
+        for path in [&self.path, &temporary] {
+            if let Err(error) = fs::remove_file(path) {
+                if error.kind() != std::io::ErrorKind::NotFound {
+                    eprintln!(
+                        "Could not remove opened-playlist cache {}: {error}",
+                        path.display()
+                    );
+                }
+            }
+        }
+    }
+
     pub(super) fn items_with_fallback(
         &self,
         controller: &AppController,

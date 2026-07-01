@@ -127,6 +127,7 @@ impl AppController {
                         } else {
                             self.youtube_library.borrow_mut().clear();
                             clear_library_cache();
+                            self.clear_youtube_cache_first_data();
                             self.refresh_browser();
                         }
                     }
@@ -159,6 +160,7 @@ impl AppController {
                             .show_empty("Search for music or connect your account.");
                         self.youtube_library.borrow_mut().clear();
                         clear_library_cache();
+                        self.clear_youtube_cache_first_data();
                         self.refresh_browser();
                         self.show_toast("Conta do YouTube Music desconectada");
                     }

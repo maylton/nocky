@@ -17,14 +17,24 @@ pub(super) fn install(controller: &Rc<AppController>) {
     let durable = Rc::new(RefCell::new(DurablePlaylistCache::load(controller)));
 
     {
+        let home_snapshot = home_snapshot.clone();
+        let durable = durable.clone();
+        let cleanup: Rc<dyn Fn()> = Rc::new(move || {
+            home_snapshot.borrow_mut().clear();
+            durable.borrow_mut().clear();
+        });
+        controller
+            .youtube_cache_first_cleanup
+            .replace(Some(cleanup));
+    }
+
+    {
         let weak = Rc::downgrade(controller);
         let home_snapshot = home_snapshot.clone();
         controller.window.connect_close_request(move |_| {
             if let Some(controller) = weak.upgrade() {
                 let current_home = controller.youtube_home_page.borrow().clone();
-                home_snapshot
-                    .borrow_mut()
-                    .persist_if_changed(&current_home);
+                home_snapshot.borrow_mut().persist_if_changed(&current_home);
             }
             glib::Propagation::Proceed
         });
@@ -39,9 +49,7 @@ pub(super) fn install(controller: &Rc<AppController>) {
             };
 
             let current_home = controller.youtube_home_page.borrow().clone();
-            home_snapshot
-                .borrow_mut()
-                .persist_if_changed(&current_home);
+            home_snapshot.borrow_mut().persist_if_changed(&current_home);
             glib::ControlFlow::Continue
         });
     }
@@ -51,6 +59,10 @@ pub(super) fn install(controller: &Rc<AppController>) {
         let Some(controller) = weak.upgrade() else {
             return glib::ControlFlow::Break;
         };
+
+        if !controller.youtube_library.borrow().connected {
+            return glib::ControlFlow::Continue;
+        }
 
         let route = controller.browser.route();
         let BrowserRoute::YouTubePlaylist { title, browse_id } = route else {
@@ -100,6 +112,30 @@ pub(super) fn install(controller: &Rc<AppController>) {
         controller.revalidate_youtube_playlist_for_browser(playlist);
         glib::ControlFlow::Continue
     });
+}
+
+impl AppController {
+    pub(crate) fn clear_youtube_cache_first_data(&self) {
+        let cleanup = self.youtube_cache_first_cleanup.borrow().clone();
+        if let Some(cleanup) = cleanup {
+            cleanup();
+        }
+
+        self.youtube_home_page.replace(Default::default());
+        self.youtube_home_previous_params.borrow_mut().clear();
+        self.youtube_playlist_revalidation.borrow_mut().clear();
+        self.youtube_pending_playlist.replace(None);
+
+        self.youtube_home_loading.set(false);
+        self.youtube_playlist_loading.set(false);
+        self.youtube_playlist_prefetching.set(false);
+
+        // Invalidate responses started before the account was disconnected.
+        self.youtube_home_request_id
+            .set(self.youtube_home_request_id.get().wrapping_add(1));
+        self.youtube_playlist_request_id
+            .set(self.youtube_playlist_request_id.get().wrapping_add(1));
+    }
 }
 
 #[cfg(test)]

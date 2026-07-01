@@ -37,6 +37,22 @@ impl DurableHomeSnapshot {
         }
     }
 
+    pub(super) fn clear(&mut self) {
+        self.last_saved = None;
+
+        let temporary = self.path.with_extension("json.tmp");
+        for path in [&self.path, &temporary] {
+            if let Err(error) = fs::remove_file(path) {
+                if error.kind() != std::io::ErrorKind::NotFound {
+                    eprintln!(
+                        "Could not remove YouTube Home snapshot {}: {error}",
+                        path.display()
+                    );
+                }
+            }
+        }
+    }
+
     pub(super) fn persist_if_changed(&mut self, page: &YouTubeHomePage) {
         let Some(page) = valid_page(page) else {
             return;

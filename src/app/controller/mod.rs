@@ -143,6 +143,7 @@ pub(crate) struct ControllerRuntime {
     pub(crate) youtube_playlist_prefetching: Cell<bool>,
     pub(crate) youtube_pending_playlist: RefCell<Option<YouTubeItem>>,
     pub(crate) youtube_playlist_revalidation: RefCell<HashMap<String, PlaylistRevalidationState>>,
+    pub(crate) youtube_cache_first_cleanup: RefCell<Option<Rc<dyn Fn()>>>,
     pub(crate) youtube_bridge: Option<Arc<YouTubeBridge>>,
     pub(crate) youtube_home_page: RefCell<YouTubeHomePage>,
     pub(crate) youtube_library: RefCell<YouTubeLibraryCache>,
