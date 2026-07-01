@@ -17,6 +17,7 @@ impl AppController {
                 self.shuffle_button.is_active(),
             ));
         self.publish_mpris_capabilities();
+        self.restore_playlist_first_paint_snapshot();
 
         {
             self.window
@@ -97,6 +98,7 @@ impl AppController {
                     return glib::ControlFlow::Break;
                 };
                 controller.handle_background_messages();
+                controller.poll_playlist_snapshot_revalidation();
                 controller.handle_youtube_playlist_metadata_updates();
                 controller.handle_browser_events();
                 controller.poll_current_youtube_playlist_metadata();
@@ -114,6 +116,17 @@ impl AppController {
                 if progress_ticks.is_multiple_of(cadence) {
                     controller.refresh_progress();
                 }
+                glib::ControlFlow::Continue
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(self);
+            glib::timeout_add_local(Duration::from_secs(2), move || {
+                let Some(controller) = weak.upgrade() else {
+                    return glib::ControlFlow::Break;
+                };
+                controller.checkpoint_playlist_first_paint_snapshot();
                 glib::ControlFlow::Continue
             });
         }
