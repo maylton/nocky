@@ -62,7 +62,7 @@ impl YouTubeHomeSection {
 impl YouTubeHomePage {
     pub(crate) fn install_cover_update_handler(handler: impl Fn(&Self) -> bool + 'static) {
         HOME_COVER_UPDATE_HANDLER.with(|current| {
-            current.replace(Some(Box::new(handler)));
+            *current.borrow_mut() = Some(Box::new(handler));
         });
     }
 
@@ -264,7 +264,9 @@ mod tests {
 
         assert!(!page.update_cover_paths(&incoming));
         assert_eq!(page.sections[0].items[0].cover_path, "/tmp/one.jpg");
-        HOME_COVER_UPDATE_HANDLER.with(|handler| handler.borrow_mut().take());
+        HOME_COVER_UPDATE_HANDLER.with(|handler| {
+            *handler.borrow_mut() = None;
+        });
     }
 
     #[test]
