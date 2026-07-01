@@ -122,8 +122,9 @@ Regression tests cover:
 - shared-component use at migrated call sites.
 
 Quality Gate #543 passed the hardened animation and accessibility core. Quality
-Gate #546 passed the semantic theme module, dynamic-palette integration and the
-complete repository test/clippy matrix.
+Gate #546 passed the semantic theme module and dynamic-palette integration.
+Quality Gate #547 passed on the final documented head, including the complete
+repository test and strict Clippy matrix.
 
 ## Manual visual validation checklist
 
