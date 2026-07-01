@@ -4953,9 +4953,9 @@ impl HomeSectionPresentation {
 
     fn scrollbar_gap(self) -> i32 {
         match self {
-            Self::Featured => 12,
+            Self::Featured => 20,
             Self::Compact => 18,
-            Self::TrackRows => 12,
+            Self::TrackRows => 20,
         }
     }
 
@@ -5222,7 +5222,8 @@ mod responsive_home_grid_tests {
     #[test]
     fn scroller_height_reserves_space_for_scrollbar_without_stretching_rows() {
         assert_eq!(HomeSectionPresentation::TrackRows.row_spacing(), 4);
-        assert_eq!(HomeSectionPresentation::TrackRows.scroller_height(4), 280);
+        assert_eq!(HomeSectionPresentation::Featured.scroller_height(1), 288);
+        assert_eq!(HomeSectionPresentation::TrackRows.scroller_height(4), 288);
         assert_eq!(HomeSectionPresentation::Compact.scroller_height(2), 418);
     }
 }

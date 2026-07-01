@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.6.0] - 2026-07-01
+
+### Added
+
+- Redesigned YouTube Music Home with distinct Featured, Compact and Track Rows presentations.
+- Direct parsing of raw InnerTube Home renderers for improved artwork, endpoint identity and recommendation coverage.
+- Durable Home and opened-playlist snapshots restored before remote synchronization.
+- Offline playback for playlists that were opened while connected.
+
+### Changed
+
+- Home carousels now adapt to the available window width without stretching compact cards.
+- Play and overflow controls use consistent opposite corners over collection artwork.
+- Featured cards and track rows reserve additional clearance above their horizontal scrollbar.
+- Cached Home and playlist content is revalidated in the background without replacing the first paint.
+- Project and release metadata advanced to 0.6.0.
+
+### Fixed
+
+- Prevented overlapping `RefCell` borrows while restoring the cached Home snapshot.
+- Prevented stale YouTube account content from surviving logout.
+- Cleared the active and persisted YouTube playback queue when disconnecting an account.
+- Invalidated pending YouTube requests so late responses cannot repopulate data after logout.
+- Fixed compact-card rails remaining limited to five visible cards on wider windows.
+- Fixed play/pause positioning on Featured and Compact Home cards.
+
 ## [0.5.0] - 2026-06-27
 
 ### Added

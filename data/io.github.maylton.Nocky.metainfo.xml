@@ -23,6 +23,18 @@
   <url type="homepage">https://github.com/maylton/nocky</url>
   <url type="bugtracker">https://github.com/maylton/nocky/issues</url>
   <releases>
+    <release version="0.6.0" date="2026-07-01">
+      <description>
+        <ul>
+          <li>Redesigns YouTube Music Home with Featured, Compact and Track Rows presentations that adapt responsively to the available window width.</li>
+          <li>Parses Home recommendations directly from raw InnerTube renderers for more reliable artwork, metadata and continuation handling.</li>
+          <li>Adds durable cache-first Home and playlist restoration, including offline playback for previously opened playlists.</li>
+          <li>Revalidates cached content in the background without replacing the first paint or losing the current Home context.</li>
+          <li>Clears personal Home snapshots, opened-playlist caches, playback sessions and the YouTube queue when the account is disconnected.</li>
+          <li>Refines Home card controls, carousel spacing, scrollbar clearance and responsive compact-card layout.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.5.0" date="2026-06-27">
       <description>
         <ul>

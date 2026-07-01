@@ -1,6 +1,6 @@
 # Frosted Glass theme
 
-Frosted Glass is the third Nocky visual identity, introduced in **Nocky 0.5.0**.
+Frosted Glass is the third Nocky visual identity, introduced in **Nocky 0.5.0** and included in **Nocky 0.6.0**.
 
 It deliberately keeps the application behavior and expressive motion system while changing the composition from connected Material surfaces to floating translucent islands.
 
