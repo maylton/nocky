@@ -4922,15 +4922,15 @@ impl HomeSectionPresentation {
     fn outer_width(self) -> i32 {
         match self {
             Self::Featured => 220,
-            Self::Compact => 176,
-            Self::TrackRows => 320,
+            Self::Compact => 168,
+            Self::TrackRows => 312,
         }
     }
 
     fn outer_height(self) -> i32 {
         match self {
             Self::Featured => 268,
-            Self::Compact => 204,
+            Self::Compact => 196,
             Self::TrackRows => 64,
         }
     }
@@ -4938,9 +4938,29 @@ impl HomeSectionPresentation {
     fn rail_spacing(self) -> i32 {
         match self {
             Self::Featured => 14,
-            Self::Compact => 12,
+            Self::Compact => 6,
+            Self::TrackRows => 8,
+        }
+    }
+
+    fn row_spacing(self) -> i32 {
+        match self {
+            Self::Featured => 0,
+            Self::Compact => 8,
+            Self::TrackRows => 4,
+        }
+    }
+
+    fn scrollbar_gap(self) -> i32 {
+        match self {
+            Self::Featured => 12,
+            Self::Compact => 18,
             Self::TrackRows => 12,
         }
+    }
+
+    fn scroller_height(self, rows: i32) -> i32 {
+        rows * self.outer_height() + (rows - 1).max(0) * self.row_spacing() + self.scrollbar_gap()
     }
 
     fn track_rows(self, item_count: usize) -> i32 {
@@ -4991,13 +5011,19 @@ fn attach_home_grid_cards(grid: &gtk::Grid, cards: &[gtk::Widget], rows: i32) {
     }
 }
 
-fn metrolist_home_scroller(child: &impl IsA<gtk::Widget>, min_height: i32) -> gtk::ScrolledWindow {
+fn metrolist_home_scroller(
+    child: &impl IsA<gtk::Widget>,
+    min_height: i32,
+    scrollbar_gap: i32,
+) -> gtk::ScrolledWindow {
     let scroll = gtk::ScrolledWindow::new();
+    child.set_margin_bottom(scrollbar_gap);
     scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Never);
     scroll.set_overlay_scrolling(false);
     scroll.set_propagate_natural_height(true);
     scroll.set_min_content_height(min_height);
     scroll.set_hexpand(true);
+    scroll.set_vexpand(false);
     scroll.set_child(Some(child));
     scroll.add_css_class("home-carousel-scroll");
     scroll.add_css_class("home-card-grid-scroll");
@@ -5029,24 +5055,33 @@ fn metrolist_home_section_content(
         let rows = presentation.track_rows(cards.len());
         let grid = gtk::Grid::new();
         grid.set_column_spacing(presentation.rail_spacing() as u32);
-        grid.set_row_spacing(8);
+        grid.set_row_spacing(presentation.row_spacing() as u32);
         grid.set_halign(gtk::Align::Start);
         grid.set_valign(gtk::Align::Start);
+        grid.set_vexpand(false);
         grid.add_css_class("home-card-grid");
         attach_home_grid_cards(&grid, &cards, rows);
-        let height = rows * presentation.outer_height() + (rows - 1).max(0) * 8;
-        metrolist_home_scroller(&grid, height)
+        metrolist_home_scroller(
+            &grid,
+            presentation.scroller_height(rows),
+            presentation.scrollbar_gap(),
+        )
     } else if presentation == HomeSectionPresentation::Compact {
         let grid = gtk::Grid::new();
         grid.set_column_spacing(presentation.rail_spacing() as u32);
-        grid.set_row_spacing(presentation.rail_spacing() as u32);
+        grid.set_row_spacing(presentation.row_spacing() as u32);
         grid.set_halign(gtk::Align::Start);
         grid.set_valign(gtk::Align::Start);
+        grid.set_vexpand(false);
         grid.add_css_class("home-card-grid");
 
         let cards = Rc::new(cards);
         let current_rows = Rc::new(Cell::new(0_i32));
-        let scroll = metrolist_home_scroller(&grid, presentation.outer_height());
+        let scroll = metrolist_home_scroller(
+            &grid,
+            presentation.scroller_height(1),
+            presentation.scrollbar_gap(),
+        );
         let reflow: Rc<dyn Fn(i32)> = {
             let grid = grid.clone();
             let scroll = scroll.clone();
@@ -5058,9 +5093,7 @@ fn metrolist_home_section_content(
                     return;
                 }
                 attach_home_grid_cards(&grid, &cards, rows);
-                let height = rows * presentation.outer_height()
-                    + (rows - 1).max(0) * presentation.rail_spacing();
-                scroll.set_min_content_height(height);
+                scroll.set_min_content_height(presentation.scroller_height(rows));
             })
         };
 
@@ -5084,7 +5117,11 @@ fn metrolist_home_section_content(
         for card in cards {
             rail.append(&card);
         }
-        metrolist_home_scroller(&rail, presentation.outer_height())
+        metrolist_home_scroller(
+            &rail,
+            presentation.scroller_height(1),
+            presentation.scrollbar_gap(),
+        )
     }
 }
 
@@ -5108,6 +5145,7 @@ mod responsive_home_grid_tests {
     fn compact_geometry_matches_metrolist_card_scale() {
         assert_eq!(HomeSectionPresentation::Compact.artwork_size(), 128);
         assert_eq!(HomeSectionPresentation::Compact.card_width(), 152);
+        assert_eq!(HomeSectionPresentation::Compact.outer_width(), 168);
     }
 
     #[test]
@@ -5122,6 +5160,13 @@ mod responsive_home_grid_tests {
         assert_eq!(HomeSectionPresentation::Compact.rail_rows(900, 8), 1);
         assert_eq!(HomeSectionPresentation::Compact.rail_rows(760, 8), 2);
         assert_eq!(HomeSectionPresentation::Compact.rail_rows(480, 2), 1);
+    }
+
+    #[test]
+    fn scroller_height_reserves_space_for_scrollbar_without_stretching_rows() {
+        assert_eq!(HomeSectionPresentation::TrackRows.row_spacing(), 4);
+        assert_eq!(HomeSectionPresentation::TrackRows.scroller_height(4), 280);
+        assert_eq!(HomeSectionPresentation::Compact.scroller_height(2), 418);
     }
 }
 
@@ -6469,7 +6514,11 @@ fn home_collection_card(
         _ => 8,
     });
     card.set_margin_start(8);
-    card.set_margin_end(8);
+    card.set_margin_end(match presentation {
+        HomeSectionPresentation::Compact => 4,
+        HomeSectionPresentation::TrackRows => 4,
+        HomeSectionPresentation::Featured => 8,
+    });
     card.append(&artwork_overlay);
     card.append(&text);
     card.add_css_class("collection-card");
