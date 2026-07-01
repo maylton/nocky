@@ -1,7 +1,5 @@
 //! GTK signal and timer callbacks for `AppController`.
 
-#[path = "callbacks/home_artwork.rs"]
-mod home_artwork;
 #[path = "callbacks/home_grid.rs"]
 mod home_grid;
 
@@ -22,7 +20,6 @@ impl AppController {
                 self.shuffle_button.is_active(),
             ));
         self.publish_mpris_capabilities();
-        home_artwork::install(self.browser.root());
         home_grid::install(self.browser.root());
 
         {
