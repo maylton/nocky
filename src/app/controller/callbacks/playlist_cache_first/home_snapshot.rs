@@ -24,9 +24,10 @@ impl DurableHomeSnapshot {
             .ok()
             .and_then(|raw| decode_snapshot(&raw));
 
-        if controller.youtube_home_page.borrow().sections.is_empty()
-            && let Some(page) = restored.as_ref()
-        {
+        if let (true, Some(page)) = (
+            controller.youtube_home_page.borrow().sections.is_empty(),
+            restored.as_ref(),
+        ) {
             controller.youtube_home_page.replace(page.clone());
         }
 
@@ -100,9 +101,7 @@ fn save_snapshot(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        decode_snapshot, valid_page, PersistedYouTubeHomeSnapshot, HOME_SNAPSHOT_VERSION,
-    };
+    use super::{decode_snapshot, valid_page, PersistedYouTubeHomeSnapshot, HOME_SNAPSHOT_VERSION};
     use crate::youtube::{YouTubeHomeChip, YouTubeHomePage, YouTubeHomeSection, YouTubeItem};
 
     fn playlist(title: &str, browse_id: &str) -> YouTubeItem {
