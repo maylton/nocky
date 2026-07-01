@@ -4979,11 +4979,12 @@ impl HomeSectionPresentation {
         }
     }
 
-    fn play_control_margin_start(self) -> i32 {
+    fn play_control_margin_end(self) -> i32 {
         match self {
-            Self::Featured => 140,
-            Self::Compact => 92,
-            Self::TrackRows => 20,
+            // Keep the control inside the artwork's upper-right corner.
+            Self::Featured => 10,
+            Self::Compact => 34,
+            Self::TrackRows => 10,
         }
     }
 }
@@ -5120,7 +5121,9 @@ fn metrolist_home_section_content(
         grid.set_row_spacing(presentation.row_spacing() as u32);
         grid.set_halign(gtk::Align::Start);
         grid.set_valign(gtk::Align::Start);
+        grid.set_hexpand(false);
         grid.set_vexpand(false);
+        grid.set_column_homogeneous(false);
         grid.add_css_class("home-card-grid");
 
         let cards = Rc::new(cards);
@@ -5145,18 +5148,24 @@ fn metrolist_home_section_content(
             })
         };
 
-        reflow(1);
+        // Render wide layouts as one row before the first allocation.
+        reflow(i32::MAX);
         {
             let reflow = reflow.clone();
-            let scroll = scroll.clone();
-            glib::idle_add_local_once(move || {
-                reflow(scroll.width());
+            scroll.connect_map(move |scroll| {
+                let width = scroll.width();
+                if width > 1 {
+                    reflow(width);
+                }
             });
         }
         {
             let reflow = reflow.clone();
             scroll.connect_notify_local(Some("width"), move |scroll, _| {
-                reflow(scroll.width());
+                let width = scroll.width();
+                if width > 1 {
+                    reflow(width);
+                }
             });
         }
         scroll
@@ -6180,11 +6189,11 @@ fn home_card_button(
     if show_inline_play_control {
         if let Some(play_event) = play_event {
             let control = gtk::Button::new();
-            control.set_halign(gtk::Align::Start);
+            control.set_halign(gtk::Align::End);
             control.set_valign(gtk::Align::Start);
             control.set_margin_top(10);
-            control.set_margin_start(presentation.play_control_margin_start());
-            control.set_margin_end(0);
+            control.set_margin_start(0);
+            control.set_margin_end(presentation.play_control_margin_end());
             control.add_css_class("circular");
             control.add_css_class("collection-card-context-action");
             if let Some(key) = playback_key.as_deref() {
