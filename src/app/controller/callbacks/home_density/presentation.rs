@@ -1,5 +1,12 @@
 use gtk::prelude::*;
 
+const COMPACT_OUTER_WIDTH: i32 = 172;
+const COMPACT_OUTER_HEIGHT: i32 = 210;
+const COMPACT_CARD_WIDTH: i32 = 152;
+const COMPACT_CARD_HEIGHT: i32 = 194;
+const COMPACT_ARTWORK_SIZE: i32 = 136;
+const COMPACT_ACTION_SIZE: i32 = 34;
+
 pub(super) fn apply(root: &gtk::Stack) {
     let root_widget: &gtk::Widget = root.upcast_ref();
     let width = root.width().max(1);
@@ -33,6 +40,13 @@ pub(super) fn apply(root: &gtk::Stack) {
         grid.set_max_children_per_line(compact_columns(width));
         grid.set_column_spacing(12);
         grid.set_row_spacing(14);
+
+        let grid_widget: gtk::Widget = grid.clone().upcast();
+        for child in direct_children(&grid_widget) {
+            if find_class(&child, "home-card-button").is_some() {
+                compact_card(&child);
+            }
+        }
     }
 }
 
@@ -48,10 +62,81 @@ fn compact_columns(width: i32) -> u32 {
     }
 }
 
+fn compact_card(root: &gtk::Widget) {
+    root.set_size_request(COMPACT_OUTER_WIDTH, COMPACT_OUTER_HEIGHT);
+    root.set_hexpand(false);
+    root.set_halign(gtk::Align::Start);
+
+    for widget in descendants(root) {
+        if widget.has_css_class("home-card-context-overlay")
+            || widget.has_css_class("home-card-button")
+        {
+            widget.set_size_request(COMPACT_OUTER_WIDTH, COMPACT_OUTER_HEIGHT);
+            widget.set_hexpand(false);
+            widget.set_halign(gtk::Align::Start);
+        }
+
+        if widget.has_css_class("home-card") {
+            widget.set_size_request(COMPACT_CARD_WIDTH, COMPACT_CARD_HEIGHT);
+            widget.set_hexpand(false);
+            widget.set_halign(gtk::Align::Start);
+            widget.add_css_class("home-card-compact");
+        }
+
+        if widget.has_css_class("collection-artwork") {
+            resize_artwork(&widget, COMPACT_ARTWORK_SIZE);
+        }
+
+        if widget.has_css_class("collection-card-detail") {
+            widget.set_visible(false);
+        }
+
+        if widget.has_css_class("collection-card-title")
+            || widget.has_css_class("expressive-card-subtitle")
+        {
+            if let Ok(label) = widget.clone().downcast::<gtk::Label>() {
+                label.set_width_chars(14);
+                label.set_max_width_chars(14);
+            }
+        }
+
+        if widget.has_css_class("collection-card-context-action")
+            || widget.has_css_class("collection-card-overflow-button")
+        {
+            widget.set_size_request(COMPACT_ACTION_SIZE, COMPACT_ACTION_SIZE);
+            widget.set_margin_top(8);
+            widget.set_margin_start(8);
+            widget.set_margin_end(8);
+        }
+    }
+}
+
+fn resize_artwork(artwork: &gtk::Widget, size: i32) {
+    artwork.set_size_request(size, size);
+    artwork.set_hexpand(false);
+    artwork.set_vexpand(false);
+
+    for child in direct_children(artwork) {
+        child.set_size_request(size, size);
+        if let Ok(image) = child.clone().downcast::<gtk::Image>() {
+            image.set_pixel_size(size / 3);
+        }
+        if let Ok(picture) = child.downcast::<gtk::Picture>() {
+            picture.set_size_request(size, size);
+        }
+    }
+}
+
 fn direct_flow_box(section: &gtk::Widget) -> Option<gtk::FlowBox> {
     direct_children(section)
         .into_iter()
         .find_map(|child| child.downcast::<gtk::FlowBox>().ok())
+}
+
+fn find_class(root: &gtk::Widget, class_name: &str) -> Option<gtk::Widget> {
+    descendants(root)
+        .into_iter()
+        .find(|widget| widget.has_css_class(class_name))
 }
 
 fn descendants(root: &gtk::Widget) -> Vec<gtk::Widget> {
