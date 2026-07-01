@@ -131,6 +131,7 @@ impl AppController {
         self.youtube_pending_playlist.replace(None);
 
         self.youtube_home_loading.set(false);
+        self.youtube_home_continuation_loading.set(false);
         self.youtube_playlist_loading.set(false);
         self.youtube_playlist_prefetching.set(false);
 

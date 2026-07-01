@@ -128,6 +128,7 @@ pub(crate) struct ControllerRuntime {
     pub(crate) youtube_search_request_id: Cell<u64>,
     pub(crate) youtube_home_request_id: Cell<u64>,
     pub(crate) youtube_home_loading: Cell<bool>,
+    pub(crate) youtube_home_continuation_loading: Cell<bool>,
     pub(crate) youtube_home_previous_params: RefCell<String>,
     pub(crate) youtube_recovery_in_progress: Cell<bool>,
     pub(crate) youtube_recovery_attempted: Cell<bool>,

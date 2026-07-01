@@ -37,7 +37,10 @@ use std::{
 
 pub(crate) use assisted_login::present as present_assisted_login;
 pub(crate) use collections::{resolve_youtube_collection_item, youtube_home_prefetch_candidates};
-pub(crate) use feed::{YouTubeHomeChip, YouTubeHomePage, YouTubeHomeSection};
+pub(crate) use feed::{
+    youtube_home_section_key, YouTubeHomeChip, YouTubeHomeContinuationDelta, YouTubeHomePage,
+    YouTubeHomeSection,
+};
 pub(crate) use like_mutation::{LikeMutationRegistry, LikeMutationStartError};
 pub(crate) use playlist_create::{playlist_creation_error_message, YouTubePlaylistCreation};
 pub(crate) use routing::{youtube_item_action, YouTubeItemAction};
