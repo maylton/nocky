@@ -9,6 +9,7 @@ use crate::{browser::BrowserRoute, youtube::YouTubeItem};
 use gtk::{glib, prelude::*};
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
+const HOME_SNAPSHOT_INTERVAL: Duration = Duration::from_secs(1);
 const REVALIDATION_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 pub(super) fn install(controller: &Rc<AppController>) {
@@ -29,16 +30,27 @@ pub(super) fn install(controller: &Rc<AppController>) {
         });
     }
 
+    {
+        let weak = Rc::downgrade(controller);
+        let home_snapshot = home_snapshot.clone();
+        glib::timeout_add_local(HOME_SNAPSHOT_INTERVAL, move || {
+            let Some(controller) = weak.upgrade() else {
+                return glib::ControlFlow::Break;
+            };
+
+            let current_home = controller.youtube_home_page.borrow().clone();
+            home_snapshot
+                .borrow_mut()
+                .persist_if_changed(&current_home);
+            glib::ControlFlow::Continue
+        });
+    }
+
     let weak = Rc::downgrade(controller);
     glib::timeout_add_local(REVALIDATION_POLL_INTERVAL, move || {
         let Some(controller) = weak.upgrade() else {
             return glib::ControlFlow::Break;
         };
-
-        let current_home = controller.youtube_home_page.borrow().clone();
-        home_snapshot
-            .borrow_mut()
-            .persist_if_changed(&current_home);
 
         let route = controller.browser.route();
         let BrowserRoute::YouTubePlaylist { title, browse_id } = route else {
