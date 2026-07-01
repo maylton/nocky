@@ -1,0 +1,24 @@
+window.theme-material-expressive .material-loading-indicator.contained {
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  border-radius: 999px;
+}
+
+window.theme-noctalia .material-loading-indicator.contained {
+  color: @accent_fg_color;
+  background-color: @accent_color;
+  border-radius: 999px;
+}
+
+window.theme-frosted-glass .material-loading-indicator.contained {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.72);
+  border: 1px solid alpha(@m3_primary, 0.32);
+  border-radius: 999px;
+}
+
+button .material-loading-indicator.contained {
+  color: inherit;
+  background-color: transparent;
+  border: none;
+}
