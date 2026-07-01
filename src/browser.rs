@@ -4897,155 +4897,162 @@ impl HomeSectionPresentation {
 
     fn artwork_size(self) -> i32 {
         match self {
-            Self::Featured => 208,
+            Self::Featured => 176,
             Self::Compact => 128,
-            Self::TrackRows => 54,
+            Self::TrackRows => 48,
         }
     }
 
     fn card_width(self) -> i32 {
         match self {
-            Self::Featured => 232,
-            Self::Compact => 156,
+            Self::Featured => 196,
+            Self::Compact => 152,
             Self::TrackRows => 300,
         }
     }
 
     fn card_height(self) -> i32 {
         match self {
-            Self::Featured => 292,
-            Self::Compact => 190,
-            Self::TrackRows => 72,
+            Self::Featured => 252,
+            Self::Compact => 188,
+            Self::TrackRows => 64,
         }
     }
 
     fn outer_width(self) -> i32 {
         match self {
-            Self::Featured => 248,
-            Self::Compact => 164,
+            Self::Featured => 220,
+            Self::Compact => 176,
             Self::TrackRows => 320,
         }
     }
 
     fn outer_height(self) -> i32 {
         match self {
-            Self::Featured => 312,
-            Self::Compact => 206,
-            Self::TrackRows => 76,
+            Self::Featured => 268,
+            Self::Compact => 204,
+            Self::TrackRows => 64,
         }
     }
 
-    fn columns(self, width: i32) -> u32 {
+    fn rail_spacing(self) -> i32 {
         match self {
-            Self::Featured => featured_home_columns(width),
-            Self::Compact => compact_home_columns(width),
-            Self::TrackRows => track_row_home_columns(width),
+            Self::Featured => 14,
+            Self::Compact => 12,
+            Self::TrackRows => 12,
+        }
+    }
+
+    fn track_rows(self, item_count: usize) -> i32 {
+        match self {
+            Self::TrackRows => item_count.clamp(1, 4) as i32,
+            Self::Featured | Self::Compact => 1,
+        }
+    }
+
+    fn play_control_margin_start(self) -> i32 {
+        match self {
+            Self::Featured => 140,
+            Self::Compact => 92,
+            Self::TrackRows => 20,
         }
     }
 }
 
-fn featured_home_columns(width: i32) -> u32 {
-    match width {
-        ..=599 => 2,
-        600..=999 => 3,
-        1000..=1399 => 4,
-        1400..=1899 => 5,
-        _ => 6,
-    }
+fn metrolist_home_rail(presentation: HomeSectionPresentation) -> gtk::Box {
+    let rail = gtk::Box::new(gtk::Orientation::Horizontal, presentation.rail_spacing());
+    rail.set_halign(gtk::Align::Start);
+    rail.set_valign(gtk::Align::Start);
+    rail.set_hexpand(false);
+    rail.add_css_class("home-card-grid");
+    rail
 }
 
-fn compact_home_columns(width: i32) -> u32 {
-    match width {
-        ..=479 => 2,
-        480..=679 => 3,
-        680..=899 => 4,
-        900..=1119 => 5,
-        1120..=1359 => 6,
-        1360..=1599 => 7,
-        1600..=1799 => 8,
-        1800..=2099 => 9,
-        _ => 10,
-    }
+fn metrolist_home_scroller(child: &impl IsA<gtk::Widget>, min_height: i32) -> gtk::ScrolledWindow {
+    let scroll = gtk::ScrolledWindow::new();
+    scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Never);
+    scroll.set_overlay_scrolling(false);
+    scroll.set_propagate_natural_height(true);
+    scroll.set_min_content_height(min_height);
+    scroll.set_hexpand(true);
+    scroll.set_child(Some(child));
+    scroll.add_css_class("home-carousel-scroll");
+    scroll.add_css_class("home-card-grid-scroll");
+    scroll
 }
 
-fn track_row_home_columns(width: i32) -> u32 {
-    match width {
-        ..=699 => 1,
-        700..=1399 => 2,
-        _ => 3,
-    }
-}
+fn metrolist_home_section_content(
+    cards: Vec<gtk::Widget>,
+    presentation: HomeSectionPresentation,
+    language: AppLanguage,
+    empty_detail: &str,
+) -> gtk::ScrolledWindow {
+    let cards = if cards.is_empty() {
+        let text = home_copy(language);
+        vec![home_collection_card(
+            None,
+            text.waiting_content,
+            empty_detail,
+            "",
+            false,
+            presentation,
+        )
+        .upcast::<gtk::Widget>()]
+    } else {
+        cards
+    };
 
-fn responsive_home_grid(presentation: HomeSectionPresentation) -> gtk::FlowBox {
-    let grid = gtk::FlowBox::new();
-    grid.set_selection_mode(gtk::SelectionMode::None);
-    grid.set_activate_on_single_click(false);
-    grid.set_column_spacing(match presentation {
-        HomeSectionPresentation::Featured => 14,
-        HomeSectionPresentation::Compact => 12,
-        HomeSectionPresentation::TrackRows => 14,
-    });
-    grid.set_row_spacing(match presentation {
-        HomeSectionPresentation::Featured => 16,
-        HomeSectionPresentation::Compact => 14,
-        HomeSectionPresentation::TrackRows => 8,
-    });
-    grid.set_homogeneous(presentation == HomeSectionPresentation::TrackRows);
-    grid.set_min_children_per_line(match presentation {
-        HomeSectionPresentation::Featured | HomeSectionPresentation::Compact => 2,
-        HomeSectionPresentation::TrackRows => 1,
-    });
-    grid.set_max_children_per_line(presentation.columns(1));
-    grid.set_hexpand(true);
-    grid.set_halign(match presentation {
-        HomeSectionPresentation::Compact => gtk::Align::Start,
-        HomeSectionPresentation::Featured | HomeSectionPresentation::TrackRows => gtk::Align::Fill,
-    });
-    grid.set_valign(gtk::Align::Start);
-    grid.add_css_class("home-card-grid");
-
-    let current_columns = Rc::new(Cell::new(presentation.columns(1)));
-    grid.connect_notify_local(Some("width"), move |grid, _| {
-        let columns = presentation.columns(grid.width());
-        if current_columns.replace(columns) != columns {
-            grid.set_max_children_per_line(columns);
+    if presentation == HomeSectionPresentation::TrackRows {
+        let rows = presentation.track_rows(cards.len());
+        let grid = gtk::Grid::new();
+        grid.set_column_spacing(presentation.rail_spacing() as u32);
+        grid.set_row_spacing(8);
+        grid.set_halign(gtk::Align::Start);
+        grid.set_valign(gtk::Align::Start);
+        grid.add_css_class("home-card-grid");
+        for (index, card) in cards.into_iter().enumerate() {
+            let row = (index as i32) % rows;
+            let column = (index as i32) / rows;
+            grid.attach(&card, column, row, 1, 1);
         }
-    });
-
-    grid
+        let height = rows * presentation.outer_height() + (rows - 1).max(0) * 8;
+        metrolist_home_scroller(&grid, height)
+    } else {
+        let rail = metrolist_home_rail(presentation);
+        for card in cards {
+            rail.append(&card);
+        }
+        metrolist_home_scroller(&rail, presentation.outer_height())
+    }
 }
 
 #[cfg(test)]
 mod responsive_home_grid_tests {
-    use super::{compact_home_columns, featured_home_columns, track_row_home_columns};
+    use super::HomeSectionPresentation;
 
     #[test]
-    fn featured_breakpoints_scale_with_grid_width() {
-        assert_eq!(featured_home_columns(420), 2);
-        assert_eq!(featured_home_columns(800), 3);
-        assert_eq!(featured_home_columns(1200), 4);
-        assert_eq!(featured_home_columns(1600), 5);
-        assert_eq!(featured_home_columns(2200), 6);
+    fn featured_geometry_is_larger_than_compact() {
+        assert!(
+            HomeSectionPresentation::Featured.artwork_size()
+                > HomeSectionPresentation::Compact.artwork_size()
+        );
+        assert!(
+            HomeSectionPresentation::Featured.card_width()
+                > HomeSectionPresentation::Compact.card_width()
+        );
     }
 
     #[test]
-    fn compact_breakpoints_scale_with_grid_width() {
-        assert_eq!(compact_home_columns(420), 2);
-        assert_eq!(compact_home_columns(600), 3);
-        assert_eq!(compact_home_columns(800), 4);
-        assert_eq!(compact_home_columns(1000), 5);
-        assert_eq!(compact_home_columns(1200), 6);
-        assert_eq!(compact_home_columns(1500), 7);
-        assert_eq!(compact_home_columns(1700), 8);
-        assert_eq!(compact_home_columns(1900), 9);
-        assert_eq!(compact_home_columns(2200), 10);
+    fn compact_geometry_matches_metrolist_card_scale() {
+        assert_eq!(HomeSectionPresentation::Compact.artwork_size(), 128);
+        assert_eq!(HomeSectionPresentation::Compact.card_width(), 152);
     }
 
     #[test]
-    fn track_row_breakpoints_scale_with_grid_width() {
-        assert_eq!(track_row_home_columns(600), 1);
-        assert_eq!(track_row_home_columns(1000), 2);
-        assert_eq!(track_row_home_columns(1800), 3);
+    fn track_rows_follow_metrolist_four_row_rail() {
+        assert_eq!(HomeSectionPresentation::TrackRows.track_rows(0), 1);
+        assert_eq!(HomeSectionPresentation::TrackRows.track_rows(2), 2);
+        assert_eq!(HomeSectionPresentation::TrackRows.track_rows(12), 4);
     }
 }
 
@@ -5083,11 +5090,7 @@ fn home_history_section(
     heading.append(&title_label);
     heading.append(&subtitle_label);
 
-    let grid = responsive_home_grid(presentation);
-
-    if entries.is_empty() {
-        grid.insert(&home_empty_card(language, empty_detail), -1);
-    }
+    let mut cards = Vec::new();
 
     for entry in entries {
         let (card, event) = match entry {
@@ -5248,15 +5251,20 @@ fn home_history_section(
         };
 
         let button = collection_event_button(card, event, event_tx);
+        button.set_size_request(presentation.outer_width(), presentation.outer_height());
+        button.set_hexpand(false);
+        button.set_halign(gtk::Align::Start);
         button.add_css_class("home-card-button");
-        grid.insert(&button, -1);
+        cards.push(button.upcast::<gtk::Widget>());
     }
+
+    let content = metrolist_home_section_content(cards, presentation, language, empty_detail);
 
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
     section.add_css_class("home-section");
     section.add_css_class(presentation.css_class());
     section.append(&heading);
-    section.append(&grid);
+    section.append(&content);
     section
 }
 
@@ -5694,13 +5702,10 @@ fn home_section(
     heading.append(&title_label);
     heading.append(&subtitle_label);
 
-    let grid = responsive_home_grid(presentation);
-
-    if cards.is_empty() {
-        grid.insert(&home_empty_card(language, empty_detail), -1);
-    } else {
-        for card in cards {
-            let button = home_card_button(
+    let cards = cards
+        .into_iter()
+        .map(|card| {
+            home_card_button(
                 card,
                 presentation,
                 playback,
@@ -5708,16 +5713,16 @@ fn home_section(
                 event_tx,
                 language,
                 card_effects,
-            );
-            grid.insert(&button, -1);
-        }
-    }
+            )
+        })
+        .collect::<Vec<_>>();
+    let content = metrolist_home_section_content(cards, presentation, language, empty_detail);
 
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
     section.add_css_class("home-section");
     section.add_css_class(presentation.css_class());
     section.append(&heading);
-    section.append(&grid);
+    section.append(&content);
     section
 }
 
@@ -5952,12 +5957,8 @@ fn home_card_button(
 
     let main_button = gtk::Button::new();
     main_button.set_size_request(presentation.outer_width(), presentation.outer_height());
-    main_button.set_hexpand(presentation == HomeSectionPresentation::TrackRows);
-    main_button.set_halign(match presentation {
-        HomeSectionPresentation::TrackRows => gtk::Align::Fill,
-        HomeSectionPresentation::Featured => gtk::Align::Fill,
-        HomeSectionPresentation::Compact => gtk::Align::Start,
-    });
+    main_button.set_hexpand(false);
+    main_button.set_halign(gtk::Align::Start);
     main_button.add_css_class("flat");
     main_button.add_css_class("home-card-button");
     main_button.add_css_class("expressive-collection-button");
@@ -5985,31 +5986,18 @@ fn home_card_button(
 
     let overlay = gtk::Overlay::new();
     overlay.set_size_request(presentation.outer_width(), presentation.outer_height());
-    overlay.set_hexpand(presentation == HomeSectionPresentation::TrackRows);
-    overlay.set_halign(match presentation {
-        HomeSectionPresentation::TrackRows => gtk::Align::Fill,
-        HomeSectionPresentation::Featured => gtk::Align::Fill,
-        HomeSectionPresentation::Compact => gtk::Align::Start,
-    });
+    overlay.set_hexpand(false);
+    overlay.set_halign(gtk::Align::Start);
     overlay.set_child(Some(&main_button));
     overlay.add_css_class("home-card-context-overlay");
 
     if let Some(play_event) = play_event {
         let control = gtk::Button::new();
-        control.set_halign(match presentation {
-            HomeSectionPresentation::TrackRows => gtk::Align::Start,
-            HomeSectionPresentation::Featured | HomeSectionPresentation::Compact => gtk::Align::End,
-        });
+        control.set_halign(gtk::Align::Start);
         control.set_valign(gtk::Align::Start);
-        control.set_margin_top(match presentation {
-            HomeSectionPresentation::TrackRows => 9,
-            _ => 10,
-        });
-        control.set_margin_start(match presentation {
-            HomeSectionPresentation::TrackRows => 30,
-            _ => 0,
-        });
-        control.set_margin_end(10);
+        control.set_margin_top(10);
+        control.set_margin_start(presentation.play_control_margin_start());
+        control.set_margin_end(0);
         control.add_css_class("circular");
         control.add_css_class("collection-card-context-action");
         if let Some(key) = playback_key.as_deref() {
@@ -6387,11 +6375,11 @@ fn home_collection_card(
         },
     );
     card.set_size_request(presentation.card_width(), presentation.card_height());
-    card.set_hexpand(presentation == HomeSectionPresentation::TrackRows);
+    card.set_hexpand(false);
     card.set_vexpand(false);
     card.set_halign(match presentation {
-        HomeSectionPresentation::TrackRows => gtk::Align::Fill,
-        HomeSectionPresentation::Featured => gtk::Align::Fill,
+        HomeSectionPresentation::TrackRows => gtk::Align::Start,
+        HomeSectionPresentation::Featured => gtk::Align::Start,
         HomeSectionPresentation::Compact => gtk::Align::Start,
     });
     card.set_valign(match presentation {
@@ -6432,11 +6420,6 @@ fn home_card_label(text: &str, class_name: &str, max_width_chars: i32) -> gtk::L
     label.set_max_width_chars(max_width_chars);
     label.add_css_class(class_name);
     label
-}
-
-fn home_empty_card(language: AppLanguage, detail: &str) -> gtk::Box {
-    let text = home_copy(language);
-    collection_card(None, text.waiting_content, detail, "", false)
 }
 
 fn home_syncing_hint(language: AppLanguage) -> gtk::Box {
