@@ -404,12 +404,19 @@ Next checkpoint:
 
 ### Slice 12C — remote library mutations
 
-Planned after profile semantics are documented:
+Delivered:
 
 - Like/unlike feedback in all relevant views with optimistic UI and rollback.
 - Remote reconciliation after each mutation.
-- Create and rename playlists where supported.
-- Add/remove playlist tracks with clear remote ownership and failure recovery.
+- Private-by-default playlist creation with authenticated helper execution.
+- Read-only playlist ownership/editability metadata.
+- Single-track addition to confirmed-owned playlists with duplicate-submit
+  protection and server reconciliation.
+
+Remaining checkpoints:
+
+- Rename playlists and update privacy with current-value confirmation.
+- Remove playlist tracks only when ownership and `setVideoId` are available.
 
 Remote destructive operations require a separate review before implementation.
 

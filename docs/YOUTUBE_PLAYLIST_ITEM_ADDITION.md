@@ -1,7 +1,9 @@
 # YouTube Music playlist item addition foundation
 
-This document defines Phase 12D3's first network-isolated contract. It does not
-expose a GTK action and it is not installed as a user-facing capability yet.
+This document defines Phase 12D3's single-track addition contract and native GTK
+exposure. The user-facing action is available only on an authenticated YouTube
+playlist page after the read-only metadata contract confirms that the connected
+account owns and can edit that playlist.
 
 ## Supported request
 
@@ -20,6 +22,22 @@ Caller-provided ownership is only the first gate. After authentication, the
 helper fetches the same playlist through the read-only metadata contract and
 requires the returned playlist ID, `owned` state and effective editability to
 match before any remote change can be attempted.
+
+## Native exposure
+
+The playlist header shows an "add current track" action only when all of these
+conditions are true:
+
+- the current route is a YouTube playlist;
+- read-only playlist metadata has confirmed `owned == true` and
+  `editable == true`;
+- playback is currently sourced from YouTube Music;
+- the current item has a valid 11-character YouTube video ID;
+- the same playlist/video addition is not already pending.
+
+Clicking the action disables that specific playlist/video request while a worker
+thread performs the remote mutation. The native model is not changed from the
+initial mutation response.
 
 ## Runtime call
 
@@ -52,9 +70,14 @@ the helper boundary.
 ## Reconciliation rule
 
 A successful mutation response is not sufficient to finalize native state. The
-caller must fetch the playlist again through the read-only metadata contract and
-confirm the new occurrence. The refreshed response becomes the source of truth
-for ownership, privacy, duplicate occurrences and `setVideoId` identity.
+native controller fetches the playlist again through the read-only metadata
+contract and confirms the new occurrence before updating in-memory state or the
+cache. The refreshed response becomes the source of truth for ownership,
+privacy, duplicate occurrences and `setVideoId` identity.
+
+If the fresh read cannot confirm the item, Nocky leaves the native playlist
+unchanged and reports an ambiguous reconciliation failure instead of presenting
+an optimistic success.
 
 ## Failure behavior
 
@@ -67,7 +90,6 @@ for ownership, privacy, duplicate occurrences and `setVideoId` identity.
 
 ## Out of scope
 
-- GTK controls;
 - automatic real-account smoke tests;
 - batch addition;
 - duplicate insertion;
@@ -75,6 +97,3 @@ for ownership, privacy, duplicate occurrences and `setVideoId` identity.
 - removal, reordering, rename, privacy changes or deletion;
 - profile or authentication changes;
 - Local Home and local-library changes.
-
-Native exposure remains blocked until the playlist metadata integration tracked
-by issue #71 is complete.

@@ -16,35 +16,34 @@ be updated whenever a Phase 12 slice is merged.
 - Native GTK playlist-creation dialog with asynchronous execution and immediate
   playlist-list/cache update.
 - Remote playlist mutation safety architecture.
+- Read-only playlist editability metadata integrated with native playlist detail
+  loading.
+- Native single-track addition to confirmed-owned playlists, with duplicate
+  submit protection and post-success playlist reconciliation.
 
 ## In progress
 
-### Read-only playlist editability metadata
+### Remote playlist metadata edits
 
-The current checkpoint preserves only the metadata required to decide whether a
-future operation may be offered safely:
+The next checkpoint changes playlist properties rather than playlist
+membership. It must preserve the same mutation boundary as the shipped
+creation/addition slices:
 
-- authenticated ownership;
-- normalized privacy;
-- stable playlist identity;
-- per-occurrence `videoId` and `setVideoId` identity;
-- duplicate occurrence preservation;
-- effective editability checks.
-
-This checkpoint is strictly read-only and does not authorize any remote change.
+- authenticated ownership and effective editability checks;
+- current title, description and privacy shown before submission;
+- no submission when no value changes;
+- worker-thread execution with duplicate-submit protection;
+- fresh playlist/account reconciliation after success;
+- localized success, permission, authentication and reconciliation failures.
 
 ## Next delivery order
 
-1. Package and integrate read-only editability metadata with native playlist
-   detail loading.
-2. Add a song to an owned playlist with duplicate-submit protection and server
-   reconciliation.
-3. Rename an owned playlist and change privacy with explicit validation.
-4. Remove one exact track occurrence only when both `videoId` and `setVideoId`
+1. Rename an owned playlist and change privacy with explicit validation.
+2. Remove one exact track occurrence only when both `videoId` and `setVideoId`
    are available.
-5. Implement playlist deletion as a separate destructive checkpoint with typed
+3. Implement playlist deletion as a separate destructive checkpoint with typed
    confirmation.
-6. Return to library robustness: incremental synchronization, cache expiration,
+4. Return to library robustness: incremental synchronization, cache expiration,
    offline indicators, bounded retry and diagnostics.
 
 ## Safety rules
@@ -62,5 +61,6 @@ This checkpoint is strictly read-only and does not authorize any remote change.
 
 - Profile foundation issue: completed and closed.
 - Playlist creation issue: completed and closed.
+- Read-only playlist metadata issue: completed and closed.
+- Playlist item-addition checkpoint: completed on main.
 - Playlist mutation architecture issue: remains open as the umbrella tracker.
-- Conflicted read-only metadata PR: superseded by a current-main replacement.
