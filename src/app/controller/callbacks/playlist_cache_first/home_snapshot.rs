@@ -171,6 +171,47 @@ mod tests {
     }
 
     #[test]
+    fn persisted_snapshot_contains_appended_home_continuation() {
+        let mut page = YouTubeHomePage {
+            sections: vec![YouTubeHomeSection {
+                id: "first".to_string(),
+                title: "First".to_string(),
+                items: vec![playlist("One", "VL1")],
+                ..YouTubeHomeSection::default()
+            }],
+            continuation: "page-2".to_string(),
+            ..YouTubeHomePage::default()
+        };
+        page.append_continuation(YouTubeHomePage {
+            sections: vec![YouTubeHomeSection {
+                id: "second".to_string(),
+                title: "Second".to_string(),
+                items: vec![playlist("Two", "VL2")],
+                ..YouTubeHomeSection::default()
+            }],
+            continuation: "page-3".to_string(),
+            ..YouTubeHomePage::default()
+        });
+
+        let snapshot = PersistedYouTubeHomeSnapshot {
+            version: HOME_SNAPSHOT_VERSION,
+            page,
+        };
+        let raw = serde_json::to_string(&snapshot).expect("serializable Home snapshot");
+        let restored = decode_snapshot(&raw).expect("restorable Home snapshot");
+
+        assert_eq!(
+            restored
+                .sections
+                .iter()
+                .map(|section| section.id.as_str())
+                .collect::<Vec<_>>(),
+            ["first", "second"]
+        );
+        assert_eq!(restored.continuation, "page-3");
+    }
+
+    #[test]
     fn empty_home_is_not_persisted() {
         assert!(valid_page(&YouTubeHomePage::default()).is_none());
     }

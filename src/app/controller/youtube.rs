@@ -672,7 +672,16 @@ impl AppController {
         };
         let append = !continuation.is_empty();
         let filtered = !params.is_empty();
-        if !append {
+        if append {
+            let current = self.youtube_home_page.borrow();
+            if !current.can_request_continuation(
+                &continuation,
+                &params,
+                self.youtube_home_continuation_loading.get(),
+            ) {
+                return;
+            }
+        } else {
             let current = self.youtube_home_page.borrow();
             if !current.sections.is_empty()
                 && current.selected_chip_params == params
@@ -685,26 +694,29 @@ impl AppController {
         let request_id = self.youtube_home_request_id.get().wrapping_add(1);
         self.youtube_home_request_id.set(request_id);
         if !append {
+            self.youtube_home_continuation_loading.set(false);
             let previous = self.youtube_home_page.borrow().selected_chip_params.clone();
             self.youtube_home_previous_params.replace(previous);
             self.youtube_home_page.borrow_mut().selected_chip_params = params.clone();
+            self.youtube_home_loading.set(true);
+        } else {
+            self.youtube_home_continuation_loading.set(true);
         }
-        self.youtube_home_loading.set(true);
         let youtube_active = self.config.borrow().startup_source == Some(StartupSource::YouTube);
         if youtube_active && !append {
             self.refresh_browser();
         }
 
-        self.youtube_page.set_loading(
-            true,
-            if append {
-                "Carregando mais recomendações..."
-            } else if filtered {
-                "Carregando seleção do YouTube Music..."
-            } else {
-                "Carregando seu feed do YouTube Music..."
-            },
-        );
+        if !append {
+            self.youtube_page.set_loading(
+                true,
+                if filtered {
+                    "Carregando seleção do YouTube Music..."
+                } else {
+                    "Carregando seu feed do YouTube Music..."
+                },
+            );
+        }
         let sender = self.background.sender();
         thread::spawn(move || {
             match bridge.home_page(

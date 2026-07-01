@@ -5,6 +5,7 @@ use crate::{
     background::{
         youtube_home_response_is_current, youtube_home_sections_changed, BackgroundMessage,
     },
+    browser::BrowserRoute,
     config::{AppLanguage, StartupSource},
     youtube::{
         cacheable_youtube_playlist, clear_library_cache, playlist_creation_error_message,
@@ -993,6 +994,9 @@ impl AppController {
                 {
                     if home {
                         self.youtube_home_loading.set(false);
+                        if append {
+                            self.youtube_home_continuation_loading.set(false);
+                        }
                     }
                     match result {
                         Ok(page) => {
@@ -1000,23 +1004,36 @@ impl AppController {
                             if home {
                                 let youtube_active = self.config.borrow().startup_source
                                     == Some(StartupSource::YouTube);
-                                let appended_in_place = if append && youtube_active {
-                                    let playback = self.browser_playback_state();
-                                    self.browser.append_youtube_home_page(
-                                        &page,
-                                        &playback,
-                                        &self.config.borrow(),
-                                    )
-                                } else {
-                                    false
-                                };
+                                if append && self.browser.route() != BrowserRoute::All {
+                                    continue;
+                                }
                                 {
                                     let mut current = self.youtube_home_page.borrow_mut();
+                                    if append
+                                        && ((!page.selected_chip_params.is_empty()
+                                            && current.selected_chip_params
+                                                != page.selected_chip_params)
+                                            || current.continuation.is_empty())
+                                    {
+                                        continue;
+                                    }
                                     unchanged_filtered_feed = !append
                                         && !page.selected_chip_params.is_empty()
                                         && !youtube_home_sections_changed(&current, &page);
                                     if append {
-                                        current.merge_page(page.clone());
+                                        let delta = current.append_continuation(page.clone());
+                                        if youtube_active {
+                                            let playback = self.browser_playback_state();
+                                            let appended = self.browser.append_youtube_home_page(
+                                                &current,
+                                                &delta,
+                                                &playback,
+                                                &self.config.borrow(),
+                                            );
+                                            if !appended {
+                                                self.refresh_browser();
+                                            }
+                                        }
                                     } else {
                                         let mut next = page.clone();
                                         if next.chips.is_empty()
@@ -1029,7 +1046,7 @@ impl AppController {
                                     }
                                 }
                                 self.youtube_home_previous_params.borrow_mut().clear();
-                                if youtube_active && (!append || !appended_in_place) {
+                                if youtube_active && !append {
                                     self.refresh_browser();
                                 }
                             }
@@ -1050,6 +1067,9 @@ impl AppController {
                             }
                         }
                         Err(error) if append => {
+                            if home {
+                                self.youtube_home_continuation_loading.set(false);
+                            }
                             if home
                                 && self.config.borrow().startup_source
                                     == Some(StartupSource::YouTube)
@@ -1091,14 +1111,27 @@ impl AppController {
                 ) =>
                 {
                     if home {
-                        let changed = self
-                            .youtube_home_page
-                            .borrow_mut()
-                            .update_cover_paths(&page);
-                        if changed
-                            && self.config.borrow().startup_source == Some(StartupSource::YouTube)
-                        {
-                            self.refresh_browser();
+                        let youtube_active =
+                            self.config.borrow().startup_source == Some(StartupSource::YouTube);
+                        let mut current = self.youtube_home_page.borrow_mut();
+                        let delta = current.update_cover_paths_delta(&page);
+                        let current_page = current.clone();
+                        drop(current);
+                        if !delta.sections.is_empty() && youtube_active {
+                            if append {
+                                let playback = self.browser_playback_state();
+                                let appended = self.browser.append_youtube_home_page(
+                                    &current_page,
+                                    &delta,
+                                    &playback,
+                                    &self.config.borrow(),
+                                );
+                                if !appended {
+                                    self.refresh_browser();
+                                }
+                            } else {
+                                self.refresh_browser();
+                            }
                         }
                     }
                     if !append {

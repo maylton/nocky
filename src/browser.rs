@@ -9,9 +9,9 @@ use crate::{
     ui::widgets::ExpressiveLoadingIndicator,
     youtube::{
         artist_credit_contains, credited_artists, youtube_cache_visual_state,
-        youtube_collection_cache_key, youtube_collection_key, YouTubeCacheVisualState,
-        YouTubeCollectionEntry, YouTubeHomePage, YouTubeHomeSection, YouTubeItem,
-        YouTubeLibraryCache,
+        youtube_collection_cache_key, youtube_collection_key, youtube_home_section_key,
+        YouTubeCacheVisualState, YouTubeCollectionEntry, YouTubeHomeContinuationDelta,
+        YouTubeHomePage, YouTubeHomeSection, YouTubeItem, YouTubeLibraryCache,
     },
 };
 use gtk::{gdk, gio::prelude::ListModelExt, glib, prelude::*};
@@ -1529,7 +1529,8 @@ impl LibraryBrowser {
 
     pub fn append_youtube_home_page(
         &self,
-        incoming: &YouTubeHomePage,
+        page: &YouTubeHomePage,
+        delta: &YouTubeHomeContinuationDelta,
         playback: &BrowserPlaybackState,
         config: &AppConfig,
     ) -> bool {
@@ -1553,16 +1554,22 @@ impl LibraryBrowser {
         let copy = home_copy(language);
         let card_effects =
             config.visual_theme.is_expressive() && config.expressive_home_card_effects;
-        for section in &incoming.sections {
+        let presentations = youtube_home_section_presentations(&page.sections);
+        for section in &delta.sections {
             let cards = youtube_feed_section_cards(section, language);
             if cards.is_empty() {
                 continue;
             }
-            let presentation = youtube_home_section_semantic_presentation(section)
+            let section_key = youtube_home_section_key(section);
+            let presentation = page
+                .sections
+                .iter()
+                .zip(presentations.iter())
+                .find(|(candidate, _)| youtube_home_section_key(candidate) == section_key)
+                .map(|(_, presentation)| *presentation)
                 .unwrap_or(HomeSectionPresentation::Compact);
-            home.append(&home_section(
-                &section.title,
-                &section.label,
+            let next_section = youtube_home_section_widget(
+                section,
                 copy.waiting_content,
                 cards,
                 presentation,
@@ -1571,9 +1578,21 @@ impl LibraryBrowser {
                 &self.event_tx,
                 language,
                 card_effects,
-            ));
+            );
+            let widget_name = next_section.widget_name();
+            if let Some(existing) = find_direct_child_by_name(&home, widget_name.as_str()) {
+                let previous = existing.prev_sibling();
+                home.remove(&existing);
+                if let Some(previous) = previous {
+                    home.insert_child_after(&next_section, Some(&previous));
+                } else {
+                    home.prepend(&next_section);
+                }
+            } else {
+                home.append(&next_section);
+            }
         }
-        if let Some(load_more) = youtube_home_load_more_button(incoming, &self.event_tx, language) {
+        if let Some(load_more) = youtube_home_load_more_button(page, &self.event_tx, language) {
             home.append(&load_more);
         }
         self.home_dirty.set(false);
@@ -3022,9 +3041,8 @@ impl LibraryBrowser {
                 if cards.is_empty() {
                     continue;
                 }
-                next_home.append(&home_section(
-                    &section.title,
-                    &section.label,
+                next_home.append(&youtube_home_section_widget(
+                    section,
                     copy.waiting_content,
                     cards,
                     presentation,
@@ -4981,9 +4999,8 @@ impl HomeSectionPresentation {
 
     fn play_control_margin_end(self) -> i32 {
         match self {
-            // Keep the control inside the artwork's upper-right corner.
-            Self::Featured => 10,
-            Self::Compact => 34,
+            // Keep the control pinned to the card's upper-right corner.
+            Self::Featured | Self::Compact => 10,
             Self::TrackRows => 10,
         }
     }
@@ -5203,6 +5220,18 @@ mod responsive_home_grid_tests {
         assert_eq!(HomeSectionPresentation::Compact.artwork_size(), 128);
         assert_eq!(HomeSectionPresentation::Compact.card_width(), 152);
         assert_eq!(HomeSectionPresentation::Compact.outer_width(), 168);
+    }
+
+    #[test]
+    fn compact_play_control_stays_pinned_to_card_corner() {
+        assert_eq!(
+            HomeSectionPresentation::Compact.play_control_margin_end(),
+            10
+        );
+        assert_eq!(
+            HomeSectionPresentation::Compact.play_control_margin_end(),
+            HomeSectionPresentation::Featured.play_control_margin_end()
+        );
     }
 
     #[test]
@@ -5457,6 +5486,17 @@ fn remove_direct_children_with_css(container: &gtk::Box, class_name: &str) {
             container.remove(&current);
         }
     }
+}
+
+fn find_direct_child_by_name(container: &gtk::Box, name: &str) -> Option<gtk::Widget> {
+    let mut child = container.first_child();
+    while let Some(current) = child {
+        if current.widget_name().as_str() == name {
+            return Some(current);
+        }
+        child = current.next_sibling();
+    }
+    None
 }
 
 fn youtube_home_chip_bar(
@@ -5911,6 +5951,40 @@ fn home_section(
     section.append(&heading);
     section.append(&content);
     section
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "YouTube Home section mounting mirrors the shared Home section builder"
+)]
+fn youtube_home_section_widget(
+    section: &YouTubeHomeSection,
+    empty_detail: &str,
+    cards: Vec<HomeCard>,
+    presentation: HomeSectionPresentation,
+    playback: &BrowserPlaybackState,
+    config: &AppConfig,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+    card_effects: bool,
+) -> gtk::Box {
+    let widget = home_section(
+        &section.title,
+        &section.label,
+        empty_detail,
+        cards,
+        presentation,
+        playback,
+        config,
+        event_tx,
+        language,
+        card_effects,
+    );
+    widget.set_widget_name(&format!(
+        "youtube-home-section:{}",
+        youtube_home_section_key(section)
+    ));
+    widget
 }
 
 fn home_carousel_spring_displacement(progress: f64) -> f64 {
