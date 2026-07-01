@@ -1,5 +1,8 @@
 //! GTK signal and timer callbacks for `AppController`.
 
+#[path = "callbacks/home_density.rs"]
+mod home_density;
+
 use super::AppController;
 use gtk::{glib, prelude::*};
 use std::{cell::RefCell, rc::Rc, time::Duration};
@@ -17,6 +20,7 @@ impl AppController {
                 self.shuffle_button.is_active(),
             ));
         self.publish_mpris_capabilities();
+        home_density::install(self.browser.root());
 
         {
             self.window
