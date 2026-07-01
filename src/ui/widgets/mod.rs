@@ -5,6 +5,7 @@ mod compact_volume_motion;
 mod cover;
 mod expressive_loading;
 mod expressive_transport;
+pub(crate) mod material_button;
 mod wave_progress;
 
 pub(crate) use animated_page_switcher::{AnimatedPageSpec, AnimatedPageSwitcher, TopPage};
