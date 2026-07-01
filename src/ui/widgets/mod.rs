@@ -5,6 +5,9 @@ mod compact_volume_motion;
 mod cover;
 mod expressive_loading;
 mod expressive_transport;
+// The foundation intentionally exposes variants before call sites migrate.
+// Remove this allowance when the Settings pilot buttons consume the helper.
+#[allow(dead_code)]
 pub(crate) mod material_button;
 mod wave_progress;
 
