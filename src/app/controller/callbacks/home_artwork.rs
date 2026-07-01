@@ -5,7 +5,7 @@
 
 use super::home_grid::find_home_stack;
 use crate::youtube::YouTubeHomePage;
-use gtk::{gdk, gio, glib, prelude::*};
+use gtk::{gdk, glib, prelude::*};
 use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
@@ -15,6 +15,8 @@ use std::{
 };
 
 const ARTWORK_UPDATES_PER_IDLE: usize = 2;
+const ARTWORK_MIN_SIZE: i32 = 124;
+const ARTWORK_MAX_SIZE: i32 = 216;
 
 type ArtworkUpdate = (glib::WeakRef<gtk::Stack>, PathBuf);
 
@@ -24,7 +26,7 @@ pub(super) fn install(root: &gtk::Stack) {
         let Some(root) = root.upgrade() else {
             return false;
         };
-        schedule_mounted_artwork_updates(&root.clone().upcast::<gtk::Widget>(), page)
+        schedule_mounted_artwork_updates(&root.upcast::<gtk::Widget>(), page)
     });
 }
 
@@ -95,10 +97,8 @@ fn collect_artwork_updates(
         let artwork = find_artwork_stack(widget);
         if let (Some(title), Some(artwork)) = (title, artwork) {
             let key = normalize_title(&title);
-            if let Some(candidates) = paths.get_mut(&key) {
-                if let Some(path) = candidates.pop_front() {
-                    updates.push_back((artwork.downgrade(), path));
-                }
+            if let Some(path) = paths.get_mut(&key).and_then(VecDeque::pop_front) {
+                updates.push_back((artwork.downgrade(), path));
             }
         }
         return;
@@ -112,10 +112,10 @@ fn collect_artwork_updates(
 }
 
 fn find_label_text(widget: &gtk::Widget, css_class: &str) -> Option<String> {
-    if widget.has_css_class(css_class) {
-        if let Ok(label) = widget.clone().downcast::<gtk::Label>() {
-            return Some(label.text().to_string());
-        }
+    if widget.has_css_class(css_class)
+        && let Ok(label) = widget.clone().downcast::<gtk::Label>()
+    {
+        return Some(label.text().to_string());
     }
 
     let mut child = widget.first_child();
@@ -129,10 +129,10 @@ fn find_label_text(widget: &gtk::Widget, css_class: &str) -> Option<String> {
 }
 
 fn find_artwork_stack(widget: &gtk::Widget) -> Option<gtk::Stack> {
-    if widget.has_css_class("collection-artwork") {
-        if let Ok(stack) = widget.clone().downcast::<gtk::Stack>() {
-            return Some(stack);
-        }
+    if widget.has_css_class("collection-artwork")
+        && let Ok(stack) = widget.clone().downcast::<gtk::Stack>()
+    {
+        return Some(stack);
     }
 
     let mut child = widget.first_child();
@@ -153,14 +153,30 @@ fn apply_artwork_path(artwork: &gtk::Stack, path: &Path) {
         return;
     };
 
-    let file = gio::File::for_path(path);
-    let Ok(texture) = gdk::Texture::from_file(&file) else {
+    let size = artwork.width().clamp(ARTWORK_MIN_SIZE, ARTWORK_MAX_SIZE);
+    let Some(pixbuf) = square_pixbuf(path, size) else {
         return;
     };
+    let texture = gdk::Texture::for_pixbuf(&pixbuf);
 
     picture.set_paintable(Some(&texture));
     artwork.set_visible_child_name("picture");
     artwork.remove_css_class("typed-collection-placeholder");
+}
+
+fn square_pixbuf(path: &Path, size: i32) -> Option<gdk_pixbuf::Pixbuf> {
+    let pixbuf = gdk_pixbuf::Pixbuf::from_file(path).ok()?;
+    let width = pixbuf.width();
+    let height = pixbuf.height();
+    if width <= 0 || height <= 0 {
+        return None;
+    }
+
+    let side = width.min(height);
+    let x = (width - side) / 2;
+    let y = (height - side) / 2;
+    let cropped = pixbuf.new_subpixbuf(x, y, side, side);
+    cropped.scale_simple(size, size, gdk_pixbuf::InterpType::Bilinear)
 }
 
 fn normalize_title(title: &str) -> String {
