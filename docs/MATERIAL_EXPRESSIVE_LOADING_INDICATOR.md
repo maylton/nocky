@@ -11,7 +11,7 @@ rebaselines visual-system work as the active product priority.
 | YouTube Home chip/filter refresh banner | Inline row with indicator and localized message | Indeterminate inline loading | Migrated |
 | YouTube playlist, album and artist uncached routes | Centered list row with indicator and text | Indeterminate page/section loading | Migrated |
 | YouTube collection card play action while loading | Icon button swaps to loading indicator | Indeterminate inline/action loading | Migrated |
-| Assisted browser login window | `GtkSpinner` plus localized status | Indeterminate page/dialog loading | Migrated; remaining generic spinner removed |
+| Assisted browser login window | Generic spinner plus localized status | Indeterminate page/dialog loading | Migrated; remaining generic spinner removed |
 | Search results while remote search is pending and cached results exist | Status banner text | Background activity over valid cache | Not migrated; cached content remains visible |
 | YouTube Home continuation/load-more button | Button label changes to “Loading…” | Indeterminate inline/action loading | Not migrated in this checkpoint to avoid button-width churn |
 | Playlist creation dialog submit button | Button disabled while background operation runs through page header loading | Indeterminate action loading | Covered by YouTube page header; button layout unchanged |
@@ -27,37 +27,47 @@ rebaselines visual-system work as the active product priority.
 
 `MaterialLoadingIndicator` lives in `src/ui/widgets/expressive_loading.rs` to
 avoid a broader module reorganization. It is a small `gtk::DrawingArea` wrapper
-with pure geometry helpers and a lifecycle-managed GTK tick callback.
+with pure geometry helpers and one lifecycle-managed GTK frame-clock callback.
 
-The public API supports:
+The API supports:
 
 - `LoadingIndicatorMode::Indeterminate`;
 - `LoadingIndicatorMode::Determinate(f64)`;
 - `LoadingIndicatorPresentation::{Uncontained, Contained}`;
 - `LoadingIndicatorSize::{Compact, Standard, Large}`.
 
-Indeterminate mode rotates continuously and morphs through a deterministic
-sequence of normalized rounded shapes. Determinate mode clamps progress to
-`0.0..=1.0`, maps progress to the same shape sequence and exposes accessibility
-progress values as percentages.
+Indeterminate mode rotates and morphs through seven compatible rounded shapes.
+Its phase is derived from elapsed frame-clock time, so a complete cycle keeps the
+same duration at 30, 60, 120 or 144 Hz.
 
-The shape sequence is generated from normalized geometry, so the visual center
-and bounds stay stable across sizes and fractional scaling. The contained
-variant draws a stable tonal container while only the active shape morphs.
+Determinate mode is intentionally separate: progress between `0.0` and `1.0`
+morphs a circle into a soft burst while rotating through half a turn. Progress
+updates interpolate toward the newest target and the tick stops automatically
+when the displayed value converges.
+
+All shapes use normalized compatible point topology and cubic curves. Their
+bounds and visual center remain stable across sizes and fractional scaling.
 
 ## Lifecycle and reduced motion
 
-The widget starts a single frame-clock tick only when visible, mapped,
-indeterminate and animations are enabled. It removes that callback when hidden,
-unmapped or reduced motion is active. Repeated show/hide cycles do not register
-duplicate callbacks.
+The widget owns at most one frame callback. It starts only while the widget is
+visible, mapped, animations are enabled and animation work remains.
 
-When GTK/libadwaita animations are disabled, the indicator uses one stable
-rounded Material shape and does not continuously rotate, morph or pulse.
+The callback stops when:
+
+- the widget is hidden or unmapped;
+- the owning view is destroyed;
+- system animations are disabled;
+- determinate progress reaches its target.
+
+The widget observes live changes to `gtk-enable-animations` and also checks the
+setting inside the frame callback. Reduced-motion indeterminate state uses one
+stable rounded shape without rotation, morphing or pulsing. Determinate state
+settles directly on the current target.
 
 ## Theme roles
 
-The widget uses CSS classes rather than hardcoded theme colors:
+The widget uses semantic CSS classes rather than hardcoded colors:
 
 - `.material-loading-indicator`;
 - `.material-loading-indicator.compact`;
@@ -66,22 +76,54 @@ The widget uses CSS classes rather than hardcoded theme colors:
 - `.material-loading-indicator.contained`;
 - `.material-loading-indicator.uncontained`.
 
-Base, Material Expressive and dynamic-palette CSS map the indicator to semantic
-accent/primary roles. Button-hosted indicators inherit the button foreground so
-inline pending states remain visible on tonal buttons.
+`099-loading-indicator.css` provides contained roles for all three visual
+identities:
+
+- Material Expressive: `PrimaryContainer` and `OnPrimaryContainer`;
+- Noctalia: system accent and accent foreground;
+- Frosted Glass: translucent album-toned container with a subtle outline.
+
+The dynamic-palette provider appends the same semantic Material/Frosted rules
+after every album-palette update, so the higher-priority provider cannot replace
+the contained foreground with the plain primary role. Button-hosted indicators
+continue to inherit the button foreground and keep a transparent container.
 
 ## Accessibility
 
-The drawing area uses `ProgressBar` as its GTK accessible role. Indeterminate
-instances expose a stable loading label and busy state without updating that
-label every frame. Determinate instances expose min, max and current values.
+The drawing area uses `ProgressBar` as its GTK accessible role. Call sites supply
+localized accessible labels in Portuguese, English or Spanish.
+
+Indeterminate instances expose one stable busy state without announcing every
+frame. Determinate instances expose minimum, maximum and the currently displayed
+percentage. Busy state is cleared when the determinate indicator completes or
+the widget becomes hidden.
 
 ## Migrated call sites
 
 - `src/youtube/mod.rs`: YouTube page header loading.
 - `src/browser.rs`: Home refresh banner, uncached playlist/collection loading
   rows and inline collection play loading.
-- `src/youtube/assisted_login.rs`: assisted-login `GtkSpinner` replacement.
+- `src/youtube/assisted_login.rs`: assisted-login spinner replacement.
+
+## Automated coverage
+
+Regression tests cover:
+
+- progress clamping;
+- circle and soft-burst determinate endpoints;
+- continuity between adjacent indeterminate shapes;
+- normalized bounds and center stability;
+- one closed cubic path for rounded rendering;
+- frame-rate-independent phase progression;
+- determinate target convergence;
+- reduced-motion settlement;
+- style-class mapping;
+- accessibility percentage conversion;
+- shared-component use at migrated call sites.
+
+Quality Gate #543 passed the hardened animation and accessibility core. Quality
+Gate #546 passed the semantic theme module, dynamic-palette integration and the
+complete repository test/clippy matrix.
 
 ## Manual visual validation checklist
 
@@ -108,19 +150,10 @@ label every frame. Determinate instances expose min, max and current values.
 - [ ] Runtime logs checked for GTK/GLib criticals, allocation warnings and
   repeated callback leaks.
 
-## Validation status
-
-- Automated validation passed on 2026-07-01: formatting, whitespace diff check,
-  focused loading-indicator tests, full all-target test suite, all-features
-  clippy, no-default-features test suite, no-default-features clippy and
-  `scripts/quality-gate.sh`.
-- Runtime smoke used `timeout 25s cargo run`. The application started and stayed
-  alive until the timeout. The log still showed environment/rendering messages
-  already seen in this workspace: Vulkan `VK_SUBOPTIMAL_KHR` swapchain warnings
-  and pixman invalid-rectangle diagnostics. No loading-indicator-specific
-  callback or lifecycle warnings were observed in that short run.
-- Visual checklist items above remain open until they are inspected interactively
-  and screenshots or recordings are attached to the draft PR.
+The original short runtime smoke remained alive until its timeout and did not
+show loading-indicator-specific lifecycle warnings. The visual checklist remains
+open until the branch is inspected interactively and screenshots or a recording
+are attached to the draft PR.
 
 ## Known follow-up work
 
