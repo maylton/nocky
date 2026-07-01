@@ -24,11 +24,11 @@ impl DurableHomeSnapshot {
             .ok()
             .and_then(|raw| decode_snapshot(&raw));
 
-        if let (true, Some(page)) = (
-            controller.youtube_home_page.borrow().sections.is_empty(),
-            restored.as_ref(),
-        ) {
-            controller.youtube_home_page.replace(page.clone());
+        if let Some(page) = restored.as_ref() {
+            let mut current = controller.youtube_home_page.borrow_mut();
+            if current.sections.is_empty() {
+                *current = page.clone();
+            }
         }
 
         Self {
