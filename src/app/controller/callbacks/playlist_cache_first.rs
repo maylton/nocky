@@ -5,7 +5,11 @@ mod persistence;
 
 use self::{home_snapshot::DurableHomeSnapshot, persistence::DurablePlaylistCache};
 use super::super::{youtube_playlist_revalidation_can_start, AppController};
-use crate::{browser::BrowserRoute, youtube::YouTubeItem};
+use crate::{
+    browser::BrowserRoute,
+    playback::queue::{PlaybackQueue, QueueSourceKind},
+    youtube::YouTubeItem,
+};
 use gtk::{glib, prelude::*};
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
@@ -135,6 +139,50 @@ impl AppController {
             .set(self.youtube_home_request_id.get().wrapping_add(1));
         self.youtube_playlist_request_id
             .set(self.youtube_playlist_request_id.get().wrapping_add(1));
+
+        self.clear_youtube_queue_after_disconnect();
+    }
+
+    fn clear_youtube_queue_after_disconnect(&self) {
+        // Prevent pending playback or collection requests from rebuilding the
+        // YouTube queue after the account has already been disconnected.
+        self.youtube_request_id
+            .set(self.youtube_request_id.get().wrapping_add(1));
+        self.youtube_collection_play_request_id.set(
+            self.youtube_collection_play_request_id
+                .get()
+                .wrapping_add(1),
+        );
+        self.youtube_collection_queue_request_id.set(
+            self.youtube_collection_queue_request_id
+                .get()
+                .wrapping_add(1),
+        );
+        self.youtube_recovery_generation
+            .set(self.youtube_recovery_generation.get().wrapping_add(1));
+        self.youtube_recovery_in_progress.set(false);
+        self.youtube_recovery_attempted.set(false);
+        self.youtube_recovery_retry_count.set(0);
+        self.youtube_recovery_resume_us.set(0);
+        self.youtube_recovery_was_playing.set(false);
+
+        if self.active_queue_source.get() == QueueSourceKind::YouTube {
+            self.clear_playback_queue();
+            self.refresh_queue_page();
+            return;
+        }
+
+        // A local queue may currently be active. Preserve it while still
+        // removing the separately persisted YouTube queue and playback session.
+        let empty_queue = PlaybackQueue::new().snapshot();
+        if let Err(error) =
+            crate::playback::queue::save_for(QueueSourceKind::YouTube, &empty_queue)
+        {
+            eprintln!("Could not clear saved YouTube Queue 2.0 state: {error}");
+        }
+        if let Err(error) = crate::playback::session::clear_for(QueueSourceKind::YouTube) {
+            eprintln!("Could not clear saved YouTube playback session: {error}");
+        }
     }
 }
 
