@@ -478,7 +478,11 @@ fn indeterminate_shape_points(phase: f64) -> Vec<Point> {
     let left = scaled.floor() as usize % INDETERMINATE_SHAPE_COUNT;
     let right = (left + 1) % INDETERMINATE_SHAPE_COUNT;
     let local = eased(scaled - scaled.floor());
-    morph_points(&indeterminate_shape(left), &indeterminate_shape(right), local)
+    morph_points(
+        &indeterminate_shape(left),
+        &indeterminate_shape(right),
+        local,
+    )
 }
 
 fn determinate_shape_points(progress: f64) -> Vec<Point> {
@@ -830,9 +834,10 @@ mod tests {
         assert_eq!(LoadingIndicatorSize::Compact.css_class(), "compact");
         assert_eq!(LoadingIndicatorSize::Standard.css_class(), "standard");
         assert_eq!(LoadingIndicatorSize::Large.css_class(), "large");
-        assert!(LoadingIndicatorSize::Standard.active_scale(
-            LoadingIndicatorPresentation::Contained
-        ) > 0.7);
+        assert!(
+            LoadingIndicatorSize::Standard.active_scale(LoadingIndicatorPresentation::Contained)
+                > 0.7
+        );
     }
 
     #[test]
