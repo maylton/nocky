@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
 
-CONTRACT_VERSION = 2
+CONTRACT_VERSION = 4
 DEFAULT_CACHE_MAX_AGE = 12 * 60 * 60
 VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
 ItemFactory = Callable[[dict[str, Any], str], dict[str, Any] | None]
@@ -56,7 +56,10 @@ def _upgrade_thumbnail_url(url: str, size: int = 1200) -> str:
     parts = urlsplit(url)
     path = parts.path
     upgraded = re.sub(r"=w\d+-h\d+([^/?#]*)$", f"=w{size}-h{size}\\1", path)
-    upgraded = re.sub(r"=s\d+([^/?#]*)$", f"=s{size}\\1", upgraded)
+    if parts.netloc == "yt3.ggpht.com":
+        upgraded = re.sub(r"=s\d+([^/?#]*)$", f"=w{size}-h{size}-p-l90-rj", upgraded)
+    else:
+        upgraded = re.sub(r"=s\d+([^/?#]*)$", f"=s{size}\\1", upgraded)
     if (
         upgraded == path
         and "googleusercontent.com" in parts.netloc
@@ -367,6 +370,286 @@ def extract_inner_tube_home_chips(source: Any) -> list[dict[str, str]]:
             }
         )
     return output
+
+
+def _dig(value: Any, *path: str) -> Any:
+    current = value
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _normalized_identity(value: Any) -> str:
+    return re.sub(r"\s+", " ", _text(value).casefold()).strip()
+
+
+def _renderer_title(renderer: dict[str, Any]) -> str:
+    title = _text(renderer.get("title"))
+    if title:
+        return title
+    for column_key in ("flexColumns", "fixedColumns"):
+        columns = renderer.get(column_key)
+        if not isinstance(columns, list):
+            continue
+        for column in columns:
+            if not isinstance(column, dict):
+                continue
+            title = _text(
+                _dig(column, "musicResponsiveListItemFlexColumnRenderer", "text")
+                or _dig(column, "musicResponsiveListItemFixedColumnRenderer", "text")
+            )
+            if title:
+                return title
+    return ""
+
+
+def _renderer_video_id(renderer: dict[str, Any]) -> str:
+    direct_paths = (
+        ("playlistItemData", "videoId"),
+        ("navigationEndpoint", "watchEndpoint", "videoId"),
+        ("onTap", "watchEndpoint", "videoId"),
+        (
+            "overlay",
+            "musicItemThumbnailOverlayRenderer",
+            "content",
+            "musicPlayButtonRenderer",
+            "playNavigationEndpoint",
+            "watchEndpoint",
+            "videoId",
+        ),
+        (
+            "thumbnailOverlay",
+            "musicItemThumbnailOverlayRenderer",
+            "content",
+            "musicPlayButtonRenderer",
+            "playNavigationEndpoint",
+            "watchEndpoint",
+            "videoId",
+        ),
+    )
+    for path in direct_paths:
+        video_id = _text(_dig(renderer, *path))
+        if video_id:
+            return video_id
+    for node in _walk_dicts(renderer):
+        endpoint = node.get("watchEndpoint")
+        if isinstance(endpoint, dict):
+            video_id = _text(endpoint.get("videoId"))
+            if video_id:
+                return video_id
+    return ""
+
+
+def _renderer_playlist_id(renderer: dict[str, Any]) -> str:
+    for node in _walk_dicts(renderer):
+        for endpoint_key in ("watchPlaylistEndpoint", "watchEndpoint"):
+            endpoint = node.get(endpoint_key)
+            if not isinstance(endpoint, dict):
+                continue
+            playlist_id = _text(endpoint.get("playlistId"))
+            if playlist_id:
+                return playlist_id
+    return ""
+
+
+def _renderer_browse_id(renderer: dict[str, Any]) -> str:
+    for node in _walk_dicts(renderer):
+        endpoint = node.get("browseEndpoint")
+        if not isinstance(endpoint, dict):
+            continue
+        browse_id = _text(endpoint.get("browseId"))
+        if browse_id:
+            return browse_id
+    return ""
+
+
+def _renderer_thumbnail_candidates(renderer: dict[str, Any]) -> list[dict[str, Any]]:
+    preferred_paths = (
+        ("thumbnailRenderer", "musicThumbnailRenderer", "thumbnail", "thumbnails"),
+        ("thumbnailRenderer", "croppedSquareThumbnailRenderer", "thumbnail", "thumbnails"),
+        (
+            "thumbnailRenderer",
+            "musicAnimatedThumbnailRenderer",
+            "backupRenderer",
+            "thumbnail",
+            "thumbnails",
+        ),
+        ("thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails"),
+        ("thumbnail", "croppedSquareThumbnailRenderer", "thumbnail", "thumbnails"),
+        (
+            "thumbnail",
+            "musicAnimatedThumbnailRenderer",
+            "backupRenderer",
+            "thumbnail",
+            "thumbnails",
+        ),
+        (
+            "thumbnailRenderer",
+            "musicAnimatedThumbnailRenderer",
+            "animatedThumbnail",
+            "thumbnails",
+        ),
+        ("thumbnail", "musicAnimatedThumbnailRenderer", "animatedThumbnail", "thumbnails"),
+    )
+    for path in preferred_paths:
+        value = _dig(renderer, *path)
+        if isinstance(value, list):
+            candidates = [item for item in value if isinstance(item, dict) and _text(item.get("url"))]
+            if candidates:
+                return candidates
+    return _thumbnail_candidates(renderer)
+
+
+def _raw_renderer_item(renderer: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "title": _renderer_title(renderer),
+        "videoId": _renderer_video_id(renderer),
+        "playlistId": _renderer_playlist_id(renderer),
+        "browseId": _renderer_browse_id(renderer),
+        "rawRendererThumbnails": _renderer_thumbnail_candidates(renderer),
+    }
+
+
+def _raw_inner_tube_home_sections(source: Any) -> list[dict[str, Any]]:
+    if isinstance(source, list):
+        contents = source
+    elif isinstance(source, dict):
+        section_list = find_inner_tube_home_section_list(source)
+        contents = section_list.get("contents") if isinstance(section_list.get("contents"), list) else []
+        if not contents and isinstance(source.get("contents"), list):
+            contents = source["contents"]
+    else:
+        contents = []
+
+    sections: list[dict[str, Any]] = []
+    for content in contents:
+        if not isinstance(content, dict):
+            continue
+        carousel = content.get("musicCarouselShelfRenderer")
+        if not isinstance(carousel, dict):
+            continue
+        header = carousel.get("header") if isinstance(carousel.get("header"), dict) else {}
+        title = _text(_dig(header, "musicCarouselShelfBasicHeaderRenderer", "title"))
+        raw_items: list[dict[str, Any]] = []
+        for entry in carousel.get("contents") or []:
+            if not isinstance(entry, dict):
+                continue
+            renderer = next(
+                (
+                    entry.get(key)
+                    for key in (
+                        "musicTwoRowItemRenderer",
+                        "musicResponsiveListItemRenderer",
+                        "musicMultiRowListItemRenderer",
+                    )
+                    if isinstance(entry.get(key), dict)
+                ),
+                None,
+            )
+            if isinstance(renderer, dict):
+                raw_items.append(_raw_renderer_item(renderer))
+        if title and raw_items:
+            sections.append({"title": title, "items": raw_items})
+    return sections
+
+
+def _item_identifiers(item: dict[str, Any]) -> set[str]:
+    identifiers: set[str] = set()
+    for key in ("videoId", "video_id", "playlistId", "playlist_id", "browseId", "browse_id"):
+        value = _normalized_identity(item.get(key))
+        if value:
+            identifiers.add(value)
+    return identifiers
+
+
+def _raw_item_match_score(
+    parsed: dict[str, Any],
+    raw: dict[str, Any],
+    parsed_index: int,
+    raw_index: int,
+) -> int:
+    score = 0
+    parsed_ids = _item_identifiers(parsed)
+    raw_ids = _item_identifiers(raw)
+    if parsed_ids and raw_ids and parsed_ids.intersection(raw_ids):
+        score += 100
+    parsed_title = _normalized_identity(parsed.get("title") or parsed.get("name"))
+    raw_title = _normalized_identity(raw.get("title"))
+    if parsed_title and raw_title and parsed_title == raw_title:
+        score += 30
+    if parsed_index == raw_index:
+        score += 5
+    return score
+
+
+def _enrich_home_item(parsed: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]:
+    item = dict(parsed)
+    for key in ("videoId", "playlistId", "browseId"):
+        if not _text(item.get(key)) and _text(raw.get(key)):
+            item[key] = raw[key]
+    raw_thumbnails = raw.get("rawRendererThumbnails")
+    if isinstance(raw_thumbnails, list) and raw_thumbnails:
+        item["rawRendererThumbnails"] = raw_thumbnails
+    return item
+
+
+def enrich_inner_tube_home_rows(rows: Any, raw_source: Any) -> list[dict[str, Any]]:
+    """Restore renderer fields discarded by ytmusicapi's mixed-content parser.
+
+    The Android reference client parses each WEB_REMIX renderer directly. Nocky
+    keeps ytmusicapi's stable metadata parsing, then overlays thumbnail and endpoint
+    identity from the matching raw renderer before building the native feed.
+    """
+
+    parsed_rows = [dict(row) for row in (rows or []) if isinstance(row, dict)]
+    raw_sections = _raw_inner_tube_home_sections(raw_source)
+    if not raw_sections:
+        return parsed_rows
+
+    used_sections: set[int] = set()
+    for row_index, row in enumerate(parsed_rows):
+        title = _normalized_identity(row.get("title"))
+        section_index = next(
+            (
+                index
+                for index, section in enumerate(raw_sections)
+                if index not in used_sections
+                and _normalized_identity(section.get("title")) == title
+            ),
+            None,
+        )
+        if section_index is None and row_index < len(raw_sections) and row_index not in used_sections:
+            section_index = row_index
+        if section_index is None:
+            continue
+        used_sections.add(section_index)
+        raw_items = raw_sections[section_index]["items"]
+        contents = row.get("contents") or row.get("items") or row.get("results") or []
+        enriched_contents: list[Any] = []
+        used_items: set[int] = set()
+        for parsed_index, parsed in enumerate(contents):
+            if not isinstance(parsed, dict):
+                enriched_contents.append(parsed)
+                continue
+            candidates = [
+                (
+                    _raw_item_match_score(parsed, raw, parsed_index, raw_index),
+                    raw_index,
+                    raw,
+                )
+                for raw_index, raw in enumerate(raw_items)
+                if raw_index not in used_items
+            ]
+            score, raw_index, raw = max(candidates, default=(0, -1, {}), key=lambda candidate: candidate[0])
+            if score > 0 and raw_index >= 0:
+                used_items.add(raw_index)
+                enriched_contents.append(_enrich_home_item(parsed, raw))
+            else:
+                enriched_contents.append(parsed)
+        row["contents"] = enriched_contents
+    return parsed_rows
 
 
 def _chips(source: Any) -> list[dict[str, str]]:

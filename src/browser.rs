@@ -1009,6 +1009,7 @@ pub struct LibraryBrowser {
     search_artist_limit: Rc<Cell<usize>>,
     search_playlist_limit: Rc<Cell<usize>>,
     queue: gtk::ListBox,
+    queue_scroll: gtk::ScrolledWindow,
     queue_title: gtk::Label,
     queue_context_header: gtk::Box,
     albums_grid: gtk::FlowBox,
@@ -1479,6 +1480,27 @@ impl LibraryBrowser {
         });
     }
 
+    pub fn queue_scroll_position(&self) -> f64 {
+        self.queue_scroll.vadjustment().value()
+    }
+
+    pub fn restore_queue_scroll_position(&self, value: f64) {
+        let queue_scroll = self.queue_scroll.clone();
+        glib::idle_add_local_once(move || {
+            let adjustment = queue_scroll.vadjustment();
+            let maximum = (adjustment.upper() - adjustment.page_size()).max(adjustment.lower());
+            adjustment.set_value(value.clamp(adjustment.lower(), maximum));
+        });
+    }
+
+    pub fn reset_queue_scroll_position(&self) {
+        let queue_scroll = self.queue_scroll.clone();
+        glib::idle_add_local_once(move || {
+            let adjustment = queue_scroll.vadjustment();
+            adjustment.set_value(adjustment.lower());
+        });
+    }
+
     pub fn mark_home_dirty(&self) {
         self.home_dirty.set(true);
     }
@@ -1536,11 +1558,14 @@ impl LibraryBrowser {
             if cards.is_empty() {
                 continue;
             }
+            let presentation = youtube_home_section_semantic_presentation(section)
+                .unwrap_or(HomeSectionPresentation::Compact);
             home.append(&home_section(
                 &section.title,
                 &section.label,
                 copy.waiting_content,
                 cards,
+                presentation,
                 playback,
                 config,
                 &self.event_tx,
@@ -1908,6 +1933,7 @@ impl LibraryBrowser {
             search_artist_limit,
             search_playlist_limit,
             queue,
+            queue_scroll,
             queue_title,
             queue_context_header,
             albums_grid,
@@ -2990,7 +3016,8 @@ impl LibraryBrowser {
             if youtube_home_loading {
                 next_home.append(&youtube_home_loading_banner(youtube_home_page, language));
             }
-            for section in &youtube_home_page.sections {
+            let presentations = youtube_home_section_presentations(&youtube_home_page.sections);
+            for (section, presentation) in youtube_home_page.sections.iter().zip(presentations) {
                 let cards = youtube_feed_section_cards(section, language);
                 if cards.is_empty() {
                     continue;
@@ -3000,6 +3027,7 @@ impl LibraryBrowser {
                     &section.label,
                     copy.waiting_content,
                     cards,
+                    presentation,
                     playback,
                     config,
                     &self.event_tx,
@@ -3058,6 +3086,7 @@ impl LibraryBrowser {
                 copy.mixtapes_subtitle,
                 copy.mixtapes_empty,
                 mixes,
+                HomeSectionPresentation::Featured,
                 playback,
                 config,
                 &self.event_tx,
@@ -3071,6 +3100,7 @@ impl LibraryBrowser {
                 copy.local_mixes_subtitle,
                 copy.local_mixes_empty,
                 mixes,
+                HomeSectionPresentation::Featured,
                 playback,
                 config,
                 &self.event_tx,
@@ -3101,6 +3131,7 @@ impl LibraryBrowser {
                 copy.recently_added_subtitle,
                 copy.recently_added_empty,
                 recently_added,
+                HomeSectionPresentation::Compact,
                 playback,
                 config,
                 &self.event_tx,
@@ -3114,6 +3145,7 @@ impl LibraryBrowser {
             copy.albums_subtitle,
             copy.albums_empty,
             ranked_home_album_cards(tracks, youtube, history, active_source, language),
+            HomeSectionPresentation::Compact,
             playback,
             config,
             &self.event_tx,
@@ -3126,6 +3158,7 @@ impl LibraryBrowser {
             copy.artists_subtitle,
             copy.artists_empty,
             ranked_home_artist_cards(tracks, youtube, history, active_source, language),
+            HomeSectionPresentation::Compact,
             playback,
             config,
             &self.event_tx,
@@ -3159,6 +3192,7 @@ impl LibraryBrowser {
             copy.playlists_subtitle,
             copy.playlists_empty,
             playlist_cards,
+            HomeSectionPresentation::Compact,
             playback,
             config,
             &self.event_tx,
@@ -4845,6 +4879,355 @@ fn search_result_artwork(cover_path: Option<&Path>, icon_name: &str) -> gtk::Sta
     stack
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum HomeSectionPresentation {
+    Featured,
+    Compact,
+    TrackRows,
+}
+
+impl HomeSectionPresentation {
+    fn css_class(self) -> &'static str {
+        match self {
+            Self::Featured => "home-section-featured",
+            Self::Compact => "home-section-compact",
+            Self::TrackRows => "home-section-track-rows",
+        }
+    }
+
+    fn artwork_size(self) -> i32 {
+        match self {
+            Self::Featured => 176,
+            Self::Compact => 128,
+            Self::TrackRows => 48,
+        }
+    }
+
+    fn card_width(self) -> i32 {
+        match self {
+            Self::Featured => 196,
+            Self::Compact => 152,
+            Self::TrackRows => 300,
+        }
+    }
+
+    fn card_height(self) -> i32 {
+        match self {
+            Self::Featured => 252,
+            Self::Compact => 188,
+            Self::TrackRows => 64,
+        }
+    }
+
+    fn outer_width(self) -> i32 {
+        match self {
+            Self::Featured => 220,
+            Self::Compact => 168,
+            Self::TrackRows => 312,
+        }
+    }
+
+    fn outer_height(self) -> i32 {
+        match self {
+            Self::Featured => 268,
+            Self::Compact => 196,
+            Self::TrackRows => 64,
+        }
+    }
+
+    fn rail_spacing(self) -> i32 {
+        match self {
+            Self::Featured => 14,
+            Self::Compact => 6,
+            Self::TrackRows => 8,
+        }
+    }
+
+    fn row_spacing(self) -> i32 {
+        match self {
+            Self::Featured => 0,
+            Self::Compact => 8,
+            Self::TrackRows => 4,
+        }
+    }
+
+    fn scrollbar_gap(self) -> i32 {
+        match self {
+            Self::Featured => 20,
+            Self::Compact => 18,
+            Self::TrackRows => 20,
+        }
+    }
+
+    fn scroller_height(self, rows: i32) -> i32 {
+        rows * self.outer_height() + (rows - 1).max(0) * self.row_spacing() + self.scrollbar_gap()
+    }
+
+    fn track_rows(self, item_count: usize) -> i32 {
+        match self {
+            Self::TrackRows => item_count.clamp(1, 4) as i32,
+            Self::Featured | Self::Compact => 1,
+        }
+    }
+
+    fn rail_rows(self, width: i32, item_count: usize) -> i32 {
+        match self {
+            Self::Featured => 1,
+            Self::Compact if width <= 760 && item_count > 2 => 2,
+            Self::Compact => 1,
+            Self::TrackRows => self.track_rows(item_count),
+        }
+    }
+
+    fn play_control_margin_end(self) -> i32 {
+        match self {
+            // Keep the control inside the artwork's upper-right corner.
+            Self::Featured => 10,
+            Self::Compact => 34,
+            Self::TrackRows => 10,
+        }
+    }
+}
+
+fn metrolist_home_rail(presentation: HomeSectionPresentation) -> gtk::Box {
+    let rail = gtk::Box::new(gtk::Orientation::Horizontal, presentation.rail_spacing());
+    rail.set_halign(gtk::Align::Start);
+    rail.set_valign(gtk::Align::Start);
+    rail.set_hexpand(false);
+    rail.add_css_class("home-card-grid");
+    rail
+}
+
+fn attach_home_grid_cards(grid: &gtk::Grid, cards: &[gtk::Widget], rows: i32) {
+    let mut child = grid.first_child();
+    while let Some(current) = child {
+        child = current.next_sibling();
+        grid.remove(&current);
+    }
+
+    for (index, card) in cards.iter().enumerate() {
+        let row = (index as i32) % rows;
+        let column = (index as i32) / rows;
+        grid.attach(card, column, row, 1, 1);
+    }
+}
+
+fn detach_home_card(card: &gtk::Widget) {
+    let Some(parent) = card.parent() else {
+        return;
+    };
+
+    if let Ok(parent_box) = parent.clone().downcast::<gtk::Box>() {
+        parent_box.remove(card);
+    } else if let Ok(parent_grid) = parent.downcast::<gtk::Grid>() {
+        parent_grid.remove(card);
+    }
+}
+
+fn attach_home_column_cards(rail: &gtk::Box, cards: &[gtk::Widget], rows: i32, row_spacing: i32) {
+    let mut child = rail.first_child();
+    while let Some(current) = child {
+        child = current.next_sibling();
+        rail.remove(&current);
+    }
+
+    for column_index in 0..(cards.len() as i32 + rows - 1) / rows {
+        let column = gtk::Box::new(gtk::Orientation::Vertical, row_spacing);
+        column.set_halign(gtk::Align::Start);
+        column.set_valign(gtk::Align::Start);
+        column.set_hexpand(false);
+        column.set_vexpand(false);
+
+        for row in 0..rows {
+            let index = (column_index * rows + row) as usize;
+            let Some(card) = cards.get(index) else {
+                continue;
+            };
+            detach_home_card(card);
+            card.set_vexpand(false);
+            card.set_valign(gtk::Align::Start);
+            column.append(card);
+        }
+
+        rail.append(&column);
+    }
+}
+
+fn set_home_scroller_height(scroll: &gtk::ScrolledWindow, height: i32) {
+    scroll.set_max_content_height(-1);
+    scroll.set_min_content_height(height);
+    scroll.set_max_content_height(height);
+}
+
+fn metrolist_home_scroller(
+    child: &impl IsA<gtk::Widget>,
+    min_height: i32,
+    scrollbar_gap: i32,
+) -> gtk::ScrolledWindow {
+    let scroll = gtk::ScrolledWindow::new();
+    child.set_margin_bottom(scrollbar_gap);
+    child.set_vexpand(false);
+    child.set_valign(gtk::Align::Start);
+    scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Never);
+    scroll.set_overlay_scrolling(false);
+    scroll.set_propagate_natural_height(true);
+    set_home_scroller_height(&scroll, min_height);
+    scroll.set_hexpand(true);
+    scroll.set_vexpand(false);
+    scroll.set_valign(gtk::Align::Start);
+    scroll.set_child(Some(child));
+    scroll.add_css_class("home-carousel-scroll");
+    scroll.add_css_class("home-card-grid-scroll");
+    scroll
+}
+
+fn metrolist_home_section_content(
+    cards: Vec<gtk::Widget>,
+    presentation: HomeSectionPresentation,
+    language: AppLanguage,
+    empty_detail: &str,
+) -> gtk::ScrolledWindow {
+    let cards = if cards.is_empty() {
+        let text = home_copy(language);
+        vec![home_collection_card(
+            None,
+            text.waiting_content,
+            empty_detail,
+            "",
+            false,
+            presentation,
+        )
+        .upcast::<gtk::Widget>()]
+    } else {
+        cards
+    };
+
+    if presentation == HomeSectionPresentation::TrackRows {
+        let rows = presentation.track_rows(cards.len());
+        let rail = metrolist_home_rail(presentation);
+        rail.set_size_request(
+            -1,
+            rows * presentation.outer_height() + (rows - 1).max(0) * presentation.row_spacing(),
+        );
+        attach_home_column_cards(&rail, &cards, rows, presentation.row_spacing());
+        metrolist_home_scroller(
+            &rail,
+            presentation.scroller_height(rows),
+            presentation.scrollbar_gap(),
+        )
+    } else if presentation == HomeSectionPresentation::Compact {
+        let grid = gtk::Grid::new();
+        grid.set_column_spacing(presentation.rail_spacing() as u32);
+        grid.set_row_spacing(presentation.row_spacing() as u32);
+        grid.set_halign(gtk::Align::Start);
+        grid.set_valign(gtk::Align::Start);
+        grid.set_hexpand(false);
+        grid.set_vexpand(false);
+        grid.set_column_homogeneous(false);
+        grid.add_css_class("home-card-grid");
+
+        let cards = Rc::new(cards);
+        let current_rows = Rc::new(Cell::new(0_i32));
+        let scroll = metrolist_home_scroller(
+            &grid,
+            presentation.scroller_height(1),
+            presentation.scrollbar_gap(),
+        );
+        let reflow: Rc<dyn Fn(i32)> = {
+            let grid = grid.clone();
+            let scroll = scroll.clone();
+            let cards = cards.clone();
+            let current_rows = current_rows.clone();
+            Rc::new(move |width| {
+                let rows = presentation.rail_rows(width, cards.len());
+                if current_rows.replace(rows) == rows {
+                    return;
+                }
+                attach_home_grid_cards(&grid, &cards, rows);
+                set_home_scroller_height(&scroll, presentation.scroller_height(rows));
+            })
+        };
+
+        // Render wide layouts as one row before the first allocation.
+        reflow(i32::MAX);
+        {
+            let reflow = reflow.clone();
+            scroll.connect_map(move |scroll| {
+                let width = scroll.width();
+                if width > 1 {
+                    reflow(width);
+                }
+            });
+        }
+        {
+            let reflow = reflow.clone();
+            scroll.connect_notify_local(Some("width"), move |scroll, _| {
+                let width = scroll.width();
+                if width > 1 {
+                    reflow(width);
+                }
+            });
+        }
+        scroll
+    } else {
+        let rail = metrolist_home_rail(presentation);
+        for card in cards {
+            rail.append(&card);
+        }
+        metrolist_home_scroller(
+            &rail,
+            presentation.scroller_height(1),
+            presentation.scrollbar_gap(),
+        )
+    }
+}
+
+#[cfg(test)]
+mod responsive_home_grid_tests {
+    use super::HomeSectionPresentation;
+
+    #[test]
+    fn featured_geometry_is_larger_than_compact() {
+        assert!(
+            HomeSectionPresentation::Featured.artwork_size()
+                > HomeSectionPresentation::Compact.artwork_size()
+        );
+        assert!(
+            HomeSectionPresentation::Featured.card_width()
+                > HomeSectionPresentation::Compact.card_width()
+        );
+    }
+
+    #[test]
+    fn compact_geometry_matches_metrolist_card_scale() {
+        assert_eq!(HomeSectionPresentation::Compact.artwork_size(), 128);
+        assert_eq!(HomeSectionPresentation::Compact.card_width(), 152);
+        assert_eq!(HomeSectionPresentation::Compact.outer_width(), 168);
+    }
+
+    #[test]
+    fn track_rows_follow_metrolist_four_row_rail() {
+        assert_eq!(HomeSectionPresentation::TrackRows.track_rows(0), 1);
+        assert_eq!(HomeSectionPresentation::TrackRows.track_rows(2), 2);
+        assert_eq!(HomeSectionPresentation::TrackRows.track_rows(12), 4);
+    }
+
+    #[test]
+    fn compact_rail_wraps_on_narrow_sections() {
+        assert_eq!(HomeSectionPresentation::Compact.rail_rows(900, 8), 1);
+        assert_eq!(HomeSectionPresentation::Compact.rail_rows(760, 8), 2);
+        assert_eq!(HomeSectionPresentation::Compact.rail_rows(480, 2), 1);
+    }
+
+    #[test]
+    fn scroller_height_reserves_space_for_scrollbar_without_stretching_rows() {
+        assert_eq!(HomeSectionPresentation::TrackRows.row_spacing(), 4);
+        assert_eq!(HomeSectionPresentation::Featured.scroller_height(1), 288);
+        assert_eq!(HomeSectionPresentation::TrackRows.scroller_height(4), 288);
+        assert_eq!(HomeSectionPresentation::Compact.scroller_height(2), 418);
+    }
+}
+
 fn home_history_section(
     title: &str,
     subtitle: &str,
@@ -4852,8 +5235,20 @@ fn home_history_section(
     entries: Vec<HomeHistoryTrack>,
     event_tx: &Sender<BrowserEvent>,
     language: AppLanguage,
-    card_effects: bool,
+    _card_effects: bool,
 ) -> gtk::Box {
+    let presentation = if !entries.is_empty()
+        && entries.iter().all(|entry| {
+            matches!(
+                entry,
+                HomeHistoryTrack::LocalTrack { .. } | HomeHistoryTrack::YouTubeTrack { .. }
+            )
+        }) {
+        HomeSectionPresentation::TrackRows
+    } else {
+        HomeSectionPresentation::Compact
+    };
+
     let title_label = gtk::Label::new(Some(title));
     title_label.set_xalign(0.0);
     title_label.add_css_class("home-section-title");
@@ -4863,16 +5258,13 @@ fn home_history_section(
     subtitle_label.add_css_class("dim-label");
 
     let heading = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    heading.set_vexpand(false);
+    heading.set_valign(gtk::Align::Start);
     heading.add_css_class("home-section-heading");
     heading.append(&title_label);
     heading.append(&subtitle_label);
 
-    let rail = gtk::Box::new(gtk::Orientation::Horizontal, 14);
-    rail.add_css_class("home-carousel");
-
-    if entries.is_empty() {
-        rail.append(&home_empty_card(language, empty_detail));
-    }
+    let mut cards = Vec::new();
 
     for entry in entries {
         let (card, event) = match entry {
@@ -4901,12 +5293,13 @@ fn home_history_section(
                     BrowserEvent::TrackActivated(index)
                 };
                 (
-                    collection_card(
+                    home_collection_card(
                         track.cover_path.as_deref(),
                         &track.title,
                         &track.artist,
                         &detail,
                         false,
+                        presentation,
                     ),
                     event,
                 )
@@ -4939,18 +5332,19 @@ fn home_history_section(
                     }
                 };
                 (
-                    collection_card(
+                    home_collection_card(
                         item.cached_cover(),
                         &item.title,
                         &item.artist,
                         &detail,
                         true,
+                        presentation,
                     ),
                     event,
                 )
             }
             HomeHistoryTrack::LocalAlbum(title) => (
-                collection_card(
+                home_collection_card(
                     None,
                     &title,
                     match language {
@@ -4960,6 +5354,7 @@ fn home_history_section(
                     },
                     "Local",
                     false,
+                    presentation,
                 ),
                 BrowserEvent::Navigate(BrowserRoute::Album(title)),
             ),
@@ -4968,7 +5363,7 @@ fn home_history_section(
                 cover_path,
                 indices,
             } => (
-                collection_card(
+                home_collection_card(
                     cover_path.as_deref(),
                     &title,
                     match language {
@@ -4978,11 +5373,12 @@ fn home_history_section(
                     },
                     "Local",
                     false,
+                    presentation,
                 ),
                 BrowserEvent::PlayLocalMix { title, indices },
             ),
             HomeHistoryTrack::LocalPlaylist(title) => (
-                collection_card(
+                home_collection_card(
                     None,
                     &title,
                     match language {
@@ -4992,11 +5388,12 @@ fn home_history_section(
                     },
                     "Local",
                     false,
+                    presentation,
                 ),
                 BrowserEvent::Navigate(BrowserRoute::Playlist(title)),
             ),
             HomeHistoryTrack::YouTubeAlbum { item, cover_path } => (
-                collection_card(
+                home_collection_card(
                     cover_path.as_deref().or_else(|| item.cached_cover()),
                     &item.title,
                     match language {
@@ -5006,11 +5403,12 @@ fn home_history_section(
                     },
                     "YouTube Music",
                     true,
+                    presentation,
                 ),
                 BrowserEvent::OpenYouTubeCollection(item),
             ),
             HomeHistoryTrack::YouTubePlaylist(item) => (
-                collection_card(
+                home_collection_card(
                     item.cached_cover(),
                     &item.title,
                     match language {
@@ -5020,40 +5418,34 @@ fn home_history_section(
                     },
                     "YouTube Music",
                     true,
+                    presentation,
                 ),
                 BrowserEvent::OpenYouTubePlaylist(item),
             ),
         };
 
         let button = collection_event_button(card, event, event_tx);
+        button.set_size_request(presentation.outer_width(), presentation.outer_height());
+        button.set_hexpand(false);
+        button.set_halign(gtk::Align::Start);
         button.add_css_class("home-card-button");
-        rail.append(&button);
+        if presentation == HomeSectionPresentation::TrackRows {
+            button.add_css_class("home-track-row-button");
+        }
+        cards.push(button.upcast::<gtk::Widget>());
     }
 
-    let item_count = rail.observe_children().n_items();
-    let scroll = gtk::ScrolledWindow::new();
-    scroll.set_policy(
-        if item_count > 1 {
-            gtk::PolicyType::Always
-        } else {
-            gtk::PolicyType::Never
-        },
-        gtk::PolicyType::Never,
-    );
-    scroll.set_min_content_height(190);
-    scroll.set_child(Some(&rail));
-    scroll.add_css_class("home-carousel-scroll");
-    scroll.add_css_class("material-carousel-scroll");
-    scroll.set_overlay_scrolling(false);
-
-    if item_count > 1 {
-        install_home_carousel_edge_spring(&scroll, &rail, card_effects);
-    }
+    let content = metrolist_home_section_content(cards, presentation, language, empty_detail);
+    content.set_vexpand(false);
+    content.set_valign(gtk::Align::Start);
 
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    section.set_vexpand(false);
+    section.set_valign(gtk::Align::Start);
     section.add_css_class("home-section");
+    section.add_css_class(presentation.css_class());
     section.append(&heading);
-    section.append(&scroll);
+    section.append(&content);
     section
 }
 
@@ -5207,6 +5599,215 @@ fn youtube_feed_section_cards(
         .collect()
 }
 
+fn youtube_home_section_presentations(
+    sections: &[YouTubeHomeSection],
+) -> Vec<HomeSectionPresentation> {
+    let semantic = sections
+        .iter()
+        .map(youtube_home_section_semantic_presentation)
+        .collect::<Vec<_>>();
+    let has_featured = semantic.contains(&Some(HomeSectionPresentation::Featured));
+    let fallback_featured = if has_featured {
+        None
+    } else {
+        semantic
+            .iter()
+            .position(|presentation| *presentation == Some(HomeSectionPresentation::Compact))
+    };
+
+    sections
+        .iter()
+        .enumerate()
+        .map(|(index, _)| {
+            if fallback_featured == Some(index) {
+                HomeSectionPresentation::Featured
+            } else {
+                semantic[index].unwrap_or(HomeSectionPresentation::Compact)
+            }
+        })
+        .collect()
+}
+
+fn youtube_home_section_semantic_presentation(
+    section: &YouTubeHomeSection,
+) -> Option<HomeSectionPresentation> {
+    if youtube_home_section_is_track_rows(section) {
+        return Some(HomeSectionPresentation::TrackRows);
+    }
+    if youtube_home_section_is_featured_mix(section) {
+        return Some(HomeSectionPresentation::Featured);
+    }
+    if youtube_home_section_is_collection(section) {
+        return Some(HomeSectionPresentation::Compact);
+    }
+    None
+}
+
+fn youtube_home_section_is_track_rows(section: &YouTubeHomeSection) -> bool {
+    !section.items.is_empty()
+        && section.items.iter().all(|item| {
+            item.playable() && matches!(item.result_type.as_str(), "song" | "video" | "episode")
+        })
+}
+
+fn youtube_home_section_is_featured_mix(section: &YouTubeHomeSection) -> bool {
+    let haystack = [
+        section.id.as_str(),
+        section.layout.as_str(),
+        section.endpoint.browse_id.as_str(),
+        section.endpoint.params.as_str(),
+    ]
+    .join(" ")
+    .to_ascii_lowercase();
+
+    if contains_mix_signal(&haystack) {
+        return true;
+    }
+
+    let playlist_items = section
+        .items
+        .iter()
+        .filter(|item| item.result_type == "playlist")
+        .collect::<Vec<_>>();
+    !playlist_items.is_empty()
+        && playlist_items
+            .iter()
+            .any(|item| item.playlist_kind == "mix" || contains_mix_signal(&item_text_signal(item)))
+}
+
+fn youtube_home_section_is_collection(section: &YouTubeHomeSection) -> bool {
+    section.items.iter().any(|item| {
+        matches!(
+            item.result_type.as_str(),
+            "playlist" | "album" | "artist" | "station"
+        ) || !item.browse_id.trim().is_empty()
+    })
+}
+
+fn item_text_signal(item: &YouTubeItem) -> String {
+    [
+        item.result_type.as_str(),
+        item.playlist_kind.as_str(),
+        item.browse_id.as_str(),
+        item.title.as_str(),
+        item.subtitle.as_str(),
+        item.album.as_str(),
+        item.artist.as_str(),
+    ]
+    .join(" ")
+    .to_ascii_lowercase()
+}
+
+fn contains_mix_signal(value: &str) -> bool {
+    value.contains("mix")
+        || value.contains("mixtape")
+        || value.contains("radio")
+        || value.contains("supermix")
+        || value.contains("quick_picks")
+        || value.contains("made_for_you")
+        || value.contains("personal")
+}
+
+#[cfg(test)]
+mod youtube_home_section_presentation_tests {
+    use super::{
+        youtube_home_section_presentations, HomeSectionPresentation, YouTubeHomeSection,
+        YouTubeItem,
+    };
+
+    fn item(result_type: &str) -> YouTubeItem {
+        YouTubeItem {
+            result_type: result_type.to_string(),
+            title: format!("{result_type} title"),
+            subtitle: "subtitle".to_string(),
+            video_id: if matches!(result_type, "song" | "video" | "episode") {
+                "video123".to_string()
+            } else {
+                String::new()
+            },
+            browse_id: format!("browse-{result_type}"),
+            ..YouTubeItem::default()
+        }
+    }
+
+    fn section(id: &str, layout: &str, items: Vec<YouTubeItem>) -> YouTubeHomeSection {
+        YouTubeHomeSection {
+            id: id.to_string(),
+            title: id.to_string(),
+            layout: layout.to_string(),
+            items,
+            ..YouTubeHomeSection::default()
+        }
+    }
+
+    #[test]
+    fn classifies_mixes_as_featured() {
+        let mut mix = item("playlist");
+        mix.playlist_kind = "mix".to_string();
+        let sections = vec![section("personal-mixes", "carousel", vec![mix])];
+
+        assert_eq!(
+            youtube_home_section_presentations(&sections),
+            vec![HomeSectionPresentation::Featured]
+        );
+    }
+
+    #[test]
+    fn classifies_suggested_playlists_as_compact() {
+        let mut playlist = item("playlist");
+        playlist.playlist_kind = "recommended".to_string();
+        let sections = vec![
+            section(
+                "made-for-you-radio",
+                "carousel",
+                vec![{
+                    let mut mix = item("playlist");
+                    mix.playlist_kind = "mix".to_string();
+                    mix
+                }],
+            ),
+            section("suggested-playlists", "carousel", vec![playlist]),
+        ];
+
+        assert_eq!(
+            youtube_home_section_presentations(&sections)[1],
+            HomeSectionPresentation::Compact
+        );
+    }
+
+    #[test]
+    fn classifies_track_sections_as_track_rows() {
+        let sections = vec![section(
+            "recently-played",
+            "quick_picks",
+            vec![item("song")],
+        )];
+
+        assert_eq!(
+            youtube_home_section_presentations(&sections),
+            vec![HomeSectionPresentation::TrackRows]
+        );
+    }
+
+    #[test]
+    fn falls_back_to_first_collection_when_no_featured_exists() {
+        let sections = vec![
+            section("songs", "list", vec![item("song")]),
+            section("albums", "carousel", vec![item("album")]),
+            section("artists", "carousel", vec![item("artist")]),
+        ];
+
+        assert_eq!(
+            youtube_home_section_presentations(&sections),
+            vec![
+                HomeSectionPresentation::TrackRows,
+                HomeSectionPresentation::Featured,
+                HomeSectionPresentation::Compact,
+            ]
+        );
+    }
+}
+
 fn youtube_feed_item_card(
     item: &YouTubeItem,
     queue: &[YouTubeItem],
@@ -5263,6 +5864,7 @@ fn home_section(
     subtitle: &str,
     empty_detail: &str,
     cards: Vec<HomeCard>,
+    presentation: HomeSectionPresentation,
     playback: &BrowserPlaybackState,
     config: &AppConfig,
     event_tx: &Sender<BrowserEvent>,
@@ -5277,323 +5879,38 @@ fn home_section(
     subtitle_label.add_css_class("dim-label");
 
     let heading = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    heading.set_vexpand(false);
+    heading.set_valign(gtk::Align::Start);
     heading.add_css_class("home-section-heading");
     heading.append(&title_label);
     heading.append(&subtitle_label);
 
-    let rail = gtk::Box::new(gtk::Orientation::Horizontal, 14);
-    rail.add_css_class("home-carousel");
-
-    if cards.is_empty() {
-        rail.append(&home_empty_card(language, empty_detail));
-    } else {
-        for card in cards {
-            rail.append(&home_card_button(
+    let cards = cards
+        .into_iter()
+        .map(|card| {
+            home_card_button(
                 card,
+                presentation,
                 playback,
                 config,
                 event_tx,
                 language,
                 card_effects,
-            ));
-        }
-    }
-
-    let scroll = gtk::ScrolledWindow::new();
-    // Keep the thin Material position indicator visible whenever the
-    // carousel is presented, instead of relying on GTK auto-hide.
-    scroll.set_policy(gtk::PolicyType::Always, gtk::PolicyType::Never);
-    scroll.set_min_content_height(190);
-    scroll.set_child(Some(&rail));
-    scroll.add_css_class("home-carousel-scroll");
-    scroll.add_css_class("material-carousel-scroll");
-    scroll.set_overlay_scrolling(false);
-    install_home_carousel_edge_spring(&scroll, &rail, card_effects);
+            )
+        })
+        .collect::<Vec<_>>();
+    let content = metrolist_home_section_content(cards, presentation, language, empty_detail);
+    content.set_vexpand(false);
+    content.set_valign(gtk::Align::Start);
 
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    section.set_vexpand(false);
+    section.set_valign(gtk::Align::Start);
     section.add_css_class("home-section");
+    section.add_css_class(presentation.css_class());
     section.append(&heading);
-    section.append(&scroll);
+    section.append(&content);
     section
-}
-
-#[derive(Clone)]
-struct HomeCarouselEdgeCard {
-    button: gtk::Widget,
-    surface: Option<gtk::Widget>,
-    original_button_width_request: i32,
-    original_surface_width_request: Option<i32>,
-    base_button_width: i32,
-    base_surface_width: i32,
-}
-
-type HomeCarouselEdgeCards = Rc<RefCell<Vec<HomeCarouselEdgeCard>>>;
-
-fn home_card_surface(widget: &gtk::Widget) -> Option<gtk::Widget> {
-    let first = widget.first_child()?;
-    if first.has_css_class("collection-card") {
-        return Some(first);
-    }
-
-    let second = first.first_child()?;
-    if second.has_css_class("collection-card") {
-        return Some(second);
-    }
-
-    let third = second.first_child()?;
-    third.has_css_class("collection-card").then_some(third)
-}
-
-fn install_home_carousel_edge_spring(scroll: &gtk::ScrolledWindow, rail: &gtk::Box, enabled: bool) {
-    if !enabled {
-        return;
-    }
-
-    scroll.set_kinetic_scrolling(true);
-
-    let ready = Rc::new(Cell::new(false));
-    let active = Rc::new(Cell::new(false));
-    let generation = Rc::new(Cell::new(0_u64));
-    let active_cards: HomeCarouselEdgeCards = Rc::new(RefCell::new(Vec::new()));
-
-    let trigger: Rc<dyn Fn(gtk::PositionType)> = {
-        let scroll_weak = scroll.downgrade();
-        let rail_weak = rail.downgrade();
-        let ready = ready.clone();
-        let active = active.clone();
-        let generation = generation.clone();
-        let active_cards = active_cards.clone();
-
-        Rc::new(move |position| {
-            if !ready.get() || active.replace(true) {
-                return;
-            }
-
-            let from_start = match position {
-                gtk::PositionType::Left => true,
-                gtk::PositionType::Right => false,
-                _ => {
-                    active.set(false);
-                    return;
-                }
-            };
-
-            let Some(scroll) = scroll_weak.upgrade() else {
-                active.set(false);
-                return;
-            };
-            let Some(rail) = rail_weak.upgrade() else {
-                active.set(false);
-                return;
-            };
-
-            let cards = home_carousel_edge_cards(&rail, from_start, 3);
-            if cards.is_empty() {
-                active.set(false);
-                return;
-            }
-
-            let token = generation.get().wrapping_add(1);
-            generation.set(token);
-
-            {
-                let mut stored = active_cards.borrow_mut();
-                stored.clear();
-
-                for button in cards {
-                    let surface = home_card_surface(&button);
-
-                    let base_button_width = button.width().max(COLLECTION_CARD_MAX_WIDTH);
-                    let base_surface_width = surface
-                        .as_ref()
-                        .map(|surface| surface.width())
-                        .unwrap_or(base_button_width)
-                        .max(COLLECTION_CARD_MAX_WIDTH);
-
-                    button.add_css_class("home-card-edge-spring");
-                    if let Some(surface) = surface.as_ref() {
-                        surface.add_css_class("home-card-edge-spring-surface");
-                    }
-
-                    stored.push(HomeCarouselEdgeCard {
-                        button: button.clone(),
-                        surface: surface.clone(),
-                        original_button_width_request: button.width_request(),
-                        original_surface_width_request: surface
-                            .as_ref()
-                            .map(|surface| surface.width_request()),
-                        base_button_width,
-                        base_surface_width,
-                    });
-                }
-            }
-
-            let started_at = Rc::new(Cell::new(0_i64));
-            let active = active.clone();
-            let generation = generation.clone();
-            let active_cards = active_cards.clone();
-
-            scroll.add_tick_callback(move |scroll, frame_clock| {
-                if generation.get() != token {
-                    restore_home_carousel_edge_cards(&active_cards);
-                    active.set(false);
-                    return glib::ControlFlow::Break;
-                }
-
-                let now = frame_clock.frame_time();
-                let start = started_at.get();
-
-                if start == 0 {
-                    started_at.set(now);
-                    return glib::ControlFlow::Continue;
-                }
-
-                let progress = ((now - start) as f64 / 520_000.0).clamp(0.0, 1.0);
-                let displacement = home_carousel_spring_displacement(progress);
-                let strengths: [f64; 3] = [1.0, 0.60, 0.32];
-
-                {
-                    let stored = active_cards.borrow();
-                    for (index, card) in stored.iter().enumerate() {
-                        let stretch = (displacement * strengths[index.min(2)]).round() as i32;
-
-                        card.button.set_width_request(
-                            (card.base_button_width + stretch).max(COLLECTION_CARD_MIN_WIDTH),
-                        );
-
-                        if let Some(surface) = card.surface.as_ref() {
-                            surface.set_width_request(
-                                (card.base_surface_width + stretch).max(COLLECTION_CARD_MIN_WIDTH),
-                            );
-                        }
-                    }
-                }
-
-                if !from_start {
-                    let adjustment = scroll.hadjustment();
-                    let end = (adjustment.upper() - adjustment.page_size()).max(adjustment.lower());
-                    adjustment.set_value(end);
-                }
-
-                if progress >= 1.0 {
-                    restore_home_carousel_edge_cards(&active_cards);
-                    active.set(false);
-                    glib::ControlFlow::Break
-                } else {
-                    glib::ControlFlow::Continue
-                }
-            });
-        })
-    };
-
-    {
-        let ready = ready.clone();
-        scroll.connect_map(move |scroll| {
-            ready.set(false);
-            let ready = ready.clone();
-            let weak_scroll = scroll.downgrade();
-
-            glib::timeout_add_local_once(Duration::from_millis(180), move || {
-                if weak_scroll.upgrade().is_some() {
-                    ready.set(true);
-                }
-            });
-        });
-    }
-
-    {
-        let trigger = trigger.clone();
-        scroll.connect_edge_reached(move |_, position| {
-            trigger(position);
-        });
-    }
-
-    {
-        let trigger = trigger.clone();
-        scroll.connect_edge_overshot(move |_, position| {
-            trigger(position);
-        });
-    }
-
-    {
-        let adjustment = scroll.hadjustment();
-        let last_value = Rc::new(Cell::new(adjustment.value()));
-        let ready = ready.clone();
-        let trigger = trigger.clone();
-
-        adjustment.connect_value_changed(move |adjustment| {
-            let value = adjustment.value();
-            let previous = last_value.replace(value);
-
-            if !ready.get() {
-                return;
-            }
-
-            let lower = adjustment.lower();
-            let upper = (adjustment.upper() - adjustment.page_size()).max(lower);
-            const EDGE_EPSILON: f64 = 0.75;
-
-            if value <= lower + EDGE_EPSILON && previous > value + EDGE_EPSILON {
-                trigger(gtk::PositionType::Left);
-            } else if value >= upper - EDGE_EPSILON && previous < value - EDGE_EPSILON {
-                trigger(gtk::PositionType::Right);
-            }
-        });
-    }
-
-    {
-        let ready = ready.clone();
-        let active = active.clone();
-        let generation = generation.clone();
-        let active_cards = active_cards.clone();
-
-        scroll.connect_unmap(move |_| {
-            ready.set(false);
-            generation.set(generation.get().wrapping_add(1));
-            restore_home_carousel_edge_cards(&active_cards);
-            active.set(false);
-        });
-    }
-}
-
-fn home_carousel_edge_cards(rail: &gtk::Box, from_start: bool, limit: usize) -> Vec<gtk::Widget> {
-    let mut cards = Vec::new();
-    let mut current = if from_start {
-        rail.first_child()
-    } else {
-        rail.last_child()
-    };
-
-    while let Some(card) = current {
-        let next = if from_start {
-            card.next_sibling()
-        } else {
-            card.prev_sibling()
-        };
-
-        cards.push(card);
-
-        if cards.len() == limit {
-            break;
-        }
-
-        current = next;
-    }
-
-    cards
-}
-
-fn restore_home_carousel_edge_cards(cards: &HomeCarouselEdgeCards) {
-    for card in cards.borrow_mut().drain(..) {
-        card.button
-            .set_width_request(card.original_button_width_request);
-        card.button.remove_css_class("home-card-edge-spring");
-
-        if let Some(surface) = card.surface {
-            surface.set_width_request(card.original_surface_width_request.unwrap_or(-1));
-            surface.remove_css_class("home-card-edge-spring-surface");
-        }
-    }
 }
 
 fn home_carousel_spring_displacement(progress: f64) -> f64 {
@@ -5636,6 +5953,7 @@ fn home_edge_lerp(start: f64, end: f64, progress: f64) -> f64 {
 
 fn home_card_button(
     card: HomeCard,
+    presentation: HomeSectionPresentation,
     playback: &BrowserPlaybackState,
     config: &AppConfig,
     event_tx: &Sender<BrowserEvent>,
@@ -5781,15 +6099,7 @@ fn home_card_button(
             HomeCard::YouTubeAlbum { .. } | HomeCard::YouTubePlaylist(_)
         );
 
-    let card_widget = collection_card_with_placeholder(
-        descriptor.cover_path,
-        descriptor.title,
-        descriptor.subtitle,
-        descriptor.detail,
-        descriptor.online,
-        descriptor.placeholder_icon,
-        descriptor.placeholder_class,
-    );
+    let card_widget = home_collection_card_with_placeholder(&descriptor, presentation);
     if descriptor.artist {
         card_widget.add_css_class("artist-collection-card");
     }
@@ -5833,9 +6143,15 @@ fn home_card_button(
     }
 
     let main_button = gtk::Button::new();
+    main_button.set_size_request(presentation.outer_width(), presentation.outer_height());
+    main_button.set_hexpand(false);
+    main_button.set_halign(gtk::Align::Start);
     main_button.add_css_class("flat");
     main_button.add_css_class("home-card-button");
     main_button.add_css_class("expressive-collection-button");
+    if presentation == HomeSectionPresentation::TrackRows {
+        main_button.add_css_class("home-track-row-button");
+    }
     if card_effects {
         main_button.add_css_class("home-card-motion-requested");
     }
@@ -5859,80 +6175,92 @@ fn home_card_button(
     }
 
     let overlay = gtk::Overlay::new();
+    overlay.set_size_request(presentation.outer_width(), presentation.outer_height());
+    overlay.set_hexpand(false);
+    overlay.set_halign(gtk::Align::Start);
     overlay.set_child(Some(&main_button));
     overlay.add_css_class("home-card-context-overlay");
+    if presentation == HomeSectionPresentation::TrackRows {
+        overlay.add_css_class("home-track-row-button");
+    }
 
-    if let Some(play_event) = play_event {
-        let control = gtk::Button::new();
-        control.set_halign(gtk::Align::End);
-        control.set_valign(gtk::Align::Start);
-        control.set_margin_top(12);
-        control.set_margin_end(12);
-        control.add_css_class("circular");
-        control.add_css_class("collection-card-context-action");
-        if let Some(key) = playback_key.as_deref() {
-            control.set_widget_name(&format!("home-play-control:{key}"));
-        }
+    let show_inline_play_control =
+        !(presentation == HomeSectionPresentation::TrackRows && collection_kind == "track");
 
-        if is_loading {
-            let loading = ExpressiveLoadingIndicator::new();
-            control.set_child(Some(loading.widget()));
-            control.set_sensitive(false);
-            control.add_css_class("loading");
-            control.set_tooltip_text(Some(match language {
-                AppLanguage::Portuguese => "Carregando coleção…",
-                AppLanguage::English => "Loading collection…",
-                AppLanguage::Spanish => "Cargando colección…",
-            }));
-        } else {
-            let icon_name = if is_active && playback.playing {
-                "media-playback-pause-symbolic"
-            } else {
-                "media-playback-start-symbolic"
-            };
-            let tooltip = match (language, is_active, playback.playing) {
-                (AppLanguage::Portuguese, true, true) => "Pausar coleção",
-                (AppLanguage::Portuguese, true, false) => "Continuar coleção",
-                (AppLanguage::Portuguese, false, _) => "Reproduzir coleção",
-                (AppLanguage::English, true, true) => "Pause collection",
-                (AppLanguage::English, true, false) => "Resume collection",
-                (AppLanguage::English, false, _) => "Play collection",
-                (AppLanguage::Spanish, true, true) => "Pausar colección",
-                (AppLanguage::Spanish, true, false) => "Continuar colección",
-                (AppLanguage::Spanish, false, _) => "Reproducir colección",
-            };
-
-            control.set_icon_name(icon_name);
-            control.set_tooltip_text(Some(tooltip));
-            if is_active {
-                control.add_css_class("active");
+    if show_inline_play_control {
+        if let Some(play_event) = play_event {
+            let control = gtk::Button::new();
+            control.set_halign(gtk::Align::End);
+            control.set_valign(gtk::Align::Start);
+            control.set_margin_top(10);
+            control.set_margin_start(0);
+            control.set_margin_end(presentation.play_control_margin_end());
+            control.add_css_class("circular");
+            control.add_css_class("collection-card-context-action");
+            if let Some(key) = playback_key.as_deref() {
+                control.set_widget_name(&format!("home-play-control:{key}"));
             }
 
-            let sender = event_tx.clone();
-            control.connect_clicked(move |button| {
-                let active = button.has_css_class("active");
-                if inline_loading_on_click && !active {
-                    let loading = ExpressiveLoadingIndicator::new();
-                    button.set_child(Some(loading.widget()));
-                    button.set_sensitive(false);
-                    button.add_css_class("loading");
-                    button.set_tooltip_text(Some(match language {
-                        AppLanguage::Portuguese => "Carregando coleção…",
-                        AppLanguage::English => "Loading collection…",
-                        AppLanguage::Spanish => "Cargando colección…",
-                    }));
+            if is_loading {
+                let loading = ExpressiveLoadingIndicator::new();
+                control.set_child(Some(loading.widget()));
+                control.set_sensitive(false);
+                control.add_css_class("loading");
+                control.set_tooltip_text(Some(match language {
+                    AppLanguage::Portuguese => "Carregando coleção…",
+                    AppLanguage::English => "Loading collection…",
+                    AppLanguage::Spanish => "Cargando colección…",
+                }));
+            } else {
+                let icon_name = if is_active && playback.playing {
+                    "media-playback-pause-symbolic"
+                } else {
+                    "media-playback-start-symbolic"
+                };
+                let tooltip = match (language, is_active, playback.playing) {
+                    (AppLanguage::Portuguese, true, true) => "Pausar coleção",
+                    (AppLanguage::Portuguese, true, false) => "Continuar coleção",
+                    (AppLanguage::Portuguese, false, _) => "Reproduzir coleção",
+                    (AppLanguage::English, true, true) => "Pause collection",
+                    (AppLanguage::English, true, false) => "Resume collection",
+                    (AppLanguage::English, false, _) => "Play collection",
+                    (AppLanguage::Spanish, true, true) => "Pausar colección",
+                    (AppLanguage::Spanish, true, false) => "Continuar colección",
+                    (AppLanguage::Spanish, false, _) => "Reproducir colección",
+                };
+
+                control.set_icon_name(icon_name);
+                control.set_tooltip_text(Some(tooltip));
+                if is_active {
+                    control.add_css_class("active");
                 }
 
-                let event = if active {
-                    BrowserEvent::TogglePlayback
-                } else {
-                    play_event.clone()
-                };
-                let _ = sender.send(event);
-            });
-        }
+                let sender = event_tx.clone();
+                control.connect_clicked(move |button| {
+                    let active = button.has_css_class("active");
+                    if inline_loading_on_click && !active {
+                        let loading = ExpressiveLoadingIndicator::new();
+                        button.set_child(Some(loading.widget()));
+                        button.set_sensitive(false);
+                        button.add_css_class("loading");
+                        button.set_tooltip_text(Some(match language {
+                            AppLanguage::Portuguese => "Carregando coleção…",
+                            AppLanguage::English => "Loading collection…",
+                            AppLanguage::Spanish => "Cargando colección…",
+                        }));
+                    }
 
-        overlay.add_overlay(&control);
+                    let event = if active {
+                        BrowserEvent::TogglePlayback
+                    } else {
+                        play_event.clone()
+                    };
+                    let _ = sender.send(event);
+                });
+            }
+
+            overlay.add_overlay(&control);
+        }
     }
 
     if let Some((play_next_event, append_event)) = queue_events {
@@ -5946,8 +6274,8 @@ fn home_card_button(
             .build();
         menu_button.set_halign(gtk::Align::Start);
         menu_button.set_valign(gtk::Align::Start);
-        menu_button.set_margin_top(12);
-        menu_button.set_margin_start(12);
+        menu_button.set_margin_top(10);
+        menu_button.set_margin_start(10);
         menu_button.add_css_class("circular");
         menu_button.add_css_class("collection-card-overflow-button");
         menu_button.set_sensitive(!is_loading);
@@ -6115,9 +6443,185 @@ fn home_card_button(
     overlay.upcast()
 }
 
-fn home_empty_card(language: AppLanguage, detail: &str) -> gtk::Box {
-    let text = home_copy(language);
-    collection_card(None, text.waiting_content, detail, "", false)
+fn home_collection_card_with_placeholder(
+    descriptor: &CollectionCardDescriptor<'_>,
+    presentation: HomeSectionPresentation,
+) -> gtk::Box {
+    let card = home_collection_card(
+        descriptor.cover_path,
+        descriptor.title,
+        descriptor.subtitle,
+        descriptor.detail,
+        descriptor.online,
+        presentation,
+    );
+
+    if descriptor.cover_path.is_none() {
+        if let Some(artwork) = card
+            .first_child()
+            .and_then(|child| child.downcast::<gtk::Overlay>().ok())
+            .and_then(|overlay| overlay.child())
+            .and_then(|child| child.downcast::<gtk::Stack>().ok())
+        {
+            artwork.add_css_class("typed-collection-placeholder");
+            artwork.add_css_class(descriptor.placeholder_class);
+
+            if let Some(icon) = artwork
+                .first_child()
+                .and_then(|child| child.downcast::<gtk::Image>().ok())
+            {
+                icon.set_icon_name(Some(descriptor.placeholder_icon));
+                icon.add_css_class("typed-placeholder-icon");
+            }
+        }
+    }
+
+    card
+}
+
+fn home_collection_card(
+    cover_path: Option<&Path>,
+    title: &str,
+    subtitle: &str,
+    detail: &str,
+    online: bool,
+    presentation: HomeSectionPresentation,
+) -> gtk::Box {
+    let artwork_size = presentation.artwork_size();
+    let artwork = artwork(cover_path, artwork_size);
+    let artwork_overlay = gtk::Overlay::new();
+    artwork_overlay.set_size_request(artwork_size, artwork_size);
+    artwork_overlay.set_halign(match presentation {
+        HomeSectionPresentation::TrackRows => gtk::Align::Start,
+        _ => gtk::Align::Center,
+    });
+    artwork_overlay.set_valign(gtk::Align::Start);
+    artwork_overlay.set_child(Some(&artwork));
+    if online {
+        if let Some(cache_indicator) = youtube_cache_indicator(AppLanguage::Portuguese) {
+            cache_indicator.set_halign(gtk::Align::End);
+            cache_indicator.set_valign(gtk::Align::End);
+            cache_indicator.set_margin_end(8);
+            cache_indicator.set_margin_bottom(8);
+            artwork_overlay.add_overlay(&cache_indicator);
+        }
+    }
+
+    let title_label = home_card_label(
+        title,
+        "collection-card-title",
+        match presentation {
+            HomeSectionPresentation::Featured => 24,
+            HomeSectionPresentation::Compact => 16,
+            HomeSectionPresentation::TrackRows => 28,
+        },
+    );
+    title_label.add_css_class("expressive-card-title");
+
+    let subtitle_label = home_card_label(
+        subtitle,
+        "expressive-card-subtitle",
+        match presentation {
+            HomeSectionPresentation::Featured => 24,
+            HomeSectionPresentation::Compact => 16,
+            HomeSectionPresentation::TrackRows => 32,
+        },
+    );
+    subtitle_label.add_css_class("dim-label");
+
+    let detail_label = home_card_label(
+        detail,
+        "collection-card-detail",
+        match presentation {
+            HomeSectionPresentation::Featured => 24,
+            HomeSectionPresentation::Compact => 16,
+            HomeSectionPresentation::TrackRows => 32,
+        },
+    );
+    detail_label.add_css_class("dim-label");
+    detail_label.add_css_class("expressive-card-detail");
+    if presentation == HomeSectionPresentation::Compact {
+        detail_label.set_visible(false);
+    }
+
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 3);
+    text.set_hexpand(presentation == HomeSectionPresentation::TrackRows);
+    text.set_halign(gtk::Align::Fill);
+    text.set_valign(match presentation {
+        HomeSectionPresentation::TrackRows => gtk::Align::Center,
+        _ => gtk::Align::Start,
+    });
+    text.append(&title_label);
+    if !subtitle.is_empty() {
+        text.append(&subtitle_label);
+    }
+    if !detail.is_empty() {
+        text.append(&detail_label);
+    }
+
+    let card = gtk::Box::new(
+        match presentation {
+            HomeSectionPresentation::TrackRows => gtk::Orientation::Horizontal,
+            HomeSectionPresentation::Featured | HomeSectionPresentation::Compact => {
+                gtk::Orientation::Vertical
+            }
+        },
+        match presentation {
+            HomeSectionPresentation::TrackRows => 10,
+            HomeSectionPresentation::Featured => 7,
+            HomeSectionPresentation::Compact => 5,
+        },
+    );
+    card.set_size_request(presentation.card_width(), presentation.card_height());
+    card.set_hexpand(false);
+    card.set_vexpand(false);
+    card.set_halign(match presentation {
+        HomeSectionPresentation::TrackRows => gtk::Align::Start,
+        HomeSectionPresentation::Featured => gtk::Align::Start,
+        HomeSectionPresentation::Compact => gtk::Align::Start,
+    });
+    card.set_valign(match presentation {
+        HomeSectionPresentation::TrackRows => gtk::Align::Center,
+        _ => gtk::Align::Start,
+    });
+    card.set_margin_top(match presentation {
+        HomeSectionPresentation::TrackRows => 2,
+        _ => 8,
+    });
+    card.set_margin_bottom(match presentation {
+        HomeSectionPresentation::TrackRows => 2,
+        _ => 8,
+    });
+    card.set_margin_start(8);
+    card.set_margin_end(match presentation {
+        HomeSectionPresentation::Compact => 4,
+        HomeSectionPresentation::TrackRows => 4,
+        HomeSectionPresentation::Featured => 8,
+    });
+    card.append(&artwork_overlay);
+    card.append(&text);
+    card.add_css_class("collection-card");
+    card.add_css_class("expressive-collection-card");
+    match presentation {
+        HomeSectionPresentation::Featured => card.add_css_class("home-card-featured"),
+        HomeSectionPresentation::Compact => card.add_css_class("home-card-compact"),
+        HomeSectionPresentation::TrackRows => card.add_css_class("home-track-card"),
+    }
+    if online {
+        card.add_css_class("youtube-collection-card");
+    }
+    card
+}
+
+fn home_card_label(text: &str, class_name: &str, max_width_chars: i32) -> gtk::Label {
+    let label = gtk::Label::new(Some(text));
+    label.set_xalign(0.0);
+    label.set_single_line_mode(true);
+    label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    label.set_width_chars(max_width_chars);
+    label.set_max_width_chars(max_width_chars);
+    label.add_css_class(class_name);
+    label
 }
 
 fn home_syncing_hint(language: AppLanguage) -> gtk::Box {
@@ -6621,38 +7125,6 @@ fn collection_card(
         card.append(&detail_label);
     }
     bind_responsive_collection_artwork(&card, &artwork, cover_path.map(Path::to_path_buf));
-    card
-}
-
-fn collection_card_with_placeholder(
-    cover_path: Option<&Path>,
-    title: &str,
-    subtitle: &str,
-    detail: &str,
-    online: bool,
-    placeholder_icon: &str,
-    placeholder_class: &str,
-) -> gtk::Box {
-    let card = collection_card(cover_path, title, subtitle, detail, online);
-
-    if cover_path.is_none() {
-        if let Some(artwork) = card
-            .first_child()
-            .and_then(|child| child.downcast::<gtk::Stack>().ok())
-        {
-            artwork.add_css_class("typed-collection-placeholder");
-            artwork.add_css_class(placeholder_class);
-
-            if let Some(icon) = artwork
-                .first_child()
-                .and_then(|child| child.downcast::<gtk::Image>().ok())
-            {
-                icon.set_icon_name(Some(placeholder_icon));
-                icon.add_css_class("typed-placeholder-icon");
-            }
-        }
-    }
-
     card
 }
 
@@ -7855,18 +8327,25 @@ fn youtube_collection_page_header(
 ) -> Option<CollectionPageHeaderData> {
     match route {
         BrowserRoute::YouTubeAlbum(collection) => {
-            let entry = youtube_collection_entry_for_route(&youtube.albums, collection)?;
+            let entry = youtube_collection_entry_for_route(&youtube.albums, collection);
             let track_count = youtube
                 .collection_tracks
                 .get(&collection.key)
                 .map(Vec::len)
-                .unwrap_or(entry.item_count);
+                .or_else(|| entry.map(|entry| entry.item_count))
+                .unwrap_or_default();
 
             Some(CollectionPageHeaderData {
-                cover_path: entry.cached_cover().map(Path::to_path_buf),
+                cover_path: entry
+                    .and_then(YouTubeCollectionEntry::cached_cover)
+                    .map(Path::to_path_buf),
                 eyebrow: localized_collection_eyebrow(language, true, "album"),
-                title: entry.title.clone(),
-                subtitle: entry.subtitle.clone(),
+                title: entry
+                    .map(|entry| entry.title.clone())
+                    .unwrap_or_else(|| collection.title.clone()),
+                subtitle: entry
+                    .map(|entry| entry.subtitle.clone())
+                    .unwrap_or_else(|| collection.artist.clone()),
                 detail: format_track_count(language, track_count),
                 online: true,
                 artist: false,

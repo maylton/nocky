@@ -4,7 +4,7 @@
 
 This app is vibe-coded and any improvement suggestion is welcomed, but don't expect much as it's just a free time hobby project =)
 
-> **Status:** Nocky 0.5.0 is a beta release. It introduces the Frosted Glass visual theme, preserves artwork-aware dynamic colors, refines matte controls and queue surfaces, and fixes complete queue clearing.
+> **Status:** Nocky 0.6.0 is a beta release. It introduces the redesigned responsive YouTube Music Home, direct InnerTube recommendation parsing, durable cache-first restoration, offline playlist playback and privacy-safe account disconnection.
 
 <!-- noctalia-inspiration:start -->
 > [!NOTE]
@@ -41,7 +41,7 @@ This app is vibe-coded and any improvement suggestion is welcomed, but don't exp
 
 ## Visual themes
 
-Nocky 0.5.0 includes three visual identities:
+Nocky 0.6.0 includes three visual identities:
 
 - **Noctalia** follows the desktop palette and keeps the original shell-oriented appearance.
 - **Material Expressive** uses solid tonal surfaces, expressive motion and colors derived from the current artwork.

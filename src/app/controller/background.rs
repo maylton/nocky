@@ -127,6 +127,7 @@ impl AppController {
                         } else {
                             self.youtube_library.borrow_mut().clear();
                             clear_library_cache();
+                            self.clear_youtube_cache_first_data();
                             self.refresh_browser();
                         }
                     }
@@ -159,6 +160,7 @@ impl AppController {
                             .show_empty("Search for music or connect your account.");
                         self.youtube_library.borrow_mut().clear();
                         clear_library_cache();
+                        self.clear_youtube_cache_first_data();
                         self.refresh_browser();
                         self.show_toast("Conta do YouTube Music desconectada");
                     }
@@ -604,10 +606,6 @@ impl AppController {
                             .remove(&browse_id);
 
                         if items.is_empty() {
-                            self.youtube_library
-                                .borrow_mut()
-                                .playlist_tracks
-                                .remove(&browse_id);
                             if self.is_open_youtube_playlist(&browse_id) {
                                 self.refresh_browser();
                             }
@@ -656,6 +654,84 @@ impl AppController {
                         }
                     }
                 },
+                BackgroundMessage::YouTubeBrowserPlaylistRevalidated { playlist, result } => {
+                    let browse_id = playlist.browse_id.clone();
+                    if browse_id.trim().is_empty() {
+                        continue;
+                    }
+
+                    self.youtube_library
+                        .borrow_mut()
+                        .playlist_loading
+                        .remove(&browse_id);
+
+                    match result {
+                        Ok(items) if !items.is_empty() => {
+                            self.youtube_library
+                                .borrow_mut()
+                                .playlist_tracks
+                                .insert(browse_id.clone(), items);
+                            self.mark_youtube_playlist_revalidation_succeeded(&browse_id);
+
+                            if cacheable_youtube_playlist(&playlist) {
+                                if let Err(error) =
+                                    queue_library_cache_save(&self.youtube_library.borrow())
+                                {
+                                    eprintln!(
+                                        "Could not save the revalidated YouTube playlist cache: {error}"
+                                    );
+                                }
+                            }
+
+                            if self.is_open_youtube_playlist(&browse_id) {
+                                self.refresh_browser();
+                            }
+                        }
+                        Ok(_) => {
+                            self.schedule_youtube_playlist_revalidation_retry(&browse_id);
+                            if self.is_open_youtube_playlist(&browse_id) {
+                                self.refresh_browser();
+                            }
+                            eprintln!(
+                                "YouTube playlist revalidation returned no playable tracks; preserving cached playlist {browse_id}"
+                            );
+                        }
+                        Err(error) => {
+                            self.schedule_youtube_playlist_revalidation_retry(&browse_id);
+                            if self.is_open_youtube_playlist(&browse_id) {
+                                self.refresh_browser();
+                            }
+                            eprintln!(
+                                "Could not revalidate YouTube playlist {browse_id}; preserving cached tracks: {error}"
+                            );
+                        }
+                    }
+                }
+                BackgroundMessage::YouTubeBrowserPlaylistCoversCached {
+                    request_id,
+                    playlist,
+                    items,
+                } => {
+                    if request_id != self.youtube_playlist_request_id.get() {
+                        continue;
+                    }
+
+                    let browse_id = playlist.browse_id.clone();
+                    if browse_id.is_empty() || items.is_empty() {
+                        continue;
+                    }
+
+                    self.youtube_library
+                        .borrow_mut()
+                        .playlist_tracks
+                        .insert(browse_id.clone(), items);
+                    if cacheable_youtube_playlist(&playlist) {
+                        if let Err(error) = queue_library_cache_save(&self.youtube_library.borrow())
+                        {
+                            eprintln!("Could not save the YouTube playlist cache: {error}");
+                        }
+                    }
+                }
                 BackgroundMessage::YouTubeArtistOverview { key, result } => {
                     self.youtube_library
                         .borrow_mut()
@@ -1002,6 +1078,34 @@ impl AppController {
                         }
                     }
                 }
+                BackgroundMessage::YouTubeStructuredPageCoversCached {
+                    request_id,
+                    title,
+                    home,
+                    append,
+                    page,
+                } if youtube_home_response_is_current(
+                    home,
+                    request_id,
+                    self.youtube_home_request_id.get(),
+                ) =>
+                {
+                    if home {
+                        let changed = self
+                            .youtube_home_page
+                            .borrow_mut()
+                            .update_cover_paths(&page);
+                        if changed
+                            && self.config.borrow().startup_source == Some(StartupSource::YouTube)
+                        {
+                            self.refresh_browser();
+                        }
+                    }
+                    if !append {
+                        self.youtube_page.show_structured_page(&title, page, false);
+                    }
+                }
+                BackgroundMessage::YouTubeStructuredPageCoversCached { .. } => {}
                 BackgroundMessage::YouTubeStructuredPage { .. } => {}
                 BackgroundMessage::YouTubeRecoveryRetry {
                     generation,

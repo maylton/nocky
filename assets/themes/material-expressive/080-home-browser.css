@@ -126,9 +126,36 @@ window.theme-material-expressive
   border-color: alpha(@m3_primary, 0.58);
   box-shadow: 0 12px 30px alpha(black, 0.27);
 }
-.home-card-context-overlay {
+/* Keep each Home overlay aligned with its presentation geometry. */
+.home-section-featured .home-card-context-overlay {
   min-width: 220px;
 }
+
+.home-section-compact .home-card-context-overlay {
+  min-width: 168px;
+}
+
+.home-section-track-rows .home-card-context-overlay {
+  min-width: 312px;
+}
+
+window.theme-material-expressive .home-track-row-button,
+window.theme-material-expressive button.home-track-row-button,
+window.theme-material-expressive .home-card-context-overlay.home-track-row-button {
+  min-width: 312px;
+  min-height: 64px;
+  border-radius: 18px;
+}
+
+window.theme-material-expressive
+  .home-track-row-button
+  .collection-card.home-track-card {
+  min-width: 300px;
+  min-height: 64px;
+  padding: 6px 8px;
+  border-radius: 18px;
+}
+
 .collection-card-context-action {
   min-width: 42px;
   min-height: 42px;
@@ -226,3 +253,4 @@ window.theme-material-expressive
 .collection-card-overflow-action:hover {
   background-color: alpha(@m3_primary, 0.14);
 }
+

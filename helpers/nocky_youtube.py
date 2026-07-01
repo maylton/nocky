@@ -34,6 +34,11 @@ from nocky_youtube_feed import (
     load_cached_page,
     save_cached_page,
 )
+from nocky_youtube_home_debug import write_home_debug_dump
+from nocky_youtube_innertube_home import (
+    missing_artwork_by_section,
+    parse_inner_tube_home_sections,
+)
 
 from nocky_stream_clients import (
     build_attempt_command,
@@ -50,10 +55,10 @@ try:
     from ytmusicapi.exceptions import YTMusicServerError, YTMusicUserError
     from ytmusicapi.parsers import playlists as ytmusic_playlist_parsers
     try:
-        from ytmusicapi.continuations import get_continuations as ytmusic_get_continuations
+        from ytmusicapi.continuations import get_continuation_params as ytmusic_get_continuation_params
         from ytmusicapi.parsers.browsing import parse_mixed_content as ytmusic_parse_mixed_content
     except Exception:
-        ytmusic_get_continuations = None
+        ytmusic_get_continuation_params = None
         ytmusic_parse_mixed_content = None
     try:
         from ytmusicapi.setup import setup as ytmusicapi_setup
@@ -65,7 +70,7 @@ except Exception as error:  # pragma: no cover - reported to the native app
     YTMusicServerError = RuntimeError
     YTMusicUserError = RuntimeError
     ytmusic_playlist_parsers = None
-    ytmusic_get_continuations = None
+    ytmusic_get_continuation_params = None
     ytmusic_parse_mixed_content = None
     ytmusicapi_setup = None
     IMPORT_ERROR = error
@@ -145,7 +150,7 @@ def _stream_cache_lock_path() -> Path:
 
 
 def _home_feed_cache_path() -> Path:
-    return _cache_dir() / "home-feed-v2.json"
+    return _cache_dir() / "home-feed-v4.json"
 
 
 def _emit(payload: Any) -> None:
@@ -461,12 +466,26 @@ def _system_locale() -> str:
     return language or ""
 
 
+def _is_neutral_locale(value: str) -> bool:
+    locale_name = re.split(r"[.@]", value.strip(), maxsplit=1)[0].lower()
+    return locale_name in {"c", "posix"}
+
+
 def _locale_candidates() -> list[str]:
-    return [
-        candidate.strip().replace("-", "_")
-        for candidate in re.split(r"[:;,]", _system_locale())
-        if candidate.strip()
-    ]
+    candidates: list[str] = []
+    for key in ("LC_ALL", "LC_MESSAGES", "LANGUAGE", "LANG"):
+        for candidate in re.split(r"[:;,]", os.environ.get(key, "")):
+            normalized = candidate.strip().replace("-", "_")
+            if normalized and not _is_neutral_locale(normalized):
+                candidates.append(normalized)
+
+    if candidates:
+        return candidates
+
+    detected = _system_locale().strip().replace("-", "_")
+    if detected and not _is_neutral_locale(detected):
+        return [detected]
+    return []
 
 
 def _language() -> str:
@@ -547,7 +566,10 @@ def _upgrade_thumbnail_url(url: str, size: int = 1200) -> str:
     parts = urlsplit(url)
     path = parts.path
     upgraded = re.sub(r"=w\d+-h\d+([^/?#]*)$", f"=w{size}-h{size}\\1", path)
-    upgraded = re.sub(r"=s\d+([^/?#]*)$", f"=s{size}\\1", upgraded)
+    if parts.netloc == "yt3.ggpht.com":
+        upgraded = re.sub(r"=s\d+([^/?#]*)$", f"=w{size}-h{size}-p-l90-rj", upgraded)
+    else:
+        upgraded = re.sub(r"=s\d+([^/?#]*)$", f"=s{size}\\1", upgraded)
     if upgraded == path and "googleusercontent.com" in parts.netloc and "=" not in path.rsplit("/", 1)[-1]:
         upgraded = f"{path}=s{size}"
     return urlunsplit(parts._replace(path=upgraded))
@@ -1554,34 +1576,81 @@ def _inner_tube_home_rows(
     params: str,
     limit: int,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    if ytmusic_parse_mixed_content is None:
-        raise RuntimeError("The installed ytmusicapi version cannot parse filtered Home responses")
     body, response = _inner_tube_home_response(client, params)
+    debug_pages: list[dict[str, Any]] = [{"kind": "root", "response": response}]
     section_list = find_inner_tube_home_section_list(response)
     contents = section_list.get("contents") if isinstance(section_list.get("contents"), list) else []
     if not contents:
-        raise RuntimeError("YouTube Music did not return filtered Home sections")
-    rows = list(ytmusic_parse_mixed_content(contents) or [])
-    remaining = max(0, limit - len(rows))
-    if (
-        remaining > 0
-        and section_list.get("continuations")
-        and ytmusic_get_continuations is not None
-    ):
-        sender = getattr(client, "_send_request")
+        raise RuntimeError("YouTube Music did not return Home sections")
 
-        def request_func(additional_params: dict[str, Any]):
-            return sender("browse", body, additional_params)
-
-        rows.extend(
-            ytmusic_get_continuations(
-                section_list,
-                "sectionListContinuation",
-                remaining,
-                request_func,
-                ytmusic_parse_mixed_content,
-            )
+    # Raw renderers are the primary source. This preserves artwork, endpoint
+    # identity and item ordering before ytmusicapi's mixed-content parser can
+    # simplify or discard renderer-specific fields.
+    rows = parse_inner_tube_home_sections(contents)
+    if not rows and ytmusic_parse_mixed_content is not None:
+        print(
+            "Nocky YouTube Home direct parser returned no rows; using metadata fallback",
+            file=sys.stderr,
         )
+        rows = list(ytmusic_parse_mixed_content(contents) or [])
+
+    sender = getattr(client, "_send_request")
+    current = section_list
+    seen_continuations: set[str] = set()
+    while (
+        len(rows) < limit
+        and current.get("continuations")
+        and ytmusic_get_continuation_params is not None
+    ):
+        additional_params = ytmusic_get_continuation_params(current)
+        if not additional_params or additional_params in seen_continuations:
+            break
+        seen_continuations.add(additional_params)
+        continuation_response = sender("browse", body, additional_params)
+        if isinstance(continuation_response, dict):
+            debug_pages.append({"kind": "continuation", "response": continuation_response})
+        continuation_contents = continuation_response.get("continuationContents")
+        if not isinstance(continuation_contents, dict):
+            break
+        current = continuation_contents.get("sectionListContinuation")
+        if not isinstance(current, dict):
+            break
+        raw_contents = current.get("contents") if isinstance(current.get("contents"), list) else []
+        if not raw_contents:
+            break
+        parsed = parse_inner_tube_home_sections(raw_contents)
+        if not parsed and ytmusic_parse_mixed_content is not None:
+            parsed = list(ytmusic_parse_mixed_content(raw_contents) or [])
+        if not parsed:
+            break
+        rows.extend(parsed)
+
+    missing = missing_artwork_by_section(rows)
+    if missing:
+        summary = ", ".join(
+            f"{title}: {count}/{total}"
+            for title, count, total in missing[:12]
+        )
+        print(
+            f"Nocky YouTube raw Home items still missing artwork: {summary}",
+            file=sys.stderr,
+        )
+
+    debug_destination = str(os.environ.get("NOCKY_HOME_DEBUG_DUMP") or "").strip()
+    if debug_destination:
+        try:
+            debug_path = write_home_debug_dump(
+                debug_destination,
+                pages=debug_pages,
+                rows=rows,
+                selected_params=params,
+            )
+            print(f"Nocky YouTube Home renderer diagnostics: {debug_path}", file=sys.stderr)
+        except Exception as debug_error:
+            print(
+                f"Nocky YouTube Home renderer diagnostics failed: {debug_error}",
+                file=sys.stderr,
+            )
     return rows, response
 
 
@@ -1610,33 +1679,18 @@ def command_home_v2(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         fetch_limit = max(12, min(36, offset + section_limit + 1))
         chips = _cached_root_home_chips(section_limit)
-        if params:
-            rows, raw_response = _inner_tube_home_rows(client, params, fetch_limit)
-            if not chips:
-                chips = extract_inner_tube_home_chips(raw_response)
-            if not chips:
-                try:
-                    _body, root_response = _inner_tube_home_response(client)
-                    chips = extract_inner_tube_home_chips(root_response)
-                except Exception as chip_error:
-                    print(
-                        f"Nocky YouTube root chips unavailable: {chip_error}",
-                        file=sys.stderr,
-                    )
-        else:
+        rows, raw_response = _inner_tube_home_rows(client, params, fetch_limit)
+        if offset == 0 or not chips:
+            chips = extract_inner_tube_home_chips(raw_response) or chips
+        if params and not chips:
             try:
-                rows = client.get_home(limit=fetch_limit)
-            except TypeError:
-                rows = client.get_home()
-            if offset == 0 or not chips:
-                try:
-                    _body, raw_response = _inner_tube_home_response(client)
-                    chips = extract_inner_tube_home_chips(raw_response) or chips
-                except Exception as chip_error:
-                    print(
-                        f"Nocky YouTube Home chips unavailable: {chip_error}",
-                        file=sys.stderr,
-                    )
+                _body, root_response = _inner_tube_home_response(client)
+                chips = extract_inner_tube_home_chips(root_response)
+            except Exception as chip_error:
+                print(
+                    f"Nocky YouTube root chips unavailable: {chip_error}",
+                    file=sys.stderr,
+                )
         page = build_structured_home(
             rows,
             offset=offset,

@@ -55,7 +55,43 @@ use std::{
     path::PathBuf,
     rc::Rc,
     sync::Arc,
+    time::{Duration, Instant},
 };
+
+pub(crate) const YOUTUBE_PLAYLIST_REVALIDATION_BACKOFF_SECS: [u64; 4] = [5, 15, 30, 60];
+
+#[derive(Clone, Debug)]
+pub(crate) enum PlaylistRevalidationState {
+    Loading { attempt: u8 },
+    Succeeded,
+    RetryAt { when: Instant, attempt: u8 },
+}
+
+pub(crate) fn youtube_playlist_revalidation_delay(attempt: u8) -> Duration {
+    let index = attempt.saturating_sub(1) as usize;
+    let seconds = YOUTUBE_PLAYLIST_REVALIDATION_BACKOFF_SECS
+        .get(index)
+        .copied()
+        .unwrap_or(
+            *YOUTUBE_PLAYLIST_REVALIDATION_BACKOFF_SECS
+                .last()
+                .unwrap_or(&60),
+        );
+    Duration::from_secs(seconds)
+}
+
+pub(crate) fn youtube_playlist_revalidation_can_start(
+    state: Option<&PlaylistRevalidationState>,
+    now: Instant,
+) -> bool {
+    match state {
+        None => true,
+        Some(PlaylistRevalidationState::RetryAt { when, .. }) => now >= *when,
+        Some(PlaylistRevalidationState::Loading { .. } | PlaylistRevalidationState::Succeeded) => {
+            false
+        }
+    }
+}
 
 pub(crate) struct ControllerRuntime {
     pub(crate) state: RefCell<AppState>,
@@ -106,6 +142,8 @@ pub(crate) struct ControllerRuntime {
     pub(crate) youtube_playlist_loading: Cell<bool>,
     pub(crate) youtube_playlist_prefetching: Cell<bool>,
     pub(crate) youtube_pending_playlist: RefCell<Option<YouTubeItem>>,
+    pub(crate) youtube_playlist_revalidation: RefCell<HashMap<String, PlaylistRevalidationState>>,
+    pub(crate) youtube_cache_first_cleanup: RefCell<Option<Rc<dyn Fn()>>>,
     pub(crate) youtube_bridge: Option<Arc<YouTubeBridge>>,
     pub(crate) youtube_home_page: RefCell<YouTubeHomePage>,
     pub(crate) youtube_library: RefCell<YouTubeLibraryCache>,

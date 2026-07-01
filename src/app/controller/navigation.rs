@@ -61,6 +61,7 @@ impl AppController {
         }
 
         let home_scroll_positions = self.browser.home_scroll_positions();
+        let queue_scroll_position = self.browser.queue_scroll_position();
         let playback = self.browser_playback_state();
         let state = self.state.borrow();
         let config = self.config.borrow();
@@ -99,6 +100,8 @@ impl AppController {
         );
         self.browser
             .restore_home_scroll_positions(home_scroll_positions);
+        self.browser
+            .restore_queue_scroll_position(queue_scroll_position);
         if !youtube_only {
             if let Some(current) = state.current {
                 self.browser.select_track(current);
@@ -107,6 +110,7 @@ impl AppController {
     }
 
     pub(crate) fn navigate_browser(&self, route: BrowserRoute) {
+        let previous_route = self.browser.route();
         if matches!(&route, BrowserRoute::Artists) {
             self.prefetch_home_artist_profiles(true);
         }
@@ -146,6 +150,9 @@ impl AppController {
         drop(state);
         self.update_sidebar_active(&route);
         self.apply_footer_mode();
+        if previous_route != route {
+            self.browser.reset_queue_scroll_position();
+        }
     }
 
     pub(crate) fn update_sidebar_active(&self, route: &BrowserRoute) {

@@ -1,16 +1,19 @@
 //! YouTube controller methods for `AppController`.
 
-use super::AppController;
+use super::{
+    youtube_playlist_revalidation_can_start, youtube_playlist_revalidation_delay, AppController,
+    PlaylistRevalidationState,
+};
 use crate::{
     background::BackgroundMessage,
     browser::{BrowserRoute, YouTubeCollectionRoute},
     config::StartupSource,
     listening_history,
     youtube::{
-        self as youtube_domain, cache_home_page_covers, cache_items_for_browser,
-        resolve_youtube_collection_item, youtube_collection_cache_key, youtube_collection_key,
-        youtube_home_prefetch_candidates, LikeMutationStartError, YouTubeItem, YouTubePageEvent,
-        YouTubeSearchResults, YouTubeStatus,
+        self as youtube_domain, cache_first_items_for_browser, cache_home_page_covers,
+        cache_items_for_browser, repair_home_page_cover_paths, resolve_youtube_collection_item,
+        youtube_collection_cache_key, youtube_collection_key, youtube_home_prefetch_candidates,
+        LikeMutationStartError, YouTubeItem, YouTubePageEvent, YouTubeSearchResults, YouTubeStatus,
     },
 };
 use gtk::prelude::*;
@@ -18,7 +21,29 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     sync::{mpsc, Arc, Mutex},
     thread,
+    time::Instant,
 };
+
+const YOUTUBE_HOME_STREAM_PRELOAD_LIMIT: usize = 6;
+
+fn youtube_home_stream_preload_items(
+    page: &youtube_domain::YouTubeHomePage,
+    limit: usize,
+) -> Vec<YouTubeItem> {
+    let mut items = Vec::new();
+    let mut seen = HashSet::new();
+    for section in &page.sections {
+        for item in &section.items {
+            if item.playable() && seen.insert(item.video_id.clone()) {
+                items.push(item.clone());
+                if items.len() == limit {
+                    return items;
+                }
+            }
+        }
+    }
+    items
+}
 
 impl AppController {
     pub(crate) fn present_assisted_youtube_login(&self) {
@@ -192,17 +217,104 @@ impl AppController {
         self.youtube_playlist_request_id.set(request_id);
         self.youtube_playlist_loading.set(true);
         let sender = self.background.sender();
+        thread::spawn(move || match bridge.playlist(&playlist) {
+            Ok(mut items) => {
+                cache_first_items_for_browser(&mut items, 24);
+                let initial_items = items.clone();
+                let initial_playlist = playlist.clone();
+                let _ = sender.send(BackgroundMessage::YouTubeBrowserPlaylist {
+                    request_id,
+                    playlist: initial_playlist,
+                    result: Ok(initial_items),
+                });
+
+                cache_items_for_browser(&mut items);
+                let _ = sender.send(BackgroundMessage::YouTubeBrowserPlaylistCoversCached {
+                    request_id,
+                    playlist,
+                    items,
+                });
+            }
+            Err(error) => {
+                let _ = sender.send(BackgroundMessage::YouTubeBrowserPlaylist {
+                    request_id,
+                    playlist,
+                    result: Err(error),
+                });
+            }
+        });
+    }
+
+    pub(crate) fn revalidate_youtube_playlist_for_browser(&self, playlist: YouTubeItem) {
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            return;
+        };
+        let browse_id = playlist.browse_id.clone();
+        if browse_id.trim().is_empty() {
+            return;
+        }
+
+        let state = self
+            .youtube_playlist_revalidation
+            .borrow()
+            .get(&browse_id)
+            .cloned();
+        if !youtube_playlist_revalidation_can_start(state.as_ref(), Instant::now()) {
+            return;
+        }
+
+        let attempt = match state {
+            Some(PlaylistRevalidationState::RetryAt { attempt, .. })
+            | Some(PlaylistRevalidationState::Loading { attempt }) => attempt,
+            _ => 0,
+        };
+
+        self.youtube_playlist_revalidation.borrow_mut().insert(
+            browse_id.clone(),
+            PlaylistRevalidationState::Loading { attempt },
+        );
+        self.youtube_library
+            .borrow_mut()
+            .playlist_loading
+            .insert(browse_id);
+
+        let sender = self.background.sender();
         thread::spawn(move || {
             let result = bridge.playlist(&playlist).map(|mut items| {
                 cache_items_for_browser(&mut items);
                 items
             });
-            let _ = sender.send(BackgroundMessage::YouTubeBrowserPlaylist {
-                request_id,
-                playlist,
-                result,
-            });
+            let _ = sender
+                .send(BackgroundMessage::YouTubeBrowserPlaylistRevalidated { playlist, result });
         });
+    }
+
+    pub(crate) fn mark_youtube_playlist_revalidation_succeeded(&self, browse_id: &str) {
+        self.youtube_playlist_revalidation
+            .borrow_mut()
+            .insert(browse_id.to_string(), PlaylistRevalidationState::Succeeded);
+    }
+
+    pub(crate) fn schedule_youtube_playlist_revalidation_retry(&self, browse_id: &str) {
+        let current_attempt = match self
+            .youtube_playlist_revalidation
+            .borrow()
+            .get(browse_id)
+            .cloned()
+        {
+            Some(PlaylistRevalidationState::Loading { attempt })
+            | Some(PlaylistRevalidationState::RetryAt { attempt, .. }) => attempt,
+            _ => 0,
+        };
+        let next_attempt = current_attempt.saturating_add(1);
+        let delay = youtube_playlist_revalidation_delay(next_attempt);
+        self.youtube_playlist_revalidation.borrow_mut().insert(
+            browse_id.to_string(),
+            PlaylistRevalidationState::RetryAt {
+                when: Instant::now() + delay,
+                attempt: next_attempt,
+            },
+        );
     }
 
     pub(crate) fn is_open_youtube_playlist(&self, browse_id: &str) -> bool {
@@ -223,6 +335,9 @@ impl AppController {
         } else {
             BrowserRoute::YouTubeAlbum(collection)
         };
+        self.youtube_library
+            .borrow_mut()
+            .remember_collection_reference(item.clone());
 
         if item.result_type == "artist" {
             self.navigate_browser(route);
@@ -592,22 +707,57 @@ impl AppController {
         );
         let sender = self.background.sender();
         thread::spawn(move || {
-            let result = bridge
-                .home_page(
-                    (!continuation.is_empty()).then_some(continuation.as_str()),
-                    (!params.is_empty()).then_some(params.as_str()),
-                )
-                .map(|mut page| {
+            match bridge.home_page(
+                (!continuation.is_empty()).then_some(continuation.as_str()),
+                (!params.is_empty()).then_some(params.as_str()),
+            ) {
+                Ok(mut page) => {
+                    repair_home_page_cover_paths(&mut page);
+                    let title = "Para você".to_string();
+                    let initial_page = page.clone();
+                    let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
+                        request_id,
+                        title: title.clone(),
+                        home: true,
+                        append,
+                        result: Ok(initial_page),
+                    });
+
+                    if !append {
+                        let preload_items = youtube_home_stream_preload_items(
+                            &page,
+                            YOUTUBE_HOME_STREAM_PRELOAD_LIMIT,
+                        );
+                        if !preload_items.is_empty() {
+                            let preload_bridge = bridge.clone();
+                            thread::spawn(move || {
+                                preload_bridge.preload_items(
+                                    &preload_items,
+                                    YOUTUBE_HOME_STREAM_PRELOAD_LIMIT,
+                                );
+                            });
+                        }
+                    }
+
                     cache_home_page_covers(&mut page);
-                    page
-                });
-            let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
-                request_id,
-                title: "Para você".to_string(),
-                home: true,
-                append,
-                result,
-            });
+                    let _ = sender.send(BackgroundMessage::YouTubeStructuredPageCoversCached {
+                        request_id,
+                        title,
+                        home: true,
+                        append,
+                        page,
+                    });
+                }
+                Err(error) => {
+                    let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
+                        request_id,
+                        title: "Para você".to_string(),
+                        home: true,
+                        append,
+                        result: Err(error),
+                    });
+                }
+            }
         });
     }
 

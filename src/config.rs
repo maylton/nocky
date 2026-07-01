@@ -67,19 +67,30 @@ pub enum AppLanguage {
 
 impl AppLanguage {
     pub fn detect_system() -> Self {
-        let locale = ["LC_ALL", "LC_MESSAGES", "LANGUAGE", "LANG"]
+        for locale in ["LC_ALL", "LC_MESSAGES", "LANGUAGE", "LANG"]
             .into_iter()
-            .find_map(|name| env::var(name).ok())
-            .unwrap_or_default()
-            .to_ascii_lowercase();
-
-        if locale.starts_with("pt") || locale.contains(":pt") {
-            Self::Portuguese
-        } else if locale.starts_with("es") || locale.contains(":es") {
-            Self::Spanish
-        } else {
-            Self::English
+            .filter_map(|name| env::var(name).ok())
+            .flat_map(|value| {
+                value
+                    .split([':', ';', ','])
+                    .map(str::trim)
+                    .map(str::to_ascii_lowercase)
+                    .collect::<Vec<_>>()
+            })
+        {
+            let locale_name = locale.split(['.', '@']).next().unwrap_or_default().trim();
+            if matches!(locale_name, "c" | "posix") {
+                continue;
+            }
+            if locale_name.starts_with("pt") {
+                return Self::Portuguese;
+            }
+            if locale_name.starts_with("es") {
+                return Self::Spanish;
+            }
         }
+
+        Self::English
     }
 
     pub fn label(self) -> &'static str {

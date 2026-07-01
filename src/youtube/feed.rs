@@ -96,6 +96,53 @@ impl YouTubeHomePage {
         }
         self.continuation = incoming.continuation;
     }
+
+    pub fn update_cover_paths(&mut self, incoming: &Self) -> bool {
+        let mut changed = false;
+        for section in &incoming.sections {
+            let Some(existing) = self
+                .sections
+                .iter_mut()
+                .find(|candidate| candidate.id == section.id)
+            else {
+                continue;
+            };
+
+            for item in &section.items {
+                let Some(existing_item) = existing
+                    .items
+                    .iter_mut()
+                    .find(|candidate| youtube_home_items_match(candidate, item))
+                else {
+                    continue;
+                };
+
+                if !item.thumbnail_url.trim().is_empty()
+                    && existing_item.thumbnail_url != item.thumbnail_url
+                {
+                    existing_item.thumbnail_url = item.thumbnail_url.clone();
+                    changed = true;
+                }
+                if !item.cover_path.trim().is_empty() && existing_item.cover_path != item.cover_path
+                {
+                    existing_item.cover_path = item.cover_path.clone();
+                    changed = true;
+                }
+            }
+        }
+        changed
+    }
+}
+
+fn youtube_home_items_match(left: &YouTubeItem, right: &YouTubeItem) -> bool {
+    (!left.video_id.is_empty() && left.video_id == right.video_id)
+        || (!left.browse_id.is_empty()
+            && left.result_type == right.result_type
+            && left.browse_id == right.browse_id)
+        || (left.result_type == right.result_type
+            && left.title == right.title
+            && left.artist == right.artist
+            && left.album == right.album)
 }
 
 #[cfg(test)]
@@ -136,6 +183,35 @@ mod tests {
 
         assert_eq!(first.item_count(), 2);
         assert!(first.continuation.is_empty());
+    }
+
+    #[test]
+    fn updates_existing_cover_paths_without_adding_duplicates() {
+        let mut page = YouTubeHomePage {
+            sections: vec![YouTubeHomeSection {
+                id: "quick".to_string(),
+                title: "Quick picks".to_string(),
+                items: vec![item("one", "One")],
+                ..YouTubeHomeSection::default()
+            }],
+            ..YouTubeHomePage::default()
+        };
+        let incoming = YouTubeHomePage {
+            sections: vec![YouTubeHomeSection {
+                id: "quick".to_string(),
+                items: vec![YouTubeItem {
+                    thumbnail_url: "https://i.ytimg.com/vi/one/hqdefault.jpg".to_string(),
+                    cover_path: "/tmp/one.jpg".to_string(),
+                    ..item("one", "One")
+                }],
+                ..YouTubeHomeSection::default()
+            }],
+            ..YouTubeHomePage::default()
+        };
+
+        assert!(page.update_cover_paths(&incoming));
+        assert_eq!(page.item_count(), 1);
+        assert_eq!(page.sections[0].items[0].cover_path, "/tmp/one.jpg");
     }
 
     #[test]

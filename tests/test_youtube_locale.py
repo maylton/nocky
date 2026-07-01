@@ -43,6 +43,21 @@ class YouTubeLocaleTests(unittest.TestCase):
                 self.assertEqual(helper._language(), language)
                 self.assertEqual(helper._location(), location)
 
+    def test_neutral_lc_all_does_not_hide_lang_locale(self):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "LC_ALL": "C.UTF-8",
+                "LC_MESSAGES": "",
+                "LANGUAGE": "",
+                "LANG": "pt_BR.UTF-8",
+            },
+            clear=False,
+        ):
+            self.assertEqual(helper._language(), "pt")
+            self.assertEqual(helper._location(), "BR")
+            self.assertEqual(helper._accept_language(), "pt-BR,pt;q=0.9,en;q=0.7")
+
     def test_unsupported_system_language_falls_back_to_english(self):
         with self.locale_environment("fr_FR.UTF-8"):
             self.assertEqual(helper._language(), "en")
