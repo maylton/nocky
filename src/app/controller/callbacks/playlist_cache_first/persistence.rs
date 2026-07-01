@@ -28,7 +28,10 @@ impl DurablePlaylistCache {
         {
             let mut library = controller.youtube_library.borrow_mut();
             for (browse_id, items) in &playlists {
-                let current = library.playlist_tracks.entry(browse_id.clone()).or_default();
+                let current = library
+                    .playlist_tracks
+                    .entry(browse_id.clone())
+                    .or_default();
                 if current.is_empty() {
                     *current = items.clone();
                 }
@@ -112,9 +115,7 @@ fn decode(raw: &str) -> HashMap<String, Vec<YouTubeItem>> {
     sanitize(cache.playlists)
 }
 
-fn sanitize(
-    playlists: HashMap<String, Vec<YouTubeItem>>,
-) -> HashMap<String, Vec<YouTubeItem>> {
+fn sanitize(playlists: HashMap<String, Vec<YouTubeItem>>) -> HashMap<String, Vec<YouTubeItem>> {
     playlists
         .into_iter()
         .filter_map(|(browse_id, items)| {
