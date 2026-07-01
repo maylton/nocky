@@ -13,7 +13,12 @@ import nocky_youtube_playlist_create  # noqa: E402
 
 
 class FakeClient:
-    def __init__(self, response=None, add_result="STATUS_SUCCEEDED"):
+    def __init__(
+        self,
+        response=None,
+        add_result="STATUS_SUCCEEDED",
+        edit_result="STATUS_SUCCEEDED",
+    ):
         self.response = response or {
             "id": "PL-owned",
             "title": "Focus",
@@ -28,8 +33,10 @@ class FakeClient:
             ],
         }
         self.add_result = add_result
+        self.edit_result = edit_result
         self.calls = []
         self.add_calls = []
+        self.edit_calls = []
 
     def get_playlist(self, playlist_id, limit=100):
         self.calls.append((playlist_id, limit))
@@ -38,6 +45,16 @@ class FakeClient:
     def add_playlist_items(self, playlist_id, videoIds=None, duplicates=False):
         self.add_calls.append((playlist_id, list(videoIds or []), duplicates))
         return self.add_result
+
+    def edit_playlist(
+        self,
+        playlist_id,
+        title=None,
+        description=None,
+        privacyStatus=None,
+    ):
+        self.edit_calls.append((playlist_id, title, description, privacyStatus))
+        return self.edit_result
 
 
 class PackagedPlaylistMetadataTests(unittest.TestCase):
@@ -250,6 +267,134 @@ class PackagedPlaylistMetadataTests(unittest.TestCase):
                         }
                     )
         self.assertEqual(client.add_calls, [])
+
+    def test_metadata_edit_revalidates_and_calls_edit_playlist(self) -> None:
+        client = FakeClient()
+        with patch.object(
+            nocky_youtube_playlist_create.nocky_youtube,
+            "_load_session",
+            return_value={"headers": {"test": "value"}},
+        ):
+            with patch.object(
+                nocky_youtube_playlist_create.nocky_youtube,
+                "_create_client",
+                return_value=client,
+            ):
+                result = nocky_youtube_playlist_create.execute(
+                    {
+                        "operation": "edit_metadata",
+                        "playlist_id": "VLPL-owned",
+                        "owned": True,
+                        "editable": True,
+                        "current": {
+                            "title": "Focus",
+                            "description": "",
+                            "privacy": "PRIVATE",
+                        },
+                        "title": "Deep Focus",
+                        "privacy": "UNLISTED",
+                    }
+                )
+
+        self.assertEqual(client.calls, [("PL-owned", 1)])
+        self.assertEqual(client.edit_calls, [("PL-owned", "Deep Focus", None, "UNLISTED")])
+        self.assertEqual(
+            result,
+            {
+                "playlist_id": "PL-owned",
+                "title": "Deep Focus",
+                "privacy": "UNLISTED",
+                "reconciliation_required": True,
+            },
+        )
+
+    def test_metadata_edit_rejects_noop_or_unowned_before_session_access(self) -> None:
+        invalid = (
+            {
+                "operation": "edit_metadata",
+                "playlist_id": "PL-owned",
+                "owned": True,
+                "editable": True,
+                "current": {"title": "Focus", "privacy": "PRIVATE"},
+                "title": "Focus",
+                "privacy": "PRIVATE",
+            },
+            {
+                "operation": "edit_metadata",
+                "playlist_id": "PL-owned",
+                "owned": False,
+                "editable": True,
+                "current": {"title": "Focus", "privacy": "PRIVATE"},
+                "title": "Deep Focus",
+            },
+            {
+                "operation": "edit_metadata",
+                "playlist_id": "PL-owned",
+                "owned": True,
+                "editable": True,
+                "current": {"title": "Focus", "privacy": "PRIVATE"},
+                "title": "Bad <title>",
+            },
+        )
+        with patch.object(
+            nocky_youtube_playlist_create.nocky_youtube,
+            "_load_session",
+        ) as load_session:
+            for payload in invalid:
+                with self.subTest(payload=payload):
+                    with self.assertRaises(RuntimeError):
+                        nocky_youtube_playlist_create.execute(payload)
+            load_session.assert_not_called()
+
+    def test_metadata_edit_blocks_stale_or_shared_remote_playlist(self) -> None:
+        stale = FakeClient(
+            {
+                "id": "PL-owned",
+                "title": "Renamed elsewhere",
+                "owned": True,
+                "privacy": "PRIVATE",
+                "tracks": [],
+            }
+        )
+        shared = FakeClient(
+            {
+                "id": "PL-owned",
+                "title": "Focus",
+                "owned": False,
+                "privacy": "PRIVATE",
+                "tracks": [],
+            }
+        )
+        for client, message in (
+            (stale, "metadata changed"),
+            (shared, "ownership and editability"),
+        ):
+            with self.subTest(message=message):
+                with patch.object(
+                    nocky_youtube_playlist_create.nocky_youtube,
+                    "_load_session",
+                    return_value={"headers": {"test": "value"}},
+                ):
+                    with patch.object(
+                        nocky_youtube_playlist_create.nocky_youtube,
+                        "_create_client",
+                        return_value=client,
+                    ):
+                        with self.assertRaisesRegex(RuntimeError, message):
+                            nocky_youtube_playlist_create.execute(
+                                {
+                                    "operation": "edit_metadata",
+                                    "playlist_id": "PL-owned",
+                                    "owned": True,
+                                    "editable": True,
+                                    "current": {
+                                        "title": "Focus",
+                                        "privacy": "PRIVATE",
+                                    },
+                                    "title": "Deep Focus",
+                                }
+                            )
+                self.assertEqual(client.edit_calls, [])
 
     def test_generated_playlist_alias_is_read_only(self) -> None:
         client = FakeClient(

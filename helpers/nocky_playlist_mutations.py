@@ -178,6 +178,94 @@ def normalize_add_request(payload: Any) -> dict[str, Any]:
     }
 
 
+def normalize_metadata_edit_request(payload: Any) -> dict[str, Any]:
+    """Return a reversible playlist metadata-edit request."""
+
+    if not isinstance(payload, dict):
+        raise RuntimeError("Expected a playlist metadata edit object")
+    if payload.get("owned") is not True or payload.get("editable") is not True:
+        raise RuntimeError("Playlist ownership and editability must be confirmed")
+
+    playlist_id = normalize_playlist_id(
+        payload.get("playlist_id") or payload.get("playlistId")
+    )
+    current = payload.get("current")
+    if not isinstance(current, dict):
+        raise RuntimeError("Current playlist metadata is required")
+
+    current_title = _text(current.get("title") or current.get("name"))
+    current_description = _text(
+        current.get("description") or current.get("description_text")
+    )
+    current_privacy = _text(current.get("privacy") or current.get("privacyStatus")).upper()
+    if current_privacy not in ALLOWED_PRIVACY:
+        current_privacy = ""
+
+    title_present = "title" in payload
+    description_present = "description" in payload
+    privacy_present = "privacy" in payload or "privacyStatus" in payload
+
+    changes: dict[str, str] = {}
+    if title_present:
+        title = _text(payload.get("title"))
+        if not title:
+            raise RuntimeError("Playlist title is required")
+        if "<" in title or ">" in title:
+            raise RuntimeError("Playlist title contains unsupported characters")
+        if title != current_title:
+            changes["title"] = title
+
+    if description_present:
+        description = _text(payload.get("description"))
+        if description != current_description:
+            changes["description"] = description
+
+    if privacy_present:
+        privacy = _text(payload.get("privacy") or payload.get("privacyStatus")).upper()
+        if privacy not in ALLOWED_PRIVACY:
+            raise RuntimeError("Playlist privacy must be PRIVATE, UNLISTED, or PUBLIC")
+        if privacy != current_privacy:
+            changes["privacy"] = privacy
+
+    if not changes:
+        raise RuntimeError("Playlist metadata edit contains no changes")
+
+    return {
+        "playlist_id": playlist_id,
+        "current": {
+            "title": current_title,
+            "description": current_description,
+            "privacy": current_privacy,
+        },
+        "changes": changes,
+    }
+
+
+def sanitize_metadata_edit_result(
+    raw_result: Any,
+    *,
+    playlist_id: str,
+    changes: dict[str, str],
+) -> dict[str, Any]:
+    """Return only the confirmed metadata-edit contract."""
+
+    if isinstance(raw_result, dict):
+        status = str(raw_result.get("status") or "").strip()
+        if status and status != _SUCCESS_STATUS:
+            raise RuntimeError("YouTube Music did not confirm the playlist metadata edit")
+    elif raw_result is False or raw_result is None:
+        raise RuntimeError("YouTube Music did not confirm the playlist metadata edit")
+
+    result: dict[str, Any] = {
+        "playlist_id": normalize_playlist_id(playlist_id),
+        "reconciliation_required": True,
+    }
+    for key in ("title", "description", "privacy"):
+        if key in changes:
+            result[key] = changes[key]
+    return result
+
+
 def sanitize_add_result(
     raw_result: Any,
     *,
