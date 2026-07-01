@@ -1,5 +1,6 @@
 use super::track_rows;
 use gtk::prelude::*;
+use std::collections::VecDeque;
 
 const COMPACT_OUTER_WIDTH: i32 = 172;
 const COMPACT_OUTER_HEIGHT: i32 = 210;
@@ -10,10 +11,9 @@ const COMPACT_ACTION_SIZE: i32 = 34;
 
 pub(super) fn apply(root: &gtk::Stack) {
     let root_widget: &gtk::Widget = root.upcast_ref();
-    let width = root.width().max(1);
     let mut featured_assigned = false;
 
-    for section in descendants(root_widget) {
+    for section in descendants_in_visual_order(root_widget) {
         if !section.has_css_class("home-section")
             || section.has_css_class("youtube-home-chip-section")
         {
@@ -33,11 +33,12 @@ pub(super) fn apply(root: &gtk::Stack) {
             continue;
         }
 
+        let grid_width = grid.width().max(1);
         clear_presentation_classes(&section);
 
         if track_rows::section_is_track_only(&cards) {
             section.add_css_class("home-section-track-rows");
-            track_rows::configure_grid(&grid, width);
+            track_rows::configure_grid(&grid, grid_width);
             for card in cards {
                 track_rows::apply_card(&card);
             }
@@ -47,11 +48,12 @@ pub(super) fn apply(root: &gtk::Stack) {
         if !featured_assigned {
             featured_assigned = true;
             section.add_css_class("home-section-featured");
+            grid.set_halign(gtk::Align::Fill);
             continue;
         }
 
         section.add_css_class("home-section-compact");
-        configure_compact_grid(&grid, width);
+        configure_compact_grid(&grid, grid_width);
         for card in cards {
             compact_card(&card);
         }
@@ -74,6 +76,7 @@ fn configure_compact_grid(grid: &gtk::FlowBox, width: i32) {
     grid.set_max_children_per_line(compact_columns(width));
     grid.set_column_spacing(12);
     grid.set_row_spacing(14);
+    grid.set_halign(gtk::Align::Start);
 }
 
 fn compact_columns(width: i32) -> u32 {
@@ -93,7 +96,7 @@ fn compact_card(root: &gtk::Widget) {
     root.set_hexpand(false);
     root.set_halign(gtk::Align::Start);
 
-    for widget in descendants(root) {
+    for widget in descendants_in_visual_order(root) {
         if widget.has_css_class("home-card-context-overlay")
             || widget.has_css_class("home-card-button")
         {
@@ -160,20 +163,20 @@ fn direct_flow_box(section: &gtk::Widget) -> Option<gtk::FlowBox> {
 }
 
 fn find_class(root: &gtk::Widget, class_name: &str) -> Option<gtk::Widget> {
-    descendants(root)
+    descendants_in_visual_order(root)
         .into_iter()
         .find(|widget| widget.has_css_class(class_name))
 }
 
-fn descendants(root: &gtk::Widget) -> Vec<gtk::Widget> {
+fn descendants_in_visual_order(root: &gtk::Widget) -> Vec<gtk::Widget> {
     let mut result = Vec::new();
-    let mut pending = vec![root.clone()];
+    let mut pending = VecDeque::from([root.clone()]);
 
-    while let Some(widget) = pending.pop() {
+    while let Some(widget) = pending.pop_front() {
         let mut child = widget.first_child();
         while let Some(current) = child {
             child = current.next_sibling();
-            pending.push(current);
+            pending.push_back(current);
         }
         result.push(widget);
     }
@@ -198,7 +201,7 @@ mod tests {
     use super::compact_columns;
 
     #[test]
-    fn compact_breakpoints_scale_with_desktop_width() {
+    fn compact_breakpoints_scale_with_grid_width() {
         assert_eq!(compact_columns(420), 2);
         assert_eq!(compact_columns(600), 3);
         assert_eq!(compact_columns(840), 4);
