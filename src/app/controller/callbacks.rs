@@ -1,5 +1,8 @@
 //! GTK signal and timer callbacks for `AppController`.
 
+#[path = "callbacks/playlist_cache_first.rs"]
+mod playlist_cache_first;
+
 use super::AppController;
 use gtk::{glib, prelude::*};
 use std::{cell::RefCell, rc::Rc, time::Duration};
@@ -17,6 +20,7 @@ impl AppController {
                 self.shuffle_button.is_active(),
             ));
         self.publish_mpris_capabilities();
+        playlist_cache_first::install(self);
         {
             self.window
                 .connect_close_request(move |_| glib::Propagation::Proceed);

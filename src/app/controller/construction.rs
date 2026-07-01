@@ -574,6 +574,7 @@ impl AppController {
                 youtube_playlist_loading: Cell::new(false),
                 youtube_playlist_prefetching: Cell::new(false),
                 youtube_pending_playlist: RefCell::new(None),
+                youtube_playlist_revalidation: RefCell::new(HashMap::new()),
                 youtube_bridge,
                 youtube_home_page: RefCell::new(YouTubeHomePage::default()),
                 youtube_library: RefCell::new(load_library_cache()),
