@@ -1,14 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
 
 use super::YouTubeItem;
-
-type HomeCoverUpdateHandler = Box<dyn Fn(&YouTubeHomePage) -> bool>;
-
-thread_local! {
-    static HOME_COVER_UPDATE_HANDLER: RefCell<Option<HomeCoverUpdateHandler>> =
-        RefCell::new(None);
-}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -60,12 +52,6 @@ impl YouTubeHomeSection {
 }
 
 impl YouTubeHomePage {
-    pub(crate) fn install_cover_update_handler(handler: impl Fn(&Self) -> bool + 'static) {
-        HOME_COVER_UPDATE_HANDLER.with(|current| {
-            *current.borrow_mut() = Some(Box::new(handler));
-        });
-    }
-
     #[cfg(test)]
     pub fn item_count(&self) -> usize {
         self.sections
@@ -144,18 +130,7 @@ impl YouTubeHomePage {
                 }
             }
         }
-
-        if !changed {
-            return false;
-        }
-
-        let updated_in_place = HOME_COVER_UPDATE_HANDLER.with(|handler| {
-            handler
-                .borrow()
-                .as_ref()
-                .is_some_and(|handler| handler(self))
-        });
-        !updated_in_place
+        changed
     }
 }
 
@@ -237,36 +212,6 @@ mod tests {
         assert!(page.update_cover_paths(&incoming));
         assert_eq!(page.item_count(), 1);
         assert_eq!(page.sections[0].items[0].cover_path, "/tmp/one.jpg");
-    }
-
-    #[test]
-    fn mounted_cover_handler_suppresses_the_fallback_rebuild() {
-        YouTubeHomePage::install_cover_update_handler(|_| true);
-        let mut page = YouTubeHomePage {
-            sections: vec![YouTubeHomeSection {
-                id: "quick".to_string(),
-                items: vec![item("one", "One")],
-                ..YouTubeHomeSection::default()
-            }],
-            ..YouTubeHomePage::default()
-        };
-        let incoming = YouTubeHomePage {
-            sections: vec![YouTubeHomeSection {
-                id: "quick".to_string(),
-                items: vec![YouTubeItem {
-                    cover_path: "/tmp/one.jpg".to_string(),
-                    ..item("one", "One")
-                }],
-                ..YouTubeHomeSection::default()
-            }],
-            ..YouTubeHomePage::default()
-        };
-
-        assert!(!page.update_cover_paths(&incoming));
-        assert_eq!(page.sections[0].items[0].cover_path, "/tmp/one.jpg");
-        HOME_COVER_UPDATE_HANDLER.with(|handler| {
-            *handler.borrow_mut() = None;
-        });
     }
 
     #[test]
