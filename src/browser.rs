@@ -5011,6 +5011,53 @@ fn attach_home_grid_cards(grid: &gtk::Grid, cards: &[gtk::Widget], rows: i32) {
     }
 }
 
+fn detach_home_card(card: &gtk::Widget) {
+    let Some(parent) = card.parent() else {
+        return;
+    };
+
+    if let Ok(parent_box) = parent.clone().downcast::<gtk::Box>() {
+        parent_box.remove(card);
+    } else if let Ok(parent_grid) = parent.downcast::<gtk::Grid>() {
+        parent_grid.remove(card);
+    }
+}
+
+fn attach_home_column_cards(rail: &gtk::Box, cards: &[gtk::Widget], rows: i32, row_spacing: i32) {
+    let mut child = rail.first_child();
+    while let Some(current) = child {
+        child = current.next_sibling();
+        rail.remove(&current);
+    }
+
+    for column_index in 0..(cards.len() as i32 + rows - 1) / rows {
+        let column = gtk::Box::new(gtk::Orientation::Vertical, row_spacing);
+        column.set_halign(gtk::Align::Start);
+        column.set_valign(gtk::Align::Start);
+        column.set_hexpand(false);
+        column.set_vexpand(false);
+
+        for row in 0..rows {
+            let index = (column_index * rows + row) as usize;
+            let Some(card) = cards.get(index) else {
+                continue;
+            };
+            detach_home_card(card);
+            card.set_vexpand(false);
+            card.set_valign(gtk::Align::Start);
+            column.append(card);
+        }
+
+        rail.append(&column);
+    }
+}
+
+fn set_home_scroller_height(scroll: &gtk::ScrolledWindow, height: i32) {
+    scroll.set_max_content_height(-1);
+    scroll.set_min_content_height(height);
+    scroll.set_max_content_height(height);
+}
+
 fn metrolist_home_scroller(
     child: &impl IsA<gtk::Widget>,
     min_height: i32,
@@ -5018,12 +5065,15 @@ fn metrolist_home_scroller(
 ) -> gtk::ScrolledWindow {
     let scroll = gtk::ScrolledWindow::new();
     child.set_margin_bottom(scrollbar_gap);
+    child.set_vexpand(false);
+    child.set_valign(gtk::Align::Start);
     scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Never);
     scroll.set_overlay_scrolling(false);
     scroll.set_propagate_natural_height(true);
-    scroll.set_min_content_height(min_height);
+    set_home_scroller_height(&scroll, min_height);
     scroll.set_hexpand(true);
     scroll.set_vexpand(false);
+    scroll.set_valign(gtk::Align::Start);
     scroll.set_child(Some(child));
     scroll.add_css_class("home-carousel-scroll");
     scroll.add_css_class("home-card-grid-scroll");
@@ -5053,16 +5103,14 @@ fn metrolist_home_section_content(
 
     if presentation == HomeSectionPresentation::TrackRows {
         let rows = presentation.track_rows(cards.len());
-        let grid = gtk::Grid::new();
-        grid.set_column_spacing(presentation.rail_spacing() as u32);
-        grid.set_row_spacing(presentation.row_spacing() as u32);
-        grid.set_halign(gtk::Align::Start);
-        grid.set_valign(gtk::Align::Start);
-        grid.set_vexpand(false);
-        grid.add_css_class("home-card-grid");
-        attach_home_grid_cards(&grid, &cards, rows);
+        let rail = metrolist_home_rail(presentation);
+        rail.set_size_request(
+            -1,
+            rows * presentation.outer_height() + (rows - 1).max(0) * presentation.row_spacing(),
+        );
+        attach_home_column_cards(&rail, &cards, rows, presentation.row_spacing());
         metrolist_home_scroller(
-            &grid,
+            &rail,
             presentation.scroller_height(rows),
             presentation.scrollbar_gap(),
         )
@@ -5093,7 +5141,7 @@ fn metrolist_home_section_content(
                     return;
                 }
                 attach_home_grid_cards(&grid, &cards, rows);
-                scroll.set_min_content_height(presentation.scroller_height(rows));
+                set_home_scroller_height(&scroll, presentation.scroller_height(rows));
             })
         };
 
@@ -5200,6 +5248,8 @@ fn home_history_section(
     subtitle_label.add_css_class("dim-label");
 
     let heading = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    heading.set_vexpand(false);
+    heading.set_valign(gtk::Align::Start);
     heading.add_css_class("home-section-heading");
     heading.append(&title_label);
     heading.append(&subtitle_label);
@@ -5369,12 +5419,19 @@ fn home_history_section(
         button.set_hexpand(false);
         button.set_halign(gtk::Align::Start);
         button.add_css_class("home-card-button");
+        if presentation == HomeSectionPresentation::TrackRows {
+            button.add_css_class("home-track-row-button");
+        }
         cards.push(button.upcast::<gtk::Widget>());
     }
 
     let content = metrolist_home_section_content(cards, presentation, language, empty_detail);
+    content.set_vexpand(false);
+    content.set_valign(gtk::Align::Start);
 
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    section.set_vexpand(false);
+    section.set_valign(gtk::Align::Start);
     section.add_css_class("home-section");
     section.add_css_class(presentation.css_class());
     section.append(&heading);
@@ -5812,6 +5869,8 @@ fn home_section(
     subtitle_label.add_css_class("dim-label");
 
     let heading = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    heading.set_vexpand(false);
+    heading.set_valign(gtk::Align::Start);
     heading.add_css_class("home-section-heading");
     heading.append(&title_label);
     heading.append(&subtitle_label);
@@ -5831,8 +5890,12 @@ fn home_section(
         })
         .collect::<Vec<_>>();
     let content = metrolist_home_section_content(cards, presentation, language, empty_detail);
+    content.set_vexpand(false);
+    content.set_valign(gtk::Align::Start);
 
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    section.set_vexpand(false);
+    section.set_valign(gtk::Align::Start);
     section.add_css_class("home-section");
     section.add_css_class(presentation.css_class());
     section.append(&heading);
@@ -6076,6 +6139,9 @@ fn home_card_button(
     main_button.add_css_class("flat");
     main_button.add_css_class("home-card-button");
     main_button.add_css_class("expressive-collection-button");
+    if presentation == HomeSectionPresentation::TrackRows {
+        main_button.add_css_class("home-track-row-button");
+    }
     if card_effects {
         main_button.add_css_class("home-card-motion-requested");
     }
@@ -6104,6 +6170,9 @@ fn home_card_button(
     overlay.set_halign(gtk::Align::Start);
     overlay.set_child(Some(&main_button));
     overlay.add_css_class("home-card-context-overlay");
+    if presentation == HomeSectionPresentation::TrackRows {
+        overlay.add_css_class("home-track-row-button");
+    }
 
     let show_inline_play_control =
         !(presentation == HomeSectionPresentation::TrackRows && collection_kind == "track");

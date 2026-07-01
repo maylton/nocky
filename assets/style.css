@@ -419,6 +419,19 @@ searchbar entry {
   background-color: alpha(@nm_accent, 0.08);
 }
 
+.home-track-row-button {
+  min-width: 312px;
+  min-height: 64px;
+  border-radius: 18px;
+}
+
+.home-track-row-button .home-track-card {
+  min-width: 300px;
+  min-height: 64px;
+  padding: 6px 8px;
+  border-radius: 18px;
+}
+
 .home-card {
   min-width: 128px;
 }
