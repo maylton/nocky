@@ -211,12 +211,18 @@ button.sidebar-row:disabled {
   background-color: shade(@nm_accent, 1.08);
 }
 
+.material-loading-indicator,
 .expressive-loading-indicator {
   color: @nm_accent;
 }
 
+button .material-loading-indicator,
 button .expressive-loading-indicator {
   color: inherit;
+}
+
+.material-loading-indicator.contained {
+  color: @nm_accent;
 }
 
 .player-bar {
@@ -918,4 +924,3 @@ window.theme-material-expressive scrollbar.vertical slider {
   border: none;
   box-shadow: none;
 }
-

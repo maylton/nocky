@@ -6,7 +6,7 @@ use crate::{
     model::Track,
     offline_store::OfflineStore,
     search_text::{normalize_search_text, search_matches, search_score},
-    ui::widgets::ExpressiveLoadingIndicator,
+    ui::widgets::MaterialLoadingIndicator,
     youtube::{
         artist_credit_contains, credited_artists, youtube_cache_visual_state,
         youtube_collection_cache_key, youtube_collection_key, youtube_home_section_key,
@@ -5616,7 +5616,10 @@ fn youtube_home_loading_banner(page: &YouTubeHomePage, language: AppLanguage) ->
     row.set_margin_start(2);
     row.add_css_class("youtube-home-loading-row");
 
-    let indicator = ExpressiveLoadingIndicator::with_size(18);
+    let indicator = MaterialLoadingIndicator::with_size(18);
+    indicator
+        .widget()
+        .update_property(&[gtk::accessible::Property::Label(&message)]);
     row.append(indicator.widget());
 
     let label = gtk::Label::new(Some(&message));
@@ -6276,15 +6279,19 @@ fn home_card_button(
             }
 
             if is_loading {
-                let loading = ExpressiveLoadingIndicator::new();
-                control.set_child(Some(loading.widget()));
-                control.set_sensitive(false);
-                control.add_css_class("loading");
-                control.set_tooltip_text(Some(match language {
+                let loading_label = match language {
                     AppLanguage::Portuguese => "Carregando coleção…",
                     AppLanguage::English => "Loading collection…",
                     AppLanguage::Spanish => "Cargando colección…",
-                }));
+                };
+                let loading = MaterialLoadingIndicator::compact();
+                loading
+                    .widget()
+                    .update_property(&[gtk::accessible::Property::Label(loading_label)]);
+                control.set_child(Some(loading.widget()));
+                control.set_sensitive(false);
+                control.add_css_class("loading");
+                control.set_tooltip_text(Some(loading_label));
             } else {
                 let icon_name = if is_active && playback.playing {
                     "media-playback-pause-symbolic"
@@ -6313,15 +6320,19 @@ fn home_card_button(
                 control.connect_clicked(move |button| {
                     let active = button.has_css_class("active");
                     if inline_loading_on_click && !active {
-                        let loading = ExpressiveLoadingIndicator::new();
-                        button.set_child(Some(loading.widget()));
-                        button.set_sensitive(false);
-                        button.add_css_class("loading");
-                        button.set_tooltip_text(Some(match language {
+                        let loading_label = match language {
                             AppLanguage::Portuguese => "Carregando coleção…",
                             AppLanguage::English => "Loading collection…",
                             AppLanguage::Spanish => "Cargando colección…",
-                        }));
+                        };
+                        let loading = MaterialLoadingIndicator::compact();
+                        loading
+                            .widget()
+                            .update_property(&[gtk::accessible::Property::Label(loading_label)]);
+                        button.set_child(Some(loading.widget()));
+                        button.set_sensitive(false);
+                        button.add_css_class("loading");
+                        button.set_tooltip_text(Some(loading_label));
                     }
 
                     let event = if active {
@@ -8801,7 +8812,10 @@ fn empty_row(message: &str) -> gtk::ListBoxRow {
 }
 
 fn loading_row(message: &str) -> gtk::ListBoxRow {
-    let loading = ExpressiveLoadingIndicator::new();
+    let loading = MaterialLoadingIndicator::new();
+    loading
+        .widget()
+        .update_property(&[gtk::accessible::Property::Label(message)]);
     let label = gtk::Label::new(Some(message));
     label.add_css_class("dim-label");
 

@@ -6,9 +6,9 @@
 
 <!-- roadmap_rebaseline_2026_06_24_v2 -->
 
-> Last updated: 2026-06-30
+> Last updated: 2026-07-01
 > Status legend: ✅ completed · 🟡 in progress · ⬜ planned  
-> Current development priority: **YouTube Music Home — Android-parity feed sections**
+> Current development priority: **Material 3 Expressive visual-system consolidation**
 
 Nocky is a modern Linux music player built with Rust, GTK4 and Libadwaita,
 combining Material 3 Expressive ideas with close integration with the Noctalia
@@ -30,8 +30,8 @@ implemented areas list only the work still required.
 - Keep the compact footer focused on track information and utilities.
 - Respect reduced-motion preferences throughout the application.
 - Keep local-library and YouTube Music behavior clearly separated.
-- Use the Android fork's Home screen as the reference for the YouTube Music
-  Home: chips and section headers come from the structured YouTube feed.
+- Keep the completed Android-parity YouTube Music Home aligned with the
+  structured feed contract while visual-system work continues.
 - Never reserve invisible layout space for collapsed controls.
 - Prevent stale asynchronous results after rapid navigation or track changes.
 - Validate implementation changes with:
@@ -133,10 +133,9 @@ implemented areas list only the work still required.
 
 # Active development
 
-## 1. 🟡 Source-aware Home
+## 1. ✅ Source-aware Home
 
-Local personalized history is implemented. The active focus is aligning the
-YouTube Music Home with the Android fork: the online Home should be driven by
+Local personalized history is implemented, and the YouTube Music Home now uses
 YouTube-provided chips, headers, labels, thumbnails and endpoints rather than
 locally invented category filters.
 
@@ -163,7 +162,7 @@ locally invented category filters.
   downloads; cached artwork is reused immediately and fresh covers update
   afterward.
 
-### Remaining
+### Remaining follow-ups
 
 - ✅ Unified chronological recent activity for tracks, albums and playlists.
 - ✅ Resumable position directly on incomplete track cards.
@@ -182,7 +181,32 @@ locally invented category filters.
 
 ---
 
-## 2. 🟡 Richer album, artist and playlist cards
+## 2. 🟡 Material Expressive visual-system consolidation
+
+The active priority is making Nocky's reusable GTK widgets, loading states and
+surface treatments feel coherent with Material 3 Expressive while preserving
+Noctalia, Frosted Glass and dynamic album-palette identities.
+
+### Active checkpoint
+
+- 🟡 Reusable native Material Loading Indicator for page, inline/action and
+  load-more loading states.
+
+### Planned checkpoints
+
+- Expressive buttons and button-state motion.
+- Menus and contextual surfaces.
+- Dialogs and confirmation surfaces.
+- Switches, toggles and segmented controls.
+- Cards, containers and shape hierarchy.
+- Shared navigation transitions.
+- Global motion tokens.
+- Reduced-motion behavior.
+- Accessibility and contrast audit.
+
+---
+
+## 3. 🟡 Richer album, artist and playlist cards
 
 ### Implemented
 
@@ -208,7 +232,7 @@ locally invented category filters.
 
 ---
 
-## 3. 🟡 Categorized and incremental search
+## 4. 🟡 Categorized and incremental search
 
 ### Implemented
 
@@ -231,7 +255,7 @@ locally invented category filters.
 
 ---
 
-## 4. 🟡 YouTube Music robustness
+## 5. 🟡 YouTube Music robustness
 
 ### Implemented
 
@@ -272,7 +296,7 @@ locally invented category filters.
 
 ---
 
-## 5. 🟡 Synced lyrics
+## 6. 🟡 Synced lyrics
 
 ### Implemented
 
@@ -298,7 +322,7 @@ locally invented category filters.
 
 ---
 
-## 6. 🟡 Audio visualizer
+## 7. 🟡 Audio visualizer
 
 ### Implemented
 
@@ -322,7 +346,7 @@ locally invented category filters.
 
 # Next milestone
 
-## 7. ✅ Queue 2.0
+## 8. ✅ Queue 2.0
 
 Queue 2.0 is implemented across the source-aware data model, playback bridge,
 dedicated interface, persistence, shuffle history and recovery foundations.
@@ -380,7 +404,7 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 
 # Planned work
 
-## 8. ⬜ Shared transitions and navigation polish
+## 9. ⬜ Shared transitions and navigation polish
 
 - Animate artwork from a card into an album or artist header.
 - Return artwork toward its original card while navigating back.
@@ -389,7 +413,7 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - Preserve focus, keyboard navigation and screen-reader context.
 - Provide reduced-motion alternatives.
 
-## 9. ⬜ Accessibility, responsiveness and performance
+## 10. ⬜ Accessibility, responsiveness and performance
 
 - Complete keyboard navigation across every view and popover.
 - Audit focus order and visible focus rings.
@@ -402,7 +426,7 @@ dedicated interface, persistence, shuffle history and recovery foundations.
 - Profile CPU and memory during long playback sessions.
 - Add power-saving behavior for animation-heavy components.
 
-## 10. ⬜ Source-module reorganization
+## 11. ⬜ Source-module reorganization
 
 Reorganize the current flat `src/` layout into domain-focused modules after the
 0.3.2 reliability work, when feature churn is lower and large file moves will
@@ -426,7 +450,7 @@ create less review and merge noise.
 - Do not cherry-pick the older fork commit directly because the current
   codebase has diverged substantially.
 
-## 11. ⬜ Packaging and release readiness
+## 12. ⬜ Packaging and release readiness
 
 - Final Flatpak permission review.
 - Stable application ID and desktop metadata.
@@ -447,13 +471,14 @@ create less review and merge noise.
 3. ✅ Integrate previous, next, repeat and shuffle with the new queue.
 4. ✅ Build the dedicated Queue 2.0 interface.
 5. ✅ Persist and restore queue state.
-6. 🟡 Complete Personalized Home with recently added music, empty states and time-window filters.
+6. 🟡 Consolidate Material Expressive loading indicators and visual-system primitives.
 7. Finish card actions and loading placeholders.
 8. Finish search pagination, caching and keyboard navigation.
 9. Harden YouTube unavailable-track and recovery behavior.
-10. Add shared card-to-page transitions.
-11. Reorganize source modules by domain after reliability stabilization.
-12. Finish lyrics, visualizer, accessibility and release polish.
+10. Resume remote playlist metadata editing, removal and deletion checkpoints.
+11. Add shared card-to-page transitions.
+12. Reorganize source modules by domain after reliability stabilization.
+13. Finish lyrics, visualizer, accessibility and release polish.
 
 ---
 
