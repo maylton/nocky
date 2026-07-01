@@ -28,7 +28,7 @@ pub(super) fn install(root: &gtk::Stack) {
     });
 }
 
-fn find_home_stack(widget: &gtk::Widget) -> Option<gtk::Stack> {
+pub(super) fn find_home_stack(widget: &gtk::Widget) -> Option<gtk::Stack> {
     if let Ok(stack) = widget.clone().downcast::<gtk::Stack>() {
         let mut child = stack.first_child();
         while let Some(current) = child {
