@@ -1,3 +1,4 @@
+#[path = "home_density/presentation.rs"]
 mod presentation;
 
 use gtk::{glib, prelude::*};
