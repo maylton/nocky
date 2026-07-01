@@ -33,10 +33,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-        with:
-          ref: codex/home-v2-raw-innertube-artwork-pr85
-          fetch-depth: 2
-          persist-credentials: false
 
       - name: Install system dependencies
         shell: bash
@@ -52,7 +48,6 @@ jobs:
             gstreamer1-devel \
             gstreamer1-plugins-base-devel \
             gtk4-devel \
-            gzip \
             libadwaita-devel \
             make \
             openssl-devel \
@@ -74,87 +69,6 @@ jobs:
 
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
-      - name: Apply one-shot performance pass
-        id: apply
-        shell: bash
-        run: |
-          payload="$(sed -n 's/^          \(H4sI.*\)$/\1/p' .github/workflows/apply-performance-pass.yml)"
-          test -n "$payload"
-          printf '%s' "$payload" | base64 -d | gzip -d > /tmp/apply_performance_pass.py
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path('/tmp/apply_performance_pass.py')
-          source = path.read_text(encoding='utf-8')
-          old = '''browser = replace_once(
-              browser,
-              "    card_effects: bool,\\n) -> gtk::Box {\\n    let title_label = gtk::Label::new(Some(title));\\n",
-              "    _card_effects: bool,\\n) -> gtk::Box {\\n    let title_label = gtk::Label::new(Some(title));\\n",
-              "history unused motion parameter",
-          )'''
-          new = '''browser = replace_once(
-              browser,
-              "fn home_history_section(\\n    title: &str,\\n    subtitle: &str,\\n    empty_detail: &str,\\n    entries: Vec<HomeHistoryTrack>,\\n    event_tx: &Sender<BrowserEvent>,\\n    language: AppLanguage,\\n    card_effects: bool,\\n) -> gtk::Box {\\n",
-              "fn home_history_section(\\n    title: &str,\\n    subtitle: &str,\\n    empty_detail: &str,\\n    entries: Vec<HomeHistoryTrack>,\\n    event_tx: &Sender<BrowserEvent>,\\n    language: AppLanguage,\\n    _card_effects: bool,\\n) -> gtk::Box {\\n",
-              "history unused motion parameter",
-          )'''
-          if source.count(old) != 1:
-              raise SystemExit('could not specialize home_history_section transform')
-          path.write_text(source.replace(old, new, 1), encoding='utf-8')
-          PY
-          python3 -m py_compile /tmp/apply_performance_pass.py
-          set +e
-          python3 /tmp/apply_performance_pass.py > /tmp/performance-pass.log 2>&1
-          status=$?
-          set -e
-          printf 'exit_status=%s\n' "$status" >> /tmp/performance-pass.log
-          if [ "$status" -eq 0 ]; then
-            git show HEAD^:.github/workflows/ci.yml > .github/workflows/ci.yml
-            cargo fmt --all >> /tmp/performance-pass.log 2>&1
-            git diff --check >> /tmp/performance-pass.log 2>&1
-            echo "success=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "success=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Upload transformation diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: nocky-performance-diagnostics
-          path: /tmp/performance-pass.log
-          if-no-files-found: error
-          retention-days: 1
-
       - name: Run quality gate
-        if: steps.apply.outputs.success == 'true'
         shell: bash
         run: bash ./scripts/quality-gate.sh
-
-      - name: Package validated source files
-        if: steps.apply.outputs.success == 'true'
-        shell: bash
-        run: |
-          tar -czf /tmp/nocky-performance-pass.tar.gz \
-            ROADMAP.md \
-            docs/PERFORMANCE_AUDIT.md \
-            docs/PERFORMANCE_VALIDATION.md \
-            src/browser.rs \
-            src/browser/home_performance.rs \
-            src/ui/widgets/artwork_cache.rs \
-            src/ui/widgets/mod.rs \
-            src/ui/widgets/cover.rs \
-            src/app/controller/background.rs \
-            src/app/controller/queue_layout.rs \
-            src/app/controller/mod.rs \
-            src/app/controller/queue_presentation.rs \
-            src/youtube/mod.rs
-
-      - name: Upload validated source files
-        if: steps.apply.outputs.success == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: nocky-performance-pass
-          path: /tmp/nocky-performance-pass.tar.gz
-          if-no-files-found: error
-          retention-days: 1
