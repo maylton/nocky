@@ -4,6 +4,11 @@ This document defines the Phase 12D review boundary for remote playlist
 operations. It authorizes only model and validation work. It does not authorize
 network mutations, UI controls, or persistence changes.
 
+Implementation status is tracked in `PHASE12_STATUS.md`. The architecture gate,
+read-only editability metadata, empty-playlist creation and native single-track
+addition slices have shipped. Metadata edits, item removal and playlist deletion
+remain separate checkpoints.
+
 ## Runtime baseline
 
 Nocky currently pins `ytmusicapi==1.12.1`.
