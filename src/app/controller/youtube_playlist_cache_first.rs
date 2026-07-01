@@ -106,8 +106,8 @@ impl AppController {
         let signature = playlist_snapshot_signature(&library.playlists, &library.playlist_tracks);
         drop(library);
 
-        LAST_SNAPSHOT_SIGNATURE.set(signature);
-        PENDING_REVALIDATION.replace(playlists);
+        set_last_snapshot_signature(signature);
+        replace_pending_revalidation(playlists);
 
         if restored > 0 {
             eprintln!("Restored {restored} YouTube playlist snapshots for cache-first rendering");
@@ -115,9 +115,9 @@ impl AppController {
     }
 
     pub(crate) fn poll_playlist_snapshot_revalidation(&self) {
-        let running = REVALIDATION_RUNNING.get();
+        let running = revalidation_running();
         if running && !self.youtube_playlist_prefetching.get() {
-            REVALIDATION_RUNNING.set(false);
+            set_revalidation_running(false);
             if matches!(
                 self.browser.route(),
                 crate::browser::BrowserRoute::YouTubePlaylist { .. }
@@ -134,18 +134,18 @@ impl AppController {
             return;
         }
 
-        let playlists = PENDING_REVALIDATION.take();
+        let playlists = take_pending_revalidation();
         if playlists.is_empty() {
             return;
         }
 
         let Some(bridge) = self.youtube_bridge.clone() else {
-            PENDING_REVALIDATION.replace(playlists);
+            replace_pending_revalidation(playlists);
             return;
         };
 
         self.youtube_playlist_prefetching.set(true);
-        REVALIDATION_RUNNING.set(true);
+        set_revalidation_running(true);
         let sender = self.background.sender();
 
         thread::spawn(move || {
@@ -205,13 +205,12 @@ impl AppController {
         {
             drop(library);
             clear_playlist_first_paint_snapshot();
-            LAST_SNAPSHOT_SIGNATURE.set(0);
-            PENDING_REVALIDATION.take();
+            set_last_snapshot_signature(0);
+            take_pending_revalidation();
             return;
         }
 
-        if REVALIDATION_RUNNING.get() || !PENDING_REVALIDATION.with(|pending| pending.borrow().is_empty())
-        {
+        if revalidation_running() || !pending_revalidation_is_empty() {
             return;
         }
 
@@ -237,10 +236,10 @@ impl AppController {
         }
 
         let signature = playlist_snapshot_signature(&playlists, &playlist_tracks);
-        if LAST_SNAPSHOT_SIGNATURE.get() == signature {
+        if last_snapshot_signature() == signature {
             return;
         }
-        LAST_SNAPSHOT_SIGNATURE.set(signature);
+        set_last_snapshot_signature(signature);
         drop(library);
 
         let snapshot = PlaylistFirstPaintSnapshot {
@@ -255,6 +254,36 @@ impl AppController {
             }
         });
     }
+}
+
+fn replace_pending_revalidation(playlists: Vec<YouTubeItem>) {
+    PENDING_REVALIDATION.with(|pending| {
+        pending.replace(playlists);
+    });
+}
+
+fn take_pending_revalidation() -> Vec<YouTubeItem> {
+    PENDING_REVALIDATION.with(RefCell::take)
+}
+
+fn pending_revalidation_is_empty() -> bool {
+    PENDING_REVALIDATION.with(|pending| pending.borrow().is_empty())
+}
+
+fn revalidation_running() -> bool {
+    REVALIDATION_RUNNING.with(Cell::get)
+}
+
+fn set_revalidation_running(running: bool) {
+    REVALIDATION_RUNNING.with(|state| state.set(running));
+}
+
+fn last_snapshot_signature() -> u64 {
+    LAST_SNAPSHOT_SIGNATURE.with(Cell::get)
+}
+
+fn set_last_snapshot_signature(signature: u64) {
+    LAST_SNAPSHOT_SIGNATURE.with(|state| state.set(signature));
 }
 
 fn load_playlist_first_paint_snapshot() -> Option<PlaylistFirstPaintSnapshot> {
