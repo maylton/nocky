@@ -5145,182 +5145,6 @@ fn attach_home_column_cards(rail: &gtk::Box, cards: &[gtk::Widget], rows: i32, r
     }
 }
 
-fn set_home_card_label_width(label: &gtk::Label, presentation: HomeSectionPresentation) {
-    let width_chars = match presentation {
-        HomeSectionPresentation::Featured => 24,
-        HomeSectionPresentation::Compact => 16,
-        HomeSectionPresentation::TrackRows => 32,
-    };
-    label.set_width_chars(width_chars);
-    label.set_max_width_chars(width_chars);
-}
-
-fn apply_home_card_widget_presentation(card: &gtk::Box, presentation: HomeSectionPresentation) {
-    card.set_size_request(presentation.card_width(), presentation.card_height());
-    card.set_spacing(match presentation {
-        HomeSectionPresentation::TrackRows => 10,
-        HomeSectionPresentation::Featured => 7,
-        HomeSectionPresentation::Compact => 5,
-    });
-    card.set_margin_top(match presentation {
-        HomeSectionPresentation::TrackRows => 2,
-        _ => 8,
-    });
-    card.set_margin_bottom(match presentation {
-        HomeSectionPresentation::TrackRows => 2,
-        _ => 8,
-    });
-    card.set_margin_end(match presentation {
-        HomeSectionPresentation::Compact => 4,
-        HomeSectionPresentation::TrackRows => 4,
-        HomeSectionPresentation::Featured => 8,
-    });
-
-    card.remove_css_class("home-card-featured");
-    card.remove_css_class("home-card-compact");
-    card.remove_css_class("home-track-card");
-    match presentation {
-        HomeSectionPresentation::Featured => card.add_css_class("home-card-featured"),
-        HomeSectionPresentation::Compact => card.add_css_class("home-card-compact"),
-        HomeSectionPresentation::TrackRows => card.add_css_class("home-track-card"),
-    }
-
-    let artwork_size = presentation.artwork_size();
-    if let Some(artwork_overlay) = card
-        .first_child()
-        .and_then(|child| child.downcast::<gtk::Overlay>().ok())
-    {
-        artwork_overlay.set_size_request(artwork_size, artwork_size);
-        if let Some(artwork) = artwork_overlay.child() {
-            artwork.set_size_request(artwork_size, artwork_size);
-        }
-    }
-
-    let mut child = card.first_child();
-    while let Some(current) = child {
-        child = current.next_sibling();
-        if let Ok(label) = current.clone().downcast::<gtk::Label>() {
-            set_home_card_label_width(&label, presentation);
-            if label.has_css_class("collection-card-detail") {
-                label.set_visible(presentation != HomeSectionPresentation::Compact);
-            }
-        } else if let Ok(container) = current.downcast::<gtk::Box>() {
-            let mut nested = container.first_child();
-            while let Some(current) = nested {
-                nested = current.next_sibling();
-                if let Ok(label) = current.downcast::<gtk::Label>() {
-                    set_home_card_label_width(&label, presentation);
-                    if label.has_css_class("collection-card-detail") {
-                        label.set_visible(presentation != HomeSectionPresentation::Compact);
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn apply_home_card_button_presentation(
-    widget: &gtk::Widget,
-    presentation: HomeSectionPresentation,
-) {
-    widget.set_size_request(presentation.outer_width(), presentation.outer_height());
-
-    let Some(button) = widget
-        .first_child()
-        .and_then(|child| child.downcast::<gtk::Button>().ok())
-    else {
-        return;
-    };
-    button.set_size_request(presentation.outer_width(), presentation.outer_height());
-
-    if let Some(card) = button
-        .child()
-        .and_then(|child| child.downcast::<gtk::Box>().ok())
-    {
-        apply_home_card_widget_presentation(&card, presentation);
-    }
-}
-
-fn material_carousel_focus_index(
-    cards: &[gtk::Widget],
-    rail: &gtk::Box,
-    scroll: &gtk::ScrolledWindow,
-) -> usize {
-    let lead_edge = scroll.hadjustment().value() + 48.0;
-    cards
-        .iter()
-        .enumerate()
-        .find_map(|(index, card)| {
-            let bounds = card.compute_bounds(rail)?;
-            let trailing_edge = bounds.x() as f64 + bounds.width() as f64;
-            (trailing_edge >= lead_edge).then_some(index)
-        })
-        .unwrap_or(0)
-}
-
-fn update_material_carousel_focus(
-    cards: &[gtk::Widget],
-    rail: &gtk::Box,
-    scroll: &gtk::ScrolledWindow,
-    current_focus: &Cell<usize>,
-) {
-    if cards.is_empty() || !scroll.is_mapped() {
-        return;
-    }
-
-    let focus = material_carousel_focus_index(cards, rail, scroll);
-    if current_focus.replace(focus) == focus {
-        return;
-    }
-
-    for (index, card) in cards.iter().enumerate() {
-        apply_home_card_button_presentation(
-            card,
-            material_carousel_item_presentation(
-                HomeSectionPresentation::Featured,
-                index.abs_diff(focus),
-            ),
-        );
-    }
-}
-
-fn install_material_featured_carousel_focus(
-    scroll: &gtk::ScrolledWindow,
-    rail: &gtk::Box,
-    cards: Vec<gtk::Widget>,
-) {
-    let cards = Rc::new(cards);
-    let current_focus = Rc::new(Cell::new(usize::MAX));
-
-    {
-        let cards = cards.clone();
-        let rail = rail.clone();
-        let current_focus = current_focus.clone();
-        scroll.connect_map(move |scroll| {
-            update_material_carousel_focus(&cards, &rail, scroll, &current_focus);
-        });
-    }
-
-    {
-        let cards = cards.clone();
-        let rail = rail.clone();
-        let scroll = scroll.clone();
-        let current_focus = current_focus.clone();
-        scroll.hadjustment().connect_value_changed(move |_| {
-            update_material_carousel_focus(&cards, &rail, &scroll, &current_focus);
-        });
-    }
-
-    {
-        let cards = cards.clone();
-        let rail = rail.clone();
-        let current_focus = current_focus.clone();
-        scroll.connect_notify_local(Some("width"), move |scroll, _| {
-            update_material_carousel_focus(&cards, &rail, scroll, &current_focus);
-        });
-    }
-}
-
 fn set_home_scroller_height(scroll: &gtk::ScrolledWindow, height: i32) {
     scroll.set_max_content_height(-1);
     scroll.set_min_content_height(height);
@@ -5443,18 +5267,14 @@ fn metrolist_home_section_content(
         scroll
     } else {
         let rail = metrolist_home_rail(presentation);
-        for card in &cards {
-            rail.append(card);
+        for card in cards {
+            rail.append(&card);
         }
-        let scroll = metrolist_home_scroller(
+        metrolist_home_scroller(
             &rail,
             presentation.scroller_height(1),
             presentation.scrollbar_gap(),
-        );
-        if presentation == HomeSectionPresentation::Featured {
-            install_material_featured_carousel_focus(&scroll, &rail, cards);
-        }
-        scroll
+        )
     }
 }
 

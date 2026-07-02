@@ -41,9 +41,6 @@ physics intact:
 - Featured visual rails now follow the Material multi-browse composition: the
   first visible item is large, while trailing items use the compact card
   geometry to create the peek-and-browse effect from the M3 carousel reference.
-- While scrolling a featured rail, the large item follows the first
-  substantially visible card, approximating the animated M3 carousel focus
-  change without replacing GTK's native scrolling.
 - Chip rails are not Material carousels because they are filter controls rather
   than visual item collections.
 - Home card action controls now expose Material card-action roles while keeping
@@ -59,7 +56,7 @@ Automated validation for this checkpoint is `cargo fmt`, `git diff --check` and
 `cargo test`. Manual validation should cover Material Expressive Home
 carousels, collection grids and compact artist rows at narrow and wide widths.
 
-The continuous item morphing shown in the animated M3 reference is approximated
-with discrete focus changes driven by horizontal scroll position. A later
-checkpoint can add frame-by-frame interpolation if manual validation shows the
-discrete focus step is too abrupt.
+The continuous item morphing shown in the animated M3 reference requires a
+separate scroll-position-driven checkpoint. This checkpoint implements the
+static multi-browse composition first so sizing and card hierarchy can be
+validated before frame-by-frame resizing is introduced.
