@@ -42,6 +42,10 @@ const MATERIAL_EXPRESSIVE_MODULES: &[(&str, &str)] = &[
         include_str!("../assets/themes/material-expressive/080-home-browser.css"),
     ),
     (
+        "081-carousel-motion.css",
+        include_str!("../assets/themes/material-expressive/081-carousel-motion.css"),
+    ),
+    (
         "085-compact-volume.css",
         include_str!("../assets/themes/material-expressive/085-compact-volume.css"),
     ),
@@ -118,9 +122,26 @@ mod tests {
             ".material-button-outlined",
             ".material-button-text",
             ".material-button-loading",
+            ".material-carousel-motion-installed",
+            ".material-carousel-item-large",
+            ".material-carousel-item-medium",
+            ".material-carousel-item-small",
         ] {
             assert!(css.contains(required), "missing required CSS: {required}");
         }
+    }
+
+    #[test]
+    fn material_typography_prefers_google_sans_flex_without_leaking_to_other_themes() {
+        let foundation_css = MATERIAL_EXPRESSIVE_MODULES
+            .iter()
+            .find_map(|(name, css)| (*name == "000-foundation.css").then_some(*css))
+            .expect("000-foundation.css module should be registered");
+
+        assert!(foundation_css.contains("font-family: \"Google Sans Flex\""));
+        assert!(foundation_css.contains("window.theme-material-expressive"));
+        assert!(!foundation_css.contains("theme-noctalia"));
+        assert!(!foundation_css.contains("theme-frosted-glass"));
     }
 
     #[test]
@@ -185,6 +206,29 @@ mod tests {
             .expect("099-loading-indicator.css module should be registered");
 
         assert!(!loading_css.contains("theme-noctalia"));
+    }
+
+    #[test]
+    fn material_carousel_motion_is_scoped_and_loaded_after_home_geometry() {
+        let names = MATERIAL_EXPRESSIVE_MODULES
+            .iter()
+            .map(|(name, _)| *name)
+            .collect::<Vec<_>>();
+        let home_index = names
+            .iter()
+            .position(|name| *name == "080-home-browser.css")
+            .expect("Home module should be registered");
+        let motion_index = names
+            .iter()
+            .position(|name| *name == "081-carousel-motion.css")
+            .expect("Carousel motion module should be registered");
+        assert!(motion_index > home_index);
+
+        let motion_css = MATERIAL_EXPRESSIVE_MODULES[motion_index].1;
+        assert!(motion_css.contains("window.theme-material-expressive"));
+        assert!(motion_css.contains("min-width: 0;"));
+        assert!(!motion_css.contains("theme-noctalia"));
+        assert!(!motion_css.contains("theme-frosted-glass"));
     }
 
     #[test]
