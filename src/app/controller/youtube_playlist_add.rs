@@ -9,6 +9,9 @@ use crate::{
     app::state::PlaybackSource,
     browser::BrowserRoute,
     config::AppLanguage,
+    ui::widgets::material_button::{
+        apply_material_button, MaterialButtonSize, MaterialButtonSpec, MaterialButtonVariant,
+    },
     youtube::{cache_items_for_browser, YouTubeItem},
 };
 use gtk::prelude::*;
@@ -274,8 +277,13 @@ impl AppController {
         button.set_tooltip_text(Some(tooltip));
         button.set_valign(gtk::Align::Center);
         button.set_sensitive(!pending);
-        button.add_css_class("pill");
-        button.add_css_class("suggested-action");
+        apply_material_button(
+            &button,
+            MaterialButtonSpec::new(
+                MaterialButtonVariant::FilledTonal,
+                MaterialButtonSize::Compact,
+            ),
+        );
         button.add_css_class("youtube-playlist-add-current");
 
         let sender = request_channel().0.clone();

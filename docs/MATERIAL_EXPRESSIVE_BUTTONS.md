@@ -115,6 +115,7 @@ but their existing motion and layout ownership must remain intact.
 | YouTube search and sync | `src/youtube/mod.rs` | suggested actions | filled and filled tonal buttons | hover, focus, pressed, disabled | migrated |
 | YouTube private navigation | `src/youtube/mod.rs` | pill actions | assist/suggestion chips | hover, focus, pressed, disabled | migrated |
 | YouTube create playlist dialog | `src/youtube/playlist_create.rs` | suggested/flat dialog actions | filled and text buttons | hover, focus, pressed, disabled | migrated |
+| YouTube add current to playlist | `src/app/controller/youtube_playlist_add.rs` | suggested pill action | filled tonal button | hover, focus, pressed, disabled, pending | migrated |
 
 ## Foundation class contract
 
@@ -224,6 +225,8 @@ The second YouTube action batch migrated:
 3. Private YouTube navigation — assist chips plus create-playlist suggestion
    chip.
 4. Create-playlist dialog actions — cancel text, create filled.
+5. Add-current-to-playlist action — filled tonal compact with pending disabled
+   state preserved.
 
 ## Loading contract for a later checkpoint
 

@@ -1298,7 +1298,6 @@ impl YouTubePage {
         ]);
         filter.set_selected(0);
         let search_button = gtk::Button::with_label("Buscar");
-        search_button.add_css_class("suggested-action");
         let search_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         search_row.append(&search_entry);
         search_row.append(&filter);
