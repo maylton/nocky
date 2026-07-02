@@ -84,10 +84,7 @@ mod tests {
 
     #[test]
     fn variants_map_to_expected_classes() {
-        assert_eq!(
-            MaterialButtonVariant::Filled.css_class(),
-            "material-button-filled"
-        );
+        assert_eq!(MaterialButtonVariant::Filled.css_class(), "material-button-filled");
         assert_eq!(
             MaterialButtonVariant::FilledTonal.css_class(),
             "material-button-filled-tonal"
