@@ -348,7 +348,11 @@ fn align_carousel_child(item: &gtk::Widget, alignment: gtk::Align) {
     }
 }
 
-fn collect_descendants_with_css(root: &gtk::Widget, class_name: &str, output: &mut Vec<gtk::Widget>) {
+fn collect_descendants_with_css(
+    root: &gtk::Widget,
+    class_name: &str,
+    output: &mut Vec<gtk::Widget>,
+) {
     if root.has_css_class(class_name) {
         output.push(root.clone());
         return;
