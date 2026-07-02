@@ -68,4 +68,12 @@ impl MaterialButtonSpec {
         self.semantic = semantic;
         self
     }
+
+    pub fn css_classes(self) -> Vec<&'static str> {
+        let mut classes = vec![self.variant.css_class(), self.size.css_class()];
+        if self.semantic == MaterialButtonSemantic::Destructive {
+            classes.push("material-button-destructive");
+        }
+        classes
+    }
 }
