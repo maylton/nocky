@@ -1,7 +1,8 @@
 use crate::{
     config::{AppConfig, AppLanguage, YouTubeStreamSources},
     ui::widgets::material_button::{
-        apply_material_button, MaterialButtonSize, MaterialButtonSpec, MaterialButtonVariant,
+        apply_material_button, apply_material_icon_button, MaterialButtonSize, MaterialButtonSpec,
+        MaterialButtonVariant, MaterialIconButtonSpec, MaterialIconButtonVariant,
     },
 };
 use adw::prelude::*;
@@ -282,7 +283,10 @@ impl DialogState {
             copy.append(&detail);
 
             let up = gtk::Button::from_icon_name("go-up-symbolic");
-            up.add_css_class("flat");
+            apply_material_icon_button(
+                &up,
+                MaterialIconButtonSpec::new(MaterialIconButtonVariant::Standard),
+            );
             up.set_sensitive(index > 0);
             up.set_tooltip_text(Some(text(
                 self.language,
@@ -292,7 +296,10 @@ impl DialogState {
             )));
 
             let down = gtk::Button::from_icon_name("go-down-symbolic");
-            down.add_css_class("flat");
+            apply_material_icon_button(
+                &down,
+                MaterialIconButtonSpec::new(MaterialIconButtonVariant::Standard),
+            );
             down.set_sensitive(index + 1 < current.order.len());
             down.set_tooltip_text(Some(text(
                 self.language,

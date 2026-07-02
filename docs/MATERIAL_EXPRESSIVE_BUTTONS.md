@@ -97,7 +97,7 @@ but their existing motion and layout ownership must remain intact.
 | Onboarding next | `src/onboarding.rs` | suggested action | filled tonal button | hover, focus, pressed | migrated |
 | Onboarding finish | `src/onboarding.rs` | suggested action | filled button | hover, focus, pressed | migrated |
 | Stream source configure | `src/ui/settings/stream_sources.rs` | suggested action | filled tonal button | hover, focus, pressed | migrated |
-| Stream source move up/down | `src/ui/settings/stream_sources.rs` | flat icon buttons | standard icon buttons | hover, focus, pressed, disabled | later icon checkpoint |
+| Stream source move up/down | `src/ui/settings/stream_sources.rs` | flat icon buttons | standard icon buttons | hover, focus, pressed, disabled | migrated |
 | Stream source reset | `src/ui/settings/stream_sources.rs` | flat labeled button | text button | hover, focus, pressed | migrated |
 | Assisted-login cancel | `src/youtube/assisted_login.rs` | flat labeled button | text button | hover, focus, pressed | migrated |
 | Home card surface | `src/browser.rs` | full-card button | clickable surface, not common button | hover, focus, pressed, playing | preserve architecture |
@@ -211,6 +211,8 @@ The first icon-button batch migrated:
    with selected state on the lyrics toggle.
 3. Footer lyrics and mute — standard icon buttons with selected state on the
    lyrics toggle.
+4. Stream-source move up/down controls — standard icon buttons with disabled
+   bounds preserved.
 
 The first chip batch migrated:
 
