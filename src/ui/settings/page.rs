@@ -3,7 +3,13 @@ use crate::{
     dialogs::SettingsEvent,
     i18n::{self, Message},
     offline_store::OfflineStore,
-    ui::widgets::{AnimatedPageSpec, AnimatedPageSwitcher},
+    ui::widgets::{
+        material_button::{
+            apply_material_button, set_material_button_selected, MaterialButtonSemantic,
+            MaterialButtonSize, MaterialButtonSpec, MaterialButtonVariant,
+        },
+        AnimatedPageSpec, AnimatedPageSwitcher,
+    },
     youtube::diagnostics::{self as youtube_diagnostics, DiagnosticCheck, DiagnosticState},
 };
 use adw::prelude::*;
@@ -480,7 +486,11 @@ fn build_content(
         "Clear history",
         "Borrar historial",
     ));
-    clear_history.add_css_class("destructive-action");
+    apply_material_button(
+        &clear_history,
+        MaterialButtonSpec::new(MaterialButtonVariant::Outlined, MaterialButtonSize::Compact)
+            .with_semantic(MaterialButtonSemantic::Destructive),
+    );
     playback_rows.append(&button_row(
         group_text(
             "Apagar atividade salva",
@@ -543,8 +553,10 @@ fn build_content(
     ));
 
     let youtube_button = gtk::Button::with_label(tr(Message::YoutubeManageAction));
-    youtube_button.add_css_class("suggested-action");
-    youtube_button.add_css_class("settings-primary-action");
+    apply_material_button(
+        &youtube_button,
+        MaterialButtonSpec::new(MaterialButtonVariant::Filled, MaterialButtonSize::Compact),
+    );
     youtube_rows.append(&button_row(
         tr(Message::YoutubeManage),
         tr(Message::YoutubeManageDescription),
@@ -593,6 +605,10 @@ fn build_content(
 
     let open_offline_folder =
         gtk::Button::with_label(group_text("Abrir pasta", "Open folder", "Abrir carpeta"));
+    apply_material_button(
+        &open_offline_folder,
+        MaterialButtonSpec::new(MaterialButtonVariant::Outlined, MaterialButtonSize::Compact),
+    );
     youtube_rows.append(&button_row(
         group_text(
             "Local dos arquivos",
@@ -666,7 +682,11 @@ fn build_content(
         "View diagnostics",
         "Ver diagnóstico",
     ));
-    diagnostics_toggle.add_css_class("settings-row-action");
+    apply_material_button(
+        &diagnostics_toggle,
+        MaterialButtonSpec::new(MaterialButtonVariant::Text, MaterialButtonSize::Compact),
+    );
+    set_material_button_selected(&diagnostics_toggle, false);
 
     youtube_rows.append(&row_with_control(
         group_text(
@@ -911,6 +931,7 @@ fn build_content(
         diagnostics_toggle.connect_clicked(move |button| {
             let reveal = !revealer.reveals_child();
             revealer.set_reveal_child(reveal);
+            set_material_button_selected(button, reveal);
             button.set_label(match (language, reveal) {
                 (AppLanguage::Portuguese, true) => "Ocultar diagnóstico",
                 (AppLanguage::English, true) => "Hide diagnostics",

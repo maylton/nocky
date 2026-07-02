@@ -8,9 +8,11 @@ Reference: <https://m3.material.io/components/all-buttons>
 ## Status
 
 - Foundation CSS: implemented in `100-buttons.css`.
-- Existing controls migrated: none yet.
-- Visual behavior changed: none yet; the new classes are opt-in.
-- Next step: introduce the GTK helper API and migrate four Settings pilots.
+- Shared Rust class contract: implemented in `material_button.rs`.
+- Existing controls migrated: four Settings pilots.
+- Visual behavior changed only for the four explicitly audited pilots.
+- Local automated validation passes with the broader surface-isolation fixes.
+- Next step: continue the labeled/loading button checkpoints after review.
 
 The inventory below records the currently identified button families. It will be
 expanded to one row per construction site before the checkpoint is marked ready
@@ -71,12 +73,12 @@ but their existing motion and layout ownership must remain intact.
 | Footer transport | `src/ui/footer/transport.rs` | custom transport buttons | keep `ExpressiveTransport` | hover, focus, pressed, playing | preserve architecture |
 | Footer lyrics | `src/ui/footer/utilities.rs` | toggle icon | toggle icon button | hover, focus, pressed, selected | later icon checkpoint |
 | Footer mute | `src/ui/footer/utilities.rs` | flat icon | toggle-like icon button | hover, focus, pressed, muted | later icon checkpoint |
-| Settings clear history | `src/ui/settings/page.rs` | destructive labeled button | destructive outlined | hover, focus, pressed, confirmation | pilot candidate |
-| Settings manage YouTube | `src/ui/settings/page.rs` | suggested primary action | filled button | hover, focus, pressed, loading | pilot candidate |
-| Settings open offline folder | `src/ui/settings/page.rs` | generic labeled button | outlined button | hover, focus, pressed | pilot candidate |
+| Settings clear history | `src/ui/settings/page.rs` | destructive labeled button | destructive outlined | hover, focus, pressed, confirmation | pilot migrated |
+| Settings manage YouTube | `src/ui/settings/page.rs` | suggested primary action | filled button | hover, focus, pressed, loading | pilot migrated |
+| Settings open offline folder | `src/ui/settings/page.rs` | generic labeled button | outlined button | hover, focus, pressed | pilot migrated |
 | Settings clean partials | `src/ui/settings/page.rs` | generic labeled button | filled tonal button | hover, focus, pressed, disabled, loading | labeled/loading checkpoint |
 | Settings remove downloads | `src/ui/settings/page.rs` | destructive labeled button | destructive filled tonal | hover, focus, pressed, disabled, confirmation | labeled checkpoint |
-| Settings diagnostics disclosure | `src/ui/settings/page.rs` | row action | text button | hover, focus, pressed, selected/disclosed | pilot candidate |
+| Settings diagnostics disclosure | `src/ui/settings/page.rs` | row action | text button | hover, focus, pressed, selected/disclosed | pilot migrated |
 | Settings diagnostics rerun | `src/ui/settings/page.rs` | row action | filled tonal button | hover, focus, pressed, disabled, loading | loading checkpoint |
 | Settings copy report | `src/ui/settings/page.rs` | primary row action | filled button | hover, focus, pressed, success feedback | labeled checkpoint |
 | Settings about | `src/ui/settings/page.rs` | primary row action | filled tonal button | hover, focus, pressed | labeled checkpoint |
@@ -115,16 +117,17 @@ classes such as `suggested-action`, `destructive-action`, `pill`, and `flat`.
 During migration, old classes must be removed from each audited control to avoid
 cascade conflicts.
 
-## Pilot migration plan
+## Pilot migration result
 
-The first GTK helper integration will migrate exactly four Settings controls:
+The first GTK helper integration migrates exactly four Settings controls:
 
 1. Manage YouTube — filled.
 2. Open offline folder — outlined.
 3. Clear listening history — destructive outlined.
-4. Diagnostics disclosure — text.
+4. Diagnostics disclosure — text with selected state while expanded.
 
-No other control will be changed in that commit.
+No transport control, card surface, page switcher or unrelated Settings action
+is changed by this checkpoint.
 
 ## Loading contract for a later checkpoint
 
@@ -136,7 +139,10 @@ state on success, failure or cancellation.
 
 ## Manual validation matrix
 
-Manual validation is deferred until the first pilot controls are wired. At that
-point validate Material Expressive, Noctalia and Frosted Glass in light/dark
-contexts, keyboard focus, hover, pressed, disabled, selected, loading, reduced
-motion, narrow layouts and all supported interface languages.
+Validate the four pilots in Material Expressive, Noctalia and Frosted Glass,
+including keyboard focus, hover, pressed, disabled and selected states. Loading,
+reduced-motion behavior and the remaining interface languages stay in the
+later checkpoints where those states are actually introduced.
+
+Automated validation for this checkpoint was run with `cargo fmt` and
+`cargo test`.

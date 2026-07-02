@@ -179,12 +179,10 @@ button.material-button.material-button-loading .expressive-loading-indicator {
 .theme-material-expressive button.material-button:focus-visible {
   outline: none;
   background-image: none;
-}
-
-.theme-material-expressive button.material-button:focus-visible {
   box-shadow: 0 0 0 3px alpha(@m3_primary, 0.34);
 }
 
+.theme-material-expressive button.material-button-destructive:focus,
 .theme-material-expressive button.material-button-destructive:focus-visible {
   box-shadow: 0 0 0 3px alpha(@m3_error, 0.34);
 }
@@ -226,6 +224,20 @@ button.material-button.material-button-loading .expressive-loading-indicator {
   background-image: none;
 }
 
+.theme-noctalia button.material-button-selected {
+  color: @accent_fg_color;
+  background-color: @accent_color;
+  border-color: transparent;
+}
+
+.theme-noctalia
+  button.material-button-destructive.material-button-outlined,
+.theme-noctalia button.material-button-destructive.material-button-text {
+  color: @error_color;
+  border-color: alpha(@error_color, 0.72);
+}
+
+.theme-noctalia button.material-button:focus,
 .theme-noctalia button.material-button:focus-visible {
   box-shadow: 0 0 0 3px alpha(@accent_color, 0.32);
 }
@@ -240,4 +252,17 @@ button.material-button.material-button-loading .expressive-loading-indicator {
 .theme-frosted-glass button.material-button-outlined {
   background-color: alpha(@m3_surface, 0.18);
   border-color: alpha(@m3_outline, 0.72);
+}
+
+.theme-frosted-glass button.material-button-selected {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.82);
+  border-color: alpha(@m3_primary, 0.38);
+}
+
+.theme-frosted-glass
+  button.material-button-destructive.material-button-outlined,
+.theme-frosted-glass button.material-button-destructive.material-button-text {
+  color: @m3_error;
+  border-color: alpha(@m3_error, 0.72);
 }

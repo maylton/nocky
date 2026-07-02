@@ -5,8 +5,8 @@ mod compact_volume_motion;
 mod cover;
 mod expressive_loading;
 mod expressive_transport;
-// The class contract lands before its first migrated call sites.
-// Remove this allowance when the Settings pilot consumes the helper.
+// Some variants intentionally land before their later migration checkpoints.
+// Keep the allowance scoped to this foundation module.
 #[allow(dead_code)]
 pub(crate) mod material_button;
 mod wave_progress;

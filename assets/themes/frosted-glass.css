@@ -143,9 +143,7 @@ window.theme-frosted-glass .expressive-player-card {
     linear-gradient(to bottom, alpha(@m3_on_surface, 0.11), transparent 28%),
     radial-gradient(circle at 16% -8%, alpha(@m3_primary, 0.22), transparent 52%),
     radial-gradient(circle at 90% 112%, alpha(@m3_tertiary, 0.11), transparent 46%);
-  box-shadow:
-    inset 0 1px alpha(@m3_on_surface, 0.10),
-    0 18px 42px alpha(black, 0.22);
+  box-shadow: inset 0 1px alpha(@m3_on_surface, 0.10);
 }
 
 window.theme-frosted-glass.material-blur-enabled .now-playing-card,
@@ -196,12 +194,12 @@ window.theme-frosted-glass .expressive-footer {
   margin: 0 14px 14px;
   border-radius: 26px;
   border: 1px solid alpha(@m3_outline_variant, 0.31);
+  border-top: 1px solid alpha(@m3_outline_variant, 0.31);
+  background-clip: padding-box;
   background-image:
     linear-gradient(to top, alpha(@m3_on_surface, 0.070), transparent 46%),
     radial-gradient(circle at 50% 132%, alpha(@m3_primary, 0.18), transparent 58%);
-  box-shadow:
-    inset 0 1px alpha(@m3_on_surface, 0.07),
-    0 14px 36px alpha(black, 0.18);
+  box-shadow: inset 0 1px alpha(@m3_on_surface, 0.07);
 }
 
 window.theme-frosted-glass.material-blur-enabled .player-bar,
@@ -327,7 +325,7 @@ popover.queue-popover.theme-frosted-glass > arrow {
 }
 
 .settings-dialog.theme-frosted-glass,
-.youtube-settings-dialog.theme-frosted-glass,
+.youtube-dialog-surface.theme-frosted-glass,
 .startup-dialog.theme-frosted-glass,
 .onboarding-dialog.theme-frosted-glass,
 .settings-dialog-shell.theme-frosted-glass {
@@ -338,6 +336,11 @@ popover.queue-popover.theme-frosted-glass > arrow {
   border: 1px solid alpha(@m3_outline_variant, 0.34);
   border-radius: 32px;
   box-shadow: 0 24px 58px alpha(black, 0.32);
+}
+
+.youtube-dialog-surface.theme-frosted-glass {
+  min-height: 680px;
+  box-shadow: none;
 }
 
 /* -------------------------------------------------------------------------
@@ -481,7 +484,7 @@ window.theme-frosted-glass:backdrop .expressive-player-card {
     radial-gradient(circle at 16% -8%, alpha(@m3_primary, 0.12), transparent 56%),
     radial-gradient(circle at 90% 112%, alpha(@m3_tertiary, 0.055), transparent 50%);
   border-color: alpha(@m3_primary, 0.21);
-  box-shadow: 0 9px 26px alpha(black, 0.10);
+  box-shadow: none;
 }
 
 window.theme-frosted-glass:backdrop .collection-card,
@@ -500,7 +503,7 @@ window.theme-frosted-glass:backdrop .expressive-footer {
   background-image:
     radial-gradient(circle at 50% 132%, alpha(@m3_primary, 0.10), transparent 60%);
   border-color: alpha(@m3_outline_variant, 0.21);
-  box-shadow: 0 8px 24px alpha(black, 0.085);
+  box-shadow: none;
 }
 
 /* -------------------------------------------------------------------------

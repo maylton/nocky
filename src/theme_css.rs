@@ -124,6 +124,19 @@ mod tests {
     }
 
     #[test]
+    fn material_toast_overlay_stays_transparent() {
+        let css = MATERIAL_EXPRESSIVE_MODULES
+            .iter()
+            .map(|(_, css)| *css)
+            .collect::<String>();
+
+        assert!(css.contains("window.theme-material-expressive > toastoverlay"));
+        assert!(!css.contains(
+            "window.theme-material-expressive,\nwindow.theme-material-expressive > toastoverlay"
+        ));
+    }
+
+    #[test]
     fn material_modules_are_not_empty() {
         assert!(MATERIAL_EXPRESSIVE_MODULES
             .iter()

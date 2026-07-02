@@ -54,8 +54,8 @@ where
 {
     let dialog = adw::Dialog::builder()
         .title("YouTube Music")
-        .content_width(760)
-        .content_height(620)
+        .content_width(880)
+        .content_height(720)
         .build();
     dialog.add_css_class("youtube-settings-dialog");
     inherit_visual_theme(parent, &dialog);
@@ -63,6 +63,10 @@ where
     let toolbar = adw::ToolbarView::new();
     toolbar.add_css_class("material-dialog-toolbar");
     toolbar.add_top_bar(&adw::HeaderBar::new());
+
+    let surface = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    surface.add_css_class("youtube-dialog-surface");
+    inherit_visual_theme(parent, &surface);
 
     let config = AppConfig::load();
     let (stream_entry, stream_button, stream_summary) =
@@ -73,7 +77,8 @@ where
     host.append(&stream_entry);
     host.append(root);
     toolbar.set_content(Some(&host));
-    dialog.set_child(Some(&toolbar));
+    surface.append(&toolbar);
+    dialog.set_child(Some(&surface));
 
     {
         let stream_parent = dialog.clone();

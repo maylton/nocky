@@ -233,10 +233,14 @@ window.background.noctalia-window.theme-material-expressive:backdrop,
 window.noctalia-window.theme-material-expressive,
 window.noctalia-window.theme-material-expressive:backdrop,
 window.theme-material-expressive,
-window.theme-material-expressive:backdrop,
+window.theme-material-expressive:backdrop {
+  background-color: @m3_surface;
+  background-image: none;
+}
+
 window.theme-material-expressive > toastoverlay,
 window.theme-material-expressive > toastoverlay:backdrop {
-  background-color: @m3_surface;
+  background-color: transparent;
   background-image: none;
 }
 
@@ -317,6 +321,71 @@ dialog.settings-dialog.theme-material-expressive {
   background-image: none;
   border-color: alpha(@m3_outline, 0.18);
 }
+
+dialog.floating.theme-material-expressive,
+dialog.floating.theme-frosted-glass,
+dialog.youtube-settings-dialog.theme-material-expressive,
+dialog.youtube-settings-dialog.theme-frosted-glass {
+  padding: 0;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background-color: transparent;
+  background-image: none;
+}
+
+dialog.floating.theme-material-expressive > widget,
+dialog.floating.theme-frosted-glass > widget,
+dialog.youtube-settings-dialog.theme-material-expressive > widget,
+dialog.youtube-settings-dialog.theme-frosted-glass > widget,
+dialog.floating.theme-material-expressive floating-sheet,
+dialog.floating.theme-frosted-glass floating-sheet,
+dialog.youtube-settings-dialog.theme-material-expressive floating-sheet,
+dialog.youtube-settings-dialog.theme-frosted-glass floating-sheet,
+dialog.floating.theme-material-expressive sheet,
+dialog.floating.theme-frosted-glass sheet,
+dialog.youtube-settings-dialog.theme-material-expressive sheet,
+dialog.youtube-settings-dialog.theme-frosted-glass sheet,
+dialog.floating.theme-material-expressive sheet > widget,
+dialog.floating.theme-frosted-glass sheet > widget,
+dialog.youtube-settings-dialog.theme-material-expressive sheet > widget,
+dialog.youtube-settings-dialog.theme-frosted-glass sheet > widget {
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background-color: transparent;
+  background-image: none;
+}
+
+.youtube-dialog-surface.theme-material-expressive {
+  min-height: 680px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  background-image:
+    radial-gradient(circle at 12% 0%, alpha(@m3_primary, 0.10), transparent 46%);
+  border: 1px solid alpha(@m3_outline, 0.20);
+  border-radius: 32px;
+  box-shadow: none;
+}
+
+.youtube-dialog-surface.theme-material-expressive .material-dialog-toolbar,
+.youtube-dialog-surface.theme-material-expressive scrolledwindow,
+.youtube-dialog-surface.theme-material-expressive viewport,
+.youtube-dialog-surface.theme-material-expressive clamp,
+.youtube-dialog-surface.theme-material-expressive .youtube-settings-host {
+  color: @m3_on_surface;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+.youtube-dialog-surface.theme-material-expressive .material-dialog-toolbar headerbar {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  background-image: none;
+  border-color: alpha(@m3_outline, 0.18);
+}
 "#,
             );
             return;
@@ -393,7 +462,11 @@ window.background.noctalia-window.theme-material-expressive:backdrop,
 window.noctalia-window.theme-material-expressive,
 window.noctalia-window.theme-material-expressive:backdrop,
 window.theme-material-expressive,
-window.theme-material-expressive:backdrop,
+window.theme-material-expressive:backdrop {{
+  background-color: transparent;
+  background-image: none;
+}}
+
 window.theme-material-expressive > toastoverlay,
 window.theme-material-expressive > toastoverlay:backdrop {{
   background-color: transparent;
@@ -429,6 +502,12 @@ window.theme-material-expressive .collection-card:backdrop {{
   background-color: alpha(@m3_surface_container, {card:.3});
 }}
 
+window.theme-material-expressive .expressive-player-card,
+window.theme-material-expressive .expressive-player-card:backdrop {{
+  background-clip: padding-box;
+  box-shadow: none;
+}}
+
 window.theme-material-expressive .library-panel,
 window.theme-material-expressive .library-panel:backdrop,
 window.theme-material-expressive .home-section,
@@ -443,6 +522,13 @@ window.theme-material-expressive .player-bar:backdrop,
 window.theme-material-expressive .expressive-footer,
 window.theme-material-expressive .expressive-footer:backdrop {{
   background-color: alpha(@m3_surface_container_low, {footer:.3});
+}}
+
+window.theme-material-expressive .expressive-footer,
+window.theme-material-expressive .expressive-footer:backdrop {{
+  border-top-color: alpha(@m3_outline, 0.24);
+  background-clip: padding-box;
+  box-shadow: none;
 }}
 
 window.theme-material-expressive scrolledwindow,
@@ -496,11 +582,24 @@ window.theme-material-expressive.material-blur-enabled .collection-card:backdrop
   background-color: rgba(29, 31, 37, {card:.3});
 }}
 
+window.theme-material-expressive.material-blur-enabled .expressive-player-card,
+window.theme-material-expressive.material-blur-enabled .expressive-player-card:backdrop {{
+  background-clip: padding-box;
+  box-shadow: none;
+}}
+
 window.theme-material-expressive.material-blur-enabled .player-bar,
 window.theme-material-expressive.material-blur-enabled .player-bar:backdrop,
 window.theme-material-expressive.material-blur-enabled .expressive-footer,
 window.theme-material-expressive.material-blur-enabled .expressive-footer:backdrop {{
   background-color: rgba(23, 25, 31, {footer:.3});
+}}
+
+window.theme-material-expressive.material-blur-enabled .expressive-footer,
+window.theme-material-expressive.material-blur-enabled .expressive-footer:backdrop {{
+  border-top-color: alpha(@m3_outline, 0.24);
+  background-clip: padding-box;
+  box-shadow: none;
 }}
 
 window.theme-material-expressive.material-blur-enabled scrolledwindow,
@@ -585,6 +684,71 @@ dialog.settings-dialog.theme-material-expressive {{
 .settings-dialog-shell.theme-material-expressive headerbar {{
   color: @m3_on_surface;
   background-color: @m3_surface_container_high;
+  background-image: none;
+  border-color: alpha(@m3_outline, 0.18);
+}}
+
+dialog.floating.theme-material-expressive,
+dialog.floating.theme-frosted-glass,
+dialog.youtube-settings-dialog.theme-material-expressive,
+dialog.youtube-settings-dialog.theme-frosted-glass {{
+  padding: 0;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background-color: transparent;
+  background-image: none;
+}}
+
+dialog.floating.theme-material-expressive > widget,
+dialog.floating.theme-frosted-glass > widget,
+dialog.youtube-settings-dialog.theme-material-expressive > widget,
+dialog.youtube-settings-dialog.theme-frosted-glass > widget,
+dialog.floating.theme-material-expressive floating-sheet,
+dialog.floating.theme-frosted-glass floating-sheet,
+dialog.youtube-settings-dialog.theme-material-expressive floating-sheet,
+dialog.youtube-settings-dialog.theme-frosted-glass floating-sheet,
+dialog.floating.theme-material-expressive sheet,
+dialog.floating.theme-frosted-glass sheet,
+dialog.youtube-settings-dialog.theme-material-expressive sheet,
+dialog.youtube-settings-dialog.theme-frosted-glass sheet,
+dialog.floating.theme-material-expressive sheet > widget,
+dialog.floating.theme-frosted-glass sheet > widget,
+dialog.youtube-settings-dialog.theme-material-expressive sheet > widget,
+dialog.youtube-settings-dialog.theme-frosted-glass sheet > widget {{
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background-color: transparent;
+  background-image: none;
+}}
+
+.youtube-dialog-surface.theme-material-expressive {{
+  min-height: 680px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  background-image:
+    radial-gradient(circle at 12% 0%, alpha(@m3_primary, 0.10), transparent 46%);
+  border: 1px solid alpha(@m3_outline, 0.20);
+  border-radius: 32px;
+  box-shadow: none;
+}}
+
+.youtube-dialog-surface.theme-material-expressive .material-dialog-toolbar,
+.youtube-dialog-surface.theme-material-expressive scrolledwindow,
+.youtube-dialog-surface.theme-material-expressive viewport,
+.youtube-dialog-surface.theme-material-expressive clamp,
+.youtube-dialog-surface.theme-material-expressive .youtube-settings-host {{
+  color: @m3_on_surface;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}}
+
+.youtube-dialog-surface.theme-material-expressive .material-dialog-toolbar headerbar {{
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
   background-image: none;
   border-color: alpha(@m3_outline, 0.18);
 }}
