@@ -1,8 +1,5 @@
 use super::strategy::MaterialCarouselStrategy;
 
-const SMALL_RATIO: f64 = 0.68;
-const MEDIUM_RATIO: f64 = 0.86;
-const LARGE_RATIO: f64 = 1.0;
 const MIN_ITEM_WIDTH: f64 = 1.0;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -114,17 +111,10 @@ impl KeylineState {
         let viewport_width = finite_non_negative(viewport_width);
         let base_item_width = finite_positive(base_item_width);
         let spacing = finite_non_negative(spacing);
-        let keylines = match strategy {
-            MaterialCarouselStrategy::Hero => hero_keylines(viewport_width, base_item_width),
-            MaterialCarouselStrategy::MultiBrowse => {
-                multi_browse_keylines(viewport_width, base_item_width, spacing)
-            }
-            MaterialCarouselStrategy::Uncontained => vec![Keyline {
-                position: viewport_width / 2.0,
-                item_size: base_item_width,
-                kind: KeylineKind::Large,
-            }],
-        };
+        let keylines = keylines_from_specs(
+            base_item_width,
+            &strategy.keyline_specs(viewport_width, base_item_width, spacing),
+        );
 
         Self {
             viewport_width,
@@ -159,65 +149,20 @@ impl KeylineState {
     }
 }
 
-fn hero_keylines(viewport_width: f64, base_item_width: f64) -> Vec<Keyline> {
-    let center = viewport_width / 2.0;
-    let shoulder = (base_item_width + viewport_width * 0.08).min(center);
-    keylines_from_specs(
-        base_item_width,
-        &[
-            (0.0, KeylineKind::Small),
-            ((center - shoulder).max(0.0), KeylineKind::Medium),
-            (center, KeylineKind::Large),
-            ((center + shoulder).min(viewport_width), KeylineKind::Medium),
-            (viewport_width, KeylineKind::Small),
-        ],
-    )
-}
-
-fn multi_browse_keylines(viewport_width: f64, base_item_width: f64, spacing: f64) -> Vec<Keyline> {
-    let center = viewport_width / 2.0;
-    let large_gap = base_item_width + spacing;
-    let large_count = if viewport_width >= base_item_width * 3.4 {
-        2
-    } else {
-        1
-    };
-
-    let mut specs = vec![
-        (0.0, KeylineKind::Small),
-        ((base_item_width * 0.72).min(center), KeylineKind::Medium),
-    ];
-
-    if large_count == 2 {
-        specs.push(((center - large_gap / 2.0).max(0.0), KeylineKind::Large));
-        specs.push((
-            (center + large_gap / 2.0).min(viewport_width),
-            KeylineKind::Large,
-        ));
-    } else {
-        specs.push((center, KeylineKind::Large));
-    }
-
-    specs.push((
-        (viewport_width - base_item_width * 0.72).max(center),
-        KeylineKind::Medium,
-    ));
-    specs.push((viewport_width, KeylineKind::Small));
-
-    keylines_from_specs(base_item_width, &specs)
-}
-
-fn keylines_from_specs(base_item_width: f64, specs: &[(f64, KeylineKind)]) -> Vec<Keyline> {
+fn keylines_from_specs(
+    base_item_width: f64,
+    specs: &[super::strategy::StrategyKeyline],
+) -> Vec<Keyline> {
     let mut keylines: Vec<Keyline> = Vec::with_capacity(specs.len());
 
-    for &(position, kind) in specs {
+    for spec in specs {
         if let Some(previous) = keylines.last_mut() {
-            if distance_is_tiny(previous.position, position) {
-                if size_for_kind(kind, base_item_width) > previous.item_size {
+            if distance_is_tiny(previous.position, spec.position) {
+                if size_for_ratio(spec.size_ratio, base_item_width) > previous.item_size {
                     *previous = Keyline {
-                        position,
-                        item_size: size_for_kind(kind, base_item_width),
-                        kind,
+                        position: spec.position,
+                        item_size: size_for_ratio(spec.size_ratio, base_item_width),
+                        kind: spec.kind,
                     };
                 }
                 continue;
@@ -225,9 +170,9 @@ fn keylines_from_specs(base_item_width: f64, specs: &[(f64, KeylineKind)]) -> Ve
         }
 
         keylines.push(Keyline {
-            position,
-            item_size: size_for_kind(kind, base_item_width),
-            kind,
+            position: spec.position,
+            item_size: size_for_ratio(spec.size_ratio, base_item_width),
+            kind: spec.kind,
         });
     }
 
@@ -243,20 +188,16 @@ fn logical_content_x(
     leading_padding + index as f64 * (base_item_width + spacing)
 }
 
-fn size_for_kind(kind: KeylineKind, base_item_width: f64) -> f64 {
-    let ratio = match kind {
-        KeylineKind::Small => SMALL_RATIO,
-        KeylineKind::Medium => MEDIUM_RATIO,
-        KeylineKind::Large => LARGE_RATIO,
-    };
+fn size_for_ratio(ratio: f64, base_item_width: f64) -> f64 {
     (base_item_width * ratio).max(MIN_ITEM_WIDTH)
 }
 
 fn kind_for_width(width: f64, base_item_width: f64) -> KeylineKind {
+    let params = MaterialCarouselStrategy::MultiBrowse.parameters();
     let ratio = width / finite_positive(base_item_width);
-    if ratio >= (MEDIUM_RATIO + LARGE_RATIO) / 2.0 {
+    if ratio >= (params.medium_ratio + params.large_ratio) / 2.0 {
         KeylineKind::Large
-    } else if ratio >= (SMALL_RATIO + MEDIUM_RATIO) / 2.0 {
+    } else if ratio >= (params.small_ratio + params.medium_ratio) / 2.0 {
         KeylineKind::Medium
     } else {
         KeylineKind::Small
@@ -378,6 +319,49 @@ mod tests {
         }
     }
 
+    fn geometry_table() -> String {
+        let mut table = String::new();
+        for variant in [
+            MaterialCarouselStrategy::Hero,
+            MaterialCarouselStrategy::MultiBrowse,
+            MaterialCarouselStrategy::Uncontained,
+        ] {
+            for viewport_width in [480.0, 760.0, 1000.0] {
+                let max_scroll = (12.0_f64 * 120.0 + 11.0 * 12.0 - viewport_width).max(0.0);
+                for (label, scroll_offset) in [
+                    ("start", 0.0),
+                    ("middle", max_scroll / 2.0),
+                    ("end", max_scroll),
+                ] {
+                    let items = layout_items(CarouselGeometryInput {
+                        item_count: 12,
+                        viewport_width,
+                        scroll_offset,
+                        base_item_width: 120.0,
+                        spacing: 12.0,
+                        leading_padding: 0.0,
+                        variant,
+                    });
+                    let summary = items
+                        .iter()
+                        .take(5)
+                        .map(|item| {
+                            format!(
+                                "{:.1}:{:.1}:{:?}",
+                                item.viewport_x, item.visible_width, item.state
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("|");
+                    table.push_str(&format!(
+                        "{variant:?} {viewport_width:.0} {label} {scroll_offset:.1} {summary}\n"
+                    ));
+                }
+            }
+        }
+        table
+    }
+
     #[test]
     fn source_rejects_discrete_focus_selection() {
         let source = include_str!("keyline.rs");
@@ -406,6 +390,42 @@ mod tests {
                 });
             }
         }
+    }
+
+    #[test]
+    fn numeric_geometry_snapshots_cover_viewports_and_scroll_positions() {
+        assert_eq!(
+            geometry_table(),
+            "\
+Hero 480 start 0.0 0.0:70.4:Small|82.4:116.4:Large|210.8:90.8:Medium|313.6:58.7:Small|384.2:52.8:Small
+Hero 480 middle 546.0 -546.0:52.8:Small|-481.2:52.8:Small|-416.4:52.8:Small|-351.6:52.8:Small|-286.8:65.1:Small
+Hero 480 end 1092.0 -1092.0:52.8:Small|-1027.2:52.8:Small|-962.4:52.8:Small|-897.6:52.8:Small|-832.8:52.8:Small
+Hero 760 start 0.0 0.0:60.8:Small|72.8:78.4:Medium|163.2:118.9:Large|294.1:87.3:Medium|393.4:70.5:Small
+Hero 760 middle 406.0 -406.0:52.8:Small|-341.2:52.8:Small|-276.4:52.8:Small|-211.6:59.5:Small|-140.1:77.1:Medium
+Hero 760 end 812.0 -812.0:52.8:Small|-747.2:52.8:Small|-682.4:52.8:Small|-617.6:52.8:Small|-552.8:52.8:Small
+Hero 1000 start 0.0 0.0:58.3:Small|70.3:70.3:Small|152.5:84.3:Medium|248.8:111.4:Large|372.2:81.1:Medium
+Hero 1000 middle 286.0 -286.0:52.8:Small|-221.2:52.8:Small|-156.4:56.3:Small|-88.1:68.3:Small|-7.9:80.3:Medium
+Hero 1000 end 572.0 -572.0:52.8:Small|-507.2:52.8:Small|-442.4:52.8:Small|-377.6:52.8:Small|-312.8:54.3:Small
+MultiBrowse 480 start 0.0 0.0:76.3:Medium|88.3:120.0:Large|220.3:112.9:Large|345.2:63.6:Small|420.8:55.2:Small
+MultiBrowse 480 middle 546.0 -546.0:55.2:Small|-478.8:55.2:Small|-411.6:55.2:Small|-344.4:55.2:Small|-277.2:70.0:Small
+MultiBrowse 480 end 1092.0 -1092.0:55.2:Small|-1024.8:55.2:Small|-957.6:55.2:Small|-890.4:55.2:Small|-823.2:55.2:Small
+MultiBrowse 760 start 0.0 0.0:76.3:Medium|88.3:101.8:Medium|202.1:120.0:Large|334.1:118.5:Large|464.6:98.8:Medium
+MultiBrowse 760 middle 406.0 -406.0:55.2:Small|-338.8:55.2:Small|-271.6:55.2:Small|-204.4:72.8:Medium|-119.6:100.3:Medium
+MultiBrowse 760 end 812.0 -812.0:55.2:Small|-744.8:55.2:Small|-677.6:55.2:Small|-610.4:55.2:Small|-543.2:55.2:Small
+MultiBrowse 1000 start 0.0 0.0:76.3:Medium|88.3:96.4:Medium|196.7:109.3:Large|318.0:120.0:Large|450.0:117.9:Large
+MultiBrowse 1000 middle 286.0 -286.0:55.2:Small|-218.8:55.2:Small|-151.6:68.6:Small|-71.0:94.3:Medium|35.3:107.2:Large
+MultiBrowse 1000 end 572.0 -572.0:55.2:Small|-504.8:55.2:Small|-437.6:55.2:Small|-370.4:55.2:Small|-303.2:60.8:Small
+Uncontained 480 start 0.0 0.0:120.0:Large|132.0:120.0:Large|264.0:120.0:Large|396.0:120.0:Large|528.0:120.0:Large
+Uncontained 480 middle 546.0 -546.0:120.0:Large|-414.0:120.0:Large|-282.0:120.0:Large|-150.0:120.0:Large|-18.0:120.0:Large
+Uncontained 480 end 1092.0 -1092.0:120.0:Large|-960.0:120.0:Large|-828.0:120.0:Large|-696.0:120.0:Large|-564.0:120.0:Large
+Uncontained 760 start 0.0 0.0:120.0:Large|132.0:120.0:Large|264.0:120.0:Large|396.0:120.0:Large|528.0:120.0:Large
+Uncontained 760 middle 406.0 -406.0:120.0:Large|-274.0:120.0:Large|-142.0:120.0:Large|-10.0:120.0:Large|122.0:120.0:Large
+Uncontained 760 end 812.0 -812.0:120.0:Large|-680.0:120.0:Large|-548.0:120.0:Large|-416.0:120.0:Large|-284.0:120.0:Large
+Uncontained 1000 start 0.0 0.0:120.0:Large|132.0:120.0:Large|264.0:120.0:Large|396.0:120.0:Large|528.0:120.0:Large
+Uncontained 1000 middle 286.0 -286.0:120.0:Large|-154.0:120.0:Large|-22.0:120.0:Large|110.0:120.0:Large|242.0:120.0:Large
+Uncontained 1000 end 572.0 -572.0:120.0:Large|-440.0:120.0:Large|-308.0:120.0:Large|-176.0:120.0:Large|-44.0:120.0:Large
+"
+        );
     }
 
     #[test]
@@ -527,16 +547,12 @@ mod tests {
 
     #[test]
     fn symmetric_strategies_have_symmetric_edge_keylines() {
-        for variant in [
-            MaterialCarouselStrategy::Hero,
-            MaterialCarouselStrategy::MultiBrowse,
-        ] {
-            let state = KeylineState::for_strategy(variant, 640.0, 120.0, 12.0);
-            for keyline in &state.keylines {
-                let mirrored_position = state.viewport_width - keyline.position;
-                let mirrored_width = state.item_width_at(mirrored_position);
-                assert!((keyline.item_size - mirrored_width).abs() < EPSILON);
-            }
+        let state =
+            KeylineState::for_strategy(MaterialCarouselStrategy::MultiBrowse, 640.0, 120.0, 12.0);
+        for keyline in &state.keylines {
+            let mirrored_position = state.viewport_width - keyline.position;
+            let mirrored_width = state.item_width_at(mirrored_position);
+            assert!((keyline.item_size - mirrored_width).abs() < EPSILON);
         }
     }
 
