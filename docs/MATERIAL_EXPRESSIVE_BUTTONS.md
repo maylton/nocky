@@ -63,9 +63,9 @@ but their existing motion and layout ownership must remain intact.
 | Header settings navigation | `src/app/controller/construction.rs` | flat icon toggle | toggle icon button | hover, focus, pressed, selected | later icon checkpoint |
 | Sidebar rows | `src/app/sidebar.rs` | flat full-width buttons | navigation rows, not common buttons | hover, focus, selected, disabled | preserve architecture |
 | Top page switcher | `src/ui/widgets/animated_page_switcher.rs` | custom button group | segmented/button-group semantics | hover, focus, selected, reduced motion | preserve architecture |
-| Empty-library action | `src/app/controller/construction.rs` | suggested pill | filled button | hover, focus, pressed, disabled | labeled checkpoint |
-| Queue clear upcoming | `src/app/controller/construction.rs` | pill | outlined button | hover, focus, pressed, disabled | labeled checkpoint |
-| Queue clear all | `src/app/controller/construction.rs` | destructive pill | destructive tonal/outlined | hover, focus, pressed, confirmation | labeled checkpoint |
+| Empty-library action | `src/app/controller/construction.rs` | suggested pill | filled button | hover, focus, pressed, disabled | migrated |
+| Queue clear upcoming | `src/app/controller/construction.rs` | pill | outlined button | hover, focus, pressed, disabled | migrated |
+| Queue clear all | `src/app/controller/construction.rs` | destructive pill | destructive outlined button | hover, focus, pressed, confirmation | migrated |
 | Player favorite | `src/ui/player/view.rs` | flat card icon | toggle icon button | hover, focus, pressed, selected | later icon checkpoint |
 | Player inline lyrics | `src/ui/player/view.rs` | flat toggle icon | toggle icon button | hover, focus, pressed, selected | later icon checkpoint |
 | Player refresh lyrics | `src/ui/player/view.rs` | flat icon | standard icon button | hover, focus, pressed, loading | later icon/loading checkpoint |
@@ -161,6 +161,12 @@ The first browser labeled-action batch migrated:
 2. Search load-more and YouTube Home load-more — filled tonal.
 3. Collection offline action — stateful filled tonal, with loading class while
    downloading and outlined retry state.
+
+The app-shell labeled-action batch migrated:
+
+1. Empty-library add-folder action — filled.
+2. Queue clear upcoming — outlined.
+3. Queue clear all — destructive outlined.
 
 ## Loading contract for a later checkpoint
 

@@ -23,7 +23,14 @@ use crate::{
         footer::{build_footer_view, FooterViewParts, FOOTER_ARTWORK_SOURCE_SIZE},
         player::PlayerView,
         settings::SettingsPage,
-        widgets::{build_cover, AnimatedPageSwitcher, TopPage},
+        widgets::{
+            build_cover,
+            material_button::{
+                apply_material_button, MaterialButtonSemantic, MaterialButtonSize,
+                MaterialButtonSpec, MaterialButtonVariant,
+            },
+            AnimatedPageSwitcher, TopPage,
+        },
     },
     visual_theme,
     youtube::{
@@ -290,8 +297,10 @@ impl AppController {
         empty_text.set_justify(gtk::Justification::Center);
         empty_text.add_css_class("dim-label");
         let empty_add = gtk::Button::with_label(tr(Message::ChooseFolderAction));
-        empty_add.add_css_class("suggested-action");
-        empty_add.add_css_class("pill");
+        apply_material_button(
+            &empty_add,
+            MaterialButtonSpec::new(MaterialButtonVariant::Filled, MaterialButtonSize::Standard),
+        );
         empty_add.add_css_class("expressive-empty-action");
         empty_state.append(&empty_icon);
         empty_state.append(&empty_title);
@@ -383,17 +392,21 @@ impl AppController {
             AppLanguage::English => "Clear upcoming",
             AppLanguage::Spanish => "Limpiar siguientes",
         });
-        queue_page_clear_upcoming.add_css_class("pill");
-        queue_page_clear_upcoming.add_css_class("queue2-page-action");
+        apply_material_button(
+            &queue_page_clear_upcoming,
+            MaterialButtonSpec::new(MaterialButtonVariant::Outlined, MaterialButtonSize::Compact),
+        );
 
         let queue_page_clear_all = gtk::Button::with_label(match config.language {
             AppLanguage::Portuguese => "Limpar tudo",
             AppLanguage::English => "Clear all",
             AppLanguage::Spanish => "Limpiar todo",
         });
-        queue_page_clear_all.add_css_class("pill");
-        queue_page_clear_all.add_css_class("queue2-page-action");
-        queue_page_clear_all.add_css_class("queue2-page-action-danger");
+        apply_material_button(
+            &queue_page_clear_all,
+            MaterialButtonSpec::new(MaterialButtonVariant::Outlined, MaterialButtonSize::Compact)
+                .with_semantic(MaterialButtonSemantic::Destructive),
+        );
 
         queue_page_actions.append(&queue_page_clear_upcoming);
         queue_page_actions.append(&queue_page_clear_all);
