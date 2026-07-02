@@ -264,6 +264,20 @@ window.theme-material-expressive
     0 0 0 2px alpha(@m3_primary, 0.22);
 }
 
+.collection-card-context-action:focus,
+.collection-card-context-action:focus-visible,
+.material-card-primary-action:focus,
+.material-card-primary-action:focus-visible,
+.collection-card-overflow-button:focus,
+.collection-card-overflow-button:focus-visible,
+.material-card-overflow-trigger:focus,
+.material-card-overflow-trigger:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px alpha(@m3_primary, 0.34),
+    0 3px 12px alpha(black, 0.26);
+}
+
 .collection-card-context-action.active,
 .material-card-primary-action.active {
   background-color: @m3_primary_container;
@@ -320,16 +334,50 @@ window.theme-material-expressive
   box-shadow: 0 10px 28px alpha(black, 0.30);
 }
 
+.collection-card-overflow-separator {
+  margin: 4px 6px;
+  background-color: alpha(@m3_outline_variant, 0.56);
+}
+
 .collection-card-overflow-action,
 .material-card-menu-action {
-  min-height: 42px;
+  min-height: 44px;
   padding: 8px 12px;
   border-radius: 12px;
   background-color: transparent;
   color: @m3_on_surface;
+  border: 1px solid transparent;
 }
 
 .collection-card-overflow-action:hover,
 .material-card-menu-action:hover {
   background-color: alpha(@m3_primary, 0.14);
+}
+
+.collection-card-overflow-action:focus,
+.collection-card-overflow-action:focus-visible,
+.material-card-menu-action:focus,
+.material-card-menu-action:focus-visible {
+  outline: none;
+  background-color: alpha(@m3_primary, 0.12);
+  border-color: alpha(@m3_primary, 0.34);
+}
+
+.material-card-menu-action-selected {
+  color: @m3_on_secondary_container;
+  background-color: alpha(@m3_secondary_container, 0.70);
+}
+
+.material-card-menu-action-loading {
+  color: @m3_on_surface_variant;
+  background-color: alpha(@m3_surface_container_highest, 0.72);
+}
+
+.material-card-menu-action-success {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.72);
+}
+
+.material-card-menu-action:disabled {
+  opacity: 0.72;
 }

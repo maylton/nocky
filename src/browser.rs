@@ -1284,6 +1284,8 @@ fn update_home_collection_offline_widget(
             );
             button.set_sensitive(false);
             button.add_css_class("success");
+            button.remove_css_class("material-card-menu-action-loading");
+            button.add_css_class("material-card-menu-action-success");
             updated += 1;
         }
     }
@@ -6418,6 +6420,7 @@ fn home_card_button(
 
                 control.set_icon_name(icon_name);
                 control.set_tooltip_text(Some(tooltip));
+                control.update_property(&[gtk::accessible::Property::Label(tooltip)]);
                 if is_active {
                     control.add_css_class("active");
                 }
@@ -6455,14 +6458,16 @@ fn home_card_button(
     }
 
     if let Some((play_next_event, append_event)) = queue_events {
+        let more_options_label = match language {
+            AppLanguage::Portuguese => "Mais opções",
+            AppLanguage::English => "More options",
+            AppLanguage::Spanish => "Más opciones",
+        };
         let menu_button = gtk::MenuButton::builder()
             .icon_name("view-more-symbolic")
-            .tooltip_text(match language {
-                AppLanguage::Portuguese => "Mais opções",
-                AppLanguage::English => "More options",
-                AppLanguage::Spanish => "Más opciones",
-            })
+            .tooltip_text(more_options_label)
             .build();
+        menu_button.update_property(&[gtk::accessible::Property::Label(more_options_label)]);
         menu_button.set_halign(gtk::Align::Start);
         menu_button.set_valign(gtk::Align::Start);
         menu_button.set_margin_top(10);
@@ -6516,10 +6521,15 @@ fn home_card_button(
         };
 
         let favorite_event = BrowserEvent::ToggleCollectionFavorite(card.identity());
-        for (label, event, icon_name) in [
-            (labels.0, play_next_event, "media-skip-forward-symbolic"),
-            (labels.1, append_event, "list-add-symbolic"),
-            (labels.2, open_event, "go-next-symbolic"),
+        for (label, event, icon_name, selected) in [
+            (
+                labels.0,
+                play_next_event,
+                "media-skip-forward-symbolic",
+                false,
+            ),
+            (labels.1, append_event, "list-add-symbolic", false),
+            (labels.2, open_event, "go-next-symbolic", false),
             (
                 labels.3,
                 favorite_event,
@@ -6528,6 +6538,7 @@ fn home_card_button(
                 } else {
                     "non-starred-symbolic"
                 },
+                is_favorite,
             ),
         ] {
             let icon = gtk::Image::from_icon_name(icon_name);
@@ -6559,6 +6570,9 @@ fn home_card_button(
             button.add_css_class("flat");
             button.add_css_class("collection-card-overflow-action");
             button.add_css_class("material-card-menu-action");
+            if selected {
+                button.add_css_class("material-card-menu-action-selected");
+            }
 
             let sender = event_tx.clone();
             let popover = popover.clone();
@@ -6614,6 +6628,7 @@ fn home_card_button(
             let popover = popover.clone();
             button.connect_clicked(move |button| {
                 button.set_sensitive(false);
+                button.add_css_class("material-card-menu-action-loading");
                 set_home_offline_menu_content(
                     button,
                     "emblem-synchronizing-symbolic",

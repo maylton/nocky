@@ -27,6 +27,9 @@ surface:
 - `material-card-primary-action` for the floating play/resume action;
 - `material-card-overflow-trigger` for the overflow menu trigger;
 - `material-card-menu-action` for actions inside the card overflow menu.
+- state classes `material-card-menu-action-selected`,
+  `material-card-menu-action-loading`, and `material-card-menu-action-success`
+  for favorite/offline feedback.
 
 ## First Checkpoint
 
@@ -45,6 +48,8 @@ physics intact:
   than visual item collections.
 - Home card action controls now expose Material card-action roles while keeping
   the final cascade in `080-home-browser.css`.
+- Card action polish adds visible focus, selected favorite state, offline
+  loading/success states and accessible labels for icon-only card actions.
 
 No transport controls, page switchers, queue rows or full-card click targets are
 replaced by the card contract. Clickable wrappers remain buttons, while the
