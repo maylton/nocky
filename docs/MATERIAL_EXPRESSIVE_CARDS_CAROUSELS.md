@@ -33,7 +33,7 @@ surface:
 
 ## First Checkpoint
 
-The first migration keeps the existing Home geometry and browser-owned scroll
+The first migration keeps the existing Home hierarchy and browser-owned scroll
 physics intact:
 
 - Home collection card surfaces are elevated Material cards because they sit on
@@ -41,9 +41,11 @@ physics intact:
 - Collection-grid and compact artist card surfaces share the same card
   contract.
 - Home visual rails receive `material-carousel-multi-browse`.
-- Featured visual rails keep the same card geometry as compact rails. The M3
-  carousel morphing reference is not enabled yet, so Nocky avoids mixing card
-  sizes in the static carousel state.
+- Featured Home cards remain visibly larger than Compact cards. Material card
+  semantics style the surface and interaction states; they do not flatten the
+  content hierarchy introduced in Nocky 0.6.0.
+- A Featured card keeps the established 220 px outer width, 196 px card width
+  and 176 px artwork scale, while Compact cards keep the 168/152/128 px scale.
 - Chip rails are not Material carousels because they are filter controls rather
   than visual item collections.
 - Home card action controls now expose Material card-action roles while keeping
@@ -62,9 +64,11 @@ inner surface carries the card semantic.
 
 Automated validation for this checkpoint is `cargo fmt`, `git diff --check` and
 `cargo test`. Manual validation should cover Material Expressive Home
-carousels, collection grids and compact artist rows at narrow and wide widths,
-with all cards in the same carousel rendered at uniform size.
+carousels, collection grids and compact artist rows at narrow and wide widths.
+Featured sections must remain clearly larger than Compact sections, without
+clipped artwork, labels, controls or horizontal scrollbars.
 
 The continuous item morphing shown in the animated M3 reference requires a
-separate scroll-position-driven checkpoint. Until that exists, this checkpoint
-keeps static carousel cards uniform instead of mixing large and compact items.
+separate scroll-position-driven checkpoint. Until that exists, each individual
+rail keeps stable card allocations while the Home still preserves its
+section-level Featured, Compact and TrackRows hierarchy.
