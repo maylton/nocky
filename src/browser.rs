@@ -5145,47 +5145,69 @@ fn attach_home_column_cards(rail: &gtk::Box, cards: &[gtk::Widget], rows: i32, r
     }
 }
 
-fn set_home_card_label_width(label: &gtk::Label, presentation: HomeSectionPresentation) {
-    let width_chars = match presentation {
-        HomeSectionPresentation::Featured => 24,
-        HomeSectionPresentation::Compact => 16,
-        HomeSectionPresentation::TrackRows => 32,
-    };
-    label.set_width_chars(width_chars);
-    label.set_max_width_chars(width_chars);
+fn home_carousel_lerp_i32(start: i32, end: i32, progress: f64) -> i32 {
+    let progress = progress.clamp(0.0, 1.0);
+    (start as f64 + (end - start) as f64 * progress).round() as i32
 }
 
-fn apply_home_card_widget_presentation(card: &gtk::Box, presentation: HomeSectionPresentation) {
-    card.set_size_request(presentation.card_width(), presentation.card_height());
-    card.set_spacing(match presentation {
-        HomeSectionPresentation::TrackRows => 10,
-        HomeSectionPresentation::Featured => 7,
-        HomeSectionPresentation::Compact => 5,
-    });
-    card.set_margin_top(match presentation {
-        HomeSectionPresentation::TrackRows => 2,
-        _ => 8,
-    });
-    card.set_margin_bottom(match presentation {
-        HomeSectionPresentation::TrackRows => 2,
-        _ => 8,
-    });
-    card.set_margin_end(match presentation {
-        HomeSectionPresentation::Compact => 4,
-        HomeSectionPresentation::TrackRows => 4,
-        HomeSectionPresentation::Featured => 8,
-    });
+fn apply_home_card_button_weight(widget: &gtk::Widget, weight: f64) {
+    let weight = weight.clamp(0.0, 1.0);
+    let outer_width = home_carousel_lerp_i32(
+        HomeSectionPresentation::Compact.outer_width(),
+        HomeSectionPresentation::Featured.outer_width(),
+        weight,
+    );
+    let outer_height = home_carousel_lerp_i32(
+        HomeSectionPresentation::Compact.outer_height(),
+        HomeSectionPresentation::Featured.outer_height(),
+        weight,
+    );
+    widget.set_size_request(outer_width, outer_height);
+
+    let Some(button) = widget
+        .first_child()
+        .and_then(|child| child.downcast::<gtk::Button>().ok())
+    else {
+        return;
+    };
+    button.set_size_request(outer_width, outer_height);
+
+    let Some(card) = button
+        .child()
+        .and_then(|child| child.downcast::<gtk::Box>().ok())
+    else {
+        return;
+    };
+
+    let card_width = home_carousel_lerp_i32(
+        HomeSectionPresentation::Compact.card_width(),
+        HomeSectionPresentation::Featured.card_width(),
+        weight,
+    );
+    let card_height = home_carousel_lerp_i32(
+        HomeSectionPresentation::Compact.card_height(),
+        HomeSectionPresentation::Featured.card_height(),
+        weight,
+    );
+    let artwork_size = home_carousel_lerp_i32(
+        HomeSectionPresentation::Compact.artwork_size(),
+        HomeSectionPresentation::Featured.artwork_size(),
+        weight,
+    );
+    let text_width = home_carousel_lerp_i32(16, 24, weight);
+
+    card.set_size_request(card_width, card_height);
+    card.set_spacing(home_carousel_lerp_i32(5, 7, weight));
+    card.set_margin_end(home_carousel_lerp_i32(4, 8, weight));
 
     card.remove_css_class("home-card-featured");
     card.remove_css_class("home-card-compact");
-    card.remove_css_class("home-track-card");
-    match presentation {
-        HomeSectionPresentation::Featured => card.add_css_class("home-card-featured"),
-        HomeSectionPresentation::Compact => card.add_css_class("home-card-compact"),
-        HomeSectionPresentation::TrackRows => card.add_css_class("home-track-card"),
+    if weight >= 0.58 {
+        card.add_css_class("home-card-featured");
+    } else {
+        card.add_css_class("home-card-compact");
     }
 
-    let artwork_size = presentation.artwork_size();
     if let Some(artwork_overlay) = card
         .first_child()
         .and_then(|child| child.downcast::<gtk::Overlay>().ok())
@@ -5200,44 +5222,24 @@ fn apply_home_card_widget_presentation(card: &gtk::Box, presentation: HomeSectio
     while let Some(current) = child {
         child = current.next_sibling();
         if let Ok(label) = current.clone().downcast::<gtk::Label>() {
-            set_home_card_label_width(&label, presentation);
+            label.set_width_chars(text_width);
+            label.set_max_width_chars(text_width);
             if label.has_css_class("collection-card-detail") {
-                label.set_visible(presentation != HomeSectionPresentation::Compact);
+                label.set_visible(weight >= 0.58);
             }
         } else if let Ok(container) = current.downcast::<gtk::Box>() {
             let mut nested = container.first_child();
             while let Some(current) = nested {
                 nested = current.next_sibling();
                 if let Ok(label) = current.downcast::<gtk::Label>() {
-                    set_home_card_label_width(&label, presentation);
+                    label.set_width_chars(text_width);
+                    label.set_max_width_chars(text_width);
                     if label.has_css_class("collection-card-detail") {
-                        label.set_visible(presentation != HomeSectionPresentation::Compact);
+                        label.set_visible(weight >= 0.58);
                     }
                 }
             }
         }
-    }
-}
-
-fn apply_home_card_button_presentation(
-    widget: &gtk::Widget,
-    presentation: HomeSectionPresentation,
-) {
-    widget.set_size_request(presentation.outer_width(), presentation.outer_height());
-
-    let Some(button) = widget
-        .first_child()
-        .and_then(|child| child.downcast::<gtk::Button>().ok())
-    else {
-        return;
-    };
-    button.set_size_request(presentation.outer_width(), presentation.outer_height());
-
-    if let Some(card) = button
-        .child()
-        .and_then(|child| child.downcast::<gtk::Box>().ok())
-    {
-        apply_home_card_widget_presentation(&card, presentation);
     }
 }
 
@@ -5269,18 +5271,24 @@ fn update_material_carousel_focus(
     }
 
     let focus = material_carousel_focus_index(cards, rail, scroll);
-    if current_focus.replace(focus) == focus {
-        return;
-    }
+    current_focus.set(focus);
 
+    let visible_focus_x = 118.0;
+    let large_span = HomeSectionPresentation::Featured.outer_width() as f64;
     for (index, card) in cards.iter().enumerate() {
-        apply_home_card_button_presentation(
-            card,
-            material_carousel_item_presentation(
-                HomeSectionPresentation::Featured,
-                index.abs_diff(focus),
-            ),
-        );
+        let Some(bounds) = card.compute_bounds(rail) else {
+            continue;
+        };
+        let center = bounds.x() as f64 + bounds.width() as f64 / 2.0;
+        let visible_center = center - scroll.hadjustment().value();
+        let distance = (visible_center - visible_focus_x).abs();
+        let weight = (1.0 - distance / large_span).clamp(0.0, 1.0);
+        let minimum_weight = if index.abs_diff(focus) <= 1 {
+            0.18
+        } else {
+            0.0
+        };
+        apply_home_card_button_weight(card, weight.max(minimum_weight));
     }
 }
 

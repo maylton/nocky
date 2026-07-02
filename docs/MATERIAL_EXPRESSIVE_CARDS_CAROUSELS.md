@@ -44,6 +44,10 @@ physics intact:
 - While scrolling a featured rail, the large item follows the first
   substantially visible card, approximating the animated M3 carousel focus
   change without replacing GTK's native scrolling.
+- Featured items now interpolate width, height, artwork size, text width and
+  detail visibility by distance from the focal keyline, matching the M3
+  principle that carousel items smoothly expand and collapse between large,
+  medium and small roles.
 - Chip rails are not Material carousels because they are filter controls rather
   than visual item collections.
 - Home card action controls now expose Material card-action roles while keeping
@@ -59,7 +63,6 @@ Automated validation for this checkpoint is `cargo fmt`, `git diff --check` and
 `cargo test`. Manual validation should cover Material Expressive Home
 carousels, collection grids and compact artist rows at narrow and wide widths.
 
-The continuous item morphing shown in the animated M3 reference is approximated
-with discrete focus changes driven by horizontal scroll position. A later
-checkpoint can add frame-by-frame interpolation if manual validation shows the
-discrete focus step is too abrupt.
+The implementation keeps GTK's native scrolling and approximates the M3
+keyline model with distance-based interpolation. It does not yet implement true
+content parallax or snap-to-keyline behavior.
