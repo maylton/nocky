@@ -201,3 +201,10 @@ window.theme-noctalia
   color: @accent_bg_color;
   background-color: @accent_fg_color;
 }
+
+/* material_loading_indicator_v1 */
+window.theme-noctalia .material-loading-indicator.contained {
+  color: @accent_fg_color;
+  background-color: @accent_color;
+  border-radius: 999px;
+}

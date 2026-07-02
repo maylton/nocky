@@ -178,6 +178,16 @@ mod tests {
     }
 
     #[test]
+    fn material_loading_css_does_not_style_noctalia() {
+        let loading_css = MATERIAL_EXPRESSIVE_MODULES
+            .iter()
+            .find_map(|(name, css)| (*name == "099-loading-indicator.css").then_some(*css))
+            .expect("099-loading-indicator.css module should be registered");
+
+        assert!(!loading_css.contains("theme-noctalia"));
+    }
+
+    #[test]
     fn material_modules_are_not_empty() {
         assert!(MATERIAL_EXPRESSIVE_MODULES
             .iter()
