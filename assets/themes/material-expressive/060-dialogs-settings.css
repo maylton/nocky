@@ -197,8 +197,35 @@ window.theme-material-expressive .settings-page .settings-hero {
     linear-gradient(120deg, alpha(@m3_primary, 0.19), alpha(@m3_primary_container, 0.82));
 }
 
-window.theme-material-expressive .settings-page .settings-group {
+window.theme-material-expressive .settings-page .settings-hero.material-card-elevated,
+window.theme-material-expressive .settings-stream-source-entry.material-card-elevated {
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  background-image:
+    linear-gradient(120deg, alpha(@m3_primary, 0.19), alpha(@m3_primary_container, 0.82));
+  border-color: alpha(@m3_primary, 0.28);
+  box-shadow: 0 8px 24px alpha(black, 0.18);
+}
+
+window.theme-material-expressive .settings-page .settings-group,
+window.theme-material-expressive .settings-page .settings-group.material-card-filled {
   background-color: alpha(@m3_surface_container_low, 0.86);
+  border-color: alpha(@m3_outline, 0.17);
+  box-shadow: 0 5px 16px alpha(black, 0.11);
+}
+
+window.theme-material-expressive .settings-page .settings-surface-row.material-card-outlined,
+window.theme-material-expressive .settings-stream-source-row.material-card-outlined {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  border-color: alpha(@m3_outline_variant, 0.38);
+  box-shadow: none;
+}
+
+window.theme-material-expressive .settings-page .settings-surface-row.material-card-outlined:hover,
+window.theme-material-expressive .settings-stream-source-row.material-card-outlined:hover {
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.24);
 }
 
 window.theme-material-expressive .settings-navigation-button:checked,

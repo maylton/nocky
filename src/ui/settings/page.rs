@@ -8,6 +8,7 @@ use crate::{
             apply_material_button, set_material_button_loading, set_material_button_selected,
             MaterialButtonSemantic, MaterialButtonSize, MaterialButtonSpec, MaterialButtonVariant,
         },
+        material_card::{apply_material_card, MaterialCardSpec, MaterialCardVariant},
         AnimatedPageSpec, AnimatedPageSwitcher,
     },
     youtube::diagnostics::{self as youtube_diagnostics, DiagnosticCheck, DiagnosticState},
@@ -120,6 +121,7 @@ fn build_content(
 
     let hero = gtk::Box::new(gtk::Orientation::Horizontal, 14);
     hero.add_css_class("settings-hero");
+    apply_material_card(&hero, MaterialCardSpec::new(MaterialCardVariant::Elevated));
     hero.append(&hero_icon_container);
     hero.append(&hero_copy);
     hero.append(&version_badge);
@@ -1258,6 +1260,7 @@ fn settings_group(icon_name: &str, title: &str, description: &str) -> (gtk::Box,
 
     let group = gtk::Box::new(gtk::Orientation::Vertical, 6);
     group.add_css_class("settings-group");
+    apply_material_card(&group, MaterialCardSpec::new(MaterialCardVariant::Filled));
     group.append(&header);
     group.append(&rows);
 
@@ -1320,6 +1323,7 @@ fn row_with_control(title: &str, subtitle: &str, control: &impl IsA<gtk::Widget>
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     row.add_css_class("settings-row");
     row.add_css_class("settings-surface-row");
+    apply_material_card(&row, MaterialCardSpec::new(MaterialCardVariant::Outlined));
     row.append(&text);
     row.append(control);
     row

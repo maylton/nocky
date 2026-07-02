@@ -50,6 +50,9 @@ physics intact:
   the final cascade in `080-home-browser.css`.
 - Card action polish adds visible focus, selected favorite state, offline
   loading/success states and accessible labels for icon-only card actions.
+- Settings and YouTube stream-source surfaces now reuse the Material card
+  contract: hero entries are elevated, grouped sections are filled, and
+  scannable rows are outlined while keeping their existing controls.
 
 No transport controls, page switchers, queue rows or full-card click targets are
 replaced by the card contract. Clickable wrappers remain buttons, while the

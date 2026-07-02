@@ -4,6 +4,7 @@ use crate::{
         apply_material_button, apply_material_icon_button, MaterialButtonSize, MaterialButtonSpec,
         MaterialButtonVariant, MaterialIconButtonSpec, MaterialIconButtonVariant,
     },
+    ui::widgets::material_card::{apply_material_card, MaterialCardSpec, MaterialCardVariant},
 };
 use adw::prelude::*;
 use gtk::glib;
@@ -236,6 +237,8 @@ pub(crate) fn entry_row(
     row.append(&copy);
     row.append(&button);
     row.add_css_class("settings-hero");
+    row.add_css_class("settings-stream-source-entry");
+    apply_material_card(&row, MaterialCardSpec::new(MaterialCardVariant::Elevated));
     (row, button, summary)
 }
 
@@ -333,6 +336,9 @@ impl DialogState {
             row.append(&copy);
             row.append(&controls);
             row.add_css_class("settings-row");
+            row.add_css_class("settings-surface-row");
+            row.add_css_class("settings-stream-source-row");
+            apply_material_card(&row, MaterialCardSpec::new(MaterialCardVariant::Outlined));
             self.rows.append(&row);
 
             let key_up = key.clone();
