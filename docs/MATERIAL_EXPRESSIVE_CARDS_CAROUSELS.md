@@ -21,6 +21,13 @@ Material carousels use:
 - one variant class: `material-carousel-multi-browse` or
   `material-carousel-hero`.
 
+Card actions use semantic roles without replacing the existing clickable card
+surface:
+
+- `material-card-primary-action` for the floating play/resume action;
+- `material-card-overflow-trigger` for the overflow menu trigger;
+- `material-card-menu-action` for actions inside the card overflow menu.
+
 ## First Checkpoint
 
 The first migration keeps the existing Home geometry and browser-owned scroll
@@ -33,6 +40,8 @@ physics intact:
 - Home visual rails receive `material-carousel-multi-browse`.
 - Chip rails are not Material carousels because they are filter controls rather
   than visual item collections.
+- Home card action controls now expose Material card-action roles while keeping
+  the final cascade in `080-home-browser.css`.
 
 No transport controls, page switchers, queue rows or full-card click targets are
 replaced by the card contract. Clickable wrappers remain buttons, while the

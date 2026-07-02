@@ -6351,6 +6351,7 @@ fn home_card_button(
             control.set_margin_end(presentation.play_control_margin_end());
             control.add_css_class("circular");
             control.add_css_class("collection-card-context-action");
+            control.add_css_class("material-card-primary-action");
             if let Some(key) = playback_key.as_deref() {
                 control.set_widget_name(&format!("home-play-control:{key}"));
             }
@@ -6440,6 +6441,7 @@ fn home_card_button(
         menu_button.set_margin_start(10);
         menu_button.add_css_class("circular");
         menu_button.add_css_class("collection-card-overflow-button");
+        menu_button.add_css_class("material-card-overflow-trigger");
         menu_button.set_sensitive(!is_loading);
 
         let popover = gtk::Popover::new();
@@ -6528,6 +6530,7 @@ fn home_card_button(
             button.set_hexpand(true);
             button.add_css_class("flat");
             button.add_css_class("collection-card-overflow-action");
+            button.add_css_class("material-card-menu-action");
 
             let sender = event_tx.clone();
             let popover = popover.clone();
@@ -6576,6 +6579,7 @@ fn home_card_button(
             button.set_hexpand(true);
             button.add_css_class("flat");
             button.add_css_class("collection-card-overflow-action");
+            button.add_css_class("material-card-menu-action");
             button.add_css_class("collection-card-offline-action");
 
             let sender = event_tx.clone();
