@@ -1,5 +1,76 @@
 
 /*
+ * Material card and carousel foundation
+ * -------------------------------------
+ *
+ * Cards present a single subject. Home collection cards use the elevated
+ * variant because they sit on section containers and need visible separation.
+ * Carousels are horizontal visual collections; layout and scroll physics stay
+ * owned by browser.rs.
+ */
+window.theme-material-expressive .material-carousel {
+  background-color: transparent;
+}
+
+window.theme-material-expressive .material-carousel-multi-browse {
+  border-radius: 0;
+}
+
+window.theme-material-expressive .material-card {
+  color: @m3_on_surface;
+  background-image: none;
+  transition:
+    background-color 180ms ease-out,
+    border-color 180ms ease-out,
+    box-shadow 220ms ease-out;
+}
+
+window.theme-material-expressive .material-card-elevated {
+  background-color: @m3_surface_container;
+  border-color: alpha(@m3_outline, 0.18);
+  box-shadow: 0 5px 16px alpha(black, 0.13);
+}
+
+window.theme-material-expressive .material-card-filled {
+  background-color: @m3_surface_container_high;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .material-card-outlined {
+  background-color: @m3_surface;
+  border-color: @m3_outline_variant;
+  box-shadow: none;
+}
+
+window.theme-material-expressive
+  button.home-card-button:hover
+  .material-card-elevated,
+window.theme-material-expressive
+  button.collection-card-button:hover
+  .material-card-elevated,
+window.theme-material-expressive
+  button.compact-artist-button:hover
+  .material-card-elevated {
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.34);
+  box-shadow: 0 9px 24px alpha(black, 0.22);
+}
+
+window.theme-material-expressive
+  button.home-card-button:active
+  .material-card-elevated,
+window.theme-material-expressive
+  button.collection-card-button:active
+  .material-card-elevated,
+window.theme-material-expressive
+  button.compact-artist-button:active
+  .material-card-elevated {
+  background-color: @m3_secondary_container;
+  border-color: alpha(@m3_primary, 0.46);
+}
+
+/*
  * Match the playback queue's M3 thumb construction:
  * a tonal outer capsule surrounding a darker inner core.
  * Overall geometry remains 34 px × 6 px.
@@ -253,4 +324,3 @@ window.theme-material-expressive
 .collection-card-overflow-action:hover {
   background-color: alpha(@m3_primary, 0.14);
 }
-

@@ -12,6 +12,10 @@ use crate::{
             MaterialButtonSemantic, MaterialButtonSize, MaterialButtonSpec, MaterialButtonVariant,
             MaterialChipSpec, MaterialChipVariant,
         },
+        material_card::{
+            apply_material_card, apply_material_carousel, MaterialCardSpec, MaterialCardVariant,
+            MaterialCarouselSpec, MaterialCarouselVariant,
+        },
         MaterialLoadingIndicator,
     },
     youtube::{
@@ -5156,6 +5160,10 @@ fn metrolist_home_scroller(
     scroll.set_child(Some(child));
     scroll.add_css_class("home-carousel-scroll");
     scroll.add_css_class("home-card-grid-scroll");
+    apply_material_carousel(
+        &scroll,
+        MaterialCarouselSpec::new(MaterialCarouselVariant::MultiBrowse),
+    );
     scroll
 }
 
@@ -6756,6 +6764,7 @@ fn home_collection_card(
     card.append(&text);
     card.add_css_class("collection-card");
     card.add_css_class("expressive-collection-card");
+    apply_material_card(&card, MaterialCardSpec::new(MaterialCardVariant::Elevated));
     match presentation {
         HomeSectionPresentation::Featured => card.add_css_class("home-card-featured"),
         HomeSectionPresentation::Compact => card.add_css_class("home-card-compact"),
@@ -7256,6 +7265,7 @@ fn collection_card(
     card.set_valign(gtk::Align::Start);
     card.add_css_class("collection-card");
     card.add_css_class("expressive-collection-card");
+    apply_material_card(&card, MaterialCardSpec::new(MaterialCardVariant::Elevated));
     if online {
         card.add_css_class("youtube-collection-card");
     }
@@ -7364,6 +7374,7 @@ fn artist_collection_card(
     card.add_css_class("compact-artist-card");
     card.add_css_class("collection-card");
     card.add_css_class("expressive-collection-card");
+    apply_material_card(&card, MaterialCardSpec::new(MaterialCardVariant::Elevated));
     card.add_css_class("search-result-row");
     if online {
         card.add_css_class("youtube-collection-card");
@@ -7457,6 +7468,7 @@ fn artist_load_more_button(remaining: usize, event_tx: &Sender<BrowserEvent>) ->
     card.add_css_class("compact-artist-card");
     card.add_css_class("collection-card");
     card.add_css_class("expressive-collection-card");
+    apply_material_card(&card, MaterialCardSpec::new(MaterialCardVariant::Elevated));
     card.add_css_class("search-result-row");
     card.add_css_class("artist-load-more-card");
 

@@ -5,6 +5,10 @@ mod compact_volume_motion;
 mod cover;
 mod expressive_loading;
 mod expressive_transport;
+// Some card/carousel variants land before their later migration checkpoints.
+// Keep the allowance scoped to this foundation module.
+#[allow(dead_code)]
+pub(crate) mod material_card;
 // Some variants intentionally land before their later migration checkpoints.
 // Keep the allowance scoped to this foundation module.
 #[allow(dead_code)]
