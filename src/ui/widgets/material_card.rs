@@ -2,9 +2,10 @@
 //!
 //! Cards are content surfaces for a single subject. Carousels are horizontal
 //! collections of visual cards. Besides applying semantic classes, this module
-//! installs the browser-independent Material 3 keyline masking behavior on GTK
-//! scrolled windows. The item slot stays stable while the visible mask changes,
-//! avoiding layout jumps as cards move between large, medium and small states.
+//! installs browser-independent Material 3 keyline masking behavior on GTK
+//! scrolled windows. Every card keeps an immutable outer slot; a nested viewport
+//! owns the changing visible mask so scrolling never feeds deformed geometry
+//! back into the next keyline calculation.
 
 use gtk::prelude::*;
 use std::rc::Rc;
@@ -31,7 +32,9 @@ const CAROUSEL_STATE_CLASSES: &[&str] = &[
 
 const CAROUSEL_ITEM_CLASS: &str = "home-card-context-overlay";
 const CAROUSEL_INSTALLED_CLASS: &str = "material-carousel-motion-installed";
+const CAROUSEL_SLOT_CLASS: &str = "material-carousel-slot";
 const CAROUSEL_MASK_CLASS: &str = "material-carousel-mask";
+const CAROUSEL_CONTENT_CLASS: &str = "material-carousel-content";
 
 const FEATURED_OUTER_WIDTH: i32 = 220;
 const COMPACT_OUTER_WIDTH: i32 = 168;
@@ -187,9 +190,12 @@ fn update_material_carousel_masks(
 
     let material_theme_active = widget_or_ancestor_has_css(scroll, "theme-material-expressive");
     let effective_variant = infer_carousel_variant(scroll, &items, requested_variant);
+    let viewport_width = f64::from(viewport_width);
 
     for item in items {
         let base_width = carousel_item_base_width(&item);
+        restore_stable_slot_geometry(&item, base_width);
+
         if !material_theme_active || effective_variant == MaterialCarouselVariant::Uncontained {
             reset_carousel_item(&item, base_width);
             continue;
@@ -199,7 +205,6 @@ fn update_material_carousel_masks(
             continue;
         };
         let center_x = f64::from(bounds.x() + bounds.width() / 2.0);
-        let viewport_width = f64::from(viewport_width);
         let base_width_f64 = f64::from(base_width);
 
         let (visible_width, focal_x) = match effective_variant {
@@ -214,8 +219,12 @@ fn update_material_carousel_masks(
             MaterialCarouselVariant::Uncontained => (base_width_f64, viewport_width / 2.0),
         };
 
+        let Some(mask) = ensure_carousel_mask(&item, base_width) else {
+            continue;
+        };
         apply_carousel_mask(
             &item,
+            &mask,
             base_width,
             visible_width.round() as i32,
             center_x,
@@ -260,7 +269,7 @@ fn carousel_item_base_width(item: &gtk::Widget) -> i32 {
 }
 
 fn multi_browse_visible_width(center_x: f64, viewport_width: f64, base_width: f64) -> f64 {
-    let minimum_width = (base_width * 0.48).max(72.0);
+    let minimum_width = (base_width * 0.62).max(88.0);
     let edge_transition = (base_width * 0.92).min(viewport_width * 0.24).max(72.0);
     let distance_to_edge = center_x.min(viewport_width - center_x).max(0.0);
     let progress = smoothstep((distance_to_edge / edge_transition).clamp(0.0, 1.0));
@@ -269,17 +278,78 @@ fn multi_browse_visible_width(center_x: f64, viewport_width: f64, base_width: f6
 
 fn hero_visible_width(center_x: f64, viewport_width: f64, base_width: f64) -> f64 {
     let focal_x = viewport_width * 0.42;
-    let minimum_width = (base_width * 0.42).max(80.0);
-    let full_radius = base_width * 0.16;
-    let transition_radius = (base_width * 1.45).max(full_radius + 1.0);
+    let minimum_width = (base_width * 0.58).max(96.0);
+    let full_radius = base_width * 0.18;
+    let transition_radius = (base_width * 1.35).max(full_radius + 1.0);
     let distance = (center_x - focal_x).abs();
     let collapse =
         smoothstep(((distance - full_radius) / (transition_radius - full_radius)).clamp(0.0, 1.0));
     lerp(base_width, minimum_width, collapse)
 }
 
+fn ensure_carousel_mask(item: &gtk::Widget, base_width: i32) -> Option<gtk::Viewport> {
+    let overlay = item.clone().downcast::<gtk::Overlay>().ok()?;
+
+    if item.has_css_class(CAROUSEL_SLOT_CLASS) {
+        return overlay.child()?.downcast::<gtk::Viewport>().ok();
+    }
+
+    let main_child = overlay.child()?;
+    overlay.set_child(None::<&gtk::Widget>);
+
+    let content = gtk::Overlay::new();
+    content.set_size_request(base_width, -1);
+    content.set_hexpand(false);
+    content.set_vexpand(false);
+    content.set_halign(gtk::Align::Start);
+    content.set_valign(gtk::Align::Start);
+    content.add_css_class(CAROUSEL_CONTENT_CLASS);
+    content.set_child(Some(&main_child));
+
+    let mut overlay_children = Vec::new();
+    let mut child = overlay.first_child();
+    while let Some(current) = child {
+        child = current.next_sibling();
+        overlay_children.push(current);
+    }
+
+    for child in overlay_children {
+        overlay.remove_overlay(&child);
+        content.add_overlay(&child);
+    }
+
+    let mask = gtk::Viewport::new(None::<&gtk::Adjustment>, None::<&gtk::Adjustment>);
+    mask.set_width_request(base_width);
+    mask.set_hexpand(false);
+    mask.set_vexpand(true);
+    mask.set_halign(gtk::Align::Start);
+    mask.set_valign(gtk::Align::Fill);
+    mask.set_overflow(gtk::Overflow::Hidden);
+    mask.add_css_class(CAROUSEL_MASK_CLASS);
+    mask.set_child(Some(&content));
+
+    overlay.set_child(Some(&mask));
+    overlay.add_css_class(CAROUSEL_SLOT_CLASS);
+    overlay.set_overflow(gtk::Overflow::Visible);
+
+    Some(mask)
+}
+
+fn restore_stable_slot_geometry(item: &gtk::Widget, base_width: i32) {
+    item.set_width_request(base_width);
+    item.set_margin_start(0);
+    item.set_margin_end(0);
+    item.set_overflow(gtk::Overflow::Visible);
+    item.remove_css_class(CAROUSEL_MASK_CLASS);
+
+    for class_name in CAROUSEL_STATE_CLASSES {
+        item.remove_css_class(class_name);
+    }
+}
+
 fn apply_carousel_mask(
     item: &gtk::Widget,
+    mask: &gtk::Viewport,
     base_width: i32,
     visible_width: i32,
     center_x: f64,
@@ -289,59 +359,69 @@ fn apply_carousel_mask(
     let hidden_width = base_width.saturating_sub(visible_width);
     let ratio = f64::from(visible_width) / f64::from(base_width.max(1));
 
-    item.add_css_class(CAROUSEL_MASK_CLASS);
-    item.set_overflow(gtk::Overflow::Hidden);
-    item.set_width_request(visible_width);
+    restore_stable_slot_geometry(item, base_width);
+    mask.set_overflow(gtk::Overflow::Hidden);
+    mask.set_width_request(visible_width);
 
     for class_name in CAROUSEL_STATE_CLASSES {
-        item.remove_css_class(class_name);
+        mask.remove_css_class(class_name);
     }
 
     if ratio >= 0.88 {
-        item.add_css_class("material-carousel-item-large");
+        mask.add_css_class("material-carousel-item-large");
     } else if ratio >= 0.64 {
-        item.add_css_class("material-carousel-item-medium");
+        mask.add_css_class("material-carousel-item-medium");
     } else {
-        item.add_css_class("material-carousel-item-small");
+        mask.add_css_class("material-carousel-item-small");
     }
 
+    let adjustment = mask.hadjustment();
+    adjustment.set_lower(0.0);
+    adjustment.set_upper(f64::from(base_width));
+    adjustment.set_page_size(f64::from(visible_width));
+
     if hidden_width == 0 {
-        item.set_margin_start(0);
-        item.set_margin_end(0);
+        mask.set_halign(gtk::Align::Start);
+        adjustment.set_value(0.0);
         return;
     }
 
     if center_x < focal_x {
-        item.set_margin_start(hidden_width);
-        item.set_margin_end(0);
-        item.add_css_class("material-carousel-item-leading");
-        align_carousel_child(item, gtk::Align::End);
+        mask.set_halign(gtk::Align::End);
+        mask.add_css_class("material-carousel-item-leading");
+        adjustment.set_value(f64::from(hidden_width));
     } else {
-        item.set_margin_start(0);
-        item.set_margin_end(hidden_width);
-        item.add_css_class("material-carousel-item-trailing");
-        align_carousel_child(item, gtk::Align::Start);
+        mask.set_halign(gtk::Align::Start);
+        mask.add_css_class("material-carousel-item-trailing");
+        adjustment.set_value(0.0);
     }
 }
 
 fn reset_carousel_item(item: &gtk::Widget, base_width: i32) {
-    item.set_width_request(base_width);
-    item.set_margin_start(0);
-    item.set_margin_end(0);
-    item.set_overflow(gtk::Overflow::Visible);
-    item.remove_css_class(CAROUSEL_MASK_CLASS);
-    for class_name in CAROUSEL_STATE_CLASSES {
-        item.remove_css_class(class_name);
-    }
-    align_carousel_child(item, gtk::Align::Start);
-}
+    restore_stable_slot_geometry(item, base_width);
 
-fn align_carousel_child(item: &gtk::Widget, alignment: gtk::Align) {
     let Ok(overlay) = item.clone().downcast::<gtk::Overlay>() else {
         return;
     };
-    if let Some(child) = overlay.child() {
-        child.set_halign(alignment);
+    let Some(mask) = overlay
+        .child()
+        .and_then(|child| child.downcast::<gtk::Viewport>().ok())
+    else {
+        return;
+    };
+
+    mask.set_width_request(base_width);
+    mask.set_halign(gtk::Align::Start);
+    mask.set_overflow(gtk::Overflow::Hidden);
+
+    let adjustment = mask.hadjustment();
+    adjustment.set_lower(0.0);
+    adjustment.set_upper(f64::from(base_width));
+    adjustment.set_page_size(f64::from(base_width));
+    adjustment.set_value(0.0);
+
+    for class_name in CAROUSEL_STATE_CLASSES {
+        mask.remove_css_class(class_name);
     }
 }
 
@@ -443,7 +523,7 @@ mod tests {
         let edge = multi_browse_visible_width(8.0, viewport, base);
         let center = multi_browse_visible_width(viewport / 2.0, viewport, base);
 
-        assert!(edge < base * 0.60);
+        assert!(edge < base * 0.72);
         assert!((center - base).abs() < f64::EPSILON);
     }
 
@@ -456,7 +536,7 @@ mod tests {
         let distant = hero_visible_width(focal + base * 1.5, viewport, base);
 
         assert!((focused - base).abs() < f64::EPSILON);
-        assert!(distant < base * 0.55);
+        assert!(distant < base * 0.68);
     }
 
     #[test]
