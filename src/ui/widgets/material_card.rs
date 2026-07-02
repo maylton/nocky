@@ -347,6 +347,30 @@ fn restore_stable_slot_geometry(item: &gtk::Widget, base_width: i32) {
     }
 }
 
+fn configure_mask_adjustment(
+    mask: &gtk::Viewport,
+    base_width: i32,
+    visible_width: i32,
+    value: i32,
+) {
+    let Some(adjustment) = mask.hadjustment() else {
+        return;
+    };
+
+    let visible_width = visible_width.clamp(1, base_width);
+    let maximum_value = base_width.saturating_sub(visible_width);
+    let value = value.clamp(0, maximum_value);
+
+    adjustment.configure(
+        f64::from(value),
+        0.0,
+        f64::from(base_width),
+        1.0,
+        f64::from(visible_width),
+        f64::from(visible_width),
+    );
+}
+
 fn apply_carousel_mask(
     item: &gtk::Widget,
     mask: &gtk::Viewport,
@@ -375,25 +399,20 @@ fn apply_carousel_mask(
         mask.add_css_class("material-carousel-item-small");
     }
 
-    let adjustment = mask.hadjustment();
-    adjustment.set_lower(0.0);
-    adjustment.set_upper(f64::from(base_width));
-    adjustment.set_page_size(f64::from(visible_width));
-
     if hidden_width == 0 {
         mask.set_halign(gtk::Align::Start);
-        adjustment.set_value(0.0);
+        configure_mask_adjustment(mask, base_width, visible_width, 0);
         return;
     }
 
     if center_x < focal_x {
         mask.set_halign(gtk::Align::End);
         mask.add_css_class("material-carousel-item-leading");
-        adjustment.set_value(f64::from(hidden_width));
+        configure_mask_adjustment(mask, base_width, visible_width, hidden_width);
     } else {
         mask.set_halign(gtk::Align::Start);
         mask.add_css_class("material-carousel-item-trailing");
-        adjustment.set_value(0.0);
+        configure_mask_adjustment(mask, base_width, visible_width, 0);
     }
 }
 
@@ -413,12 +432,7 @@ fn reset_carousel_item(item: &gtk::Widget, base_width: i32) {
     mask.set_width_request(base_width);
     mask.set_halign(gtk::Align::Start);
     mask.set_overflow(gtk::Overflow::Hidden);
-
-    let adjustment = mask.hadjustment();
-    adjustment.set_lower(0.0);
-    adjustment.set_upper(f64::from(base_width));
-    adjustment.set_page_size(f64::from(base_width));
-    adjustment.set_value(0.0);
+    configure_mask_adjustment(&mask, base_width, base_width, 0);
 
     for class_name in CAROUSEL_STATE_CLASSES {
         mask.remove_css_class(class_name);
