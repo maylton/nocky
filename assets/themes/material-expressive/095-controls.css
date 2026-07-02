@@ -136,22 +136,3 @@ window.theme-material-expressive
   color: @m3_primary_container;
   background-color: @m3_on_primary_container;
 }
-
-/* Noctalia fallback uses the same semantic widget. */
-window.theme-noctalia
-  button.playback-mode-toggle:hover {
-  background-color: alpha(@theme_fg_color, 0.09);
-}
-
-window.theme-noctalia
-  button.playback-mode-toggle:checked {
-  color: @accent_fg_color;
-  background-color: @accent_bg_color;
-}
-
-window.theme-noctalia
-  button.repeat-mode-toggle:checked
-  .mode-toggle-badge {
-  color: @accent_bg_color;
-  background-color: @accent_fg_color;
-}

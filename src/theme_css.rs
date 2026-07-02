@@ -168,6 +168,16 @@ mod tests {
     }
 
     #[test]
+    fn material_controls_css_does_not_style_noctalia() {
+        let controls_css = MATERIAL_EXPRESSIVE_MODULES
+            .iter()
+            .find_map(|(name, css)| (*name == "095-controls.css").then_some(*css))
+            .expect("095-controls.css module should be registered");
+
+        assert!(!controls_css.contains("theme-noctalia"));
+    }
+
+    #[test]
     fn material_modules_are_not_empty() {
         assert!(MATERIAL_EXPRESSIVE_MODULES
             .iter()

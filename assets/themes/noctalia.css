@@ -182,3 +182,22 @@ window.theme-noctalia .lyric-seek-target:hover {
 window.theme-material-expressive .lyric-seek-target:hover {
   background-color: alpha(@m3_primary, 0.14);
 }
+
+/* playback_mode_toggle_v1 */
+window.theme-noctalia
+  button.playback-mode-toggle:hover {
+  background-color: alpha(@theme_fg_color, 0.09);
+}
+
+window.theme-noctalia
+  button.playback-mode-toggle:checked {
+  color: @accent_fg_color;
+  background-color: @accent_bg_color;
+}
+
+window.theme-noctalia
+  button.repeat-mode-toggle:checked
+  .mode-toggle-badge {
+  color: @accent_bg_color;
+  background-color: @accent_fg_color;
+}
