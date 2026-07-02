@@ -77,3 +77,81 @@ impl MaterialButtonSpec {
         classes
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn variants_map_to_expected_classes() {
+        assert_eq!(
+            MaterialButtonVariant::Filled.css_class(),
+            "material-button-filled"
+        );
+        assert_eq!(
+            MaterialButtonVariant::FilledTonal.css_class(),
+            "material-button-filled-tonal"
+        );
+        assert_eq!(
+            MaterialButtonVariant::Elevated.css_class(),
+            "material-button-elevated"
+        );
+        assert_eq!(
+            MaterialButtonVariant::Outlined.css_class(),
+            "material-button-outlined"
+        );
+        assert_eq!(
+            MaterialButtonVariant::Text.css_class(),
+            "material-button-text"
+        );
+    }
+
+    #[test]
+    fn sizes_map_to_expected_classes() {
+        assert_eq!(
+            MaterialButtonSize::Compact.css_class(),
+            "material-button-compact"
+        );
+        assert_eq!(
+            MaterialButtonSize::Standard.css_class(),
+            "material-button-standard"
+        );
+        assert_eq!(
+            MaterialButtonSize::Large.css_class(),
+            "material-button-large"
+        );
+    }
+
+    #[test]
+    fn standard_spec_contains_variant_and_size_only() {
+        let classes = MaterialButtonSpec::new(
+            MaterialButtonVariant::FilledTonal,
+            MaterialButtonSize::Standard,
+        )
+        .css_classes();
+
+        assert_eq!(
+            classes,
+            vec!["material-button-filled-tonal", "material-button-standard"]
+        );
+    }
+
+    #[test]
+    fn destructive_is_a_semantic_modifier() {
+        let classes = MaterialButtonSpec::new(
+            MaterialButtonVariant::Outlined,
+            MaterialButtonSize::Compact,
+        )
+        .with_semantic(MaterialButtonSemantic::Destructive)
+        .css_classes();
+
+        assert_eq!(
+            classes,
+            vec![
+                "material-button-outlined",
+                "material-button-compact",
+                "material-button-destructive",
+            ]
+        );
+    }
+}
