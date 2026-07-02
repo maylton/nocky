@@ -13,7 +13,7 @@ Reference: <https://m3.material.io/components/all-buttons>
   labeled/loading batch.
 - Visual behavior changed only for explicitly audited Settings controls.
 - Local automated validation passes.
-- Next step: continue browser/search labeled buttons after review.
+- Next step: continue icon-only and specialized popover buttons after review.
 
 The inventory below records the currently identified button families. It will be
 expanded to one row per construction site before the checkpoint is marked ready
@@ -97,8 +97,12 @@ but their existing motion and layout ownership must remain intact.
 | Home card surface | `src/browser.rs` | full-card button | clickable surface, not common button | hover, focus, pressed, playing | preserve architecture |
 | Home card play/context | `src/browser.rs` | contextual icon action | filled/elevated icon button | hover, focus, pressed, selected | later icon checkpoint |
 | Home card overflow | `src/browser.rs` | compact icon button | standard icon button with 48 px target | hover, focus, pressed | later icon checkpoint |
-| Collection offline action | `src/browser.rs` | stateful labeled button | filled/tonal stateful button | ready, loading, complete, retry, disabled | loading checkpoint |
-| Search/load-more actions | `src/browser.rs` | labeled actions | filled tonal or text by hierarchy | hover, focus, pressed, loading | loading checkpoint |
+| Local playlist create | `src/browser.rs` | suggested labeled button | filled button | hover, focus, pressed | migrated |
+| Local playlist add current | `src/browser.rs` | labeled button | filled tonal button | hover, focus, pressed | migrated |
+| Local playlist remove current | `src/browser.rs` | labeled button | outlined button | hover, focus, pressed | migrated |
+| Local playlist delete | `src/browser.rs` | destructive labeled button | destructive outlined button | hover, focus, pressed | migrated |
+| Collection offline action | `src/browser.rs` | stateful labeled button | filled tonal or outlined by state | ready, loading, complete, retry, disabled | migrated |
+| Search/load-more actions | `src/browser.rs` | labeled actions | filled tonal by hierarchy | hover, focus, pressed, loading | migrated |
 
 ## Foundation class contract
 
@@ -149,6 +153,14 @@ The first dialog/onboarding batch migrated:
 4. Stream-source configure — filled tonal.
 5. Stream-source reset — text.
 6. Assisted-login cancel — text.
+
+The first browser labeled-action batch migrated:
+
+1. Local playlist manager actions — create filled, add filled tonal, remove
+   outlined and delete destructive outlined.
+2. Search load-more and YouTube Home load-more — filled tonal.
+3. Collection offline action — stateful filled tonal, with loading class while
+   downloading and outlined retry state.
 
 ## Loading contract for a later checkpoint
 

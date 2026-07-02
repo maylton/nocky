@@ -6,7 +6,13 @@ use crate::{
     model::Track,
     offline_store::OfflineStore,
     search_text::{normalize_search_text, search_matches, search_score},
-    ui::widgets::MaterialLoadingIndicator,
+    ui::widgets::{
+        material_button::{
+            apply_material_button, set_material_button_loading, MaterialButtonSemantic,
+            MaterialButtonSize, MaterialButtonSpec, MaterialButtonVariant,
+        },
+        MaterialLoadingIndicator,
+    },
     youtube::{
         artist_credit_contains, credited_artists, youtube_cache_visual_state,
         youtube_collection_cache_key, youtube_collection_key, youtube_home_section_key,
@@ -1123,25 +1129,55 @@ fn apply_collection_offline_button_state(
 
     match state {
         CollectionOfflineButtonState::Ready => {
+            apply_material_button(
+                button,
+                MaterialButtonSpec::new(
+                    MaterialButtonVariant::FilledTonal,
+                    MaterialButtonSize::Compact,
+                ),
+            );
+            set_material_button_loading(button, false);
             button.set_icon_name("folder-download-symbolic");
             button.set_sensitive(true);
-            button.add_css_class("suggested-action");
             button.add_css_class("collection-offline-ready");
         }
         CollectionOfflineButtonState::Downloading { .. } => {
+            apply_material_button(
+                button,
+                MaterialButtonSpec::new(
+                    MaterialButtonVariant::FilledTonal,
+                    MaterialButtonSize::Compact,
+                ),
+            );
+            set_material_button_loading(button, true);
             button.set_icon_name("emblem-synchronizing-symbolic");
             button.set_sensitive(false);
-            button.add_css_class("suggested-action");
             button.add_css_class("collection-offline-downloading");
             button.set_opacity(1.0);
         }
         CollectionOfflineButtonState::Complete => {
+            apply_material_button(
+                button,
+                MaterialButtonSpec::new(
+                    MaterialButtonVariant::FilledTonal,
+                    MaterialButtonSize::Compact,
+                ),
+            );
+            set_material_button_loading(button, false);
             button.set_icon_name("emblem-ok-symbolic");
             button.set_sensitive(false);
             button.add_css_class("success");
             button.add_css_class("collection-offline-complete");
         }
         CollectionOfflineButtonState::Retry => {
+            apply_material_button(
+                button,
+                MaterialButtonSpec::new(
+                    MaterialButtonVariant::Outlined,
+                    MaterialButtonSize::Compact,
+                ),
+            );
+            set_material_button_loading(button, false);
             button.set_icon_name("view-refresh-symbolic");
             button.set_sensitive(true);
             button.add_css_class("warning");
@@ -1764,7 +1800,10 @@ impl LibraryBrowser {
             .hexpand(true)
             .build();
         let create_button = gtk::Button::with_label("Criar");
-        create_button.add_css_class("suggested-action");
+        apply_material_button(
+            &create_button,
+            MaterialButtonSpec::new(MaterialButtonVariant::Filled, MaterialButtonSize::Compact),
+        );
         {
             let tx = event_tx.clone();
             let entry = playlist_entry.clone();
@@ -1803,7 +1842,22 @@ impl LibraryBrowser {
         let add_button = gtk::Button::with_label("Adicionar faixa atual");
         let remove_button = gtk::Button::with_label("Remover faixa atual");
         let delete_button = gtk::Button::with_label("Excluir playlist local");
-        delete_button.add_css_class("destructive-action");
+        apply_material_button(
+            &add_button,
+            MaterialButtonSpec::new(
+                MaterialButtonVariant::FilledTonal,
+                MaterialButtonSize::Compact,
+            ),
+        );
+        apply_material_button(
+            &remove_button,
+            MaterialButtonSpec::new(MaterialButtonVariant::Outlined, MaterialButtonSize::Compact),
+        );
+        apply_material_button(
+            &delete_button,
+            MaterialButtonSpec::new(MaterialButtonVariant::Outlined, MaterialButtonSize::Compact)
+                .with_semantic(MaterialButtonSemantic::Destructive),
+        );
 
         for (button, kind) in [
             (&add_button, 0_u8),
@@ -4633,7 +4687,13 @@ fn search_more_button(
     let next = remaining.min(SEARCH_BATCH_SIZE);
     let button = gtk::Button::with_label(&format!("{} {next} {category}", copy.load_more));
     button.set_halign(gtk::Align::Start);
-    button.add_css_class("pill");
+    apply_material_button(
+        &button,
+        MaterialButtonSpec::new(
+            MaterialButtonVariant::FilledTonal,
+            MaterialButtonSize::Compact,
+        ),
+    );
     let sender = event_tx.clone();
     button.connect_clicked(move |_| {
         limit.set(limit.get().saturating_add(SEARCH_BATCH_SIZE));
@@ -5579,8 +5639,13 @@ fn youtube_home_load_more_button(
     };
     let load_more = gtk::Button::with_label(copy.youtube_load_more);
     load_more.set_halign(gtk::Align::Center);
-    load_more.add_css_class("pill");
-    load_more.add_css_class("suggested-action");
+    apply_material_button(
+        &load_more,
+        MaterialButtonSpec::new(
+            MaterialButtonVariant::FilledTonal,
+            MaterialButtonSize::Compact,
+        ),
+    );
     load_more.add_css_class("youtube-home-load-more");
     let continuation = page.continuation.clone();
     let params = page.selected_chip_params.clone();
@@ -5588,6 +5653,7 @@ fn youtube_home_load_more_button(
     load_more.connect_clicked(move |button| {
         button.set_label(loading_label);
         button.set_sensitive(false);
+        set_material_button_loading(button, true);
         let _ = event_tx.send(BrowserEvent::LoadYouTubeHome {
             continuation: continuation.clone(),
             params: params.clone(),
