@@ -16,6 +16,16 @@
 @define-color m3_outline_variant #46464f;
 @define-color m3_error #ffb4ab;
 
+/* Google Sans Flex is the Material Expressive typeface. Keep the font scoped
+ * to this theme so Noctalia and Frosted Glass preserve their own typography. */
+window.theme-material-expressive,
+window.theme-material-expressive .app-shell,
+window.theme-material-expressive tooltip,
+window.theme-material-expressive popover,
+dialog.theme-material-expressive {
+  font-family: "Google Sans Flex", "Google Sans", "Inter", "Cantarell", sans-serif;
+}
+
 window.theme-material-expressive,
 window.theme-material-expressive .app-shell {
   background-color: @m3_surface;
@@ -215,162 +225,4 @@ window.theme-material-expressive .player-favorite-action {
   min-width: 38px;
   min-height: 38px;
   border-radius: 20px;
-}
-
-
-/* Transport surface and action hierarchy */
-window.theme-material-expressive .player-transport-surface {
-  min-height: 122px;
-  padding: 12px 14px 10px 14px;
-  border-radius: 28px;
-  background-color: @m3_surface_container_high;
-  border: 1px solid alpha(@m3_outline, 0.20);
-}
-
-window.theme-material-expressive .player-time-row {
-  padding-left: 4px;
-  padding-right: 4px;
-}
-
-window.theme-material-expressive .player-elapsed,
-window.theme-material-expressive .player-duration {
-  color: @m3_on_surface_variant;
-  font-size: 0.72rem;
-  font-weight: 650;
-}
-
-window.theme-material-expressive .player-transport-controls {
-  min-height: 70px;
-  padding: 3px 6px;
-}
-
-window.theme-material-expressive .player-primary-control {
-  min-width: 68px;
-  min-height: 68px;
-  border-radius: 24px;
-  color: @m3_on_primary;
-  background-color: @m3_primary;
-  box-shadow: 0 8px 22px alpha(@m3_primary, 0.26);
-  transition:
-    border-radius 220ms ease-out,
-    background-color 180ms ease-out,
-    box-shadow 220ms ease-out;
-}
-
-window.theme-material-expressive .player-primary-control:hover {
-  border-radius: 32px;
-  background-color: shade(@m3_primary, 1.06);
-  box-shadow: 0 10px 26px alpha(@m3_primary, 0.34);
-}
-
-window.theme-material-expressive .player-primary-control:active {
-  border-radius: 18px;
-  background-color: shade(@m3_primary, 0.94);
-}
-
-window.theme-material-expressive .player-skip-control {
-  min-width: 48px;
-  min-height: 48px;
-  border-radius: 24px;
-  color: @m3_on_secondary_container;
-  background-color: alpha(@m3_secondary_container, 0.86);
-}
-
-window.theme-material-expressive .player-skip-control:hover {
-  background-color: shade(@m3_secondary_container, 1.12);
-}
-
-/* Supporting content stays calm but visibly grouped */
-window.theme-material-expressive .player-visualizer-surface,
-window.theme-material-expressive .player-lyrics-surface {
-  border-radius: 24px;
-  background-color: alpha(@m3_surface_container_low, 0.72);
-  border: 1px solid alpha(@m3_outline, 0.14);
-}
-
-window.theme-material-expressive .player-lyrics-surface {
-  padding: 4px 8px;
-}
-
-window.theme-material-expressive .player-visualizer-surface {
-  padding: 2px 6px;
-}
-
-window.theme-material-expressive .expressive-footer {
-  border: 1px solid alpha(@m3_outline, 0.24);
-  border-top: 1px solid alpha(@m3_outline, 0.24);
-  background-color: @m3_surface_container_low;
-  background-clip: padding-box;
-  background-image: radial-gradient(circle at 4% 50%, alpha(@m3_primary, 0.14), transparent 32%),
-    linear-gradient(110deg, transparent 48%, alpha(@m3_tertiary, 0.055));
-  box-shadow: none;
-}
-
-window.theme-material-expressive .footer-info-card {
-  border: 1px solid alpha(@m3_primary, 0.22);
-  box-shadow: none;
-}
-
-window.theme-material-expressive .footer-info-card:hover {
-  background-color: shade(@m3_primary_container, 1.06);
-}
-
-
-window.theme-material-expressive .footer-artwork {
-  border: 1px solid alpha(@m3_primary, 0.34);
-  box-shadow: 0 5px 16px alpha(black, 0.26);
-}
-
-window.theme-material-expressive .footer-metadata {
-  margin-left: 3px;
-}
-
-window.theme-material-expressive .footer-track-title {
-  font-weight: 820;
-  letter-spacing: 0;
-}
-
-window.theme-material-expressive .footer-track-artist {
-  color: alpha(@m3_on_primary_container, 0.76);
-  font-weight: 560;
-}
-
-window.theme-material-expressive .footer-favorite-action {
-  min-width: 30px;
-  min-height: 30px;
-  border-radius: 16px;
-}
-
-
-window.theme-material-expressive .footer-source-pill {
-  color: @m3_on_tertiary_container;
-  background-color: @m3_tertiary_container;
-  border: 1px solid alpha(@m3_tertiary, 0.20);
-  font-weight: 720;
-}
-
-
-window.theme-material-expressive .footer-transport-controls {
-  background-color: alpha(@m3_surface_container_high, 0.90);
-  border: 1px solid alpha(@m3_outline, 0.17);
-}
-
-window.theme-material-expressive .footer-primary-control {
-  color: @m3_on_primary;
-  background-color: @m3_primary;
-  box-shadow: 0 6px 18px alpha(@m3_primary, 0.28);
-}
-
-window.theme-material-expressive .footer-primary-control:hover {
-  background-color: shade(@m3_primary, 1.06);
-}
-
-window.theme-material-expressive .footer-primary-control:active {
-  border-radius: 16px;
-  background-color: shade(@m3_primary, 0.94);
-}
-
-window.theme-material-expressive .footer-skip-control {
-  color: @m3_on_secondary_container;
-  background-color: @m3_secondary_container;
 }
