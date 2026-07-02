@@ -1,0 +1,30 @@
+name: Carousel Format Diagnostic
+
+on:
+  push:
+    branches:
+      - codex/material-expressive-buttons-foundation
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Format Rust sources
+        run: cargo fmt --all
+      - name: Collect formatted files
+        run: |
+          mkdir -p formatted/src/ui/widgets formatted/src
+          cp src/ui/widgets/material_card.rs formatted/src/ui/widgets/material_card.rs
+          cp src/theme_css.rs formatted/src/theme_css.rs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: carousel-formatted-rust
+          path: formatted
+          if-no-files-found: error
