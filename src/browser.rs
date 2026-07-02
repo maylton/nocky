@@ -5071,6 +5071,16 @@ impl HomeSectionPresentation {
     }
 }
 
+fn material_carousel_item_presentation(
+    section_presentation: HomeSectionPresentation,
+    index: usize,
+) -> HomeSectionPresentation {
+    match section_presentation {
+        HomeSectionPresentation::Featured if index > 0 => HomeSectionPresentation::Compact,
+        presentation => presentation,
+    }
+}
+
 fn metrolist_home_rail(presentation: HomeSectionPresentation) -> gtk::Box {
     let rail = gtk::Box::new(gtk::Orientation::Horizontal, presentation.rail_spacing());
     rail.set_halign(gtk::Align::Start);
@@ -5270,7 +5280,7 @@ fn metrolist_home_section_content(
 
 #[cfg(test)]
 mod responsive_home_grid_tests {
-    use super::HomeSectionPresentation;
+    use super::{material_carousel_item_presentation, HomeSectionPresentation};
 
     #[test]
     fn featured_geometry_is_larger_than_compact() {
@@ -5323,6 +5333,22 @@ mod responsive_home_grid_tests {
         assert_eq!(HomeSectionPresentation::Featured.scroller_height(1), 288);
         assert_eq!(HomeSectionPresentation::TrackRows.scroller_height(4), 288);
         assert_eq!(HomeSectionPresentation::Compact.scroller_height(2), 418);
+    }
+
+    #[test]
+    fn featured_carousel_uses_large_first_item_and_compact_trailing_items() {
+        assert_eq!(
+            material_carousel_item_presentation(HomeSectionPresentation::Featured, 0),
+            HomeSectionPresentation::Featured
+        );
+        assert_eq!(
+            material_carousel_item_presentation(HomeSectionPresentation::Featured, 1),
+            HomeSectionPresentation::Compact
+        );
+        assert_eq!(
+            material_carousel_item_presentation(HomeSectionPresentation::Compact, 1),
+            HomeSectionPresentation::Compact
+        );
     }
 }
 
@@ -6007,10 +6033,12 @@ fn home_section(
 
     let cards = cards
         .into_iter()
-        .map(|card| {
+        .enumerate()
+        .map(|(index, card)| {
+            let item_presentation = material_carousel_item_presentation(presentation, index);
             home_card_button(
                 card,
-                presentation,
+                item_presentation,
                 playback,
                 config,
                 event_tx,
