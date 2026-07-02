@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: read
+  issues: write
+  pull-requests: write
 
 jobs:
   format:
@@ -18,13 +20,30 @@ jobs:
           components: rustfmt
       - name: Format Rust sources
         run: cargo fmt --all
-      - name: Collect formatted files
+      - name: Publish rustfmt diff
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p formatted/src/ui/widgets formatted/src
-          cp src/ui/widgets/material_card.rs formatted/src/ui/widgets/material_card.rs
-          cp src/theme_css.rs formatted/src/theme_css.rs
-      - uses: actions/upload-artifact@v4
-        with:
-          name: carousel-formatted-rust
-          path: formatted
-          if-no-files-found: error
+          git diff -- src/ui/widgets/material_card.rs src/theme_css.rs > /tmp/rustfmt.diff
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          diff = Path('/tmp/rustfmt.diff').read_text(encoding='utf-8')
+          body = '<!-- carousel-rustfmt-diagnostic -->\n## Carousel rustfmt diagnostic\n\n```diff\n' + diff + '\n```'
+          request = urllib.request.Request(
+              'https://api.github.com/repos/maylton/nocky/issues/98/comments',
+              data=json.dumps({'body': body}).encode('utf-8'),
+              headers={
+                  'Authorization': f"Bearer {os.environ['GH_TOKEN']}",
+                  'Accept': 'application/vnd.github+json',
+                  'X-GitHub-Api-Version': '2022-11-28',
+                  'Content-Type': 'application/json',
+              },
+              method='POST',
+          )
+          with urllib.request.urlopen(request) as response:
+              print(response.status)
+          PY
