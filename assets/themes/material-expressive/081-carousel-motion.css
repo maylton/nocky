@@ -4,7 +4,8 @@
  *
  * Rust keeps an immutable outer slot for every card and changes only a nested
  * GtkViewport mask. GTK owns clipping through Widget::set_overflow(); CSS owns
- * rounded shapes and content-density states only.
+ * rounded shapes and edge-action density only. Card copy remains visible and
+ * leaves the viewport naturally through the mask instead of fading by state.
  */
 
 window.theme-material-expressive
@@ -52,9 +53,7 @@ window.theme-material-expressive
   .material-carousel-mask
   .collection-artwork
   image {
-  transition:
-    border-radius 180ms ease-out,
-    opacity 140ms ease-out;
+  transition: border-radius 180ms ease-out;
 }
 
 window.theme-material-expressive
@@ -108,28 +107,24 @@ window.theme-material-expressive
   border-radius: 16px;
 }
 
-/* Medium masks retain title and subtitle but remove secondary detail. */
 window.theme-material-expressive
-  .material-carousel-item-medium
-  .expressive-card-detail {
-  opacity: 0;
+  .material-carousel-mask
+  .collection-card-context-action,
+window.theme-material-expressive
+  .material-carousel-mask
+  .collection-card-overflow-button,
+window.theme-material-expressive
+  .material-carousel-mask
+  .material-card-primary-action,
+window.theme-material-expressive
+  .material-carousel-mask
+  .material-card-overflow-trigger {
+  transition: opacity 120ms ease-out;
 }
 
-/* Small edge previews behave as image-first peeks. The whole card remains
- * clickable because the original card and action overlays live inside the
- * viewport mask rather than being resized independently. */
-window.theme-material-expressive
-  .material-carousel-item-small
-  .collection-card-title,
-window.theme-material-expressive
-  .material-carousel-item-small
-  .expressive-card-title,
-window.theme-material-expressive
-  .material-carousel-item-small
-  .expressive-card-subtitle,
-window.theme-material-expressive
-  .material-carousel-item-small
-  .expressive-card-detail,
+/* Small edge previews keep their title, subtitle and detail inside the card.
+ * Only floating controls are hidden when the mask becomes too narrow to keep a
+ * useful and visually complete hit target. */
 window.theme-material-expressive
   .material-carousel-item-small
   .collection-card-context-action,
