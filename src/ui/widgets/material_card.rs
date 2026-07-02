@@ -261,9 +261,7 @@ fn carousel_item_base_width(item: &gtk::Widget) -> i32 {
 
 fn multi_browse_visible_width(center_x: f64, viewport_width: f64, base_width: f64) -> f64 {
     let minimum_width = (base_width * 0.48).max(72.0);
-    let edge_transition = (base_width * 0.92)
-        .min(viewport_width * 0.24)
-        .max(72.0);
+    let edge_transition = (base_width * 0.92).min(viewport_width * 0.24).max(72.0);
     let distance_to_edge = center_x.min(viewport_width - center_x).max(0.0);
     let progress = smoothstep((distance_to_edge / edge_transition).clamp(0.0, 1.0));
     lerp(minimum_width, base_width, progress)
@@ -275,9 +273,8 @@ fn hero_visible_width(center_x: f64, viewport_width: f64, base_width: f64) -> f6
     let full_radius = base_width * 0.16;
     let transition_radius = (base_width * 1.45).max(full_radius + 1.0);
     let distance = (center_x - focal_x).abs();
-    let collapse = smoothstep(
-        ((distance - full_radius) / (transition_radius - full_radius)).clamp(0.0, 1.0),
-    );
+    let collapse =
+        smoothstep(((distance - full_radius) / (transition_radius - full_radius)).clamp(0.0, 1.0));
     lerp(base_width, minimum_width, collapse)
 }
 
