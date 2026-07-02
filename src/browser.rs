@@ -3202,7 +3202,7 @@ impl LibraryBrowser {
                 recent,
                 &self.event_tx,
                 language,
-                card_effects,
+                material_carousel_v2_enabled(config),
             ));
         }
 
@@ -5518,7 +5518,7 @@ fn home_history_section(
     entries: Vec<HomeHistoryTrack>,
     event_tx: &Sender<BrowserEvent>,
     language: AppLanguage,
-    _card_effects: bool,
+    material_carousel_v2: bool,
 ) -> gtk::Box {
     let presentation = if !entries.is_empty()
         && entries.iter().all(|entry| {
@@ -5718,8 +5718,13 @@ fn home_history_section(
         cards.push(button.upcast::<gtk::Widget>());
     }
 
-    let content =
-        metrolist_home_section_content(cards, presentation, language, empty_detail, false);
+    let content = metrolist_home_section_content(
+        cards,
+        presentation,
+        language,
+        empty_detail,
+        material_carousel_v2,
+    );
     content.set_vexpand(false);
     content.set_valign(gtk::Align::Start);
 
