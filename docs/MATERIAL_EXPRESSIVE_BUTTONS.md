@@ -111,6 +111,10 @@ but their existing motion and layout ownership must remain intact.
 | Search/load-more actions | `src/browser.rs` | labeled actions | filled tonal by hierarchy | hover, focus, pressed, loading | migrated |
 | YouTube Home filter chips | `src/browser.rs` | pill/suggested action | filter chip | hover, focus, pressed, selected | migrated |
 | YouTube result filter chips | `src/youtube/mod.rs` | pill/suggested action | filter chip | hover, focus, pressed, selected | migrated |
+| YouTube account actions | `src/youtube/mod.rs` | suggested/flat actions | filled, outlined and text buttons | hover, focus, pressed, disabled | migrated |
+| YouTube search and sync | `src/youtube/mod.rs` | suggested actions | filled and filled tonal buttons | hover, focus, pressed, disabled | migrated |
+| YouTube private navigation | `src/youtube/mod.rs` | pill actions | assist/suggestion chips | hover, focus, pressed, disabled | migrated |
+| YouTube create playlist dialog | `src/youtube/playlist_create.rs` | suggested/flat dialog actions | filled and text buttons | hover, focus, pressed, disabled | migrated |
 
 ## Foundation class contract
 
@@ -211,6 +215,15 @@ The first chip batch migrated:
 
 1. YouTube Home filter rail — `Tudo` and remote-provided chips.
 2. YouTube result filter rail — `Tudo` and remote-provided chips.
+
+The second YouTube action batch migrated:
+
+1. Account/authentication actions — browser login filled, manual import and
+   browser-open outlined, cancel/disconnect text.
+2. Search and sync actions — search filled, sync filled tonal.
+3. Private YouTube navigation — assist chips plus create-playlist suggestion
+   chip.
+4. Create-playlist dialog actions — cancel text, create filled.
 
 ## Loading contract for a later checkpoint
 

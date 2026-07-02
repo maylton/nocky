@@ -14,7 +14,10 @@ mod structured_cards;
 
 use crate::search_text::{normalize_search_text, search_matches, search_score};
 use crate::ui::widgets::{
-    material_button::{apply_material_chip, MaterialChipSpec, MaterialChipVariant},
+    material_button::{
+        apply_material_button, apply_material_chip, MaterialButtonSize, MaterialButtonSpec,
+        MaterialButtonVariant, MaterialChipSpec, MaterialChipVariant,
+    },
     MaterialLoadingIndicator,
 };
 use adw::prelude::*;
@@ -1212,11 +1215,20 @@ impl YouTubePage {
         status.set_hexpand(true);
         status.add_css_class("youtube-status");
         let connect_button = gtk::Button::with_label("Entrar com o navegador");
-        connect_button.add_css_class("suggested-action");
+        apply_material_button(
+            &connect_button,
+            MaterialButtonSpec::new(MaterialButtonVariant::Filled, MaterialButtonSize::Compact),
+        );
         let manual_import_button = gtk::Button::with_label("Importar sessão manualmente");
-        manual_import_button.add_css_class("flat");
+        apply_material_button(
+            &manual_import_button,
+            MaterialButtonSpec::new(MaterialButtonVariant::Outlined, MaterialButtonSize::Compact),
+        );
         let disconnect_button = gtk::Button::with_label("Desconectar");
-        disconnect_button.add_css_class("flat");
+        apply_material_button(
+            &disconnect_button,
+            MaterialButtonSpec::new(MaterialButtonVariant::Text, MaterialButtonSize::Compact),
+        );
         disconnect_button.set_visible(false);
         let account_row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
         account_row.append(&status);
@@ -1244,11 +1256,20 @@ impl YouTubePage {
         auth_scroll.set_child(Some(&auth_view));
         auth_scroll.add_css_class("youtube-auth-input");
         let import_button = gtk::Button::with_label("Salvar sessão importada");
-        import_button.add_css_class("suggested-action");
+        apply_material_button(
+            &import_button,
+            MaterialButtonSpec::new(MaterialButtonVariant::Filled, MaterialButtonSize::Compact),
+        );
         let open_browser_button = gtk::Button::with_label("Abrir no navegador");
-        open_browser_button.add_css_class("flat");
+        apply_material_button(
+            &open_browser_button,
+            MaterialButtonSpec::new(MaterialButtonVariant::Outlined, MaterialButtonSize::Compact),
+        );
         let cancel_auth = gtk::Button::with_label("Cancelar");
-        cancel_auth.add_css_class("flat");
+        apply_material_button(
+            &cancel_auth,
+            MaterialButtonSpec::new(MaterialButtonVariant::Text, MaterialButtonSize::Compact),
+        );
         let auth_buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         auth_buttons.set_halign(gtk::Align::End);
         auth_buttons.append(&open_browser_button);
@@ -1284,14 +1305,36 @@ impl YouTubePage {
         search_row.append(&search_button);
 
         let sync_button = gtk::Button::with_label("Sincronizar com Nocky");
-        sync_button.add_css_class("suggested-action");
+        apply_material_button(
+            &search_button,
+            MaterialButtonSpec::new(MaterialButtonVariant::Filled, MaterialButtonSize::Compact),
+        );
+        apply_material_button(
+            &sync_button,
+            MaterialButtonSpec::new(
+                MaterialButtonVariant::FilledTonal,
+                MaterialButtonSize::Compact,
+            ),
+        );
         let home_button = gtk::Button::with_label("Para você");
         let overview_button = gtk::Button::with_label("Visão geral");
         let library_button = gtk::Button::with_label("Biblioteca");
         let liked_button = gtk::Button::with_label("Curtidas");
         let playlists_button = gtk::Button::with_label("Playlists");
         let create_playlist_button = gtk::Button::with_label("Criar playlist");
-        create_playlist_button.add_css_class("suggested-action");
+        for button in [
+            &home_button,
+            &overview_button,
+            &library_button,
+            &liked_button,
+            &playlists_button,
+        ] {
+            apply_material_chip(button, MaterialChipSpec::new(MaterialChipVariant::Assist));
+        }
+        apply_material_chip(
+            &create_playlist_button,
+            MaterialChipSpec::new(MaterialChipVariant::Suggestion),
+        );
         for button in [
             &home_button,
             &overview_button,
@@ -1300,7 +1343,7 @@ impl YouTubePage {
             &playlists_button,
             &create_playlist_button,
         ] {
-            button.add_css_class("pill");
+            button.add_css_class("youtube-private-action");
         }
         let private_actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         private_actions.append(&sync_button);

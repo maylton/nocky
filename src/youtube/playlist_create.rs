@@ -2,6 +2,9 @@
 mod playlist_metadata_model;
 
 use super::{HelperResponse, YouTubeBridge, YouTubePage, YouTubePageEvent};
+use crate::ui::widgets::material_button::{
+    apply_material_button, MaterialButtonSize, MaterialButtonSpec, MaterialButtonVariant,
+};
 use adw::prelude::*;
 use playlist_metadata_model::{YouTubePlaylistMetadata, YouTubePlaylistPrivacy};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -386,9 +389,15 @@ impl YouTubePage {
         privacy.set_hexpand(true);
 
         let cancel = gtk::Button::with_label("Cancelar");
-        cancel.add_css_class("flat");
+        apply_material_button(
+            &cancel,
+            MaterialButtonSpec::new(MaterialButtonVariant::Text, MaterialButtonSize::Compact),
+        );
         let create = gtk::Button::with_label("Criar playlist");
-        create.add_css_class("suggested-action");
+        apply_material_button(
+            &create,
+            MaterialButtonSpec::new(MaterialButtonVariant::Filled, MaterialButtonSize::Compact),
+        );
         create.set_sensitive(false);
 
         let actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
