@@ -24,8 +24,8 @@ Options:
   -h, --help      Show this help
 
 The installer downloads the Latin and Latin Extended variable WOFF2 files from
-Fontsource's Google Fonts mirror, validates them with Fontconfig and refreshes
-the local font cache.
+Fontsource's Google Fonts mirror, converts them to TTF for Pango/Fontconfig,
+validates the resulting fonts and refreshes the local font cache.
 EOF
 }
 
@@ -51,17 +51,15 @@ case "$MODE" in
   custom) : ;;
 esac
 
-for command_name in curl install python3; do
+for command_name in curl install python3 fc-scan fc-match fc-cache woff2_decompress; do
   command -v "$command_name" >/dev/null 2>&1 || {
     echo "Missing required command: $command_name" >&2
+    if [[ "$command_name" == "woff2_decompress" ]]; then
+      echo "On Arch Linux, install it with: sudo pacman -S --needed woff2" >&2
+    fi
     exit 1
   }
 done
-
-command -v fc-scan >/dev/null 2>&1 || {
-  echo "Missing required command: fc-scan (provided by fontconfig)" >&2
-  exit 1
-}
 
 run_install() {
   if [[ "$MODE" == "system" && ${EUID} -ne 0 ]]; then
@@ -75,7 +73,7 @@ run_install() {
   fi
 }
 
-validate_font_file() {
+validate_download() {
   local font_file="$1"
 
   python3 - "$font_file" <<'PY'
@@ -84,10 +82,26 @@ import sys
 
 path = Path(sys.argv[1])
 magic = path.read_bytes()[:4]
-valid = {b"wOF2", b"wOFF", b"OTTO", b"\x00\x01\x00\x00"}
+if magic != b"wOF2":
+    raise SystemExit(
+        f"Downloaded file is not a WOFF2 font: {path.name} (magic={magic!r})"
+    )
+PY
+}
+
+validate_system_font() {
+  local font_file="$1"
+
+  python3 - "$font_file" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+magic = path.read_bytes()[:4]
+valid = {b"OTTO", b"\x00\x01\x00\x00"}
 if magic not in valid:
     raise SystemExit(
-        f"Downloaded file is not a supported font: {path.name} (magic={magic!r})"
+        f"Converted file is not a TTF/OpenType font: {path.name} (magic={magic!r})"
     )
 PY
 
@@ -98,6 +112,8 @@ PY
     echo "Detected family: ${detected_family:-<none>}" >&2
     exit 1
   fi
+
+  printf '%s' "$detected_family"
 }
 
 FONT_DIR="${PREFIX}/share/fonts/nocky"
@@ -105,24 +121,42 @@ LICENSE_DIR="${PREFIX}/share/doc/nocky/licenses"
 TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
-printf 'Downloading %s variable fonts...\n' "$FONT_FAMILY"
+printf 'Downloading and converting %s fonts...\n' "$FONT_FAMILY"
 
 installed_count=0
+matched_family=""
 for remote_name in "${FONT_FILES[@]}"; do
   source_url="${FONT_SOURCE_BASE}/${remote_name}"
-  local_path="${TEMP_DIR}/google-sans-flex-${remote_name}"
+  woff2_path="${TEMP_DIR}/google-sans-flex-${remote_name}"
+  ttf_path="${woff2_path%.woff2}.ttf"
 
   curl --fail --location --retry 3 --retry-delay 1 \
     --header 'Accept: font/woff2,application/octet-stream;q=0.9,*/*;q=0.1' \
     "$source_url" \
-    --output "$local_path"
+    --output "$woff2_path"
 
-  validate_font_file "$local_path"
+  validate_download "$woff2_path"
+  woff2_decompress "$woff2_path"
+
+  [[ -s "$ttf_path" ]] || {
+    echo "WOFF2 conversion did not produce $(basename "$ttf_path")." >&2
+    exit 1
+  }
+
+  detected_family="$(validate_system_font "$ttf_path")"
+  if [[ -z "$matched_family" ]]; then
+    matched_family="${detected_family%%,*}"
+    matched_family="${matched_family%%$'\n'*}"
+  fi
+
   run_install install -D -m 0644 \
-    "$local_path" \
-    "$FONT_DIR/$(basename "$local_path")"
+    "$ttf_path" \
+    "$FONT_DIR/$(basename "$ttf_path")"
   installed_count=$((installed_count + 1))
 done
+
+# Remove files installed by the previous broken WOFF2-only implementation.
+run_install rm -f "$FONT_DIR"/google-sans-flex-*.woff2
 
 license_file="${TEMP_DIR}/google-sans-flex-OFL.txt"
 if curl --fail --location --retry 2 --retry-delay 1 \
@@ -135,17 +169,24 @@ else
   echo "Warning: the optional OFL license copy could not be downloaded." >&2
 fi
 
-if command -v fc-cache >/dev/null 2>&1; then
-  fc-cache -f "$FONT_DIR" >/dev/null
-fi
+fc-cache -f "$FONT_DIR" >/dev/null
 
-matched_family="$(fc-match --format='%{family}\n' "$FONT_FAMILY" 2>/dev/null || true)"
-if [[ "$matched_family" != *"Google Sans Flex"* ]]; then
-  echo "Installation completed, but Fontconfig still does not select Google Sans Flex." >&2
-  echo "fc-match returned: ${matched_family:-<none>}" >&2
-  exit 1
-fi
+match_output="$(fc-match --format='%{file}\n%{family}\n' "$matched_family" 2>/dev/null || true)"
+matched_file="${match_output%%$'\n'*}"
+matched_name="${match_output#*$'\n'}"
+matched_name="${matched_name%%$'\n'*}"
 
-printf 'Installed %d %s font file(s) under %s\n' \
-  "$installed_count" "$FONT_FAMILY" "$FONT_DIR"
-printf 'Fontconfig match: %s\n' "$matched_family"
+case "$matched_file" in
+  "$FONT_DIR"/*) : ;;
+  *)
+    echo "Installation completed, but Fontconfig still selects another font." >&2
+    echo "Requested family: ${matched_family:-$FONT_FAMILY}" >&2
+    echo "fc-match file: ${matched_file:-<none>}" >&2
+    echo "fc-match family: ${matched_name:-<none>}" >&2
+    exit 1
+    ;;
+esac
+
+printf 'Installed %d Google Sans Flex TTF file(s) under %s\n' \
+  "$installed_count" "$FONT_DIR"
+printf 'Fontconfig match: %s (%s)\n' "$matched_name" "$matched_file"
