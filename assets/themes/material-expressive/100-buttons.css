@@ -8,7 +8,8 @@
  * they are explicitly audited and migrated.
  */
 
-button.material-button {
+.theme-material-expressive button.material-button,
+.theme-frosted-glass button.material-button {
   min-height: 48px;
   padding: 0 20px;
   border-radius: 24px;
@@ -24,18 +25,21 @@ button.material-button {
     border-radius 180ms ease-out;
 }
 
-button.material-button.material-button-compact {
+.theme-material-expressive button.material-button.material-button-compact,
+.theme-frosted-glass button.material-button.material-button-compact {
   min-height: 40px;
   padding-left: 16px;
   padding-right: 16px;
   border-radius: 20px;
 }
 
-button.material-button.material-button-standard {
+.theme-material-expressive button.material-button.material-button-standard,
+.theme-frosted-glass button.material-button.material-button-standard {
   min-height: 48px;
 }
 
-button.material-button.material-button-large {
+.theme-material-expressive button.material-button.material-button-large,
+.theme-frosted-glass button.material-button.material-button-large {
   min-height: 56px;
   padding-left: 24px;
   padding-right: 24px;
@@ -43,18 +47,31 @@ button.material-button.material-button-large {
   font-size: 1rem;
 }
 
-button.material-button:disabled {
+.theme-material-expressive button.material-button:disabled,
+.theme-frosted-glass button.material-button:disabled {
   box-shadow: none;
   opacity: 0.56;
 }
 
-button.material-button.material-button-loading {
+.theme-material-expressive button.material-button.material-button-loading,
+.theme-frosted-glass button.material-button.material-button-loading {
   box-shadow: none;
 }
 
-button.material-button.material-button-loading > *,
-button.material-button.material-button-loading .material-loading-indicator,
-button.material-button.material-button-loading .expressive-loading-indicator {
+.theme-material-expressive button.material-button.material-button-loading > *,
+.theme-material-expressive
+  button.material-button.material-button-loading
+  .material-loading-indicator,
+.theme-material-expressive
+  button.material-button.material-button-loading
+  .expressive-loading-indicator,
+.theme-frosted-glass button.material-button.material-button-loading > *,
+.theme-frosted-glass
+  button.material-button.material-button-loading
+  .material-loading-indicator,
+.theme-frosted-glass
+  button.material-button.material-button-loading
+  .expressive-loading-indicator {
   color: inherit;
 }
 
@@ -187,61 +204,6 @@ button.material-button.material-button-loading .expressive-loading-indicator {
   box-shadow: 0 0 0 3px alpha(@m3_error, 0.34);
 }
 
-/* Noctalia keeps ownership of palette roles while sharing button semantics. */
-.theme-noctalia button.material-button-filled {
-  color: @accent_fg_color;
-  background-color: @accent_color;
-  border-color: transparent;
-}
-
-.theme-noctalia button.material-button-filled-tonal {
-  color: @window_fg_color;
-  background-color: alpha(@accent_color, 0.18);
-  border-color: alpha(@accent_color, 0.24);
-}
-
-.theme-noctalia button.material-button-elevated {
-  color: @window_fg_color;
-  background-color: alpha(@window_fg_color, 0.06);
-  border-color: alpha(@window_fg_color, 0.12);
-  box-shadow: 0 3px 10px alpha(black, 0.16);
-}
-
-.theme-noctalia button.material-button-outlined {
-  color: @accent_color;
-  background-color: transparent;
-  border-color: alpha(@accent_color, 0.68);
-}
-
-.theme-noctalia button.material-button-text {
-  color: @accent_color;
-  background-color: transparent;
-  border-color: transparent;
-  box-shadow: none;
-}
-
-.theme-noctalia button.material-button:hover {
-  background-image: none;
-}
-
-.theme-noctalia button.material-button-selected {
-  color: @accent_fg_color;
-  background-color: @accent_color;
-  border-color: transparent;
-}
-
-.theme-noctalia
-  button.material-button-destructive.material-button-outlined,
-.theme-noctalia button.material-button-destructive.material-button-text {
-  color: @error_color;
-  border-color: alpha(@error_color, 0.72);
-}
-
-.theme-noctalia button.material-button:focus,
-.theme-noctalia button.material-button:focus-visible {
-  box-shadow: 0 0 0 3px alpha(@accent_color, 0.32);
-}
-
 /* Frosted Glass remains translucent while reusing Material hierarchy. */
 .theme-frosted-glass button.material-button-elevated {
   background-color: alpha(@m3_surface_container, 0.70);
@@ -274,7 +236,8 @@ button.material-button.material-button-loading .expressive-loading-indicator {
  * Icon buttons are for compact supplementary actions. Geometry is opt-in and
  * stable so hover, selected and pressed states never resize toolbar rows.
  */
-button.material-icon-button {
+.theme-material-expressive button.material-icon-button,
+.theme-frosted-glass button.material-icon-button {
   min-width: 40px;
   min-height: 40px;
   padding: 0;
@@ -290,7 +253,8 @@ button.material-icon-button {
     border-radius 180ms ease-out;
 }
 
-button.material-icon-button:disabled {
+.theme-material-expressive button.material-icon-button:disabled,
+.theme-frosted-glass button.material-icon-button:disabled {
   opacity: 0.56;
   box-shadow: none;
 }
@@ -340,41 +304,6 @@ button.material-icon-button:disabled {
   box-shadow: 0 0 0 3px alpha(@m3_primary, 0.34);
 }
 
-.theme-noctalia button.material-icon-button-standard {
-  color: alpha(@window_fg_color, 0.78);
-  background-color: transparent;
-  border-color: transparent;
-}
-
-.theme-noctalia button.material-icon-button-standard:hover {
-  color: @window_fg_color;
-  background-color: alpha(@window_fg_color, 0.08);
-}
-
-.theme-noctalia button.material-icon-button-filled,
-.theme-noctalia button.material-icon-button-selected {
-  color: @accent_fg_color;
-  background-color: @accent_color;
-  border-color: transparent;
-}
-
-.theme-noctalia button.material-icon-button-filled-tonal {
-  color: @window_fg_color;
-  background-color: alpha(@accent_color, 0.18);
-  border-color: alpha(@accent_color, 0.24);
-}
-
-.theme-noctalia button.material-icon-button-outlined {
-  color: @accent_color;
-  background-color: transparent;
-  border-color: alpha(@accent_color, 0.68);
-}
-
-.theme-noctalia button.material-icon-button:focus,
-.theme-noctalia button.material-icon-button:focus-visible {
-  box-shadow: 0 0 0 3px alpha(@accent_color, 0.32);
-}
-
 .theme-frosted-glass button.material-icon-button-standard {
   color: @m3_on_surface_variant;
   background-color: alpha(@m3_surface_container_high, 0.24);
@@ -407,7 +336,8 @@ button.material-icon-button:disabled {
  * Chips are compact choices and filters, separate from high-priority action
  * buttons. Geometry is fixed so selection and hover states do not resize rails.
  */
-button.material-chip {
+.theme-material-expressive button.material-chip,
+.theme-frosted-glass button.material-chip {
   min-height: 36px;
   padding: 0 16px;
   border-radius: 12px;
@@ -424,7 +354,8 @@ button.material-chip {
     box-shadow 180ms ease-out;
 }
 
-button.material-chip:disabled {
+.theme-material-expressive button.material-chip:disabled,
+.theme-frosted-glass button.material-chip:disabled {
   opacity: 0.56;
   box-shadow: none;
 }
@@ -464,37 +395,6 @@ button.material-chip:disabled {
 .theme-material-expressive button.material-chip:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px alpha(@m3_primary, 0.34);
-}
-
-.theme-noctalia button.material-chip-assist,
-.theme-noctalia button.material-chip-input,
-.theme-noctalia button.material-chip-filter {
-  color: alpha(@window_fg_color, 0.82);
-  background-color: transparent;
-  border-color: alpha(@window_fg_color, 0.24);
-}
-
-.theme-noctalia button.material-chip-suggestion {
-  color: @window_fg_color;
-  background-color: alpha(@accent_color, 0.14);
-  border-color: alpha(@accent_color, 0.22);
-}
-
-.theme-noctalia button.material-chip:hover {
-  color: @window_fg_color;
-  background-color: alpha(@accent_color, 0.14);
-  border-color: alpha(@accent_color, 0.44);
-}
-
-.theme-noctalia button.material-chip-selected {
-  color: @accent_fg_color;
-  background-color: @accent_color;
-  border-color: transparent;
-}
-
-.theme-noctalia button.material-chip:focus,
-.theme-noctalia button.material-chip:focus-visible {
-  box-shadow: 0 0 0 3px alpha(@accent_color, 0.32);
 }
 
 .theme-frosted-glass button.material-chip-assist,

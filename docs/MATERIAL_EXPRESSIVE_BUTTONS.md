@@ -15,7 +15,10 @@ References:
 - Shared Rust class contract: implemented in `material_button.rs`.
 - Existing controls migrated: Settings pilots, dialog/browser/app-shell labeled
   actions, the first icon-button batch and the first YouTube chip batch.
-- Visual behavior changed only for explicitly audited controls.
+- Visual behavior changed only for explicitly audited controls in Material
+  Expressive and Frosted Glass.
+- The button CSS does not style `.theme-noctalia`; Noctalia keeps its own
+  shell/theme cascade instead of acting as a Material variant.
 - Local automated validation passes.
 - Next step: continue chips and specialized popover buttons after review.
 
@@ -36,7 +39,8 @@ for review.
 7. Hover must never change widget allocation.
 8. Focus remains visible for keyboard users.
 9. Loading must preserve width and use the shared Material loading indicator.
-10. Noctalia retains ownership of Shell palette roles.
+10. Noctalia is not a Material variant; Material button, icon-button and chip
+    CSS is scoped to Material Expressive and Frosted Glass only.
 11. Frosted Glass retains translucency and surface separation.
 12. Chips are compact selection/filter controls and must not inherit
     high-priority action classes.

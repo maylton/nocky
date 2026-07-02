@@ -137,6 +137,37 @@ mod tests {
     }
 
     #[test]
+    fn material_button_css_does_not_style_noctalia() {
+        let button_css = MATERIAL_EXPRESSIVE_MODULES
+            .iter()
+            .find_map(|(name, css)| (*name == "100-buttons.css").then_some(*css))
+            .expect("100-buttons.css module should be registered");
+
+        assert!(!button_css.contains("theme-noctalia"));
+        let mut remaining = button_css;
+        while let Some((selectors, rest)) = remaining.split_once('{') {
+            remaining = match rest.split_once('}') {
+                Some((_, tail)) => tail,
+                None => "",
+            };
+
+            for selector in selectors.split(',') {
+                let selector = selector.split_whitespace().collect::<Vec<_>>().join(" ");
+                for global_prefix in [
+                    "button.material-button",
+                    "button.material-icon-button",
+                    "button.material-chip",
+                ] {
+                    assert!(
+                        !selector.starts_with(global_prefix),
+                        "global Material button selector leaked: {selector}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn material_modules_are_not_empty() {
         assert!(MATERIAL_EXPRESSIVE_MODULES
             .iter()
