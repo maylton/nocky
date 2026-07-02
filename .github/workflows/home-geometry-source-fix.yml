@@ -1,0 +1,168 @@
+name: Home Geometry Source Fix
+
+on:
+  push:
+    branches:
+      - codex/material-expressive-buttons-foundation
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: codex/material-expressive-buttons-foundation
+          persist-credentials: true
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Restore Home presentation hierarchy
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/browser.rs')
+          text = path.read_text(encoding='utf-8')
+
+          replacements = [
+              (
+                  '            Self::Featured | Self::Compact => 128,\n            Self::TrackRows => 48,',
+                  '            Self::Featured => 176,\n            Self::Compact => 128,\n            Self::TrackRows => 48,',
+              ),
+              (
+                  '            Self::Featured | Self::Compact => 152,\n            Self::TrackRows => 300,',
+                  '            Self::Featured => 196,\n            Self::Compact => 152,\n            Self::TrackRows => 300,',
+              ),
+              (
+                  '            Self::Featured | Self::Compact => 188,\n            Self::TrackRows => 64,',
+                  '            Self::Featured => 252,\n            Self::Compact => 188,\n            Self::TrackRows => 64,',
+              ),
+              (
+                  '            Self::Featured | Self::Compact => 168,\n            Self::TrackRows => 312,',
+                  '            Self::Featured => 220,\n            Self::Compact => 168,\n            Self::TrackRows => 312,',
+              ),
+              (
+                  '            Self::Featured | Self::Compact => 196,\n            Self::TrackRows => 64,',
+                  '            Self::Featured => 268,\n            Self::Compact => 196,\n            Self::TrackRows => 64,',
+              ),
+              (
+                  '            Self::Featured | Self::Compact => 6,\n            Self::TrackRows => 8,',
+                  '            Self::Featured => 14,\n            Self::Compact => 6,\n            Self::TrackRows => 8,',
+              ),
+              (
+                  '            Self::Featured | Self::Compact => 8,\n            Self::TrackRows => 4,',
+                  '            Self::Featured => 0,\n            Self::Compact => 8,\n            Self::TrackRows => 4,',
+              ),
+              (
+                  '            Self::Featured | Self::Compact => 18,\n            Self::TrackRows => 20,',
+                  '            Self::Featured => 20,\n            Self::Compact => 18,\n            Self::TrackRows => 20,',
+              ),
+              (
+                  '            Self::Featured | Self::Compact if width <= 760 && item_count > 2 => 2,\n            Self::Featured | Self::Compact => 1,\n            Self::TrackRows => self.track_rows(item_count),',
+                  '            Self::Featured => 1,\n            Self::Compact if width <= 760 && item_count > 2 => 2,\n            Self::Compact => 1,\n            Self::TrackRows => self.track_rows(item_count),',
+              ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected one geometry match, found {count}: {old!r}')
+              text = text.replace(old, new, 1)
+
+          old_test = '''    #[test]
+    fn featured_and_compact_cards_keep_uniform_carousel_geometry() {
+        assert_eq!(
+            HomeSectionPresentation::Featured.artwork_size(),
+            HomeSectionPresentation::Compact.artwork_size()
+        );
+        assert_eq!(
+            HomeSectionPresentation::Featured.card_width(),
+            HomeSectionPresentation::Compact.card_width()
+        );
+        assert_eq!(
+            HomeSectionPresentation::Featured.card_height(),
+            HomeSectionPresentation::Compact.card_height()
+        );
+        assert_eq!(
+            HomeSectionPresentation::Featured.outer_width(),
+            HomeSectionPresentation::Compact.outer_width()
+        );
+        assert_eq!(
+            HomeSectionPresentation::Featured.outer_height(),
+            HomeSectionPresentation::Compact.outer_height()
+        );
+    }
+'''
+          new_test = '''    #[test]
+    fn featured_geometry_is_larger_than_compact() {
+        assert!(
+            HomeSectionPresentation::Featured.artwork_size()
+                > HomeSectionPresentation::Compact.artwork_size()
+        );
+        assert!(
+            HomeSectionPresentation::Featured.card_width()
+                > HomeSectionPresentation::Compact.card_width()
+        );
+        assert!(
+            HomeSectionPresentation::Featured.card_height()
+                > HomeSectionPresentation::Compact.card_height()
+        );
+        assert!(
+            HomeSectionPresentation::Featured.outer_width()
+                > HomeSectionPresentation::Compact.outer_width()
+        );
+        assert!(
+            HomeSectionPresentation::Featured.outer_height()
+                > HomeSectionPresentation::Compact.outer_height()
+        );
+    }
+'''
+          if text.count(old_test) != 1:
+              raise SystemExit('uniform geometry regression test was not found exactly once')
+          text = text.replace(old_test, new_test, 1)
+
+          old_height = '''        assert_eq!(
+            HomeSectionPresentation::Featured.scroller_height(1),
+            HomeSectionPresentation::Compact.scroller_height(1)
+        );'''
+          new_height = '''        assert_eq!(HomeSectionPresentation::Featured.scroller_height(1), 288);'''
+          if text.count(old_height) != 1:
+              raise SystemExit('uniform scroller-height assertion was not found exactly once')
+          text = text.replace(old_height, new_height, 1)
+
+          old_wrap = '''    #[test]
+    fn featured_rail_wraps_like_compact_on_narrow_sections() {
+        assert_eq!(HomeSectionPresentation::Featured.rail_rows(900, 8), 1);
+        assert_eq!(HomeSectionPresentation::Featured.rail_rows(760, 8), 2);
+        assert_eq!(HomeSectionPresentation::Featured.rail_rows(480, 2), 1);
+    }
+'''
+          new_wrap = '''    #[test]
+    fn featured_rail_stays_single_row() {
+        assert_eq!(HomeSectionPresentation::Featured.rail_rows(900, 8), 1);
+        assert_eq!(HomeSectionPresentation::Featured.rail_rows(760, 8), 1);
+        assert_eq!(HomeSectionPresentation::Featured.rail_rows(480, 8), 1);
+    }
+'''
+          if text.count(old_wrap) != 1:
+              raise SystemExit('Featured wrap regression test was not found exactly once')
+          text = text.replace(old_wrap, new_wrap, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+          cargo fmt --all
+      - name: Commit source hierarchy fix
+        run: |
+          if git diff --quiet -- src/browser.rs; then
+            echo "Home geometry is already aligned"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/browser.rs
+          git commit -m "fix: restore Featured Home geometry in source"
+          git push origin HEAD:codex/material-expressive-buttons-foundation
