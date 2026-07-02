@@ -3,6 +3,7 @@
 //! The contract is introduced incrementally so each layer is validated before
 //! existing widgets begin to consume it.
 
+use super::expressive_loading::MaterialLoadingIndicator;
 use gtk::prelude::*;
 
 const LEGACY_CLASSES: &[&str] = &[
@@ -265,6 +266,55 @@ pub fn set_material_chip_selected(button: &gtk::Button, selected: bool) {
 
 pub fn set_material_button_loading(button: &gtk::Button, loading: bool) {
     set_state_class(button, "material-button-loading", loading);
+}
+
+#[derive(Clone)]
+pub(crate) struct MaterialButtonLoadingContent {
+    stack: gtk::Stack,
+    label: gtk::Label,
+}
+
+impl MaterialButtonLoadingContent {
+    pub(crate) fn set_loading(&self, button: &gtk::Button, loading: bool) {
+        set_material_button_loading(button, loading);
+        self.stack
+            .set_visible_child_name(if loading { "loading" } else { "label" });
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn set_label(&self, button: &gtk::Button, label: &str) {
+        self.label.set_text(label);
+        button.update_property(&[gtk::accessible::Property::Label(label)]);
+    }
+}
+
+pub(crate) fn install_material_button_loading_content(
+    button: &gtk::Button,
+    label: &str,
+) -> MaterialButtonLoadingContent {
+    let label_widget = gtk::Label::new(Some(label));
+    label_widget.set_halign(gtk::Align::Center);
+    label_widget.set_valign(gtk::Align::Center);
+
+    let loading = MaterialLoadingIndicator::compact();
+    loading.widget().set_halign(gtk::Align::Center);
+    loading.widget().set_valign(gtk::Align::Center);
+
+    let stack = gtk::Stack::new();
+    stack.set_hhomogeneous(true);
+    stack.set_vhomogeneous(true);
+    stack.add_named(&label_widget, Some("label"));
+    stack.add_named(loading.widget(), Some("loading"));
+    stack.set_visible_child_name("label");
+    stack.add_css_class("material-button-loading-stack");
+
+    button.set_child(Some(&stack));
+    button.update_property(&[gtk::accessible::Property::Label(label)]);
+
+    MaterialButtonLoadingContent {
+        stack,
+        label: label_widget,
+    }
 }
 
 fn set_state_class(button: &gtk::Button, class_name: &str, active: bool) {

@@ -242,10 +242,10 @@ changing the label. The implementation must preserve minimum width, expose a
 stable accessible name, disable duplicate activation, and restore the previous
 state on success, failure or cancellation.
 
-The diagnostics rerun action is the first minimal loading-class consumer. It
-keeps its label stable, disables duplicate activation and restores the normal
-class once the refresh timeout updates the report. A later checkpoint can add
-the shared indicator stack where a longer-running action needs visible progress.
+The diagnostics rerun action is the first shared loading-content consumer. It
+uses a homogeneous stack with the normal label and the shared
+`MaterialLoadingIndicator`, disables duplicate activation and restores the label
+once the refresh timeout updates the report.
 
 ## Manual validation matrix
 

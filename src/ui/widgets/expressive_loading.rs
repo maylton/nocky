@@ -850,10 +850,12 @@ mod tests {
     #[test]
     fn migrated_call_sites_use_shared_component() {
         let browser = include_str!("../../browser.rs");
+        let settings_page = include_str!("../settings/page.rs");
         let youtube = include_str!("../../youtube/mod.rs");
         let assisted_login = include_str!("../../youtube/assisted_login.rs");
 
         assert!(browser.contains("MaterialLoadingIndicator"));
+        assert!(settings_page.contains("install_material_button_loading_content"));
         assert!(youtube.contains("MaterialLoadingIndicator"));
         assert!(assisted_login.contains("MaterialLoadingIndicator"));
     }

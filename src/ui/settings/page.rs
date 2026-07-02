@@ -5,8 +5,9 @@ use crate::{
     offline_store::OfflineStore,
     ui::widgets::{
         material_button::{
-            apply_material_button, set_material_button_loading, set_material_button_selected,
-            MaterialButtonSemantic, MaterialButtonSize, MaterialButtonSpec, MaterialButtonVariant,
+            apply_material_button, install_material_button_loading_content,
+            set_material_button_selected, MaterialButtonSemantic, MaterialButtonSize,
+            MaterialButtonSpec, MaterialButtonVariant,
         },
         material_card::{apply_material_card, MaterialCardSpec, MaterialCardVariant},
         AnimatedPageSpec, AnimatedPageSwitcher,
@@ -724,11 +725,9 @@ fn build_content(
     let diagnostics_actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     diagnostics_actions.set_halign(gtk::Align::End);
 
-    let diagnostics_refresh = gtk::Button::with_label(group_text(
-        "Executar novamente",
-        "Run again",
-        "Ejecutar de nuevo",
-    ));
+    let diagnostics_refresh_label =
+        group_text("Executar novamente", "Run again", "Ejecutar de nuevo");
+    let diagnostics_refresh = gtk::Button::new();
     apply_material_button(
         &diagnostics_refresh,
         MaterialButtonSpec::new(
@@ -736,6 +735,8 @@ fn build_content(
             MaterialButtonSize::Compact,
         ),
     );
+    let diagnostics_refresh_content =
+        install_material_button_loading_content(&diagnostics_refresh, diagnostics_refresh_label);
 
     let diagnostics_copy = gtk::Button::with_label(group_text(
         "Copiar relatório",
@@ -980,20 +981,22 @@ fn build_content(
         let summary = diagnostics_summary.clone();
         let details = diagnostics_details.clone();
         let button = diagnostics_refresh.clone();
+        let loading_content = diagnostics_refresh_content.clone();
         let language = initial.language;
         diagnostics_refresh.connect_clicked(move |_| {
             button.set_sensitive(false);
-            set_material_button_loading(&button, true);
+            loading_content.set_loading(&button, true);
             youtube_diagnostics::refresh_now();
 
             let icon = icon.clone();
             let summary = summary.clone();
             let details = details.clone();
             let button = button.clone();
+            let loading_content = loading_content.clone();
             glib::timeout_add_local_once(Duration::from_millis(1200), move || {
                 update_diagnostics_view(&icon, &summary, &details, language);
                 button.set_sensitive(true);
-                set_material_button_loading(&button, false);
+                loading_content.set_loading(&button, false);
             });
         });
     }
