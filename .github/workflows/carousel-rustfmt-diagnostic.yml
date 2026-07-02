@@ -1,0 +1,20 @@
+name: Carousel rustfmt diagnostic
+
+on:
+  push:
+    branches:
+      - codex/material-expressive-buttons-foundation
+
+permissions:
+  contents: read
+
+jobs:
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Show rustfmt diff
+        run: cargo fmt --all -- --check
