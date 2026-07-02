@@ -86,24 +86,15 @@ mod tests {
     fn variants_map_to_expected_classes() {
         let cases = [
             (MaterialButtonVariant::Filled, "material-button-filled"),
-            (
-                MaterialButtonVariant::FilledTonal,
-                "material-button-filled-tonal",
-            ),
-            (
-                MaterialButtonVariant::Elevated,
-                "material-button-elevated",
-            ),
-            (
-                MaterialButtonVariant::Outlined,
-                "material-button-outlined",
-            ),
+            (MaterialButtonVariant::FilledTonal, "material-button-filled-tonal"),
+            (MaterialButtonVariant::Elevated, "material-button-elevated"),
+            (MaterialButtonVariant::Outlined, "material-button-outlined"),
             (MaterialButtonVariant::Text, "material-button-text"),
         ];
 
         for (variant, expected) in cases {
-            let classes = MaterialButtonSpec::new(variant, MaterialButtonSize::Standard)
-                .css_classes();
+            let spec = MaterialButtonSpec::new(variant, MaterialButtonSize::Standard);
+            let classes = spec.css_classes();
             assert_eq!(classes[0], expected);
         }
     }
@@ -117,41 +108,38 @@ mod tests {
         ];
 
         for (size, expected) in cases {
-            let classes = MaterialButtonSpec::new(MaterialButtonVariant::Filled, size).css_classes();
+            let spec = MaterialButtonSpec::new(MaterialButtonVariant::Filled, size);
+            let classes = spec.css_classes();
             assert_eq!(classes[1], expected);
         }
     }
 
     #[test]
     fn standard_spec_contains_variant_and_size_only() {
-        let classes = MaterialButtonSpec::new(
+        let spec = MaterialButtonSpec::new(
             MaterialButtonVariant::FilledTonal,
             MaterialButtonSize::Standard,
-        )
-        .css_classes();
-
-        assert_eq!(
-            classes,
-            vec!["material-button-filled-tonal", "material-button-standard"]
         );
+        let classes = spec.css_classes();
+        let expected = vec!["material-button-filled-tonal", "material-button-standard"];
+
+        assert_eq!(classes, expected);
     }
 
     #[test]
     fn destructive_is_a_semantic_modifier() {
-        let classes = MaterialButtonSpec::new(
+        let spec = MaterialButtonSpec::new(
             MaterialButtonVariant::Outlined,
             MaterialButtonSize::Compact,
         )
-        .with_semantic(MaterialButtonSemantic::Destructive)
-        .css_classes();
+        .with_semantic(MaterialButtonSemantic::Destructive);
+        let classes = spec.css_classes();
+        let expected = vec![
+            "material-button-outlined",
+            "material-button-compact",
+            "material-button-destructive",
+        ];
 
-        assert_eq!(
-            classes,
-            vec![
-                "material-button-outlined",
-                "material-button-compact",
-                "material-button-destructive",
-            ]
-        );
+        assert_eq!(classes, expected);
     }
 }
