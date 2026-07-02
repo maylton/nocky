@@ -18,17 +18,12 @@ pub(crate) use layout::MaterialCarouselLayout;
 #[allow(unused_imports)]
 pub(crate) use strategy::MaterialCarouselStrategy;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum MaterialCarouselVariant {
     Hero,
+    #[default]
     MultiBrowse,
     Uncontained,
-}
-
-impl Default for MaterialCarouselVariant {
-    fn default() -> Self {
-        Self::MultiBrowse
-    }
 }
 
 glib::wrapper! {
