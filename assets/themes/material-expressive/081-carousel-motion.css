@@ -2,16 +2,21 @@
  * Material 3 Expressive carousel keyline masks
  * --------------------------------------------
  *
- * Rust keeps a stable item slot and updates only the visible mask width as an
- * item crosses the carousel keylines. These selectors own the rounded clipping
- * shape and the content-density changes for large, medium and small masks.
+ * Rust keeps an immutable outer slot for every card and changes only a nested
+ * GtkViewport mask. GTK owns clipping through Widget::set_overflow(); CSS owns
+ * rounded shapes and content-density states only.
  */
 
 window.theme-material-expressive
   .material-carousel-motion-installed
-  .home-card-context-overlay.material-carousel-mask {
+  .home-card-context-overlay.material-carousel-slot {
+  background-color: transparent;
+}
+
+window.theme-material-expressive
+  .material-carousel-motion-installed
+  .material-carousel-mask {
   min-width: 0;
-  overflow: hidden;
   background-color: transparent;
   transition:
     border-radius 180ms ease-out,
@@ -110,8 +115,9 @@ window.theme-material-expressive
   opacity: 0;
 }
 
-/* Small edge previews behave as image-first peeks, matching the M3 carousel
- * hierarchy. The whole card remains clickable through its existing button. */
+/* Small edge previews behave as image-first peeks. The whole card remains
+ * clickable because the original card and action overlays live inside the
+ * viewport mask rather than being resized independently. */
 window.theme-material-expressive
   .material-carousel-item-small
   .collection-card-title,
