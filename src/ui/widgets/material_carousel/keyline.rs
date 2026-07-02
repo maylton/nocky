@@ -111,10 +111,8 @@ impl KeylineState {
         let viewport_width = finite_non_negative(viewport_width);
         let base_item_width = finite_positive(base_item_width);
         let spacing = finite_non_negative(spacing);
-        let keylines = keylines_from_specs(
-            base_item_width,
-            &strategy.keyline_specs(viewport_width, base_item_width, spacing),
-        );
+        let keylines =
+            keylines_from_specs(&strategy.keyline_specs(viewport_width, base_item_width, spacing));
 
         Self {
             viewport_width,
@@ -149,19 +147,16 @@ impl KeylineState {
     }
 }
 
-fn keylines_from_specs(
-    base_item_width: f64,
-    specs: &[super::strategy::StrategyKeyline],
-) -> Vec<Keyline> {
+fn keylines_from_specs(specs: &[super::strategy::StrategyKeyline]) -> Vec<Keyline> {
     let mut keylines: Vec<Keyline> = Vec::with_capacity(specs.len());
 
     for spec in specs {
         if let Some(previous) = keylines.last_mut() {
             if distance_is_tiny(previous.position, spec.position) {
-                if size_for_ratio(spec.size_ratio, base_item_width) > previous.item_size {
+                if finite_positive(spec.item_size) > previous.item_size {
                     *previous = Keyline {
                         position: spec.position,
-                        item_size: size_for_ratio(spec.size_ratio, base_item_width),
+                        item_size: finite_positive(spec.item_size),
                         kind: spec.kind,
                     };
                 }
@@ -171,7 +166,7 @@ fn keylines_from_specs(
 
         keylines.push(Keyline {
             position: spec.position,
-            item_size: size_for_ratio(spec.size_ratio, base_item_width),
+            item_size: finite_positive(spec.item_size),
             kind: spec.kind,
         });
     }
@@ -186,10 +181,6 @@ fn logical_content_x(
     leading_padding: f64,
 ) -> f64 {
     leading_padding + index as f64 * (base_item_width + spacing)
-}
-
-fn size_for_ratio(ratio: f64, base_item_width: f64) -> f64 {
-    (base_item_width * ratio).max(MIN_ITEM_WIDTH)
 }
 
 fn kind_for_width(width: f64, base_item_width: f64) -> KeylineKind {
@@ -246,6 +237,7 @@ fn lerp(from: f64, to: f64, t: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    use super::super::strategy::FeaturedCardMetrics;
     use super::*;
 
     const EPSILON: f64 = 1.0e-7;
@@ -260,10 +252,19 @@ mod tests {
             item_count,
             viewport_width,
             scroll_offset,
-            base_item_width: 120.0,
+            base_item_width: base_item_width_for(variant, viewport_width),
             spacing: 12.0,
-            leading_padding: 0.0,
+            leading_padding: variant.leading_padding(viewport_width),
             variant,
+        }
+    }
+
+    fn base_item_width_for(variant: MaterialCarouselStrategy, viewport_width: f64) -> f64 {
+        match variant {
+            MaterialCarouselStrategy::Hero => {
+                FeaturedCardMetrics::for_viewport(viewport_width).large_width
+            }
+            MaterialCarouselStrategy::MultiBrowse | MaterialCarouselStrategy::Uncontained => 120.0,
         }
     }
 
@@ -327,7 +328,9 @@ mod tests {
             MaterialCarouselStrategy::Uncontained,
         ] {
             for viewport_width in [480.0, 760.0, 1000.0] {
-                let max_scroll = (12.0_f64 * 120.0 + 11.0 * 12.0 - viewport_width).max(0.0);
+                let base_item_width = base_item_width_for(variant, viewport_width);
+                let max_scroll =
+                    (12.0_f64 * base_item_width + 11.0 * 12.0 - viewport_width).max(0.0);
                 for (label, scroll_offset) in [
                     ("start", 0.0),
                     ("middle", max_scroll / 2.0),
@@ -337,9 +340,9 @@ mod tests {
                         item_count: 12,
                         viewport_width,
                         scroll_offset,
-                        base_item_width: 120.0,
+                        base_item_width,
                         spacing: 12.0,
-                        leading_padding: 0.0,
+                        leading_padding: variant.leading_padding(viewport_width),
                         variant,
                     });
                     let summary = items
@@ -383,7 +386,7 @@ mod tests {
                     item_count: 11,
                     viewport_width: 672.0,
                     scroll_offset,
-                    base_item_width: 120.0,
+                    base_item_width: base_item_width_for(variant, 672.0),
                     spacing: 12.0,
                     leading_padding: 24.0,
                     variant,
@@ -397,15 +400,15 @@ mod tests {
         assert_eq!(
             geometry_table(),
             "\
-Hero 480 start 0.0 0.0:70.4:Small|82.4:116.4:Large|210.8:90.8:Medium|313.6:58.7:Small|384.2:52.8:Small
-Hero 480 middle 546.0 -546.0:52.8:Small|-481.2:52.8:Small|-416.4:52.8:Small|-351.6:52.8:Small|-286.8:65.1:Small
-Hero 480 end 1092.0 -1092.0:52.8:Small|-1027.2:52.8:Small|-962.4:52.8:Small|-897.6:52.8:Small|-832.8:52.8:Small
-Hero 760 start 0.0 0.0:60.8:Small|72.8:78.4:Medium|163.2:118.9:Large|294.1:87.3:Medium|393.4:70.5:Small
-Hero 760 middle 406.0 -406.0:52.8:Small|-341.2:52.8:Small|-276.4:52.8:Small|-211.6:59.5:Small|-140.1:77.1:Medium
-Hero 760 end 812.0 -812.0:52.8:Small|-747.2:52.8:Small|-682.4:52.8:Small|-617.6:52.8:Small|-552.8:52.8:Small
-Hero 1000 start 0.0 0.0:58.3:Small|70.3:70.3:Small|152.5:84.3:Medium|248.8:111.4:Large|372.2:81.1:Medium
-Hero 1000 middle 286.0 -286.0:52.8:Small|-221.2:52.8:Small|-156.4:56.3:Small|-88.1:68.3:Small|-7.9:80.3:Medium
-Hero 1000 end 572.0 -572.0:52.8:Small|-507.2:52.8:Small|-442.4:52.8:Small|-377.6:52.8:Small|-312.8:54.3:Small
+Hero 480 start 0.0 51.6:300.0:Large|363.6:123.4:Small|499.0:255.0:Medium|766.0:255.0:Medium|1033.0:255.0:Medium
+Hero 480 middle 1626.0 -1574.4:96.0:Small|-1466.4:96.0:Small|-1358.4:96.0:Small|-1250.4:96.0:Small|-1142.4:96.0:Small
+Hero 480 end 3252.0 -3200.4:96.0:Small|-3092.4:96.0:Small|-2984.4:96.0:Small|-2876.4:96.0:Small|-2768.4:96.0:Small
+Hero 760 start 0.0 159.6:319.2:Large|490.8:151.4:Small|654.2:271.3:Medium|937.5:271.3:Medium|1220.8:271.3:Medium
+Hero 760 middle 1601.2 -1441.6:102.1:Small|-1327.5:102.1:Small|-1213.3:102.1:Small|-1099.2:102.1:Small|-985.0:128.7:Small
+Hero 760 end 3202.4 -3042.8:102.1:Small|-2928.7:102.1:Small|-2814.5:102.1:Small|-2700.4:102.1:Small|-2586.2:102.1:Small
+Hero 1000 start 0.0 210.0:420.0:Large|642.0:188.4:Small|842.4:357.0:Medium|1211.4:357.0:Medium|1580.4:357.0:Medium
+Hero 1000 middle 2086.0 -1876.0:112.0:Small|-1752.0:112.0:Small|-1628.0:112.0:Small|-1504.0:112.0:Small|-1380.0:156.2:Small
+Hero 1000 end 4172.0 -3962.0:112.0:Small|-3838.0:112.0:Small|-3714.0:112.0:Small|-3590.0:112.0:Small|-3466.0:112.0:Small
 MultiBrowse 480 start 0.0 0.0:76.3:Medium|88.3:120.0:Large|220.3:112.9:Large|345.2:63.6:Small|420.8:55.2:Small
 MultiBrowse 480 middle 546.0 -546.0:55.2:Small|-478.8:55.2:Small|-411.6:55.2:Small|-344.4:55.2:Small|-277.2:70.0:Small
 MultiBrowse 480 end 1092.0 -1092.0:55.2:Small|-1024.8:55.2:Small|-957.6:55.2:Small|-890.4:55.2:Small|-823.2:55.2:Small
@@ -426,6 +429,141 @@ Uncontained 1000 middle 286.0 -286.0:120.0:Large|-154.0:120.0:Large|-22.0:120.0:
 Uncontained 1000 end 572.0 -572.0:120.0:Large|-440.0:120.0:Large|-308.0:120.0:Large|-176.0:120.0:Large|-44.0:120.0:Large
 "
         );
+    }
+
+    #[test]
+    fn featured_hero_metrics_are_responsive_and_ordered() {
+        for viewport_width in [480.0, 760.0, 1000.0, 1400.0] {
+            let metrics = FeaturedCardMetrics::for_viewport(viewport_width);
+
+            assert!((300.0..=420.0).contains(&metrics.large_width));
+            assert!(metrics.large_width > metrics.medium_width);
+            assert!(metrics.medium_width > metrics.small_width);
+            assert!((72.0..=112.0).contains(&metrics.small_width));
+            assert!(metrics.card_height.is_finite());
+            assert!(metrics.card_height > 0.0);
+            assert!(metrics.artwork_width.is_finite());
+            assert!(metrics.artwork_height.is_finite());
+            assert!(metrics.horizontal_padding.is_finite());
+            assert!(metrics.vertical_padding.is_finite());
+        }
+    }
+
+    #[test]
+    fn featured_hero_has_one_focal_large_keyline_per_viewport() {
+        for viewport_width in [480.0, 760.0, 1000.0, 1400.0] {
+            let metrics = FeaturedCardMetrics::for_viewport(viewport_width);
+            let state = KeylineState::for_strategy(
+                MaterialCarouselStrategy::Hero,
+                viewport_width,
+                metrics.large_width,
+                12.0,
+            );
+            assert_eq!(
+                state
+                    .keylines
+                    .iter()
+                    .filter(|keyline| {
+                        keyline.kind == KeylineKind::Large
+                            && keyline.position <= viewport_width + EPSILON
+                    })
+                    .count(),
+                1
+            );
+            assert!(state
+                .keylines
+                .iter()
+                .any(|keyline| (keyline.item_size - metrics.large_width).abs() < EPSILON));
+            assert!(state
+                .keylines
+                .iter()
+                .any(|keyline| (keyline.item_size - metrics.medium_width).abs() < EPSILON));
+            assert!(state
+                .keylines
+                .iter()
+                .any(|keyline| (keyline.item_size - metrics.small_width).abs() < EPSILON));
+        }
+    }
+
+    #[test]
+    fn featured_hero_geometry_contract_holds_across_viewports() {
+        for viewport_width in [480.0, 760.0, 1000.0, 1400.0] {
+            let metrics = FeaturedCardMetrics::for_viewport(viewport_width);
+            let max_scroll =
+                (12.0_f64 * metrics.large_width + 11.0 * 12.0 - viewport_width).max(0.0);
+
+            for scroll_offset in [0.0, max_scroll / 2.0, max_scroll] {
+                let input = CarouselGeometryInput {
+                    item_count: 12,
+                    viewport_width,
+                    scroll_offset,
+                    base_item_width: metrics.large_width,
+                    spacing: 12.0,
+                    leading_padding: MaterialCarouselStrategy::Hero.leading_padding(viewport_width),
+                    variant: MaterialCarouselStrategy::Hero,
+                };
+                let items = layout_items(input);
+
+                assert_valid_geometry(&items);
+                assert_ordered_without_overlap(&items, 12.0);
+
+                let visible_count = items
+                    .iter()
+                    .filter(|item| {
+                        item.viewport_x < viewport_width
+                            && item.viewport_x + item.visible_width > 0.0
+                    })
+                    .count();
+                assert!(
+                    visible_count <= 5,
+                    "viewport {viewport_width} scroll {scroll_offset}: {visible_count} visible"
+                );
+
+                for item in items.iter().filter(|item| {
+                    item.viewport_x < viewport_width && item.viewport_x + item.visible_width > 0.0
+                }) {
+                    assert!(
+                        item.visible_width + EPSILON >= metrics.small_width,
+                        "visible width {} < small {}",
+                        item.visible_width,
+                        metrics.small_width
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn featured_hero_tiny_scroll_delta_stays_continuous() {
+        for viewport_width in [480.0, 760.0, 1000.0, 1400.0] {
+            let metrics = FeaturedCardMetrics::for_viewport(viewport_width);
+            for scroll_offset in (0..20).map(|step| step as f64 * 17.0) {
+                let before = layout_items(CarouselGeometryInput {
+                    item_count: 10,
+                    viewport_width,
+                    scroll_offset,
+                    base_item_width: metrics.large_width,
+                    spacing: 12.0,
+                    leading_padding: MaterialCarouselStrategy::Hero.leading_padding(viewport_width),
+                    variant: MaterialCarouselStrategy::Hero,
+                });
+                let after = layout_items(CarouselGeometryInput {
+                    item_count: 10,
+                    viewport_width,
+                    scroll_offset: scroll_offset + 0.1,
+                    base_item_width: metrics.large_width,
+                    spacing: 12.0,
+                    leading_padding: MaterialCarouselStrategy::Hero.leading_padding(viewport_width),
+                    variant: MaterialCarouselStrategy::Hero,
+                });
+
+                for (left, right) in before.iter().zip(after.iter()) {
+                    assert!((left.viewport_x - right.viewport_x).abs() < 0.5);
+                    assert!((left.content_x - right.content_x).abs() < 0.5);
+                    assert!((left.visible_width - right.visible_width).abs() < 0.5);
+                }
+            }
+        }
     }
 
     #[test]

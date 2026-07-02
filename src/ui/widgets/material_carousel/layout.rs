@@ -1,7 +1,6 @@
 use super::{keyline::layout_items, MaterialCarousel, MaterialCarouselStrategy};
 use gtk::{glib, graphene, gsk, prelude::*, subclass::prelude::*};
 
-const LEADING_PADDING: f64 = 0.0;
 const TRAILING_PADDING: f64 = 0.0;
 
 glib::wrapper! {
@@ -15,12 +14,18 @@ impl MaterialCarouselLayout {
     }
 }
 
-pub(super) fn logical_extent(item_count: usize, base_item_width: f64, spacing: f64) -> f64 {
+pub(super) fn logical_extent(
+    item_count: usize,
+    viewport_width: f64,
+    base_item_width: f64,
+    spacing: f64,
+    strategy: MaterialCarouselStrategy,
+) -> f64 {
     let base_item_width = finite_positive(base_item_width);
     let spacing = finite_non_negative(spacing);
     let content =
         item_count as f64 * base_item_width + item_count.saturating_sub(1) as f64 * spacing;
-    LEADING_PADDING + content + TRAILING_PADDING
+    strategy.leading_padding(viewport_width) + content + TRAILING_PADDING
 }
 
 fn strategy_from_variant(variant: super::MaterialCarouselVariant) -> MaterialCarouselStrategy {
@@ -82,8 +87,10 @@ mod imp {
                 gtk::Orientation::Horizontal => {
                     let extent = ceil_to_i32(logical_extent(
                         imp.item_count.get(),
+                        imp.viewport_width.get(),
                         imp.base_item_width.get(),
                         imp.spacing.get(),
+                        strategy_from_variant(imp.variant.get()),
                     ));
                     (extent, extent, -1, -1)
                 }
@@ -117,7 +124,8 @@ mod imp {
                 scroll_offset: finite_non_negative(imp.scroll_offset.get()),
                 base_item_width: finite_positive(imp.base_item_width.get()),
                 spacing: finite_non_negative(imp.spacing.get()),
-                leading_padding: LEADING_PADDING,
+                leading_padding: strategy_from_variant(imp.variant.get())
+                    .leading_padding(finite_non_negative(imp.viewport_width.get())),
                 variant: strategy_from_variant(imp.variant.get()),
             });
 

@@ -12,11 +12,11 @@ use std::cell::Cell;
 #[allow(unused_imports)]
 pub(crate) use item::MaterialCarouselItem;
 #[allow(unused_imports)]
-pub(crate) use keyline::{layout_items, KeylineState};
+pub(crate) use keyline::{layout_items, CarouselGeometryInput, KeylineKind, KeylineState};
 #[allow(unused_imports)]
 pub(crate) use layout::MaterialCarouselLayout;
 #[allow(unused_imports)]
-pub(crate) use strategy::MaterialCarouselStrategy;
+pub(crate) use strategy::{FeaturedCardMetrics, MaterialCarouselStrategy};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum MaterialCarouselVariant {

@@ -4986,42 +4986,48 @@ impl HomeSectionPresentation {
 
     fn artwork_size(self) -> i32 {
         match self {
-            Self::Featured | Self::Compact => 128,
+            Self::Featured => 176,
+            Self::Compact => 128,
             Self::TrackRows => 48,
         }
     }
 
     fn card_width(self) -> i32 {
         match self {
-            Self::Featured | Self::Compact => 152,
+            Self::Featured => 196,
+            Self::Compact => 152,
             Self::TrackRows => 300,
         }
     }
 
     fn card_height(self) -> i32 {
         match self {
-            Self::Featured | Self::Compact => 188,
+            Self::Featured => 252,
+            Self::Compact => 188,
             Self::TrackRows => 64,
         }
     }
 
     fn outer_width(self) -> i32 {
         match self {
-            Self::Featured | Self::Compact => 168,
+            Self::Featured => 220,
+            Self::Compact => 168,
             Self::TrackRows => 312,
         }
     }
 
     fn outer_height(self) -> i32 {
         match self {
-            Self::Featured | Self::Compact => 196,
+            Self::Featured => 268,
+            Self::Compact => 196,
             Self::TrackRows => 64,
         }
     }
 
     fn rail_spacing(self) -> i32 {
         match self {
-            Self::Featured | Self::Compact => 6,
+            Self::Featured => 10,
+            Self::Compact => 6,
             Self::TrackRows => 8,
         }
     }
@@ -5035,7 +5041,8 @@ impl HomeSectionPresentation {
 
     fn scrollbar_gap(self) -> i32 {
         match self {
-            Self::Featured | Self::Compact => 18,
+            Self::Featured => 20,
+            Self::Compact => 18,
             Self::TrackRows => 20,
         }
     }
@@ -5436,27 +5443,36 @@ mod responsive_home_grid_tests {
     }
 
     #[test]
-    fn featured_and_compact_cards_keep_uniform_carousel_geometry() {
-        assert_eq!(
+    fn featured_and_compact_cards_do_not_share_metrics() {
+        assert_ne!(
             HomeSectionPresentation::Featured.artwork_size(),
             HomeSectionPresentation::Compact.artwork_size()
         );
-        assert_eq!(
+        assert_ne!(
             HomeSectionPresentation::Featured.card_width(),
             HomeSectionPresentation::Compact.card_width()
         );
-        assert_eq!(
+        assert_ne!(
             HomeSectionPresentation::Featured.card_height(),
             HomeSectionPresentation::Compact.card_height()
         );
-        assert_eq!(
+        assert_ne!(
             HomeSectionPresentation::Featured.outer_width(),
             HomeSectionPresentation::Compact.outer_width()
         );
-        assert_eq!(
+        assert_ne!(
             HomeSectionPresentation::Featured.outer_height(),
             HomeSectionPresentation::Compact.outer_height()
         );
+    }
+
+    #[test]
+    fn featured_geometry_matches_material_featured_scale() {
+        assert_eq!(HomeSectionPresentation::Featured.artwork_size(), 176);
+        assert_eq!(HomeSectionPresentation::Featured.card_width(), 196);
+        assert_eq!(HomeSectionPresentation::Featured.card_height(), 252);
+        assert_eq!(HomeSectionPresentation::Featured.outer_width(), 220);
+        assert_eq!(HomeSectionPresentation::Featured.outer_height(), 268);
     }
 
     #[test]
@@ -5495,9 +5511,9 @@ mod responsive_home_grid_tests {
     #[test]
     fn scroller_height_reserves_space_for_scrollbar_without_stretching_rows() {
         assert_eq!(HomeSectionPresentation::TrackRows.row_spacing(), 4);
-        assert_eq!(
-            HomeSectionPresentation::Featured.scroller_height(1),
-            HomeSectionPresentation::Compact.scroller_height(1)
+        assert!(
+            HomeSectionPresentation::Featured.scroller_height(1)
+                > HomeSectionPresentation::Compact.scroller_height(1)
         );
         assert_eq!(HomeSectionPresentation::TrackRows.scroller_height(4), 288);
         assert_eq!(HomeSectionPresentation::Compact.scroller_height(2), 418);
