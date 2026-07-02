@@ -182,3 +182,197 @@ window.theme-noctalia .lyric-seek-target:hover {
 window.theme-material-expressive .lyric-seek-target:hover {
   background-color: alpha(@m3_primary, 0.14);
 }
+
+/* playback_mode_toggle_v1 */
+window.theme-noctalia
+  button.playback-mode-toggle:hover {
+  background-color: alpha(@theme_fg_color, 0.09);
+}
+
+window.theme-noctalia
+  button.playback-mode-toggle:checked {
+  color: @accent_fg_color;
+  background-color: @accent_bg_color;
+}
+
+window.theme-noctalia
+  button.repeat-mode-toggle:checked
+  .mode-toggle-badge {
+  color: @accent_bg_color;
+  background-color: @accent_fg_color;
+}
+
+/* material_loading_indicator_v1 */
+window.theme-noctalia .material-loading-indicator.contained {
+  color: @accent_fg_color;
+  background-color: @accent_color;
+  border-radius: 999px;
+}
+
+/* material_button_compat_v1
+ * Material semantics are shared by the widget tree, but Noctalia keeps its own
+ * accent-driven visual language instead of falling back to generic GTK buttons.
+ */
+window.theme-noctalia button.material-button {
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border-width: 1px;
+  border-style: solid;
+  background-image: none;
+  font-weight: 720;
+  box-shadow: none;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+window.theme-noctalia button.material-button.material-button-compact {
+  min-height: 40px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+window.theme-noctalia button.material-button.material-button-large {
+  min-height: 56px;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+window.theme-noctalia button.material-button-filled {
+  color: @accent_fg_color;
+  background-color: @accent_bg_color;
+  border-color: transparent;
+}
+
+window.theme-noctalia button.material-button-filled:hover {
+  background-color: shade(@accent_bg_color, 1.06);
+  box-shadow: 0 3px 10px alpha(black, 0.16);
+}
+
+window.theme-noctalia button.material-button-filled-tonal {
+  color: @accent_color;
+  background-color: alpha(@accent_color, 0.16);
+  border-color: alpha(@accent_color, 0.22);
+}
+
+window.theme-noctalia button.material-button-filled-tonal:hover {
+  background-color: alpha(@accent_color, 0.23);
+}
+
+window.theme-noctalia button.material-button-elevated {
+  color: @accent_color;
+  background-color: alpha(@window_fg_color, 0.05);
+  border-color: alpha(@window_fg_color, 0.11);
+  box-shadow: 0 3px 10px alpha(black, 0.14);
+}
+
+window.theme-noctalia button.material-button-outlined {
+  color: @accent_color;
+  background-color: transparent;
+  border-color: alpha(@accent_color, 0.58);
+}
+
+window.theme-noctalia button.material-button-outlined:hover,
+window.theme-noctalia button.material-button-text:hover {
+  background-color: alpha(@accent_color, 0.12);
+}
+
+window.theme-noctalia button.material-button-text {
+  color: @accent_color;
+  background-color: transparent;
+  border-color: transparent;
+}
+
+window.theme-noctalia
+  button.material-button-destructive.material-button-filled {
+  color: @destructive_fg_color;
+  background-color: @destructive_bg_color;
+}
+
+window.theme-noctalia
+  button.material-button-destructive.material-button-outlined,
+window.theme-noctalia
+  button.material-button-destructive.material-button-text {
+  color: @destructive_color;
+  border-color: alpha(@destructive_color, 0.68);
+}
+
+window.theme-noctalia button.material-button:focus,
+window.theme-noctalia button.material-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px alpha(@accent_color, 0.28);
+}
+
+window.theme-noctalia button.material-icon-button {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 999px;
+  border-width: 1px;
+  border-style: solid;
+  background-image: none;
+  box-shadow: none;
+}
+
+window.theme-noctalia button.material-icon-button-standard {
+  color: @window_fg_color;
+  background-color: transparent;
+  border-color: transparent;
+}
+
+window.theme-noctalia button.material-icon-button-standard:hover {
+  background-color: alpha(@window_fg_color, 0.09);
+}
+
+window.theme-noctalia button.material-icon-button-filled {
+  color: @accent_fg_color;
+  background-color: @accent_bg_color;
+  border-color: transparent;
+}
+
+window.theme-noctalia button.material-icon-button-filled-tonal,
+window.theme-noctalia button.material-icon-button-selected {
+  color: @accent_color;
+  background-color: alpha(@accent_color, 0.16);
+  border-color: alpha(@accent_color, 0.24);
+}
+
+window.theme-noctalia button.material-icon-button-outlined {
+  color: @accent_color;
+  background-color: transparent;
+  border-color: alpha(@accent_color, 0.58);
+}
+
+window.theme-noctalia button.material-chip {
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border-width: 1px;
+  border-style: solid;
+  background-image: none;
+  box-shadow: none;
+  font-weight: 680;
+}
+
+window.theme-noctalia button.material-chip-assist,
+window.theme-noctalia button.material-chip-filter,
+window.theme-noctalia button.material-chip-input {
+  color: @window_fg_color;
+  background-color: transparent;
+  border-color: alpha(@window_fg_color, 0.22);
+}
+
+window.theme-noctalia button.material-chip-suggestion,
+window.theme-noctalia button.material-chip-selected {
+  color: @accent_fg_color;
+  background-color: @accent_bg_color;
+  border-color: transparent;
+}
+
+window.theme-noctalia button.material-chip:hover {
+  background-color: alpha(@accent_color, 0.12);
+  border-color: alpha(@accent_color, 0.45);
+}

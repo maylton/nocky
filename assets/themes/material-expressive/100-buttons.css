@@ -1,0 +1,418 @@
+/*
+ * Material Expressive button foundation
+ * -------------------------------------
+ *
+ * This module defines the shared visual contract for labeled buttons. It is
+ * intentionally opt-in through semantic classes so existing transport,
+ * navigation, card-surface and theme-specific controls remain untouched until
+ * they are explicitly audited and migrated.
+ */
+
+.theme-material-expressive button.material-button,
+.theme-frosted-glass button.material-button {
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 24px;
+  border-width: 1px;
+  border-style: solid;
+  background-image: none;
+  font-weight: 720;
+  transition:
+    background-color 180ms ease-out,
+    color 180ms ease-out,
+    border-color 180ms ease-out,
+    box-shadow 220ms ease-out,
+    border-radius 180ms ease-out;
+}
+
+.theme-material-expressive button.material-button.material-button-compact,
+.theme-frosted-glass button.material-button.material-button-compact {
+  min-height: 40px;
+  padding-left: 16px;
+  padding-right: 16px;
+  border-radius: 20px;
+}
+
+.theme-material-expressive button.material-button.material-button-standard,
+.theme-frosted-glass button.material-button.material-button-standard {
+  min-height: 48px;
+}
+
+.theme-material-expressive button.material-button.material-button-large,
+.theme-frosted-glass button.material-button.material-button-large {
+  min-height: 56px;
+  padding-left: 24px;
+  padding-right: 24px;
+  border-radius: 28px;
+  font-size: 1rem;
+}
+
+.theme-material-expressive button.material-button:disabled,
+.theme-frosted-glass button.material-button:disabled {
+  box-shadow: none;
+  opacity: 0.56;
+}
+
+.theme-material-expressive button.material-button.material-button-loading,
+.theme-frosted-glass button.material-button.material-button-loading {
+  box-shadow: none;
+}
+
+.theme-material-expressive button.material-button.material-button-loading > *,
+.theme-material-expressive
+  button.material-button.material-button-loading
+  .material-loading-indicator,
+.theme-material-expressive
+  button.material-button.material-button-loading
+  .expressive-loading-indicator,
+.theme-frosted-glass button.material-button.material-button-loading > *,
+.theme-frosted-glass
+  button.material-button.material-button-loading
+  .material-loading-indicator,
+.theme-frosted-glass
+  button.material-button.material-button-loading
+  .expressive-loading-indicator {
+  color: inherit;
+}
+
+/* Material Expressive variants. */
+.theme-material-expressive button.material-button-filled {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.theme-material-expressive button.material-button-filled:hover {
+  background-color: shade(@m3_primary, 1.06);
+  box-shadow: 0 3px 10px alpha(black, 0.18);
+}
+
+.theme-material-expressive button.material-button-filled:active {
+  border-radius: 18px;
+  background-color: shade(@m3_primary, 0.94);
+  box-shadow: none;
+}
+
+.theme-material-expressive button.material-button-filled-tonal {
+  color: @m3_on_secondary_container;
+  background-color: @m3_secondary_container;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.theme-material-expressive button.material-button-filled-tonal:hover {
+  background-color: shade(@m3_secondary_container, 1.10);
+  box-shadow: 0 2px 8px alpha(black, 0.14);
+}
+
+.theme-material-expressive button.material-button-filled-tonal:active {
+  border-radius: 18px;
+  background-color: shade(@m3_secondary_container, 0.94);
+  box-shadow: none;
+}
+
+.theme-material-expressive button.material-button-elevated {
+  color: @m3_primary;
+  background-color: @m3_surface_container_low;
+  border-color: alpha(@m3_outline_variant, 0.20);
+  box-shadow: 0 3px 10px alpha(black, 0.20);
+}
+
+.theme-material-expressive button.material-button-elevated:hover {
+  background-color: @m3_surface_container;
+  border-color: alpha(@m3_primary, 0.24);
+  box-shadow: 0 5px 14px alpha(black, 0.24);
+}
+
+.theme-material-expressive button.material-button-elevated:active {
+  border-radius: 18px;
+  background-color: @m3_surface_container_high;
+  box-shadow: 0 2px 7px alpha(black, 0.18);
+}
+
+.theme-material-expressive button.material-button-outlined {
+  color: @m3_primary;
+  background-color: transparent;
+  border-color: @m3_outline;
+  box-shadow: none;
+}
+
+.theme-material-expressive button.material-button-outlined:hover {
+  background-color: alpha(@m3_primary, 0.10);
+  border-color: @m3_primary;
+}
+
+.theme-material-expressive button.material-button-outlined:active {
+  border-radius: 18px;
+  background-color: alpha(@m3_primary, 0.16);
+}
+
+.theme-material-expressive button.material-button-text {
+  min-width: 48px;
+  color: @m3_primary;
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.theme-material-expressive button.material-button-text:hover {
+  background-color: alpha(@m3_primary, 0.10);
+}
+
+.theme-material-expressive button.material-button-text:active {
+  border-radius: 18px;
+  background-color: alpha(@m3_primary, 0.16);
+}
+
+.theme-material-expressive button.material-button-selected {
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  border-color: alpha(@m3_primary, 0.34);
+}
+
+.theme-material-expressive button.material-button-destructive.material-button-filled {
+  color: @m3_surface;
+  background-color: @m3_error;
+}
+
+.theme-material-expressive button.material-button-destructive.material-button-filled:hover {
+  background-color: shade(@m3_error, 1.05);
+}
+
+.theme-material-expressive button.material-button-destructive.material-button-filled-tonal {
+  color: @m3_error;
+  background-color: alpha(@m3_error, 0.16);
+  border-color: transparent;
+}
+
+.theme-material-expressive button.material-button-destructive.material-button-outlined,
+.theme-material-expressive button.material-button-destructive.material-button-text {
+  color: @m3_error;
+  border-color: alpha(@m3_error, 0.72);
+}
+
+.theme-material-expressive button.material-button:focus,
+.theme-material-expressive button.material-button:focus-visible {
+  outline: none;
+  background-image: none;
+  box-shadow: 0 0 0 3px alpha(@m3_primary, 0.34);
+}
+
+.theme-material-expressive button.material-button-destructive:focus,
+.theme-material-expressive button.material-button-destructive:focus-visible {
+  box-shadow: 0 0 0 3px alpha(@m3_error, 0.34);
+}
+
+/* Frosted Glass remains translucent while reusing Material hierarchy. */
+.theme-frosted-glass button.material-button-elevated {
+  background-color: alpha(@m3_surface_container, 0.70);
+  border-color: alpha(@m3_outline, 0.28);
+  box-shadow: 0 5px 18px alpha(black, 0.20);
+}
+
+.theme-frosted-glass button.material-button-outlined {
+  background-color: alpha(@m3_surface, 0.18);
+  border-color: alpha(@m3_outline, 0.72);
+}
+
+.theme-frosted-glass button.material-button-selected {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.82);
+  border-color: alpha(@m3_primary, 0.38);
+}
+
+.theme-frosted-glass
+  button.material-button-destructive.material-button-outlined,
+.theme-frosted-glass button.material-button-destructive.material-button-text {
+  color: @m3_error;
+  border-color: alpha(@m3_error, 0.72);
+}
+
+/*
+ * Material icon buttons
+ * ---------------------
+ *
+ * Icon buttons are for compact supplementary actions. Geometry is opt-in and
+ * stable so hover, selected and pressed states never resize toolbar rows.
+ */
+.theme-material-expressive button.material-icon-button,
+.theme-frosted-glass button.material-icon-button {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 20px;
+  border-width: 1px;
+  border-style: solid;
+  background-image: none;
+  box-shadow: none;
+  transition:
+    background-color 180ms ease-out,
+    color 180ms ease-out,
+    border-color 180ms ease-out,
+    border-radius 180ms ease-out;
+}
+
+.theme-material-expressive button.material-icon-button:disabled,
+.theme-frosted-glass button.material-icon-button:disabled {
+  opacity: 0.56;
+  box-shadow: none;
+}
+
+.theme-material-expressive button.material-icon-button-standard {
+  color: @m3_on_surface_variant;
+  background-color: transparent;
+  border-color: transparent;
+}
+
+.theme-material-expressive button.material-icon-button-standard:hover {
+  color: @m3_on_surface;
+  background-color: alpha(@m3_on_surface, 0.08);
+}
+
+.theme-material-expressive button.material-icon-button-filled {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  border-color: transparent;
+}
+
+.theme-material-expressive button.material-icon-button-filled-tonal {
+  color: @m3_on_secondary_container;
+  background-color: @m3_secondary_container;
+  border-color: transparent;
+}
+
+.theme-material-expressive button.material-icon-button-outlined {
+  color: @m3_on_surface_variant;
+  background-color: transparent;
+  border-color: @m3_outline;
+}
+
+.theme-material-expressive button.material-icon-button-selected {
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  border-color: alpha(@m3_primary, 0.34);
+}
+
+.theme-material-expressive button.material-icon-button:active {
+  border-radius: 16px;
+}
+
+.theme-material-expressive button.material-icon-button:focus,
+.theme-material-expressive button.material-icon-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px alpha(@m3_primary, 0.34);
+}
+
+.theme-frosted-glass button.material-icon-button-standard {
+  color: @m3_on_surface_variant;
+  background-color: alpha(@m3_surface_container_high, 0.24);
+  border-color: alpha(@m3_outline_variant, 0.22);
+}
+
+.theme-frosted-glass button.material-icon-button-standard:hover {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.42);
+  border-color: alpha(@m3_primary, 0.32);
+}
+
+.theme-frosted-glass button.material-icon-button-filled-tonal,
+.theme-frosted-glass button.material-icon-button-selected {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.78);
+  border-color: alpha(@m3_primary, 0.36);
+}
+
+.theme-frosted-glass button.material-icon-button-outlined {
+  color: @m3_on_surface_variant;
+  background-color: alpha(@m3_surface, 0.16);
+  border-color: alpha(@m3_outline, 0.68);
+}
+
+/*
+ * Material chips
+ * --------------
+ *
+ * Chips are compact choices and filters, separate from high-priority action
+ * buttons. Geometry is fixed so selection and hover states do not resize rails.
+ */
+.theme-material-expressive button.material-chip,
+.theme-frosted-glass button.material-chip {
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border-width: 1px;
+  border-style: solid;
+  background-image: none;
+  box-shadow: none;
+  font-weight: 680;
+  transition:
+    background-color 180ms ease-out,
+    color 180ms ease-out,
+    border-color 180ms ease-out,
+    border-radius 180ms ease-out,
+    box-shadow 180ms ease-out;
+}
+
+.theme-material-expressive button.material-chip:disabled,
+.theme-frosted-glass button.material-chip:disabled {
+  opacity: 0.56;
+  box-shadow: none;
+}
+
+.theme-material-expressive button.material-chip-assist,
+.theme-material-expressive button.material-chip-input,
+.theme-material-expressive button.material-chip-filter {
+  color: @m3_on_surface_variant;
+  background-color: transparent;
+  border-color: @m3_outline;
+}
+
+.theme-material-expressive button.material-chip-suggestion {
+  color: @m3_on_secondary_container;
+  background-color: alpha(@m3_secondary_container, 0.52);
+  border-color: transparent;
+}
+
+.theme-material-expressive button.material-chip:hover {
+  color: @m3_on_surface;
+  background-color: alpha(@m3_primary, 0.10);
+  border-color: alpha(@m3_primary, 0.50);
+}
+
+.theme-material-expressive button.material-chip-selected {
+  color: @m3_on_secondary_container;
+  background-color: @m3_secondary_container;
+  border-color: transparent;
+}
+
+.theme-material-expressive button.material-chip:active {
+  border-radius: 9px;
+  background-color: alpha(@m3_primary, 0.16);
+}
+
+.theme-material-expressive button.material-chip:focus,
+.theme-material-expressive button.material-chip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px alpha(@m3_primary, 0.34);
+}
+
+.theme-frosted-glass button.material-chip-assist,
+.theme-frosted-glass button.material-chip-input,
+.theme-frosted-glass button.material-chip-filter {
+  color: @m3_on_surface_variant;
+  background-color: alpha(@m3_surface, 0.18);
+  border-color: alpha(@m3_outline, 0.46);
+}
+
+.theme-frosted-glass button.material-chip-suggestion {
+  color: @m3_on_secondary_container;
+  background-color: alpha(@m3_secondary_container, 0.56);
+  border-color: alpha(@m3_secondary_container, 0.38);
+}
+
+.theme-frosted-glass button.material-chip-selected {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.82);
+  border-color: alpha(@m3_primary, 0.38);
+}

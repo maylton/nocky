@@ -220,10 +220,15 @@ impl MaterialPalette {
 @define-color m3_error {error};
 
 window.theme-material-expressive,
-window.theme-material-expressive > toastoverlay,
 window.theme-material-expressive .app-shell {{
   background-color: {surface};
   color: {on_surface};
+}}
+
+window.theme-material-expressive > toastoverlay,
+window.theme-material-expressive > toastoverlay:backdrop {{
+  background-color: transparent;
+  background-image: none;
 }}
 
 window.theme-material-expressive .noctalia-header,
@@ -235,10 +240,12 @@ window.theme-material-expressive .player-bar {{
 
 window.theme-material-expressive .expressive-player-card {{
   background-color: {surface_container};
+  background-clip: padding-box;
   background-image:
     radial-gradient(circle at 18% 4%, alpha({primary}, 0.20), transparent 42%),
     linear-gradient(145deg, alpha({tertiary}, 0.08), transparent 58%);
   border-color: alpha({outline}, 0.30);
+  box-shadow: none;
 }}
 
 window.theme-material-expressive .player-now-header {{
@@ -330,10 +337,13 @@ window.theme-material-expressive button .expressive-loading-indicator {{
 }}
 window.theme-material-expressive .expressive-footer {{
   background-color: {surface_container_low};
+  background-clip: padding-box;
   background-image:
     radial-gradient(circle at 4% 50%, alpha({primary}, 0.16), transparent 32%),
     linear-gradient(110deg, transparent 48%, alpha({tertiary}, 0.065));
   border-color: alpha({outline}, 0.26);
+  border-top-color: alpha({outline}, 0.26);
+  box-shadow: none;
 }}
 
 window.theme-material-expressive .footer-info-card {{
@@ -920,6 +930,71 @@ dialog.startup-dialog.theme-material-expressive .material-dialog-toolbar headerb
   background-image: none;
   border-color: alpha({outline}, 0.18);
 }}
+
+dialog.floating.theme-material-expressive,
+dialog.floating.theme-frosted-glass,
+dialog.youtube-settings-dialog.theme-material-expressive,
+dialog.youtube-settings-dialog.theme-frosted-glass {{
+  padding: 0;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background-color: transparent;
+  background-image: none;
+}}
+
+dialog.floating.theme-material-expressive > widget,
+dialog.floating.theme-frosted-glass > widget,
+dialog.youtube-settings-dialog.theme-material-expressive > widget,
+dialog.youtube-settings-dialog.theme-frosted-glass > widget,
+dialog.floating.theme-material-expressive floating-sheet,
+dialog.floating.theme-frosted-glass floating-sheet,
+dialog.youtube-settings-dialog.theme-material-expressive floating-sheet,
+dialog.youtube-settings-dialog.theme-frosted-glass floating-sheet,
+dialog.floating.theme-material-expressive sheet,
+dialog.floating.theme-frosted-glass sheet,
+dialog.youtube-settings-dialog.theme-material-expressive sheet,
+dialog.youtube-settings-dialog.theme-frosted-glass sheet,
+dialog.floating.theme-material-expressive sheet > widget,
+dialog.floating.theme-frosted-glass sheet > widget,
+dialog.youtube-settings-dialog.theme-material-expressive sheet > widget,
+dialog.youtube-settings-dialog.theme-frosted-glass sheet > widget {{
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background-color: transparent;
+  background-image: none;
+}}
+
+.youtube-dialog-surface.theme-material-expressive {{
+  min-height: 680px;
+  color: {on_surface};
+  background-color: {surface_container_low};
+  background-image:
+    radial-gradient(circle at 12% 0%, alpha({primary}, 0.10), transparent 46%);
+  border: 1px solid alpha({outline}, 0.20);
+  border-radius: 32px;
+  box-shadow: none;
+}}
+
+.youtube-dialog-surface.theme-material-expressive .material-dialog-toolbar,
+.youtube-dialog-surface.theme-material-expressive scrolledwindow,
+.youtube-dialog-surface.theme-material-expressive viewport,
+.youtube-dialog-surface.theme-material-expressive clamp,
+.youtube-dialog-surface.theme-material-expressive .youtube-settings-host {{
+  color: {on_surface};
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}}
+
+.youtube-dialog-surface.theme-material-expressive .material-dialog-toolbar headerbar {{
+  color: {on_surface};
+  background-color: {surface_container};
+  background-image: none;
+  border-color: alpha({outline}, 0.18);
+}}
 window.theme-material-expressive
   .home-carousel-scroll
   scrollbar.horizontal
@@ -1177,6 +1252,16 @@ mod tests {
 
         assert!(css.contains("@define-color m3_outline_variant"));
         assert!(css.contains("@define-color m3_error"));
+    }
+
+    #[test]
+    fn dynamic_css_keeps_toast_overlay_transparent() {
+        let css = MaterialPalette::fallback().to_css();
+
+        assert!(css.contains("window.theme-material-expressive > toastoverlay"));
+        assert!(!css.contains(
+            "window.theme-material-expressive,\nwindow.theme-material-expressive > toastoverlay"
+        ));
     }
 
     #[test]

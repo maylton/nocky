@@ -1,5 +1,76 @@
 
 /*
+ * Material card and carousel foundation
+ * -------------------------------------
+ *
+ * Cards present a single subject. Home collection cards use the elevated
+ * variant because they sit on section containers and need visible separation.
+ * Carousels are horizontal visual collections; layout and scroll physics stay
+ * owned by browser.rs.
+ */
+window.theme-material-expressive .material-carousel {
+  background-color: transparent;
+}
+
+window.theme-material-expressive .material-carousel-multi-browse {
+  border-radius: 0;
+}
+
+window.theme-material-expressive .material-card {
+  color: @m3_on_surface;
+  background-image: none;
+  transition:
+    background-color 180ms ease-out,
+    border-color 180ms ease-out,
+    box-shadow 220ms ease-out;
+}
+
+window.theme-material-expressive .material-card-elevated {
+  background-color: @m3_surface_container;
+  border-color: alpha(@m3_outline, 0.18);
+  box-shadow: 0 5px 16px alpha(black, 0.13);
+}
+
+window.theme-material-expressive .material-card-filled {
+  background-color: @m3_surface_container_high;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .material-card-outlined {
+  background-color: @m3_surface;
+  border-color: @m3_outline_variant;
+  box-shadow: none;
+}
+
+window.theme-material-expressive
+  button.home-card-button:hover
+  .material-card-elevated,
+window.theme-material-expressive
+  button.collection-card-button:hover
+  .material-card-elevated,
+window.theme-material-expressive
+  button.compact-artist-button:hover
+  .material-card-elevated {
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.34);
+  box-shadow: 0 9px 24px alpha(black, 0.22);
+}
+
+window.theme-material-expressive
+  button.home-card-button:active
+  .material-card-elevated,
+window.theme-material-expressive
+  button.collection-card-button:active
+  .material-card-elevated,
+window.theme-material-expressive
+  button.compact-artist-button:active
+  .material-card-elevated {
+  background-color: @m3_secondary_container;
+  border-color: alpha(@m3_primary, 0.46);
+}
+
+/*
  * Match the playback queue's M3 thumb construction:
  * a tonal outer capsule surrounding a darker inner core.
  * Overall geometry remains 34 px × 6 px.
@@ -110,7 +181,6 @@ window.theme-material-expressive
   box-shadow: 0 11px 28px alpha(black, 0.25);
 }
 
-
 /* Stronger tonal state while the edge spring is active */
 
 /*
@@ -126,9 +196,34 @@ window.theme-material-expressive
   border-color: alpha(@m3_primary, 0.58);
   box-shadow: 0 12px 30px alpha(black, 0.27);
 }
-/* Keep each Home overlay aligned with its presentation geometry. */
+
+/*
+ * Home presentation hierarchy
+ * ---------------------------
+ *
+ * Featured is intentionally larger than Compact. The Material card semantic
+ * classes style the surface, but must not flatten the browser-owned content
+ * hierarchy introduced for Nocky 0.6.0.
+ */
+.home-section-featured button.home-card-button,
 .home-section-featured .home-card-context-overlay {
   min-width: 220px;
+  min-height: 268px;
+}
+
+.home-section-featured .collection-card.home-card-featured {
+  min-width: 196px;
+  min-height: 252px;
+}
+
+.home-section-featured .home-card-featured .collection-artwork {
+  min-width: 176px;
+  min-height: 176px;
+}
+
+.home-section-featured .home-carousel-scroll,
+.home-section-featured .home-card-grid-scroll {
+  min-height: 288px;
 }
 
 .home-section-compact .home-card-context-overlay {
@@ -156,7 +251,8 @@ window.theme-material-expressive
   border-radius: 18px;
 }
 
-.collection-card-context-action {
+.collection-card-context-action,
+.material-card-primary-action {
   min-width: 42px;
   min-height: 42px;
   padding: 0;
@@ -174,7 +270,8 @@ window.theme-material-expressive
     transform 140ms ease-out;
 }
 
-.collection-card-context-action:hover {
+.collection-card-context-action:hover,
+.material-card-primary-action:hover {
   background-color: mix(@m3_primary, white, 0.10);
   color: @m3_on_primary;
   box-shadow:
@@ -182,7 +279,8 @@ window.theme-material-expressive
     0 0 0 3px alpha(@m3_primary, 0.18);
 }
 
-.collection-card-context-action:active {
+.collection-card-context-action:active,
+.material-card-primary-action:active {
   background-color: mix(@m3_primary, black, 0.10);
   color: @m3_on_primary;
   box-shadow:
@@ -190,7 +288,22 @@ window.theme-material-expressive
     0 0 0 2px alpha(@m3_primary, 0.22);
 }
 
-.collection-card-context-action.active {
+.collection-card-context-action:focus,
+.collection-card-context-action:focus-visible,
+.material-card-primary-action:focus,
+.material-card-primary-action:focus-visible,
+.collection-card-overflow-button:focus,
+.collection-card-overflow-button:focus-visible,
+.material-card-overflow-trigger:focus,
+.material-card-overflow-trigger:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px alpha(@m3_primary, 0.34),
+    0 3px 12px alpha(black, 0.26);
+}
+
+.collection-card-context-action.active,
+.material-card-primary-action.active {
   background-color: @m3_primary_container;
   color: @m3_on_primary_container;
   border-color: alpha(@m3_primary, 0.44);
@@ -199,7 +312,8 @@ window.theme-material-expressive
     0 0 0 3px alpha(@m3_primary, 0.24);
 }
 
-.collection-card-context-action.active:hover {
+.collection-card-context-action.active:hover,
+.material-card-primary-action.active:hover {
   background-color: mix(@m3_primary_container, @m3_primary, 0.18);
   color: @m3_on_primary_container;
 }
@@ -217,7 +331,8 @@ window.theme-material-expressive
     inset 0 0 0 1px alpha(@m3_on_primary, 0.30),
     0 0 0 2px alpha(@m3_primary, 0.22);
 }
-.collection-card-overflow-button {
+.collection-card-overflow-button,
+.material-card-overflow-trigger {
   min-width: 36px;
   min-height: 36px;
   padding: 0;
@@ -228,7 +343,8 @@ window.theme-material-expressive
   box-shadow: 0 2px 10px alpha(black, 0.22);
 }
 
-.collection-card-overflow-button:hover {
+.collection-card-overflow-button:hover,
+.material-card-overflow-trigger:hover {
   background-color: alpha(@m3_surface_container_high, 0.94);
   border-color: alpha(@m3_primary, 0.42);
 }
@@ -242,15 +358,50 @@ window.theme-material-expressive
   box-shadow: 0 10px 28px alpha(black, 0.30);
 }
 
-.collection-card-overflow-action {
-  min-height: 42px;
+.collection-card-overflow-separator {
+  margin: 4px 6px;
+  background-color: alpha(@m3_outline_variant, 0.56);
+}
+
+.collection-card-overflow-action,
+.material-card-menu-action {
+  min-height: 44px;
   padding: 8px 12px;
   border-radius: 12px;
   background-color: transparent;
   color: @m3_on_surface;
+  border: 1px solid transparent;
 }
 
-.collection-card-overflow-action:hover {
+.collection-card-overflow-action:hover,
+.material-card-menu-action:hover {
   background-color: alpha(@m3_primary, 0.14);
 }
 
+.collection-card-overflow-action:focus,
+.collection-card-overflow-action:focus-visible,
+.material-card-menu-action:focus,
+.material-card-menu-action:focus-visible {
+  outline: none;
+  background-color: alpha(@m3_primary, 0.12);
+  border-color: alpha(@m3_primary, 0.34);
+}
+
+.material-card-menu-action-selected {
+  color: @m3_on_secondary_container;
+  background-color: alpha(@m3_secondary_container, 0.70);
+}
+
+.material-card-menu-action-loading {
+  color: @m3_on_surface_variant;
+  background-color: alpha(@m3_surface_container_highest, 0.72);
+}
+
+.material-card-menu-action-success {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.72);
+}
+
+.material-card-menu-action:disabled {
+  opacity: 0.72;
+}

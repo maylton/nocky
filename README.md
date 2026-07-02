@@ -250,7 +250,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
 ## Current beta limitations
 
-- A tiny lower-border rasterization artifact may appear on the main Frosted Glass player card with some GTK/compositor combinations.
 - YouTube Music uses an unofficial browser-session integration and can require updates when the service changes.
 - YouTube stream URLs are temporary, although Nocky automatically refreshes rejected or expired streams.
 - YouTube Music mutations are reconciled asynchronously and may be confirmed again during the next library synchronization when remote verification is unavailable.

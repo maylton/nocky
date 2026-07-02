@@ -7,6 +7,9 @@ use crate::{
     config::AppLanguage,
     i18n::{self, Message},
     md3_volume::Md3VolumeSlider,
+    ui::widgets::material_button::{
+        apply_material_icon_button, MaterialIconButtonSpec, MaterialIconButtonVariant,
+    },
 };
 use gtk::prelude::*;
 const VOLUME_STEP: f64 = 0.01;
@@ -41,7 +44,10 @@ pub(crate) fn build_footer_utilities(
         .icon_name("audio-input-microphone-symbolic")
         .tooltip_text(tr(Message::LyricsTooltip))
         .build();
-    lyrics_button.add_css_class("flat");
+    apply_material_icon_button(
+        &lyrics_button,
+        MaterialIconButtonSpec::new(MaterialIconButtonVariant::Standard),
+    );
     lyrics_button.add_css_class("footer-control");
     lyrics_button.add_css_class("footer-lyrics-button");
     lyrics_button.add_css_class("footer-utility-action");
@@ -50,7 +56,10 @@ pub(crate) fn build_footer_utilities(
     let mute_icon = gtk::Image::from_icon_name("audio-volume-high-symbolic");
     let mute_button = gtk::Button::new();
     mute_button.set_child(Some(&mute_icon));
-    mute_button.add_css_class("flat");
+    apply_material_icon_button(
+        &mute_button,
+        MaterialIconButtonSpec::new(MaterialIconButtonVariant::Standard),
+    );
     mute_button.add_css_class("footer-control");
     mute_button.add_css_class("footer-utility-action");
     mute_button.set_valign(gtk::Align::Center);

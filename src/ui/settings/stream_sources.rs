@@ -1,4 +1,11 @@
-use crate::config::{AppConfig, AppLanguage, YouTubeStreamSources};
+use crate::{
+    config::{AppConfig, AppLanguage, YouTubeStreamSources},
+    ui::widgets::material_button::{
+        apply_material_button, apply_material_icon_button, MaterialButtonSize, MaterialButtonSpec,
+        MaterialButtonVariant, MaterialIconButtonSpec, MaterialIconButtonVariant,
+    },
+    ui::widgets::material_card::{apply_material_card, MaterialCardSpec, MaterialCardVariant},
+};
 use adw::prelude::*;
 use gtk::glib;
 use std::{cell::RefCell, fs, rc::Rc};
@@ -213,7 +220,13 @@ pub(crate) fn entry_row(
     copy.append(&summary);
 
     let button = gtk::Button::with_label(text(language, "Configurar", "Configure", "Configurar"));
-    button.add_css_class("suggested-action");
+    apply_material_button(
+        &button,
+        MaterialButtonSpec::new(
+            MaterialButtonVariant::FilledTonal,
+            MaterialButtonSize::Compact,
+        ),
+    );
     button.set_valign(gtk::Align::Center);
 
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
@@ -224,6 +237,8 @@ pub(crate) fn entry_row(
     row.append(&copy);
     row.append(&button);
     row.add_css_class("settings-hero");
+    row.add_css_class("settings-stream-source-entry");
+    apply_material_card(&row, MaterialCardSpec::new(MaterialCardVariant::Elevated));
     (row, button, summary)
 }
 
@@ -271,7 +286,10 @@ impl DialogState {
             copy.append(&detail);
 
             let up = gtk::Button::from_icon_name("go-up-symbolic");
-            up.add_css_class("flat");
+            apply_material_icon_button(
+                &up,
+                MaterialIconButtonSpec::new(MaterialIconButtonVariant::Standard),
+            );
             up.set_sensitive(index > 0);
             up.set_tooltip_text(Some(text(
                 self.language,
@@ -281,7 +299,10 @@ impl DialogState {
             )));
 
             let down = gtk::Button::from_icon_name("go-down-symbolic");
-            down.add_css_class("flat");
+            apply_material_icon_button(
+                &down,
+                MaterialIconButtonSpec::new(MaterialIconButtonVariant::Standard),
+            );
             down.set_sensitive(index + 1 < current.order.len());
             down.set_tooltip_text(Some(text(
                 self.language,
@@ -315,6 +336,9 @@ impl DialogState {
             row.append(&copy);
             row.append(&controls);
             row.add_css_class("settings-row");
+            row.add_css_class("settings-surface-row");
+            row.add_css_class("settings-stream-source-row");
+            apply_material_card(&row, MaterialCardSpec::new(MaterialCardVariant::Outlined));
             self.rows.append(&row);
 
             let key_up = key.clone();
@@ -436,7 +460,10 @@ pub(crate) fn present_dialog<W>(
         "Restaurar valores predeterminados",
     ));
     reset.set_halign(gtk::Align::End);
-    reset.add_css_class("flat");
+    apply_material_button(
+        &reset,
+        MaterialButtonSpec::new(MaterialButtonVariant::Text, MaterialButtonSize::Compact),
+    );
     {
         let weak = Rc::downgrade(&state);
         reset.connect_clicked(move |_| {

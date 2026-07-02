@@ -1,4 +1,9 @@
-use crate::config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme};
+use crate::{
+    config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme},
+    ui::widgets::material_button::{
+        apply_material_button, MaterialButtonSize, MaterialButtonSpec, MaterialButtonVariant,
+    },
+};
 use adw::prelude::*;
 use std::{cell::Cell, rc::Rc};
 
@@ -617,8 +622,21 @@ pub fn present<F>(
     let back = gtk::Button::with_label(text.back);
     let next = gtk::Button::with_label(text.next);
     let finish = gtk::Button::with_label(text.finish);
-    next.add_css_class("suggested-action");
-    finish.add_css_class("suggested-action");
+    apply_material_button(
+        &back,
+        MaterialButtonSpec::new(MaterialButtonVariant::Outlined, MaterialButtonSize::Compact),
+    );
+    apply_material_button(
+        &next,
+        MaterialButtonSpec::new(
+            MaterialButtonVariant::FilledTonal,
+            MaterialButtonSize::Compact,
+        ),
+    );
+    apply_material_button(
+        &finish,
+        MaterialButtonSpec::new(MaterialButtonVariant::Filled, MaterialButtonSize::Compact),
+    );
 
     let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     spacer.set_hexpand(true);

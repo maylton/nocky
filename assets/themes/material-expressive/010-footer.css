@@ -37,6 +37,7 @@ window.theme-material-expressive .expressive-footer {
   margin: 0 8px 8px 8px;
   padding: 6px 10px;
   border-radius: 28px;
+  background-clip: padding-box;
 }
 
 window.theme-material-expressive .expressive-footer.footer-mode-full {

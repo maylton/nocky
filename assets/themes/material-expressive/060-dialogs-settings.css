@@ -78,6 +78,41 @@ dialog.settings-dialog.theme-material-expressive {
   background-image: none;
 }
 
+dialog.floating.theme-material-expressive,
+dialog.floating.theme-frosted-glass,
+dialog.youtube-settings-dialog.theme-material-expressive,
+dialog.youtube-settings-dialog.theme-frosted-glass {
+  padding: 0;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background-color: transparent;
+  background-image: none;
+}
+
+dialog.floating.theme-material-expressive > widget,
+dialog.floating.theme-frosted-glass > widget,
+dialog.youtube-settings-dialog.theme-material-expressive > widget,
+dialog.youtube-settings-dialog.theme-frosted-glass > widget,
+dialog.floating.theme-material-expressive floating-sheet,
+dialog.floating.theme-frosted-glass floating-sheet,
+dialog.youtube-settings-dialog.theme-material-expressive floating-sheet,
+dialog.youtube-settings-dialog.theme-frosted-glass floating-sheet,
+dialog.floating.theme-material-expressive sheet,
+dialog.floating.theme-frosted-glass sheet,
+dialog.youtube-settings-dialog.theme-material-expressive sheet,
+dialog.youtube-settings-dialog.theme-frosted-glass sheet,
+dialog.floating.theme-material-expressive sheet > widget,
+dialog.floating.theme-frosted-glass sheet > widget,
+dialog.youtube-settings-dialog.theme-material-expressive sheet > widget,
+dialog.youtube-settings-dialog.theme-frosted-glass sheet > widget {
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background-color: transparent;
+  background-image: none;
+}
+
 .settings-dialog-shell.theme-material-expressive {
   color: @m3_on_surface;
   background-color: @m3_surface_container;
@@ -109,6 +144,40 @@ dialog.settings-dialog.theme-material-expressive {
   background-image: none;
 }
 
+.youtube-dialog-surface.theme-material-expressive {
+  min-height: 680px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  background-image:
+    radial-gradient(circle at 12% 0%, alpha(@m3_primary, 0.10), transparent 46%);
+  border: 1px solid alpha(@m3_outline, 0.20);
+  border-radius: 32px;
+  box-shadow: none;
+}
+
+.youtube-dialog-surface.theme-material-expressive .material-dialog-toolbar {
+  color: @m3_on_surface;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+.youtube-dialog-surface.theme-material-expressive .material-dialog-toolbar headerbar {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  background-image: none;
+  border-color: alpha(@m3_outline, 0.18);
+}
+
+.youtube-dialog-surface.theme-material-expressive scrolledwindow,
+.youtube-dialog-surface.theme-material-expressive viewport,
+.youtube-dialog-surface.theme-material-expressive clamp,
+.youtube-dialog-surface.theme-material-expressive .youtube-settings-host {
+  background-color: transparent;
+  background-image: none;
+}
+
 window.theme-material-expressive .settings-page-scroll,
 window.theme-material-expressive .settings-page-scroll viewport,
 window.theme-noctalia .settings-page-scroll,
@@ -128,8 +197,35 @@ window.theme-material-expressive .settings-page .settings-hero {
     linear-gradient(120deg, alpha(@m3_primary, 0.19), alpha(@m3_primary_container, 0.82));
 }
 
-window.theme-material-expressive .settings-page .settings-group {
+window.theme-material-expressive .settings-page .settings-hero.material-card-elevated,
+window.theme-material-expressive .settings-stream-source-entry.material-card-elevated {
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  background-image:
+    linear-gradient(120deg, alpha(@m3_primary, 0.19), alpha(@m3_primary_container, 0.82));
+  border-color: alpha(@m3_primary, 0.28);
+  box-shadow: 0 8px 24px alpha(black, 0.18);
+}
+
+window.theme-material-expressive .settings-page .settings-group,
+window.theme-material-expressive .settings-page .settings-group.material-card-filled {
   background-color: alpha(@m3_surface_container_low, 0.86);
+  border-color: alpha(@m3_outline, 0.17);
+  box-shadow: 0 5px 16px alpha(black, 0.11);
+}
+
+window.theme-material-expressive .settings-page .settings-surface-row.material-card-outlined,
+window.theme-material-expressive .settings-stream-source-row.material-card-outlined {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  border-color: alpha(@m3_outline_variant, 0.38);
+  box-shadow: none;
+}
+
+window.theme-material-expressive .settings-page .settings-surface-row.material-card-outlined:hover,
+window.theme-material-expressive .settings-stream-source-row.material-card-outlined:hover {
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_primary, 0.24);
 }
 
 window.theme-material-expressive .settings-navigation-button:checked,

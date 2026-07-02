@@ -185,3 +185,15 @@ The Home carousel edge spring retains neutral elevation but no longer adds a
 colored glow halo.
 
 Marker: `nocky_theme_scoped_expressive_effects_v1`.
+
+## Material Expressive surface isolation
+
+Material Expressive and Frosted Glass keep dialog/window wrapper nodes
+transparent and assign visible paint only to component-owned surfaces.
+
+This avoids full-window `toastoverlay` paint under `AdwDialogHost` and prevents
+rounded player/footer/dialog surfaces from projecting dark off-radius halos.
+The detailed Inspector diagnosis and validation checklist live in
+`docs/MATERIAL_EXPRESSIVE_SURFACE_ISOLATION.md`.
+
+Marker: `nocky_material_expressive_surface_isolation_v1`.

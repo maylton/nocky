@@ -99,6 +99,7 @@ pub(crate) fn build_footer_view(
 
     let root = gtk::CenterBox::new();
     root.set_height_request(ROOT_HEIGHT);
+    root.set_overflow(gtk::Overflow::Hidden);
     for class in ROOT_CLASSES {
         root.add_css_class(class);
     }

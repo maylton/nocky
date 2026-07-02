@@ -2,6 +2,9 @@ use crate::{
     config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme},
     i18n::{self, Message},
     ui::settings::stream_sources,
+    ui::widgets::material_button::{
+        apply_material_button, MaterialButtonSize, MaterialButtonSpec, MaterialButtonVariant,
+    },
 };
 use adw::prelude::*;
 use std::rc::Rc;
@@ -54,8 +57,8 @@ where
 {
     let dialog = adw::Dialog::builder()
         .title("YouTube Music")
-        .content_width(760)
-        .content_height(620)
+        .content_width(880)
+        .content_height(720)
         .build();
     dialog.add_css_class("youtube-settings-dialog");
     inherit_visual_theme(parent, &dialog);
@@ -63,6 +66,10 @@ where
     let toolbar = adw::ToolbarView::new();
     toolbar.add_css_class("material-dialog-toolbar");
     toolbar.add_top_bar(&adw::HeaderBar::new());
+
+    let surface = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    surface.add_css_class("youtube-dialog-surface");
+    inherit_visual_theme(parent, &surface);
 
     let config = AppConfig::load();
     let (stream_entry, stream_button, stream_summary) =
@@ -73,7 +80,8 @@ where
     host.append(&stream_entry);
     host.append(root);
     toolbar.set_content(Some(&host));
-    dialog.set_child(Some(&toolbar));
+    surface.append(&toolbar);
+    dialog.set_child(Some(&surface));
 
     {
         let stream_parent = dialog.clone();
@@ -145,12 +153,22 @@ pub(crate) fn present_startup_source<F>(
 
     let local_button = gtk::Button::with_label(tr(Message::UseLocalLibrary));
     local_button.set_tooltip_text(Some(tr(Message::UseLocalLibraryTooltip)));
+    apply_material_button(
+        &local_button,
+        MaterialButtonSpec::new(
+            MaterialButtonVariant::Outlined,
+            MaterialButtonSize::Standard,
+        ),
+    );
     local_button.add_css_class("source-choice-button");
 
     let youtube_button = gtk::Button::with_label(tr(Message::UseYoutubeMusic));
     youtube_button.set_tooltip_text(Some(tr(Message::UseYoutubeMusicTooltip)));
+    apply_material_button(
+        &youtube_button,
+        MaterialButtonSpec::new(MaterialButtonVariant::Filled, MaterialButtonSize::Standard),
+    );
     youtube_button.add_css_class("source-choice-button");
-    youtube_button.add_css_class("suggested-action");
 
     let choices = gtk::Box::new(gtk::Orientation::Vertical, 10);
     choices.add_css_class("startup-choice-group");
@@ -164,6 +182,10 @@ pub(crate) fn present_startup_source<F>(
     if !first_run {
         let cancel_button = gtk::Button::with_label(tr(Message::Cancel));
         cancel_button.set_halign(gtk::Align::End);
+        apply_material_button(
+            &cancel_button,
+            MaterialButtonSpec::new(MaterialButtonVariant::Text, MaterialButtonSize::Compact),
+        );
         cancel_button.add_css_class("startup-cancel-action");
         content.append(&cancel_button);
 

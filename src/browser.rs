@@ -6,7 +6,18 @@ use crate::{
     model::Track,
     offline_store::OfflineStore,
     search_text::{normalize_search_text, search_matches, search_score},
-    ui::widgets::MaterialLoadingIndicator,
+    ui::widgets::{
+        material_button::{
+            apply_material_button, apply_material_chip, install_material_button_loading_content,
+            set_material_button_loading, MaterialButtonSemantic, MaterialButtonSize,
+            MaterialButtonSpec, MaterialButtonVariant, MaterialChipSpec, MaterialChipVariant,
+        },
+        material_card::{
+            apply_material_card, apply_material_carousel, MaterialCardSpec, MaterialCardVariant,
+            MaterialCarouselSpec, MaterialCarouselVariant,
+        },
+        MaterialLoadingIndicator,
+    },
     youtube::{
         artist_credit_contains, credited_artists, youtube_cache_visual_state,
         youtube_collection_cache_key, youtube_collection_key, youtube_home_section_key,
@@ -1123,25 +1134,55 @@ fn apply_collection_offline_button_state(
 
     match state {
         CollectionOfflineButtonState::Ready => {
+            apply_material_button(
+                button,
+                MaterialButtonSpec::new(
+                    MaterialButtonVariant::FilledTonal,
+                    MaterialButtonSize::Compact,
+                ),
+            );
+            set_material_button_loading(button, false);
             button.set_icon_name("folder-download-symbolic");
             button.set_sensitive(true);
-            button.add_css_class("suggested-action");
             button.add_css_class("collection-offline-ready");
         }
         CollectionOfflineButtonState::Downloading { .. } => {
+            apply_material_button(
+                button,
+                MaterialButtonSpec::new(
+                    MaterialButtonVariant::FilledTonal,
+                    MaterialButtonSize::Compact,
+                ),
+            );
+            set_material_button_loading(button, true);
             button.set_icon_name("emblem-synchronizing-symbolic");
             button.set_sensitive(false);
-            button.add_css_class("suggested-action");
             button.add_css_class("collection-offline-downloading");
             button.set_opacity(1.0);
         }
         CollectionOfflineButtonState::Complete => {
+            apply_material_button(
+                button,
+                MaterialButtonSpec::new(
+                    MaterialButtonVariant::FilledTonal,
+                    MaterialButtonSize::Compact,
+                ),
+            );
+            set_material_button_loading(button, false);
             button.set_icon_name("emblem-ok-symbolic");
             button.set_sensitive(false);
             button.add_css_class("success");
             button.add_css_class("collection-offline-complete");
         }
         CollectionOfflineButtonState::Retry => {
+            apply_material_button(
+                button,
+                MaterialButtonSpec::new(
+                    MaterialButtonVariant::Outlined,
+                    MaterialButtonSize::Compact,
+                ),
+            );
+            set_material_button_loading(button, false);
             button.set_icon_name("view-refresh-symbolic");
             button.set_sensitive(true);
             button.add_css_class("warning");
@@ -1243,6 +1284,8 @@ fn update_home_collection_offline_widget(
             );
             button.set_sensitive(false);
             button.add_css_class("success");
+            button.remove_css_class("material-card-menu-action-loading");
+            button.add_css_class("material-card-menu-action-success");
             updated += 1;
         }
     }
@@ -1764,7 +1807,10 @@ impl LibraryBrowser {
             .hexpand(true)
             .build();
         let create_button = gtk::Button::with_label("Criar");
-        create_button.add_css_class("suggested-action");
+        apply_material_button(
+            &create_button,
+            MaterialButtonSpec::new(MaterialButtonVariant::Filled, MaterialButtonSize::Compact),
+        );
         {
             let tx = event_tx.clone();
             let entry = playlist_entry.clone();
@@ -1803,7 +1849,22 @@ impl LibraryBrowser {
         let add_button = gtk::Button::with_label("Adicionar faixa atual");
         let remove_button = gtk::Button::with_label("Remover faixa atual");
         let delete_button = gtk::Button::with_label("Excluir playlist local");
-        delete_button.add_css_class("destructive-action");
+        apply_material_button(
+            &add_button,
+            MaterialButtonSpec::new(
+                MaterialButtonVariant::FilledTonal,
+                MaterialButtonSize::Compact,
+            ),
+        );
+        apply_material_button(
+            &remove_button,
+            MaterialButtonSpec::new(MaterialButtonVariant::Outlined, MaterialButtonSize::Compact),
+        );
+        apply_material_button(
+            &delete_button,
+            MaterialButtonSpec::new(MaterialButtonVariant::Outlined, MaterialButtonSize::Compact)
+                .with_semantic(MaterialButtonSemantic::Destructive),
+        );
 
         for (button, kind) in [
             (&add_button, 0_u8),
@@ -4633,7 +4694,13 @@ fn search_more_button(
     let next = remaining.min(SEARCH_BATCH_SIZE);
     let button = gtk::Button::with_label(&format!("{} {next} {category}", copy.load_more));
     button.set_halign(gtk::Align::Start);
-    button.add_css_class("pill");
+    apply_material_button(
+        &button,
+        MaterialButtonSpec::new(
+            MaterialButtonVariant::FilledTonal,
+            MaterialButtonSize::Compact,
+        ),
+    );
     let sender = event_tx.clone();
     button.connect_clicked(move |_| {
         limit.set(limit.get().saturating_add(SEARCH_BATCH_SIZE));
@@ -4915,64 +4982,56 @@ impl HomeSectionPresentation {
 
     fn artwork_size(self) -> i32 {
         match self {
-            Self::Featured => 176,
-            Self::Compact => 128,
+            Self::Featured | Self::Compact => 128,
             Self::TrackRows => 48,
         }
     }
 
     fn card_width(self) -> i32 {
         match self {
-            Self::Featured => 196,
-            Self::Compact => 152,
+            Self::Featured | Self::Compact => 152,
             Self::TrackRows => 300,
         }
     }
 
     fn card_height(self) -> i32 {
         match self {
-            Self::Featured => 252,
-            Self::Compact => 188,
+            Self::Featured | Self::Compact => 188,
             Self::TrackRows => 64,
         }
     }
 
     fn outer_width(self) -> i32 {
         match self {
-            Self::Featured => 220,
-            Self::Compact => 168,
+            Self::Featured | Self::Compact => 168,
             Self::TrackRows => 312,
         }
     }
 
     fn outer_height(self) -> i32 {
         match self {
-            Self::Featured => 268,
-            Self::Compact => 196,
+            Self::Featured | Self::Compact => 196,
             Self::TrackRows => 64,
         }
     }
 
     fn rail_spacing(self) -> i32 {
         match self {
-            Self::Featured => 14,
-            Self::Compact => 6,
+            Self::Featured | Self::Compact => 6,
             Self::TrackRows => 8,
         }
     }
 
     fn row_spacing(self) -> i32 {
         match self {
-            Self::Featured => 0,
-            Self::Compact => 8,
+            Self::Featured | Self::Compact => 8,
             Self::TrackRows => 4,
         }
     }
 
     fn scrollbar_gap(self) -> i32 {
         match self {
-            Self::Featured => 20,
-            Self::Compact => 18,
+            Self::Featured | Self::Compact => 18,
             Self::TrackRows => 20,
         }
     }
@@ -4990,9 +5049,8 @@ impl HomeSectionPresentation {
 
     fn rail_rows(self, width: i32, item_count: usize) -> i32 {
         match self {
-            Self::Featured => 1,
-            Self::Compact if width <= 760 && item_count > 2 => 2,
-            Self::Compact => 1,
+            Self::Featured | Self::Compact if width <= 760 && item_count > 2 => 2,
+            Self::Featured | Self::Compact => 1,
             Self::TrackRows => self.track_rows(item_count),
         }
     }
@@ -5095,6 +5153,10 @@ fn metrolist_home_scroller(
     scroll.set_child(Some(child));
     scroll.add_css_class("home-carousel-scroll");
     scroll.add_css_class("home-card-grid-scroll");
+    apply_material_carousel(
+        &scroll,
+        MaterialCarouselSpec::new(MaterialCarouselVariant::MultiBrowse),
+    );
     scroll
 }
 
@@ -5204,14 +5266,26 @@ mod responsive_home_grid_tests {
     use super::HomeSectionPresentation;
 
     #[test]
-    fn featured_geometry_is_larger_than_compact() {
-        assert!(
-            HomeSectionPresentation::Featured.artwork_size()
-                > HomeSectionPresentation::Compact.artwork_size()
+    fn featured_and_compact_cards_keep_uniform_carousel_geometry() {
+        assert_eq!(
+            HomeSectionPresentation::Featured.artwork_size(),
+            HomeSectionPresentation::Compact.artwork_size()
         );
-        assert!(
-            HomeSectionPresentation::Featured.card_width()
-                > HomeSectionPresentation::Compact.card_width()
+        assert_eq!(
+            HomeSectionPresentation::Featured.card_width(),
+            HomeSectionPresentation::Compact.card_width()
+        );
+        assert_eq!(
+            HomeSectionPresentation::Featured.card_height(),
+            HomeSectionPresentation::Compact.card_height()
+        );
+        assert_eq!(
+            HomeSectionPresentation::Featured.outer_width(),
+            HomeSectionPresentation::Compact.outer_width()
+        );
+        assert_eq!(
+            HomeSectionPresentation::Featured.outer_height(),
+            HomeSectionPresentation::Compact.outer_height()
         );
     }
 
@@ -5251,9 +5325,19 @@ mod responsive_home_grid_tests {
     #[test]
     fn scroller_height_reserves_space_for_scrollbar_without_stretching_rows() {
         assert_eq!(HomeSectionPresentation::TrackRows.row_spacing(), 4);
-        assert_eq!(HomeSectionPresentation::Featured.scroller_height(1), 288);
+        assert_eq!(
+            HomeSectionPresentation::Featured.scroller_height(1),
+            HomeSectionPresentation::Compact.scroller_height(1)
+        );
         assert_eq!(HomeSectionPresentation::TrackRows.scroller_height(4), 288);
         assert_eq!(HomeSectionPresentation::Compact.scroller_height(2), 418);
+    }
+
+    #[test]
+    fn featured_rail_wraps_like_compact_on_narrow_sections() {
+        assert_eq!(HomeSectionPresentation::Featured.rail_rows(900, 8), 1);
+        assert_eq!(HomeSectionPresentation::Featured.rail_rows(760, 8), 2);
+        assert_eq!(HomeSectionPresentation::Featured.rail_rows(480, 2), 1);
     }
 }
 
@@ -5517,10 +5601,11 @@ fn youtube_home_chip_bar(
     rail.set_margin_bottom(28);
 
     let all = gtk::Button::with_label(copy.youtube_all);
-    all.add_css_class("pill");
-    if page.selected_chip_params.trim().is_empty() {
-        all.add_css_class("suggested-action");
-    }
+    apply_material_chip(
+        &all,
+        MaterialChipSpec::new(MaterialChipVariant::Filter)
+            .selected(page.selected_chip_params.trim().is_empty()),
+    );
     {
         let event_tx = event_tx.clone();
         all.connect_clicked(move |_| {
@@ -5534,10 +5619,11 @@ fn youtube_home_chip_bar(
 
     for chip in &page.chips {
         let button = gtk::Button::with_label(&chip.title);
-        button.add_css_class("pill");
-        if !chip.params.is_empty() && chip.params == page.selected_chip_params {
-            button.add_css_class("suggested-action");
-        }
+        apply_material_chip(
+            &button,
+            MaterialChipSpec::new(MaterialChipVariant::Filter)
+                .selected(!chip.params.is_empty() && chip.params == page.selected_chip_params),
+        );
         let params = chip.params.clone();
         let event_tx = event_tx.clone();
         button.connect_clicked(move |_| {
@@ -5572,22 +5658,24 @@ fn youtube_home_load_more_button(
         return None;
     }
     let copy = home_copy(language);
-    let loading_label = match language {
-        AppLanguage::Portuguese => "Carregando…",
-        AppLanguage::English => "Loading…",
-        AppLanguage::Spanish => "Cargando…",
-    };
-    let load_more = gtk::Button::with_label(copy.youtube_load_more);
+    let load_more = gtk::Button::new();
     load_more.set_halign(gtk::Align::Center);
-    load_more.add_css_class("pill");
-    load_more.add_css_class("suggested-action");
+    apply_material_button(
+        &load_more,
+        MaterialButtonSpec::new(
+            MaterialButtonVariant::FilledTonal,
+            MaterialButtonSize::Compact,
+        ),
+    );
+    let loading_content =
+        install_material_button_loading_content(&load_more, copy.youtube_load_more);
     load_more.add_css_class("youtube-home-load-more");
     let continuation = page.continuation.clone();
     let params = page.selected_chip_params.clone();
     let event_tx = event_tx.clone();
     load_more.connect_clicked(move |button| {
-        button.set_label(loading_label);
         button.set_sensitive(false);
+        loading_content.set_loading(button, true);
         let _ = event_tx.send(BrowserEvent::LoadYouTubeHome {
             continuation: continuation.clone(),
             params: params.clone(),
@@ -6274,6 +6362,7 @@ fn home_card_button(
             control.set_margin_end(presentation.play_control_margin_end());
             control.add_css_class("circular");
             control.add_css_class("collection-card-context-action");
+            control.add_css_class("material-card-primary-action");
             if let Some(key) = playback_key.as_deref() {
                 control.set_widget_name(&format!("home-play-control:{key}"));
             }
@@ -6312,6 +6401,7 @@ fn home_card_button(
 
                 control.set_icon_name(icon_name);
                 control.set_tooltip_text(Some(tooltip));
+                control.update_property(&[gtk::accessible::Property::Label(tooltip)]);
                 if is_active {
                     control.add_css_class("active");
                 }
@@ -6349,20 +6439,23 @@ fn home_card_button(
     }
 
     if let Some((play_next_event, append_event)) = queue_events {
+        let more_options_label = match language {
+            AppLanguage::Portuguese => "Mais opções",
+            AppLanguage::English => "More options",
+            AppLanguage::Spanish => "Más opciones",
+        };
         let menu_button = gtk::MenuButton::builder()
             .icon_name("view-more-symbolic")
-            .tooltip_text(match language {
-                AppLanguage::Portuguese => "Mais opções",
-                AppLanguage::English => "More options",
-                AppLanguage::Spanish => "Más opciones",
-            })
+            .tooltip_text(more_options_label)
             .build();
+        menu_button.update_property(&[gtk::accessible::Property::Label(more_options_label)]);
         menu_button.set_halign(gtk::Align::Start);
         menu_button.set_valign(gtk::Align::Start);
         menu_button.set_margin_top(10);
         menu_button.set_margin_start(10);
         menu_button.add_css_class("circular");
         menu_button.add_css_class("collection-card-overflow-button");
+        menu_button.add_css_class("material-card-overflow-trigger");
         menu_button.set_sensitive(!is_loading);
 
         let popover = gtk::Popover::new();
@@ -6409,10 +6502,15 @@ fn home_card_button(
         };
 
         let favorite_event = BrowserEvent::ToggleCollectionFavorite(card.identity());
-        for (label, event, icon_name) in [
-            (labels.0, play_next_event, "media-skip-forward-symbolic"),
-            (labels.1, append_event, "list-add-symbolic"),
-            (labels.2, open_event, "go-next-symbolic"),
+        for (label, event, icon_name, selected) in [
+            (
+                labels.0,
+                play_next_event,
+                "media-skip-forward-symbolic",
+                false,
+            ),
+            (labels.1, append_event, "list-add-symbolic", false),
+            (labels.2, open_event, "go-next-symbolic", false),
             (
                 labels.3,
                 favorite_event,
@@ -6421,6 +6519,7 @@ fn home_card_button(
                 } else {
                     "non-starred-symbolic"
                 },
+                is_favorite,
             ),
         ] {
             let icon = gtk::Image::from_icon_name(icon_name);
@@ -6451,6 +6550,10 @@ fn home_card_button(
             button.set_hexpand(true);
             button.add_css_class("flat");
             button.add_css_class("collection-card-overflow-action");
+            button.add_css_class("material-card-menu-action");
+            if selected {
+                button.add_css_class("material-card-menu-action-selected");
+            }
 
             let sender = event_tx.clone();
             let popover = popover.clone();
@@ -6499,12 +6602,14 @@ fn home_card_button(
             button.set_hexpand(true);
             button.add_css_class("flat");
             button.add_css_class("collection-card-overflow-action");
+            button.add_css_class("material-card-menu-action");
             button.add_css_class("collection-card-offline-action");
 
             let sender = event_tx.clone();
             let popover = popover.clone();
             button.connect_clicked(move |button| {
                 button.set_sensitive(false);
+                button.add_css_class("material-card-menu-action-loading");
                 set_home_offline_menu_content(
                     button,
                     "emblem-synchronizing-symbolic",
@@ -6596,8 +6701,7 @@ fn home_collection_card(
         title,
         "collection-card-title",
         match presentation {
-            HomeSectionPresentation::Featured => 24,
-            HomeSectionPresentation::Compact => 16,
+            HomeSectionPresentation::Featured | HomeSectionPresentation::Compact => 16,
             HomeSectionPresentation::TrackRows => 28,
         },
     );
@@ -6607,8 +6711,7 @@ fn home_collection_card(
         subtitle,
         "expressive-card-subtitle",
         match presentation {
-            HomeSectionPresentation::Featured => 24,
-            HomeSectionPresentation::Compact => 16,
+            HomeSectionPresentation::Featured | HomeSectionPresentation::Compact => 16,
             HomeSectionPresentation::TrackRows => 32,
         },
     );
@@ -6618,8 +6721,7 @@ fn home_collection_card(
         detail,
         "collection-card-detail",
         match presentation {
-            HomeSectionPresentation::Featured => 24,
-            HomeSectionPresentation::Compact => 16,
+            HomeSectionPresentation::Featured | HomeSectionPresentation::Compact => 16,
             HomeSectionPresentation::TrackRows => 32,
         },
     );
@@ -6653,8 +6755,7 @@ fn home_collection_card(
         },
         match presentation {
             HomeSectionPresentation::TrackRows => 10,
-            HomeSectionPresentation::Featured => 7,
-            HomeSectionPresentation::Compact => 5,
+            HomeSectionPresentation::Featured | HomeSectionPresentation::Compact => 5,
         },
     );
     card.set_size_request(presentation.card_width(), presentation.card_height());
@@ -6679,14 +6780,14 @@ fn home_collection_card(
     });
     card.set_margin_start(8);
     card.set_margin_end(match presentation {
-        HomeSectionPresentation::Compact => 4,
+        HomeSectionPresentation::Featured | HomeSectionPresentation::Compact => 4,
         HomeSectionPresentation::TrackRows => 4,
-        HomeSectionPresentation::Featured => 8,
     });
     card.append(&artwork_overlay);
     card.append(&text);
     card.add_css_class("collection-card");
     card.add_css_class("expressive-collection-card");
+    apply_material_card(&card, MaterialCardSpec::new(MaterialCardVariant::Elevated));
     match presentation {
         HomeSectionPresentation::Featured => card.add_css_class("home-card-featured"),
         HomeSectionPresentation::Compact => card.add_css_class("home-card-compact"),
@@ -7187,6 +7288,7 @@ fn collection_card(
     card.set_valign(gtk::Align::Start);
     card.add_css_class("collection-card");
     card.add_css_class("expressive-collection-card");
+    apply_material_card(&card, MaterialCardSpec::new(MaterialCardVariant::Elevated));
     if online {
         card.add_css_class("youtube-collection-card");
     }
@@ -7295,6 +7397,7 @@ fn artist_collection_card(
     card.add_css_class("compact-artist-card");
     card.add_css_class("collection-card");
     card.add_css_class("expressive-collection-card");
+    apply_material_card(&card, MaterialCardSpec::new(MaterialCardVariant::Elevated));
     card.add_css_class("search-result-row");
     if online {
         card.add_css_class("youtube-collection-card");
@@ -7388,6 +7491,7 @@ fn artist_load_more_button(remaining: usize, event_tx: &Sender<BrowserEvent>) ->
     card.add_css_class("compact-artist-card");
     card.add_css_class("collection-card");
     card.add_css_class("expressive-collection-card");
+    apply_material_card(&card, MaterialCardSpec::new(MaterialCardVariant::Elevated));
     card.add_css_class("search-result-row");
     card.add_css_class("artist-load-more-card");
 

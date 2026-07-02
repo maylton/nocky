@@ -23,7 +23,16 @@ use crate::{
         footer::{build_footer_view, FooterViewParts, FOOTER_ARTWORK_SOURCE_SIZE},
         player::PlayerView,
         settings::SettingsPage,
-        widgets::{build_cover, AnimatedPageSwitcher, TopPage},
+        widgets::{
+            build_cover,
+            material_button::{
+                apply_material_button, apply_material_icon_button,
+                set_material_icon_button_selected, MaterialButtonSemantic, MaterialButtonSize,
+                MaterialButtonSpec, MaterialButtonVariant, MaterialIconButtonSpec,
+                MaterialIconButtonVariant,
+            },
+            AnimatedPageSwitcher, TopPage,
+        },
     },
     visual_theme,
     youtube::{
@@ -118,6 +127,10 @@ impl AppController {
             .active(false)
             .tooltip_text(tr(Message::SidebarToggle))
             .build();
+        apply_material_icon_button(
+            &sidebar_button,
+            MaterialIconButtonSpec::new(MaterialIconButtonVariant::Standard),
+        );
         sidebar_button.add_css_class("header-navigation-button");
         header.pack_start(&sidebar_button);
 
@@ -130,7 +143,10 @@ impl AppController {
         player_toggle_icon.set_pixel_size(18);
         let player_toggle_button = gtk::Button::new();
         player_toggle_button.set_child(Some(&player_toggle_icon));
-        player_toggle_button.add_css_class("flat");
+        apply_material_icon_button(
+            &player_toggle_button,
+            MaterialIconButtonSpec::new(MaterialIconButtonVariant::Standard),
+        );
         player_toggle_button.add_css_class("header-action-button");
         player_toggle_button.add_css_class("home-player-toggle-button");
         header.pack_start(&player_toggle_button);
@@ -151,6 +167,10 @@ impl AppController {
             .icon_name("system-search-symbolic")
             .tooltip_text(tr(Message::SearchLibrary))
             .build();
+        apply_material_icon_button(
+            &search_button,
+            MaterialIconButtonSpec::new(MaterialIconButtonVariant::Standard),
+        );
         search_button.add_css_class("header-action-button");
         header.pack_end(&search_button);
 
@@ -158,7 +178,10 @@ impl AppController {
             .icon_name("view-refresh-symbolic")
             .tooltip_text("Sincronizar biblioteca")
             .build();
-        sync_button.add_css_class("flat");
+        apply_material_icon_button(
+            &sync_button,
+            MaterialIconButtonSpec::new(MaterialIconButtonVariant::Standard),
+        );
         sync_button.add_css_class("header-action-button");
         header.pack_end(&sync_button);
 
@@ -166,6 +189,10 @@ impl AppController {
             .icon_name("folder-open-symbolic")
             .tooltip_text(tr(Message::ChooseMusicFolderTooltip))
             .build();
+        apply_material_icon_button(
+            &folder_button,
+            MaterialIconButtonSpec::new(MaterialIconButtonVariant::Standard),
+        );
         folder_button.add_css_class("header-action-button");
         header.pack_end(&folder_button);
 
@@ -173,7 +200,10 @@ impl AppController {
             .icon_name("preferences-system-symbolic")
             .tooltip_text(tr(Message::SettingsTitle))
             .build();
-        settings_button.add_css_class("flat");
+        apply_material_icon_button(
+            &settings_button,
+            MaterialIconButtonSpec::new(MaterialIconButtonVariant::Standard),
+        );
         settings_button.add_css_class("header-action-button");
         settings_button.add_css_class("settings-navigation-button");
         header.pack_end(&settings_button);
@@ -290,8 +320,10 @@ impl AppController {
         empty_text.set_justify(gtk::Justification::Center);
         empty_text.add_css_class("dim-label");
         let empty_add = gtk::Button::with_label(tr(Message::ChooseFolderAction));
-        empty_add.add_css_class("suggested-action");
-        empty_add.add_css_class("pill");
+        apply_material_button(
+            &empty_add,
+            MaterialButtonSpec::new(MaterialButtonVariant::Filled, MaterialButtonSize::Standard),
+        );
         empty_add.add_css_class("expressive-empty-action");
         empty_state.append(&empty_icon);
         empty_state.append(&empty_title);
@@ -383,17 +415,21 @@ impl AppController {
             AppLanguage::English => "Clear upcoming",
             AppLanguage::Spanish => "Limpiar siguientes",
         });
-        queue_page_clear_upcoming.add_css_class("pill");
-        queue_page_clear_upcoming.add_css_class("queue2-page-action");
+        apply_material_button(
+            &queue_page_clear_upcoming,
+            MaterialButtonSpec::new(MaterialButtonVariant::Outlined, MaterialButtonSize::Compact),
+        );
 
         let queue_page_clear_all = gtk::Button::with_label(match config.language {
             AppLanguage::Portuguese => "Limpar tudo",
             AppLanguage::English => "Clear all",
             AppLanguage::Spanish => "Limpiar todo",
         });
-        queue_page_clear_all.add_css_class("pill");
-        queue_page_clear_all.add_css_class("queue2-page-action");
-        queue_page_clear_all.add_css_class("queue2-page-action-danger");
+        apply_material_button(
+            &queue_page_clear_all,
+            MaterialButtonSpec::new(MaterialButtonVariant::Outlined, MaterialButtonSize::Compact)
+                .with_semantic(MaterialButtonSemantic::Destructive),
+        );
 
         queue_page_actions.append(&queue_page_clear_upcoming);
         queue_page_actions.append(&queue_page_clear_all);
@@ -854,6 +890,7 @@ impl AppController {
             sidebar_button.connect_toggled(move |button| {
                 if let Some(controller) = weak.upgrade() {
                     let expanded = button.is_active();
+                    set_material_icon_button_selected(button, expanded);
                     controller.sidebar.remove_css_class("sidebar-expanded");
                     controller.sidebar.remove_css_class("sidebar-collapsed");
 
@@ -892,6 +929,7 @@ impl AppController {
         {
             let search_bar = search_bar.clone();
             search_button.connect_toggled(move |button| {
+                set_material_icon_button_selected(button, button.is_active());
                 search_bar.set_search_mode(button.is_active());
             });
         }
@@ -902,6 +940,7 @@ impl AppController {
                 if search_button.is_active() != bar.is_search_mode() {
                     search_button.set_active(bar.is_search_mode());
                 }
+                set_material_icon_button_selected(&search_button, bar.is_search_mode());
             });
         }
 
@@ -961,6 +1000,7 @@ impl AppController {
         {
             let weak = Rc::downgrade(&controller);
             settings_button.connect_toggled(move |button| {
+                set_material_icon_button_selected(button, button.is_active());
                 let Some(controller) = weak.upgrade() else {
                     return;
                 };
@@ -1171,6 +1211,7 @@ impl AppController {
         {
             let weak = Rc::downgrade(&controller);
             controller.lyrics_button.connect_toggled(move |button| {
+                set_material_icon_button_selected(button, button.is_active());
                 if let Some(controller) = weak.upgrade() {
                     controller
                         .views
@@ -1214,6 +1255,7 @@ impl AppController {
         {
             let weak = Rc::downgrade(&controller);
             inline_lyrics_button.connect_toggled(move |button| {
+                set_material_icon_button_selected(button, button.is_active());
                 let Some(controller) = weak.upgrade() else {
                     return;
                 };
