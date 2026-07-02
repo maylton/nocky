@@ -3,7 +3,11 @@
 This document is the living audit and migration contract for Nocky's Material
 Expressive button checkpoint.
 
-Reference: <https://m3.material.io/components/all-buttons>
+References:
+
+- Buttons: <https://m3.material.io/components/buttons>
+- Icon buttons: <https://m3.material.io/components/icon-buttons>
+- Chips: <https://m3.material.io/components/chips>
 
 ## Status
 
@@ -13,7 +17,7 @@ Reference: <https://m3.material.io/components/all-buttons>
   labeled/loading batch.
 - Visual behavior changed only for explicitly audited Settings controls.
 - Local automated validation passes.
-- Next step: continue icon-only and specialized popover buttons after review.
+- Next step: continue chips and specialized popover buttons after review.
 
 The inventory below records the currently identified button families. It will be
 expanded to one row per construction site before the checkpoint is marked ready
@@ -55,25 +59,25 @@ but their existing motion and layout ownership must remain intact.
 
 | Surface | Source | Current family | Recommended treatment | States | Migration decision |
 | --- | --- | --- | --- | --- | --- |
-| Header sidebar toggle | `src/app/controller/construction.rs` | icon toggle | toggle icon button | hover, focus, pressed, selected | later icon checkpoint |
-| Header player collapse | `src/app/controller/construction.rs` | flat icon button | standard icon button | hover, focus, pressed | later icon checkpoint |
-| Header search | `src/app/controller/construction.rs` | icon toggle | toggle icon button | hover, focus, pressed, selected | later icon checkpoint |
-| Header sync | `src/app/controller/construction.rs` | flat icon button | icon button, tonal only while pending | hover, focus, pressed, loading | later icon/loading checkpoint |
-| Header folder picker | `src/app/controller/construction.rs` | icon button | standard icon button | hover, focus, pressed | later icon checkpoint |
-| Header settings navigation | `src/app/controller/construction.rs` | flat icon toggle | toggle icon button | hover, focus, pressed, selected | later icon checkpoint |
+| Header sidebar toggle | `src/app/controller/construction.rs` | icon toggle | standard icon button | hover, focus, pressed, selected | migrated |
+| Header player collapse | `src/app/controller/construction.rs` | flat icon button | standard icon button | hover, focus, pressed | migrated |
+| Header search | `src/app/controller/construction.rs` | icon toggle | standard icon button | hover, focus, pressed, selected | migrated |
+| Header sync | `src/app/controller/construction.rs` | flat icon button | standard icon button | hover, focus, pressed | migrated |
+| Header folder picker | `src/app/controller/construction.rs` | icon button | standard icon button | hover, focus, pressed | migrated |
+| Header settings navigation | `src/app/controller/construction.rs` | flat icon toggle | standard icon button | hover, focus, pressed, selected | migrated |
 | Sidebar rows | `src/app/sidebar.rs` | flat full-width buttons | navigation rows, not common buttons | hover, focus, selected, disabled | preserve architecture |
 | Top page switcher | `src/ui/widgets/animated_page_switcher.rs` | custom button group | segmented/button-group semantics | hover, focus, selected, reduced motion | preserve architecture |
 | Empty-library action | `src/app/controller/construction.rs` | suggested pill | filled button | hover, focus, pressed, disabled | migrated |
 | Queue clear upcoming | `src/app/controller/construction.rs` | pill | outlined button | hover, focus, pressed, disabled | migrated |
 | Queue clear all | `src/app/controller/construction.rs` | destructive pill | destructive outlined button | hover, focus, pressed, confirmation | migrated |
-| Player favorite | `src/ui/player/view.rs` | flat card icon | toggle icon button | hover, focus, pressed, selected | later icon checkpoint |
-| Player inline lyrics | `src/ui/player/view.rs` | flat toggle icon | toggle icon button | hover, focus, pressed, selected | later icon checkpoint |
-| Player refresh lyrics | `src/ui/player/view.rs` | flat icon | standard icon button | hover, focus, pressed, loading | later icon/loading checkpoint |
+| Player favorite | `src/ui/player/view.rs` | flat card icon | standard icon button | hover, focus, pressed | migrated |
+| Player inline lyrics | `src/ui/player/view.rs` | flat toggle icon | standard icon button | hover, focus, pressed, selected | migrated |
+| Player refresh lyrics | `src/ui/player/view.rs` | flat icon | standard icon button | hover, focus, pressed | migrated |
 | Main transport | `src/ui/player/view.rs` | custom transport buttons | keep `ExpressiveTransport` | hover, focus, pressed, playing | preserve architecture |
 | Repeat and shuffle | `src/mode_toggle.rs` | custom toggle buttons | keep `new_mode_toggle` | hover, focus, pressed, checked | preserve architecture |
 | Footer transport | `src/ui/footer/transport.rs` | custom transport buttons | keep `ExpressiveTransport` | hover, focus, pressed, playing | preserve architecture |
-| Footer lyrics | `src/ui/footer/utilities.rs` | toggle icon | toggle icon button | hover, focus, pressed, selected | later icon checkpoint |
-| Footer mute | `src/ui/footer/utilities.rs` | flat icon | toggle-like icon button | hover, focus, pressed, muted | later icon checkpoint |
+| Footer lyrics | `src/ui/footer/utilities.rs` | toggle icon | standard icon button | hover, focus, pressed, selected | migrated |
+| Footer mute | `src/ui/footer/utilities.rs` | flat icon | standard icon button | hover, focus, pressed | migrated |
 | Settings clear history | `src/ui/settings/page.rs` | destructive labeled button | destructive outlined | hover, focus, pressed, confirmation | pilot migrated |
 | Settings manage YouTube | `src/ui/settings/page.rs` | suggested primary action | filled button | hover, focus, pressed, loading | pilot migrated |
 | Settings open offline folder | `src/ui/settings/page.rs` | generic labeled button | outlined button | hover, focus, pressed | pilot migrated |
@@ -123,6 +127,17 @@ classes such as `suggested-action`, `destructive-action`, `pill`, and `flat`.
 During migration, old classes must be removed from each audited control to avoid
 cascade conflicts.
 
+All common icon buttons receive:
+
+- `material-icon-button`;
+- one variant class: `material-icon-button-standard`,
+  `material-icon-button-filled`, `material-icon-button-filled-tonal`, or
+  `material-icon-button-outlined`;
+- optional state class `material-icon-button-selected`.
+
+Icon buttons are for compact supplementary actions and keep a stable 40 px
+target so hover, selected and pressed states do not resize toolbar rows.
+
 ## Pilot migration result
 
 The first GTK helper integration migrated four Settings controls:
@@ -167,6 +182,15 @@ The app-shell labeled-action batch migrated:
 1. Empty-library add-folder action — filled.
 2. Queue clear upcoming — outlined.
 3. Queue clear all — destructive outlined.
+
+The first icon-button batch migrated:
+
+1. Header navigation/search/sync/folder/settings/player-collapse actions —
+   standard icon buttons.
+2. Player favorite, inline lyrics and refresh lyrics — standard icon buttons
+   with selected state on the lyrics toggle.
+3. Footer lyrics and mute — standard icon buttons with selected state on the
+   lyrics toggle.
 
 ## Loading contract for a later checkpoint
 

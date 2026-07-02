@@ -25,6 +25,12 @@ const SIZE_CLASSES: &[&str] = &[
     "material-button-standard",
     "material-button-large",
 ];
+const ICON_VARIANT_CLASSES: &[&str] = &[
+    "material-icon-button-standard",
+    "material-icon-button-filled",
+    "material-icon-button-filled-tonal",
+    "material-icon-button-outlined",
+];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MaterialButtonVariant {
@@ -33,6 +39,25 @@ pub enum MaterialButtonVariant {
     Elevated,
     Outlined,
     Text,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MaterialIconButtonVariant {
+    Standard,
+    Filled,
+    FilledTonal,
+    Outlined,
+}
+
+impl MaterialIconButtonVariant {
+    pub const fn css_class(self) -> &'static str {
+        match self {
+            Self::Standard => "material-icon-button-standard",
+            Self::Filled => "material-icon-button-filled",
+            Self::FilledTonal => "material-icon-button-filled-tonal",
+            Self::Outlined => "material-icon-button-outlined",
+        }
+    }
 }
 
 impl MaterialButtonVariant {
@@ -78,6 +103,34 @@ pub struct MaterialButtonSpec {
     pub semantic: MaterialButtonSemantic,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MaterialIconButtonSpec {
+    pub variant: MaterialIconButtonVariant,
+    pub selected: bool,
+}
+
+impl MaterialIconButtonSpec {
+    pub const fn new(variant: MaterialIconButtonVariant) -> Self {
+        Self {
+            variant,
+            selected: false,
+        }
+    }
+
+    pub const fn selected(mut self, selected: bool) -> Self {
+        self.selected = selected;
+        self
+    }
+
+    pub fn css_classes(self) -> Vec<&'static str> {
+        let mut classes = vec![self.variant.css_class()];
+        if self.selected {
+            classes.push("material-icon-button-selected");
+        }
+        classes
+    }
+}
+
 impl MaterialButtonSpec {
     pub const fn new(variant: MaterialButtonVariant, size: MaterialButtonSize) -> Self {
         Self {
@@ -118,8 +171,26 @@ pub fn apply_material_button(button: &gtk::Button, spec: MaterialButtonSpec) {
     }
 }
 
+pub fn apply_material_icon_button(widget: &impl IsA<gtk::Widget>, spec: MaterialIconButtonSpec) {
+    let widget = widget.as_ref();
+    widget.add_css_class("material-icon-button");
+
+    for class_name in LEGACY_CLASSES.iter().chain(ICON_VARIANT_CLASSES) {
+        widget.remove_css_class(class_name);
+    }
+    widget.remove_css_class("material-icon-button-selected");
+
+    for class_name in spec.css_classes() {
+        widget.add_css_class(class_name);
+    }
+}
+
 pub fn set_material_button_selected(button: &gtk::Button, selected: bool) {
     set_state_class(button, "material-button-selected", selected);
+}
+
+pub fn set_material_icon_button_selected(widget: &impl IsA<gtk::Widget>, selected: bool) {
+    set_widget_state_class(widget, "material-icon-button-selected", selected);
 }
 
 pub fn set_material_button_loading(button: &gtk::Button, loading: bool) {
@@ -127,10 +198,15 @@ pub fn set_material_button_loading(button: &gtk::Button, loading: bool) {
 }
 
 fn set_state_class(button: &gtk::Button, class_name: &str, active: bool) {
+    set_widget_state_class(button, class_name, active);
+}
+
+fn set_widget_state_class(widget: &impl IsA<gtk::Widget>, class_name: &str, active: bool) {
+    let widget = widget.as_ref();
     if active {
-        button.add_css_class(class_name);
+        widget.add_css_class(class_name);
     } else {
-        button.remove_css_class(class_name);
+        widget.remove_css_class(class_name);
     }
 }
 
@@ -156,6 +232,47 @@ mod tests {
             let classes = spec.css_classes();
             assert_eq!(classes[0], expected);
         }
+    }
+
+    #[test]
+    fn icon_variants_map_to_expected_classes() {
+        let cases = [
+            (
+                MaterialIconButtonVariant::Standard,
+                "material-icon-button-standard",
+            ),
+            (
+                MaterialIconButtonVariant::Filled,
+                "material-icon-button-filled",
+            ),
+            (
+                MaterialIconButtonVariant::FilledTonal,
+                "material-icon-button-filled-tonal",
+            ),
+            (
+                MaterialIconButtonVariant::Outlined,
+                "material-icon-button-outlined",
+            ),
+        ];
+
+        for (variant, expected) in cases {
+            let spec = MaterialIconButtonSpec::new(variant);
+            let classes = spec.css_classes();
+            assert_eq!(classes[0], expected);
+        }
+    }
+
+    #[test]
+    fn icon_selected_is_a_state_modifier() {
+        let spec =
+            MaterialIconButtonSpec::new(MaterialIconButtonVariant::FilledTonal).selected(true);
+        let classes = spec.css_classes();
+        let expected = vec![
+            "material-icon-button-filled-tonal",
+            "material-icon-button-selected",
+        ];
+
+        assert_eq!(classes, expected);
     }
 
     #[test]

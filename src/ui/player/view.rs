@@ -3,7 +3,13 @@ use crate::{
     i18n::{self, Message},
     lyrics::LyricsPresenter,
     playback::transition::TransitionClock,
-    ui::widgets::{build_cover, CoverView, ExpressiveTransport, TransportVariant, WaveProgress},
+    ui::widgets::{
+        build_cover,
+        material_button::{
+            apply_material_icon_button, MaterialIconButtonSpec, MaterialIconButtonVariant,
+        },
+        CoverView, ExpressiveTransport, TransportVariant, WaveProgress,
+    },
     visualizer::SpectrumVisualizer,
 };
 use gtk::prelude::*;
@@ -174,7 +180,10 @@ impl PlayerView {
         favorite_icon.set_opacity(0.28);
         let favorite = gtk::Button::new();
         favorite.set_child(Some(&favorite_icon));
-        favorite.add_css_class("flat");
+        apply_material_icon_button(
+            &favorite,
+            MaterialIconButtonSpec::new(MaterialIconButtonVariant::Standard),
+        );
         favorite.add_css_class("card-icon-button");
         favorite.set_tooltip_text(Some(tr(Message::FavoriteTooltip)));
         favorite.add_css_class("like-button");
@@ -205,14 +214,20 @@ impl PlayerView {
             .active(true)
             .tooltip_text(tr(Message::HomeLyricsDescription))
             .build();
-        inline_lyrics_button.add_css_class("flat");
+        apply_material_icon_button(
+            &inline_lyrics_button,
+            MaterialIconButtonSpec::new(MaterialIconButtonVariant::Standard).selected(true),
+        );
         inline_lyrics_button.add_css_class("card-icon-button");
         inline_lyrics_button.add_css_class("player-secondary-action");
         inline_lyrics_button.set_size_request(34, 34);
 
         let refresh_lyrics_button = gtk::Button::from_icon_name("view-refresh-symbolic");
         refresh_lyrics_button.set_tooltip_text(Some(tr(Message::MenuDownloadLyrics)));
-        refresh_lyrics_button.add_css_class("flat");
+        apply_material_icon_button(
+            &refresh_lyrics_button,
+            MaterialIconButtonSpec::new(MaterialIconButtonVariant::Standard),
+        );
         refresh_lyrics_button.add_css_class("card-icon-button");
         refresh_lyrics_button.add_css_class("player-secondary-action");
         refresh_lyrics_button.set_size_request(34, 34);
