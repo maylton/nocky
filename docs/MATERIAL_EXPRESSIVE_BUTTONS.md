@@ -9,10 +9,11 @@ Reference: <https://m3.material.io/components/all-buttons>
 
 - Foundation CSS: implemented in `100-buttons.css`.
 - Shared Rust class contract: implemented in `material_button.rs`.
-- Existing controls migrated: four Settings pilots.
-- Visual behavior changed only for the four explicitly audited pilots.
-- Local automated validation passes with the broader surface-isolation fixes.
-- Next step: continue the labeled/loading button checkpoints after review.
+- Existing controls migrated: Settings pilots plus the first Settings
+  labeled/loading batch.
+- Visual behavior changed only for explicitly audited Settings controls.
+- Local automated validation passes.
+- Next step: continue non-Settings labeled buttons after review.
 
 The inventory below records the currently identified button families. It will be
 expanded to one row per construction site before the checkpoint is marked ready
@@ -76,13 +77,13 @@ but their existing motion and layout ownership must remain intact.
 | Settings clear history | `src/ui/settings/page.rs` | destructive labeled button | destructive outlined | hover, focus, pressed, confirmation | pilot migrated |
 | Settings manage YouTube | `src/ui/settings/page.rs` | suggested primary action | filled button | hover, focus, pressed, loading | pilot migrated |
 | Settings open offline folder | `src/ui/settings/page.rs` | generic labeled button | outlined button | hover, focus, pressed | pilot migrated |
-| Settings clean partials | `src/ui/settings/page.rs` | generic labeled button | filled tonal button | hover, focus, pressed, disabled, loading | labeled/loading checkpoint |
-| Settings remove downloads | `src/ui/settings/page.rs` | destructive labeled button | destructive filled tonal | hover, focus, pressed, disabled, confirmation | labeled checkpoint |
+| Settings clean partials | `src/ui/settings/page.rs` | generic labeled button | filled tonal button | hover, focus, pressed, disabled | migrated |
+| Settings remove downloads | `src/ui/settings/page.rs` | destructive labeled button | destructive filled tonal | hover, focus, pressed, disabled, confirmation | migrated |
 | Settings diagnostics disclosure | `src/ui/settings/page.rs` | row action | text button | hover, focus, pressed, selected/disclosed | pilot migrated |
-| Settings diagnostics rerun | `src/ui/settings/page.rs` | row action | filled tonal button | hover, focus, pressed, disabled, loading | loading checkpoint |
-| Settings copy report | `src/ui/settings/page.rs` | primary row action | filled button | hover, focus, pressed, success feedback | labeled checkpoint |
-| Settings about | `src/ui/settings/page.rs` | primary row action | filled tonal button | hover, focus, pressed | labeled checkpoint |
-| Settings shortcuts | `src/ui/settings/page.rs` | row action | outlined or text button | hover, focus, pressed | labeled checkpoint |
+| Settings diagnostics rerun | `src/ui/settings/page.rs` | row action | filled tonal button | hover, focus, pressed, disabled, loading class | migrated |
+| Settings copy report | `src/ui/settings/page.rs` | primary row action | filled button | hover, focus, pressed | migrated |
+| Settings about | `src/ui/settings/page.rs` | primary row action | filled tonal button | hover, focus, pressed | migrated |
+| Settings shortcuts | `src/ui/settings/page.rs` | row action | outlined button | hover, focus, pressed | migrated |
 | Startup local source | `src/dialogs.rs` | source-choice button | outlined button | hover, focus, pressed | labeled checkpoint |
 | Startup YouTube source | `src/dialogs.rs` | suggested source-choice | filled button | hover, focus, pressed | labeled checkpoint |
 | Startup cancel | `src/dialogs.rs` | low-emphasis action | text button | hover, focus, pressed | labeled checkpoint |
@@ -119,15 +120,25 @@ cascade conflicts.
 
 ## Pilot migration result
 
-The first GTK helper integration migrates exactly four Settings controls:
+The first GTK helper integration migrated four Settings controls:
 
 1. Manage YouTube — filled.
 2. Open offline folder — outlined.
 3. Clear listening history — destructive outlined.
 4. Diagnostics disclosure — text with selected state while expanded.
 
-No transport control, card surface, page switcher or unrelated Settings action
-is changed by this checkpoint.
+The second Settings batch migrated six more labeled controls:
+
+1. Clean incomplete downloads — filled tonal.
+2. Remove downloads — destructive filled tonal.
+3. Diagnostics rerun — filled tonal with `material-button-loading` while
+   checks refresh.
+4. Copy diagnostics report — filled.
+5. About details — filled tonal.
+6. Keyboard shortcuts — outlined.
+
+No transport control, card surface, page switcher or icon-only action is
+changed by these checkpoints.
 
 ## Loading contract for a later checkpoint
 
@@ -137,12 +148,17 @@ changing the label. The implementation must preserve minimum width, expose a
 stable accessible name, disable duplicate activation, and restore the previous
 state on success, failure or cancellation.
 
+The diagnostics rerun action is the first minimal loading-class consumer. It
+keeps its label stable, disables duplicate activation and restores the normal
+class once the refresh timeout updates the report. A later checkpoint can add
+the shared indicator stack where a longer-running action needs visible progress.
+
 ## Manual validation matrix
 
-Validate the four pilots in Material Expressive, Noctalia and Frosted Glass,
-including keyboard focus, hover, pressed, disabled and selected states. Loading,
-reduced-motion behavior and the remaining interface languages stay in the
-later checkpoints where those states are actually introduced.
+Validate the migrated Settings buttons in Material Expressive, Noctalia and
+Frosted Glass, including keyboard focus, hover, pressed, disabled, selected,
+confirmation and diagnostics loading states. Reduced-motion behavior and
+remaining non-Settings controls stay in later checkpoints.
 
 Automated validation for this checkpoint was run with `cargo fmt` and
 `cargo test`.

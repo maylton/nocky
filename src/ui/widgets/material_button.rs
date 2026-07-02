@@ -122,6 +122,10 @@ pub fn set_material_button_selected(button: &gtk::Button, selected: bool) {
     set_state_class(button, "material-button-selected", selected);
 }
 
+pub fn set_material_button_loading(button: &gtk::Button, loading: bool) {
+    set_state_class(button, "material-button-loading", loading);
+}
+
 fn set_state_class(button: &gtk::Button, class_name: &str, active: bool) {
     if active {
         button.add_css_class(class_name);

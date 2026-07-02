@@ -5,8 +5,8 @@ use crate::{
     offline_store::OfflineStore,
     ui::widgets::{
         material_button::{
-            apply_material_button, set_material_button_selected, MaterialButtonSemantic,
-            MaterialButtonSize, MaterialButtonSpec, MaterialButtonVariant,
+            apply_material_button, set_material_button_loading, set_material_button_selected,
+            MaterialButtonSemantic, MaterialButtonSize, MaterialButtonSpec, MaterialButtonVariant,
         },
         AnimatedPageSpec, AnimatedPageSwitcher,
     },
@@ -628,6 +628,13 @@ fn build_content(
         "Clean incomplete",
         "Limpiar incompletos",
     ));
+    apply_material_button(
+        &clean_partials,
+        MaterialButtonSpec::new(
+            MaterialButtonVariant::FilledTonal,
+            MaterialButtonSize::Compact,
+        ),
+    );
     clean_partials.set_sensitive(partial_count > 0);
     youtube_rows.append(&button_row(
         group_text(
@@ -648,7 +655,14 @@ fn build_content(
         "Remove downloads",
         "Eliminar descargas",
     ));
-    clear_offline.add_css_class("destructive-action");
+    apply_material_button(
+        &clear_offline,
+        MaterialButtonSpec::new(
+            MaterialButtonVariant::FilledTonal,
+            MaterialButtonSize::Compact,
+        )
+        .with_semantic(MaterialButtonSemantic::Destructive),
+    );
     clear_offline.set_sensitive(offline_count > 0 || partial_count > 0);
     youtube_rows.append(&button_row(
         group_text(
@@ -713,15 +727,23 @@ fn build_content(
         "Run again",
         "Ejecutar de nuevo",
     ));
-    diagnostics_refresh.add_css_class("settings-row-action");
+    apply_material_button(
+        &diagnostics_refresh,
+        MaterialButtonSpec::new(
+            MaterialButtonVariant::FilledTonal,
+            MaterialButtonSize::Compact,
+        ),
+    );
 
     let diagnostics_copy = gtk::Button::with_label(group_text(
         "Copiar relatório",
         "Copy report",
         "Copiar informe",
     ));
-    diagnostics_copy.add_css_class("settings-primary-action");
-    diagnostics_copy.add_css_class("settings-row-action");
+    apply_material_button(
+        &diagnostics_copy,
+        MaterialButtonSpec::new(MaterialButtonVariant::Filled, MaterialButtonSize::Compact),
+    );
 
     diagnostics_actions.append(&diagnostics_refresh);
     diagnostics_actions.append(&diagnostics_copy);
@@ -751,8 +773,13 @@ fn build_content(
         "Ver información",
     ));
     about_button.set_action_name(Some("app.about"));
-    about_button.add_css_class("settings-primary-action");
-    about_button.add_css_class("settings-row-action");
+    apply_material_button(
+        &about_button,
+        MaterialButtonSpec::new(
+            MaterialButtonVariant::FilledTonal,
+            MaterialButtonSize::Compact,
+        ),
+    );
     about_button.add_css_class("settings-about-action");
 
     let about_subtitle = format!("v{} · GPL-3.0", env!("CARGO_PKG_VERSION"));
@@ -761,7 +788,10 @@ fn build_content(
     let shortcuts_button =
         gtk::Button::with_label(group_text("Ver atalhos", "View shortcuts", "Ver atajos"));
     shortcuts_button.set_action_name(Some("app.shortcuts"));
-    shortcuts_button.add_css_class("settings-row-action");
+    apply_material_button(
+        &shortcuts_button,
+        MaterialButtonSpec::new(MaterialButtonVariant::Outlined, MaterialButtonSize::Compact),
+    );
     shortcuts_button.add_css_class("settings-shortcuts-action");
 
     about_rows.append(&button_row(
@@ -951,6 +981,7 @@ fn build_content(
         let language = initial.language;
         diagnostics_refresh.connect_clicked(move |_| {
             button.set_sensitive(false);
+            set_material_button_loading(&button, true);
             youtube_diagnostics::refresh_now();
 
             let icon = icon.clone();
@@ -960,6 +991,7 @@ fn build_content(
             glib::timeout_add_local_once(Duration::from_millis(1200), move || {
                 update_diagnostics_view(&icon, &summary, &details, language);
                 button.set_sensitive(true);
+                set_material_button_loading(&button, false);
             });
         });
     }
@@ -1261,7 +1293,9 @@ fn scale_row(title: &str, subtitle: &str, scale: &gtk::Scale) -> gtk::Box {
 
 fn button_row(title: &str, subtitle: &str, button: &gtk::Button) -> gtk::Box {
     button.set_valign(gtk::Align::Center);
-    button.add_css_class("settings-row-action");
+    if !button.has_css_class("material-button") {
+        button.add_css_class("settings-row-action");
+    }
     row_with_control(title, subtitle, button)
 }
 
