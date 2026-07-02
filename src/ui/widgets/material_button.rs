@@ -85,31 +85,16 @@ mod tests {
     #[test]
     fn variants_map_to_expected_classes() {
         assert_eq!(MaterialButtonVariant::Filled.css_class(), "material-button-filled");
-        assert_eq!(
-            MaterialButtonVariant::FilledTonal.css_class(),
-            "material-button-filled-tonal"
-        );
-        assert_eq!(
-            MaterialButtonVariant::Elevated.css_class(),
-            "material-button-elevated"
-        );
-        assert_eq!(
-            MaterialButtonVariant::Outlined.css_class(),
-            "material-button-outlined"
-        );
+        assert_eq!(MaterialButtonVariant::FilledTonal.css_class(), "material-button-filled-tonal");
+        assert_eq!(MaterialButtonVariant::Elevated.css_class(), "material-button-elevated");
+        assert_eq!(MaterialButtonVariant::Outlined.css_class(), "material-button-outlined");
         assert_eq!(MaterialButtonVariant::Text.css_class(), "material-button-text");
     }
 
     #[test]
     fn sizes_map_to_expected_classes() {
-        assert_eq!(
-            MaterialButtonSize::Compact.css_class(),
-            "material-button-compact"
-        );
-        assert_eq!(
-            MaterialButtonSize::Standard.css_class(),
-            "material-button-standard"
-        );
+        assert_eq!(MaterialButtonSize::Compact.css_class(), "material-button-compact");
+        assert_eq!(MaterialButtonSize::Standard.css_class(), "material-button-standard");
         assert_eq!(MaterialButtonSize::Large.css_class(), "material-button-large");
     }
 
@@ -121,10 +106,7 @@ mod tests {
         )
         .css_classes();
 
-        assert_eq!(
-            classes,
-            vec!["material-button-filled-tonal", "material-button-standard"]
-        );
+        assert_eq!(classes, vec!["material-button-filled-tonal", "material-button-standard"]);
     }
 
     #[test]
