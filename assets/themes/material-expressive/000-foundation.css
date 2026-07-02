@@ -16,14 +16,15 @@
 @define-color m3_outline_variant #46464f;
 @define-color m3_error #ffb4ab;
 
-/* Google Sans Flex is the Material Expressive typeface. Keep the font scoped
- * to this theme so Noctalia and Frosted Glass preserve their own typography. */
+/* Google Sans Flex is the Material Expressive typeface. Fontsource's variable
+ * files expose the family as "Google Sans Flex Variable"; keep the original
+ * family name as a fallback for native Google Fonts installations. */
 window.theme-material-expressive,
 window.theme-material-expressive .app-shell,
 window.theme-material-expressive tooltip,
 window.theme-material-expressive popover,
 dialog.theme-material-expressive {
-  font-family: "Google Sans Flex", "Google Sans", "Inter", "Cantarell", sans-serif;
+  font-family: "Google Sans Flex Variable", "Google Sans Flex", "Google Sans", "Inter", "Cantarell", sans-serif;
 }
 
 window.theme-material-expressive,
