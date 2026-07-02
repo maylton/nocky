@@ -100,10 +100,7 @@ mod tests {
             MaterialButtonVariant::Outlined.css_class(),
             "material-button-outlined"
         );
-        assert_eq!(
-            MaterialButtonVariant::Text.css_class(),
-            "material-button-text"
-        );
+        assert_eq!(MaterialButtonVariant::Text.css_class(), "material-button-text");
     }
 
     #[test]
@@ -116,10 +113,7 @@ mod tests {
             MaterialButtonSize::Standard.css_class(),
             "material-button-standard"
         );
-        assert_eq!(
-            MaterialButtonSize::Large.css_class(),
-            "material-button-large"
-        );
+        assert_eq!(MaterialButtonSize::Large.css_class(), "material-button-large");
     }
 
     #[test]
