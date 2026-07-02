@@ -5188,14 +5188,29 @@ fn presentation_uses_material_carousel_v2(
     presentation: HomeSectionPresentation,
     material_carousel_v2: bool,
 ) -> bool {
-    material_carousel_v2 && presentation == HomeSectionPresentation::Featured
+    material_carousel_v2
+        && matches!(
+            presentation,
+            HomeSectionPresentation::Featured | HomeSectionPresentation::Compact
+        )
+}
+
+fn material_carousel_variant_for_presentation(
+    presentation: HomeSectionPresentation,
+) -> MaterialCarouselWidgetVariant {
+    match presentation {
+        HomeSectionPresentation::Featured => MaterialCarouselWidgetVariant::Hero,
+        HomeSectionPresentation::Compact => MaterialCarouselWidgetVariant::MultiBrowse,
+        HomeSectionPresentation::TrackRows => MaterialCarouselWidgetVariant::Uncontained,
+    }
 }
 
 fn metrolist_home_material_carousel_scroller(
     cards: Vec<gtk::Widget>,
     presentation: HomeSectionPresentation,
 ) -> gtk::ScrolledWindow {
-    let carousel = MaterialCarouselWidget::new(MaterialCarouselWidgetVariant::Hero);
+    let variant = material_carousel_variant_for_presentation(presentation);
+    let carousel = MaterialCarouselWidget::new(variant);
     carousel.set_base_item_extent(presentation.outer_width());
     carousel.set_spacing(presentation.rail_spacing());
     carousel.set_vexpand(false);
@@ -5213,7 +5228,15 @@ fn metrolist_home_material_carousel_scroller(
         presentation.scrollbar_gap(),
     );
     scroll.add_css_class("material-carousel");
-    scroll.add_css_class("material-carousel-hero");
+    match variant {
+        MaterialCarouselWidgetVariant::Hero => scroll.add_css_class("material-carousel-hero"),
+        MaterialCarouselWidgetVariant::MultiBrowse => {
+            scroll.add_css_class("material-carousel-multi-browse")
+        }
+        MaterialCarouselWidgetVariant::Uncontained => {
+            scroll.add_css_class("material-carousel-uncontained")
+        }
+    }
 
     let adjustment = scroll.hadjustment();
     carousel.set_adjustment(&adjustment);
@@ -5347,8 +5370,9 @@ fn metrolist_home_section_content(
 #[cfg(test)]
 mod responsive_home_grid_tests {
     use super::{
-        material_carousel_v2_active, presentation_uses_material_carousel_v2,
-        HomeSectionPresentation, VisualTheme,
+        material_carousel_v2_active, material_carousel_variant_for_presentation,
+        presentation_uses_material_carousel_v2, HomeSectionPresentation,
+        MaterialCarouselWidgetVariant, VisualTheme,
     };
 
     #[test]
@@ -5376,12 +5400,12 @@ mod responsive_home_grid_tests {
     }
 
     #[test]
-    fn material_carousel_v2_applies_only_to_featured_in_this_stage() {
+    fn material_carousel_v2_applies_to_featured_and_compact_only() {
         assert!(presentation_uses_material_carousel_v2(
             HomeSectionPresentation::Featured,
             true
         ));
-        assert!(!presentation_uses_material_carousel_v2(
+        assert!(presentation_uses_material_carousel_v2(
             HomeSectionPresentation::Compact,
             true
         ));
@@ -5393,6 +5417,22 @@ mod responsive_home_grid_tests {
             HomeSectionPresentation::Featured,
             false
         ));
+    }
+
+    #[test]
+    fn material_carousel_v2_maps_home_presentations_to_expected_variants() {
+        assert_eq!(
+            material_carousel_variant_for_presentation(HomeSectionPresentation::Featured),
+            MaterialCarouselWidgetVariant::Hero
+        );
+        assert_eq!(
+            material_carousel_variant_for_presentation(HomeSectionPresentation::Compact),
+            MaterialCarouselWidgetVariant::MultiBrowse
+        );
+        assert_eq!(
+            material_carousel_variant_for_presentation(HomeSectionPresentation::TrackRows),
+            MaterialCarouselWidgetVariant::Uncontained
+        );
     }
 
     #[test]
