@@ -1,6 +1,6 @@
 use crate::{
     artist_index::LocalArtistIndex,
-    config::{AppConfig, AppLanguage, StartupSource},
+    config::{AppConfig, AppLanguage, StartupSource, VisualTheme},
     listening_history::{HistoryActivity, ListeningHistory, ListeningSource, ListeningStats},
     local_mix_cover,
     model::Track,
@@ -16,6 +16,10 @@ use crate::{
             apply_material_card, apply_material_carousel, MaterialCardSpec, MaterialCardVariant,
             MaterialCarouselSpec, MaterialCarouselVariant,
         },
+        material_carousel::{
+            MaterialCarousel as MaterialCarouselWidget,
+            MaterialCarouselVariant as MaterialCarouselWidgetVariant,
+        },
         MaterialLoadingIndicator,
     },
     youtube::{
@@ -30,7 +34,7 @@ use std::{
     cell::{Cell, RefCell},
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
-    fs,
+    env, fs,
     path::{Path, PathBuf},
     rc::Rc,
     sync::mpsc::{self, Receiver, Sender},
@@ -5134,7 +5138,7 @@ fn set_home_scroller_height(scroll: &gtk::ScrolledWindow, height: i32) {
     scroll.set_max_content_height(height);
 }
 
-fn metrolist_home_scroller(
+fn metrolist_home_base_scroller(
     child: &impl IsA<gtk::Widget>,
     min_height: i32,
     scrollbar_gap: i32,
@@ -5153,10 +5157,86 @@ fn metrolist_home_scroller(
     scroll.set_child(Some(child));
     scroll.add_css_class("home-carousel-scroll");
     scroll.add_css_class("home-card-grid-scroll");
+    scroll
+}
+
+fn metrolist_home_scroller(
+    child: &impl IsA<gtk::Widget>,
+    min_height: i32,
+    scrollbar_gap: i32,
+) -> gtk::ScrolledWindow {
+    let scroll = metrolist_home_base_scroller(child, min_height, scrollbar_gap);
     apply_material_carousel(
         &scroll,
         MaterialCarouselSpec::new(MaterialCarouselVariant::MultiBrowse),
     );
+    scroll
+}
+
+fn material_carousel_v2_active(visual_theme: VisualTheme, feature_gate: Option<&str>) -> bool {
+    visual_theme == VisualTheme::MaterialExpressive && feature_gate == Some("1")
+}
+
+fn material_carousel_v2_enabled(config: &AppConfig) -> bool {
+    material_carousel_v2_active(
+        config.visual_theme,
+        env::var("NOCKY_MATERIAL_CAROUSEL_V2").ok().as_deref(),
+    )
+}
+
+fn presentation_uses_material_carousel_v2(
+    presentation: HomeSectionPresentation,
+    material_carousel_v2: bool,
+) -> bool {
+    material_carousel_v2 && presentation == HomeSectionPresentation::Featured
+}
+
+fn metrolist_home_material_carousel_scroller(
+    cards: Vec<gtk::Widget>,
+    presentation: HomeSectionPresentation,
+) -> gtk::ScrolledWindow {
+    let carousel = MaterialCarouselWidget::new(MaterialCarouselWidgetVariant::Hero);
+    carousel.set_base_item_extent(presentation.outer_width());
+    carousel.set_spacing(presentation.rail_spacing());
+    carousel.set_vexpand(false);
+    carousel.set_valign(gtk::Align::Start);
+    carousel.add_css_class("home-card-grid");
+    carousel.add_css_class("home-material-carousel-v2");
+
+    for card in cards {
+        carousel.append(&card);
+    }
+
+    let scroll = metrolist_home_base_scroller(
+        &carousel,
+        presentation.scroller_height(1),
+        presentation.scrollbar_gap(),
+    );
+    scroll.add_css_class("material-carousel");
+    scroll.add_css_class("material-carousel-hero");
+
+    let adjustment = scroll.hadjustment();
+    carousel.set_adjustment(&adjustment);
+
+    {
+        let carousel = carousel.clone();
+        scroll.connect_map(move |scroll| {
+            let width = scroll.width();
+            if width > 1 {
+                carousel.set_viewport_width(width);
+            }
+        });
+    }
+    {
+        let carousel = carousel.clone();
+        scroll.connect_notify_local(Some("width"), move |scroll, _| {
+            let width = scroll.width();
+            if width > 1 {
+                carousel.set_viewport_width(width);
+            }
+        });
+    }
+
     scroll
 }
 
@@ -5165,6 +5245,7 @@ fn metrolist_home_section_content(
     presentation: HomeSectionPresentation,
     language: AppLanguage,
     empty_detail: &str,
+    material_carousel_v2: bool,
 ) -> gtk::ScrolledWindow {
     let cards = if cards.is_empty() {
         let text = home_copy(language);
@@ -5181,7 +5262,9 @@ fn metrolist_home_section_content(
         cards
     };
 
-    if presentation == HomeSectionPresentation::TrackRows {
+    if presentation_uses_material_carousel_v2(presentation, material_carousel_v2) {
+        metrolist_home_material_carousel_scroller(cards, presentation)
+    } else if presentation == HomeSectionPresentation::TrackRows {
         let rows = presentation.track_rows(cards.len());
         let rail = metrolist_home_rail(presentation);
         rail.set_size_request(
@@ -5263,7 +5346,54 @@ fn metrolist_home_section_content(
 
 #[cfg(test)]
 mod responsive_home_grid_tests {
-    use super::HomeSectionPresentation;
+    use super::{
+        material_carousel_v2_active, presentation_uses_material_carousel_v2,
+        HomeSectionPresentation, VisualTheme,
+    };
+
+    #[test]
+    fn material_carousel_v2_requires_material_expressive_and_feature_gate() {
+        assert!(material_carousel_v2_active(
+            VisualTheme::MaterialExpressive,
+            Some("1")
+        ));
+        assert!(!material_carousel_v2_active(
+            VisualTheme::MaterialExpressive,
+            None
+        ));
+        assert!(!material_carousel_v2_active(
+            VisualTheme::MaterialExpressive,
+            Some("true")
+        ));
+        assert!(!material_carousel_v2_active(
+            VisualTheme::Noctalia,
+            Some("1")
+        ));
+        assert!(!material_carousel_v2_active(
+            VisualTheme::FrostedGlass,
+            Some("1")
+        ));
+    }
+
+    #[test]
+    fn material_carousel_v2_applies_only_to_featured_in_this_stage() {
+        assert!(presentation_uses_material_carousel_v2(
+            HomeSectionPresentation::Featured,
+            true
+        ));
+        assert!(!presentation_uses_material_carousel_v2(
+            HomeSectionPresentation::Compact,
+            true
+        ));
+        assert!(!presentation_uses_material_carousel_v2(
+            HomeSectionPresentation::TrackRows,
+            true
+        ));
+        assert!(!presentation_uses_material_carousel_v2(
+            HomeSectionPresentation::Featured,
+            false
+        ));
+    }
 
     #[test]
     fn featured_and_compact_cards_keep_uniform_carousel_geometry() {
@@ -5548,7 +5678,8 @@ fn home_history_section(
         cards.push(button.upcast::<gtk::Widget>());
     }
 
-    let content = metrolist_home_section_content(cards, presentation, language, empty_detail);
+    let content =
+        metrolist_home_section_content(cards, presentation, language, empty_detail, false);
     content.set_vexpand(false);
     content.set_valign(gtk::Align::Start);
 
@@ -6030,7 +6161,13 @@ fn home_section(
             )
         })
         .collect::<Vec<_>>();
-    let content = metrolist_home_section_content(cards, presentation, language, empty_detail);
+    let content = metrolist_home_section_content(
+        cards,
+        presentation,
+        language,
+        empty_detail,
+        material_carousel_v2_enabled(config),
+    );
     content.set_vexpand(false);
     content.set_valign(gtk::Align::Start);
 
