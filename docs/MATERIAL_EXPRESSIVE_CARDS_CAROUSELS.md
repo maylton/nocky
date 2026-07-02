@@ -41,9 +41,9 @@ physics intact:
 - Collection-grid and compact artist card surfaces share the same card
   contract.
 - Home visual rails receive `material-carousel-multi-browse`.
-- Featured visual rails now follow the Material multi-browse composition: the
-  first visible item is large, while trailing items use the compact card
-  geometry to create the peek-and-browse effect from the M3 carousel reference.
+- Featured visual rails keep the same card geometry as compact rails. The M3
+  carousel morphing reference is not enabled yet, so Nocky avoids mixing card
+  sizes in the static carousel state.
 - Chip rails are not Material carousels because they are filter controls rather
   than visual item collections.
 - Home card action controls now expose Material card-action roles while keeping
@@ -62,9 +62,9 @@ inner surface carries the card semantic.
 
 Automated validation for this checkpoint is `cargo fmt`, `git diff --check` and
 `cargo test`. Manual validation should cover Material Expressive Home
-carousels, collection grids and compact artist rows at narrow and wide widths.
+carousels, collection grids and compact artist rows at narrow and wide widths,
+with all cards in the same carousel rendered at uniform size.
 
 The continuous item morphing shown in the animated M3 reference requires a
-separate scroll-position-driven checkpoint. This checkpoint implements the
-static multi-browse composition first so sizing and card hierarchy can be
-validated before frame-by-frame resizing is introduced.
+separate scroll-position-driven checkpoint. Until that exists, this checkpoint
+keeps static carousel cards uniform instead of mixing large and compact items.

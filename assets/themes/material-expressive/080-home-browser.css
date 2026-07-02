@@ -199,7 +199,7 @@ window.theme-material-expressive
 }
 /* Keep each Home overlay aligned with its presentation geometry. */
 .home-section-featured .home-card-context-overlay {
-  min-width: 220px;
+  min-width: 168px;
 }
 
 .home-section-compact .home-card-context-overlay {

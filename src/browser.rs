@@ -4982,64 +4982,56 @@ impl HomeSectionPresentation {
 
     fn artwork_size(self) -> i32 {
         match self {
-            Self::Featured => 176,
-            Self::Compact => 128,
+            Self::Featured | Self::Compact => 128,
             Self::TrackRows => 48,
         }
     }
 
     fn card_width(self) -> i32 {
         match self {
-            Self::Featured => 196,
-            Self::Compact => 152,
+            Self::Featured | Self::Compact => 152,
             Self::TrackRows => 300,
         }
     }
 
     fn card_height(self) -> i32 {
         match self {
-            Self::Featured => 252,
-            Self::Compact => 188,
+            Self::Featured | Self::Compact => 188,
             Self::TrackRows => 64,
         }
     }
 
     fn outer_width(self) -> i32 {
         match self {
-            Self::Featured => 220,
-            Self::Compact => 168,
+            Self::Featured | Self::Compact => 168,
             Self::TrackRows => 312,
         }
     }
 
     fn outer_height(self) -> i32 {
         match self {
-            Self::Featured => 268,
-            Self::Compact => 196,
+            Self::Featured | Self::Compact => 196,
             Self::TrackRows => 64,
         }
     }
 
     fn rail_spacing(self) -> i32 {
         match self {
-            Self::Featured => 14,
-            Self::Compact => 6,
+            Self::Featured | Self::Compact => 6,
             Self::TrackRows => 8,
         }
     }
 
     fn row_spacing(self) -> i32 {
         match self {
-            Self::Featured => 0,
-            Self::Compact => 8,
+            Self::Featured | Self::Compact => 8,
             Self::TrackRows => 4,
         }
     }
 
     fn scrollbar_gap(self) -> i32 {
         match self {
-            Self::Featured => 20,
-            Self::Compact => 18,
+            Self::Featured | Self::Compact => 18,
             Self::TrackRows => 20,
         }
     }
@@ -5057,9 +5049,8 @@ impl HomeSectionPresentation {
 
     fn rail_rows(self, width: i32, item_count: usize) -> i32 {
         match self {
-            Self::Featured => 1,
-            Self::Compact if width <= 760 && item_count > 2 => 2,
-            Self::Compact => 1,
+            Self::Featured | Self::Compact if width <= 760 && item_count > 2 => 2,
+            Self::Featured | Self::Compact => 1,
             Self::TrackRows => self.track_rows(item_count),
         }
     }
@@ -5070,16 +5061,6 @@ impl HomeSectionPresentation {
             Self::Featured | Self::Compact => 10,
             Self::TrackRows => 10,
         }
-    }
-}
-
-fn material_carousel_item_presentation(
-    section_presentation: HomeSectionPresentation,
-    index: usize,
-) -> HomeSectionPresentation {
-    match section_presentation {
-        HomeSectionPresentation::Featured if index > 0 => HomeSectionPresentation::Compact,
-        presentation => presentation,
     }
 }
 
@@ -5282,17 +5263,29 @@ fn metrolist_home_section_content(
 
 #[cfg(test)]
 mod responsive_home_grid_tests {
-    use super::{material_carousel_item_presentation, HomeSectionPresentation};
+    use super::HomeSectionPresentation;
 
     #[test]
-    fn featured_geometry_is_larger_than_compact() {
-        assert!(
-            HomeSectionPresentation::Featured.artwork_size()
-                > HomeSectionPresentation::Compact.artwork_size()
+    fn featured_and_compact_cards_keep_uniform_carousel_geometry() {
+        assert_eq!(
+            HomeSectionPresentation::Featured.artwork_size(),
+            HomeSectionPresentation::Compact.artwork_size()
         );
-        assert!(
-            HomeSectionPresentation::Featured.card_width()
-                > HomeSectionPresentation::Compact.card_width()
+        assert_eq!(
+            HomeSectionPresentation::Featured.card_width(),
+            HomeSectionPresentation::Compact.card_width()
+        );
+        assert_eq!(
+            HomeSectionPresentation::Featured.card_height(),
+            HomeSectionPresentation::Compact.card_height()
+        );
+        assert_eq!(
+            HomeSectionPresentation::Featured.outer_width(),
+            HomeSectionPresentation::Compact.outer_width()
+        );
+        assert_eq!(
+            HomeSectionPresentation::Featured.outer_height(),
+            HomeSectionPresentation::Compact.outer_height()
         );
     }
 
@@ -5332,25 +5325,19 @@ mod responsive_home_grid_tests {
     #[test]
     fn scroller_height_reserves_space_for_scrollbar_without_stretching_rows() {
         assert_eq!(HomeSectionPresentation::TrackRows.row_spacing(), 4);
-        assert_eq!(HomeSectionPresentation::Featured.scroller_height(1), 288);
+        assert_eq!(
+            HomeSectionPresentation::Featured.scroller_height(1),
+            HomeSectionPresentation::Compact.scroller_height(1)
+        );
         assert_eq!(HomeSectionPresentation::TrackRows.scroller_height(4), 288);
         assert_eq!(HomeSectionPresentation::Compact.scroller_height(2), 418);
     }
 
     #[test]
-    fn featured_carousel_uses_large_first_item_and_compact_trailing_items() {
-        assert_eq!(
-            material_carousel_item_presentation(HomeSectionPresentation::Featured, 0),
-            HomeSectionPresentation::Featured
-        );
-        assert_eq!(
-            material_carousel_item_presentation(HomeSectionPresentation::Featured, 1),
-            HomeSectionPresentation::Compact
-        );
-        assert_eq!(
-            material_carousel_item_presentation(HomeSectionPresentation::Compact, 1),
-            HomeSectionPresentation::Compact
-        );
+    fn featured_rail_wraps_like_compact_on_narrow_sections() {
+        assert_eq!(HomeSectionPresentation::Featured.rail_rows(900, 8), 1);
+        assert_eq!(HomeSectionPresentation::Featured.rail_rows(760, 8), 2);
+        assert_eq!(HomeSectionPresentation::Featured.rail_rows(480, 2), 1);
     }
 }
 
@@ -6035,12 +6022,10 @@ fn home_section(
 
     let cards = cards
         .into_iter()
-        .enumerate()
-        .map(|(index, card)| {
-            let item_presentation = material_carousel_item_presentation(presentation, index);
+        .map(|card| {
             home_card_button(
                 card,
-                item_presentation,
+                presentation,
                 playback,
                 config,
                 event_tx,
@@ -6720,8 +6705,7 @@ fn home_collection_card(
         title,
         "collection-card-title",
         match presentation {
-            HomeSectionPresentation::Featured => 24,
-            HomeSectionPresentation::Compact => 16,
+            HomeSectionPresentation::Featured | HomeSectionPresentation::Compact => 16,
             HomeSectionPresentation::TrackRows => 28,
         },
     );
@@ -6731,8 +6715,7 @@ fn home_collection_card(
         subtitle,
         "expressive-card-subtitle",
         match presentation {
-            HomeSectionPresentation::Featured => 24,
-            HomeSectionPresentation::Compact => 16,
+            HomeSectionPresentation::Featured | HomeSectionPresentation::Compact => 16,
             HomeSectionPresentation::TrackRows => 32,
         },
     );
@@ -6742,8 +6725,7 @@ fn home_collection_card(
         detail,
         "collection-card-detail",
         match presentation {
-            HomeSectionPresentation::Featured => 24,
-            HomeSectionPresentation::Compact => 16,
+            HomeSectionPresentation::Featured | HomeSectionPresentation::Compact => 16,
             HomeSectionPresentation::TrackRows => 32,
         },
     );
@@ -6777,8 +6759,7 @@ fn home_collection_card(
         },
         match presentation {
             HomeSectionPresentation::TrackRows => 10,
-            HomeSectionPresentation::Featured => 7,
-            HomeSectionPresentation::Compact => 5,
+            HomeSectionPresentation::Featured | HomeSectionPresentation::Compact => 5,
         },
     );
     card.set_size_request(presentation.card_width(), presentation.card_height());
@@ -6803,9 +6784,8 @@ fn home_collection_card(
     });
     card.set_margin_start(8);
     card.set_margin_end(match presentation {
-        HomeSectionPresentation::Compact => 4,
+        HomeSectionPresentation::Featured | HomeSectionPresentation::Compact => 4,
         HomeSectionPresentation::TrackRows => 4,
-        HomeSectionPresentation::Featured => 8,
     });
     card.append(&artwork_overlay);
     card.append(&text);
