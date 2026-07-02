@@ -13,9 +13,9 @@ References:
 
 - Foundation CSS: implemented in `100-buttons.css`.
 - Shared Rust class contract: implemented in `material_button.rs`.
-- Existing controls migrated: Settings pilots plus the first Settings
-  labeled/loading batch.
-- Visual behavior changed only for explicitly audited Settings controls.
+- Existing controls migrated: Settings pilots, dialog/browser/app-shell labeled
+  actions, the first icon-button batch and the first YouTube chip batch.
+- Visual behavior changed only for explicitly audited controls.
 - Local automated validation passes.
 - Next step: continue chips and specialized popover buttons after review.
 
@@ -38,6 +38,8 @@ for review.
 9. Loading must preserve width and use the shared Material loading indicator.
 10. Noctalia retains ownership of Shell palette roles.
 11. Frosted Glass retains translucency and surface separation.
+12. Chips are compact selection/filter controls and must not inherit
+    high-priority action classes.
 
 ## Preserved architectures
 
@@ -107,6 +109,8 @@ but their existing motion and layout ownership must remain intact.
 | Local playlist delete | `src/browser.rs` | destructive labeled button | destructive outlined button | hover, focus, pressed | migrated |
 | Collection offline action | `src/browser.rs` | stateful labeled button | filled tonal or outlined by state | ready, loading, complete, retry, disabled | migrated |
 | Search/load-more actions | `src/browser.rs` | labeled actions | filled tonal by hierarchy | hover, focus, pressed, loading | migrated |
+| YouTube Home filter chips | `src/browser.rs` | pill/suggested action | filter chip | hover, focus, pressed, selected | migrated |
+| YouTube result filter chips | `src/youtube/mod.rs` | pill/suggested action | filter chip | hover, focus, pressed, selected | migrated |
 
 ## Foundation class contract
 
@@ -137,6 +141,17 @@ All common icon buttons receive:
 
 Icon buttons are for compact supplementary actions and keep a stable 40 px
 target so hover, selected and pressed states do not resize toolbar rows.
+
+All common chips receive:
+
+- `material-chip`;
+- one variant class: `material-chip-assist`, `material-chip-filter`,
+  `material-chip-input`, or `material-chip-suggestion`;
+- optional state class `material-chip-selected`.
+
+Filter chips use the selected state instead of legacy `suggested-action`, so
+they remain visually distinct from primary actions while preserving compact rail
+geometry.
 
 ## Pilot migration result
 
@@ -191,6 +206,11 @@ The first icon-button batch migrated:
    with selected state on the lyrics toggle.
 3. Footer lyrics and mute — standard icon buttons with selected state on the
    lyrics toggle.
+
+The first chip batch migrated:
+
+1. YouTube Home filter rail — `Tudo` and remote-provided chips.
+2. YouTube result filter rail — `Tudo` and remote-provided chips.
 
 ## Loading contract for a later checkpoint
 

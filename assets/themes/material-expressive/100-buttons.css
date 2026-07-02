@@ -399,3 +399,120 @@ button.material-icon-button:disabled {
   background-color: alpha(@m3_surface, 0.16);
   border-color: alpha(@m3_outline, 0.68);
 }
+
+/*
+ * Material chips
+ * --------------
+ *
+ * Chips are compact choices and filters, separate from high-priority action
+ * buttons. Geometry is fixed so selection and hover states do not resize rails.
+ */
+button.material-chip {
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border-width: 1px;
+  border-style: solid;
+  background-image: none;
+  box-shadow: none;
+  font-weight: 680;
+  transition:
+    background-color 180ms ease-out,
+    color 180ms ease-out,
+    border-color 180ms ease-out,
+    border-radius 180ms ease-out,
+    box-shadow 180ms ease-out;
+}
+
+button.material-chip:disabled {
+  opacity: 0.56;
+  box-shadow: none;
+}
+
+.theme-material-expressive button.material-chip-assist,
+.theme-material-expressive button.material-chip-input,
+.theme-material-expressive button.material-chip-filter {
+  color: @m3_on_surface_variant;
+  background-color: transparent;
+  border-color: @m3_outline;
+}
+
+.theme-material-expressive button.material-chip-suggestion {
+  color: @m3_on_secondary_container;
+  background-color: alpha(@m3_secondary_container, 0.52);
+  border-color: transparent;
+}
+
+.theme-material-expressive button.material-chip:hover {
+  color: @m3_on_surface;
+  background-color: alpha(@m3_primary, 0.10);
+  border-color: alpha(@m3_primary, 0.50);
+}
+
+.theme-material-expressive button.material-chip-selected {
+  color: @m3_on_secondary_container;
+  background-color: @m3_secondary_container;
+  border-color: transparent;
+}
+
+.theme-material-expressive button.material-chip:active {
+  border-radius: 9px;
+  background-color: alpha(@m3_primary, 0.16);
+}
+
+.theme-material-expressive button.material-chip:focus,
+.theme-material-expressive button.material-chip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px alpha(@m3_primary, 0.34);
+}
+
+.theme-noctalia button.material-chip-assist,
+.theme-noctalia button.material-chip-input,
+.theme-noctalia button.material-chip-filter {
+  color: alpha(@window_fg_color, 0.82);
+  background-color: transparent;
+  border-color: alpha(@window_fg_color, 0.24);
+}
+
+.theme-noctalia button.material-chip-suggestion {
+  color: @window_fg_color;
+  background-color: alpha(@accent_color, 0.14);
+  border-color: alpha(@accent_color, 0.22);
+}
+
+.theme-noctalia button.material-chip:hover {
+  color: @window_fg_color;
+  background-color: alpha(@accent_color, 0.14);
+  border-color: alpha(@accent_color, 0.44);
+}
+
+.theme-noctalia button.material-chip-selected {
+  color: @accent_fg_color;
+  background-color: @accent_color;
+  border-color: transparent;
+}
+
+.theme-noctalia button.material-chip:focus,
+.theme-noctalia button.material-chip:focus-visible {
+  box-shadow: 0 0 0 3px alpha(@accent_color, 0.32);
+}
+
+.theme-frosted-glass button.material-chip-assist,
+.theme-frosted-glass button.material-chip-input,
+.theme-frosted-glass button.material-chip-filter {
+  color: @m3_on_surface_variant;
+  background-color: alpha(@m3_surface, 0.18);
+  border-color: alpha(@m3_outline, 0.46);
+}
+
+.theme-frosted-glass button.material-chip-suggestion {
+  color: @m3_on_secondary_container;
+  background-color: alpha(@m3_secondary_container, 0.56);
+  border-color: alpha(@m3_secondary_container, 0.38);
+}
+
+.theme-frosted-glass button.material-chip-selected {
+  color: @m3_on_primary_container;
+  background-color: alpha(@m3_primary_container, 0.82);
+  border-color: alpha(@m3_primary, 0.38);
+}

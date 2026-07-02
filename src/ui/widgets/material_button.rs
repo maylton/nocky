@@ -31,6 +31,12 @@ const ICON_VARIANT_CLASSES: &[&str] = &[
     "material-icon-button-filled-tonal",
     "material-icon-button-outlined",
 ];
+const CHIP_VARIANT_CLASSES: &[&str] = &[
+    "material-chip-assist",
+    "material-chip-filter",
+    "material-chip-input",
+    "material-chip-suggestion",
+];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MaterialButtonVariant {
@@ -47,6 +53,25 @@ pub enum MaterialIconButtonVariant {
     Filled,
     FilledTonal,
     Outlined,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MaterialChipVariant {
+    Assist,
+    Filter,
+    Input,
+    Suggestion,
+}
+
+impl MaterialChipVariant {
+    pub const fn css_class(self) -> &'static str {
+        match self {
+            Self::Assist => "material-chip-assist",
+            Self::Filter => "material-chip-filter",
+            Self::Input => "material-chip-input",
+            Self::Suggestion => "material-chip-suggestion",
+        }
+    }
 }
 
 impl MaterialIconButtonVariant {
@@ -107,6 +132,34 @@ pub struct MaterialButtonSpec {
 pub struct MaterialIconButtonSpec {
     pub variant: MaterialIconButtonVariant,
     pub selected: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MaterialChipSpec {
+    pub variant: MaterialChipVariant,
+    pub selected: bool,
+}
+
+impl MaterialChipSpec {
+    pub const fn new(variant: MaterialChipVariant) -> Self {
+        Self {
+            variant,
+            selected: false,
+        }
+    }
+
+    pub const fn selected(mut self, selected: bool) -> Self {
+        self.selected = selected;
+        self
+    }
+
+    pub fn css_classes(self) -> Vec<&'static str> {
+        let mut classes = vec![self.variant.css_class()];
+        if self.selected {
+            classes.push("material-chip-selected");
+        }
+        classes
+    }
 }
 
 impl MaterialIconButtonSpec {
@@ -185,12 +238,29 @@ pub fn apply_material_icon_button(widget: &impl IsA<gtk::Widget>, spec: Material
     }
 }
 
+pub fn apply_material_chip(button: &gtk::Button, spec: MaterialChipSpec) {
+    button.add_css_class("material-chip");
+
+    for class_name in LEGACY_CLASSES.iter().chain(CHIP_VARIANT_CLASSES) {
+        button.remove_css_class(class_name);
+    }
+    button.remove_css_class("material-chip-selected");
+
+    for class_name in spec.css_classes() {
+        button.add_css_class(class_name);
+    }
+}
+
 pub fn set_material_button_selected(button: &gtk::Button, selected: bool) {
     set_state_class(button, "material-button-selected", selected);
 }
 
 pub fn set_material_icon_button_selected(widget: &impl IsA<gtk::Widget>, selected: bool) {
     set_widget_state_class(widget, "material-icon-button-selected", selected);
+}
+
+pub fn set_material_chip_selected(button: &gtk::Button, selected: bool) {
+    set_state_class(button, "material-chip-selected", selected);
 }
 
 pub fn set_material_button_loading(button: &gtk::Button, loading: bool) {
@@ -271,6 +341,31 @@ mod tests {
             "material-icon-button-filled-tonal",
             "material-icon-button-selected",
         ];
+
+        assert_eq!(classes, expected);
+    }
+
+    #[test]
+    fn chip_variants_map_to_expected_classes() {
+        let cases = [
+            (MaterialChipVariant::Assist, "material-chip-assist"),
+            (MaterialChipVariant::Filter, "material-chip-filter"),
+            (MaterialChipVariant::Input, "material-chip-input"),
+            (MaterialChipVariant::Suggestion, "material-chip-suggestion"),
+        ];
+
+        for (variant, expected) in cases {
+            let spec = MaterialChipSpec::new(variant);
+            let classes = spec.css_classes();
+            assert_eq!(classes[0], expected);
+        }
+    }
+
+    #[test]
+    fn chip_selected_is_a_state_modifier() {
+        let spec = MaterialChipSpec::new(MaterialChipVariant::Filter).selected(true);
+        let classes = spec.css_classes();
+        let expected = vec!["material-chip-filter", "material-chip-selected"];
 
         assert_eq!(classes, expected);
     }

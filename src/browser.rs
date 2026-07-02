@@ -8,8 +8,9 @@ use crate::{
     search_text::{normalize_search_text, search_matches, search_score},
     ui::widgets::{
         material_button::{
-            apply_material_button, set_material_button_loading, MaterialButtonSemantic,
-            MaterialButtonSize, MaterialButtonSpec, MaterialButtonVariant,
+            apply_material_button, apply_material_chip, set_material_button_loading,
+            MaterialButtonSemantic, MaterialButtonSize, MaterialButtonSpec, MaterialButtonVariant,
+            MaterialChipSpec, MaterialChipVariant,
         },
         MaterialLoadingIndicator,
     },
@@ -5577,10 +5578,11 @@ fn youtube_home_chip_bar(
     rail.set_margin_bottom(28);
 
     let all = gtk::Button::with_label(copy.youtube_all);
-    all.add_css_class("pill");
-    if page.selected_chip_params.trim().is_empty() {
-        all.add_css_class("suggested-action");
-    }
+    apply_material_chip(
+        &all,
+        MaterialChipSpec::new(MaterialChipVariant::Filter)
+            .selected(page.selected_chip_params.trim().is_empty()),
+    );
     {
         let event_tx = event_tx.clone();
         all.connect_clicked(move |_| {
@@ -5594,10 +5596,11 @@ fn youtube_home_chip_bar(
 
     for chip in &page.chips {
         let button = gtk::Button::with_label(&chip.title);
-        button.add_css_class("pill");
-        if !chip.params.is_empty() && chip.params == page.selected_chip_params {
-            button.add_css_class("suggested-action");
-        }
+        apply_material_chip(
+            &button,
+            MaterialChipSpec::new(MaterialChipVariant::Filter)
+                .selected(!chip.params.is_empty() && chip.params == page.selected_chip_params),
+        );
         let params = chip.params.clone();
         let event_tx = event_tx.clone();
         button.connect_clicked(move |_| {

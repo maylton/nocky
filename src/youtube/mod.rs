@@ -13,7 +13,10 @@ mod routing;
 mod structured_cards;
 
 use crate::search_text::{normalize_search_text, search_matches, search_score};
-use crate::ui::widgets::MaterialLoadingIndicator;
+use crate::ui::widgets::{
+    material_button::{apply_material_chip, MaterialChipSpec, MaterialChipVariant},
+    MaterialLoadingIndicator,
+};
 use adw::prelude::*;
 use gtk::glib;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -1860,10 +1863,11 @@ fn youtube_chip_row(
     rail.add_css_class("youtube-chip-row");
 
     let root = gtk::Button::with_label("Tudo");
-    root.add_css_class("pill");
-    if selected_params.trim().is_empty() {
-        root.add_css_class("suggested-action");
-    }
+    apply_material_chip(
+        &root,
+        MaterialChipSpec::new(MaterialChipVariant::Filter)
+            .selected(selected_params.trim().is_empty()),
+    );
     {
         let event_tx = event_tx.clone();
         root.connect_clicked(move |_| {
@@ -1877,10 +1881,11 @@ fn youtube_chip_row(
 
     for chip in chips {
         let button = gtk::Button::with_label(&chip.title);
-        button.add_css_class("pill");
-        if !chip.params.is_empty() && chip.params == selected_params {
-            button.add_css_class("suggested-action");
-        }
+        apply_material_chip(
+            &button,
+            MaterialChipSpec::new(MaterialChipVariant::Filter)
+                .selected(!chip.params.is_empty() && chip.params == selected_params),
+        );
         let params = chip.params.clone();
         let event_tx = event_tx.clone();
         button.connect_clicked(move |_| {
