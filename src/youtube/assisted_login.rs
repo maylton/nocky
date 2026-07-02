@@ -5,6 +5,10 @@ mod implementation {
     use super::AppLanguage;
     use crate::{
         ui::widgets::{
+            material_button::{
+                apply_material_button, MaterialButtonSize, MaterialButtonSpec,
+                MaterialButtonVariant,
+            },
             LoadingIndicatorMode, LoadingIndicatorPresentation, LoadingIndicatorSize,
             MaterialLoadingIndicator,
         },
@@ -197,7 +201,10 @@ mod implementation {
         status.set_hexpand(true);
         status.add_css_class("dim-label");
         let cancel = gtk::Button::with_label(text.cancel);
-        cancel.add_css_class("flat");
+        apply_material_button(
+            &cancel,
+            MaterialButtonSpec::new(MaterialButtonVariant::Text, MaterialButtonSize::Compact),
+        );
         status_row.append(loading.widget());
         status_row.append(&status);
         status_row.append(&cancel);

@@ -1,4 +1,9 @@
-use crate::config::{AppConfig, AppLanguage, YouTubeStreamSources};
+use crate::{
+    config::{AppConfig, AppLanguage, YouTubeStreamSources},
+    ui::widgets::material_button::{
+        apply_material_button, MaterialButtonSize, MaterialButtonSpec, MaterialButtonVariant,
+    },
+};
 use adw::prelude::*;
 use gtk::glib;
 use std::{cell::RefCell, fs, rc::Rc};
@@ -213,7 +218,13 @@ pub(crate) fn entry_row(
     copy.append(&summary);
 
     let button = gtk::Button::with_label(text(language, "Configurar", "Configure", "Configurar"));
-    button.add_css_class("suggested-action");
+    apply_material_button(
+        &button,
+        MaterialButtonSpec::new(
+            MaterialButtonVariant::FilledTonal,
+            MaterialButtonSize::Compact,
+        ),
+    );
     button.set_valign(gtk::Align::Center);
 
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
@@ -436,7 +447,10 @@ pub(crate) fn present_dialog<W>(
         "Restaurar valores predeterminados",
     ));
     reset.set_halign(gtk::Align::End);
-    reset.add_css_class("flat");
+    apply_material_button(
+        &reset,
+        MaterialButtonSpec::new(MaterialButtonVariant::Text, MaterialButtonSize::Compact),
+    );
     {
         let weak = Rc::downgrade(&state);
         reset.connect_clicked(move |_| {

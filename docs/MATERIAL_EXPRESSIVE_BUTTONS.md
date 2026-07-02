@@ -13,7 +13,7 @@ Reference: <https://m3.material.io/components/all-buttons>
   labeled/loading batch.
 - Visual behavior changed only for explicitly audited Settings controls.
 - Local automated validation passes.
-- Next step: continue non-Settings labeled buttons after review.
+- Next step: continue browser/search labeled buttons after review.
 
 The inventory below records the currently identified button families. It will be
 expanded to one row per construction site before the checkpoint is marked ready
@@ -84,15 +84,16 @@ but their existing motion and layout ownership must remain intact.
 | Settings copy report | `src/ui/settings/page.rs` | primary row action | filled button | hover, focus, pressed | migrated |
 | Settings about | `src/ui/settings/page.rs` | primary row action | filled tonal button | hover, focus, pressed | migrated |
 | Settings shortcuts | `src/ui/settings/page.rs` | row action | outlined button | hover, focus, pressed | migrated |
-| Startup local source | `src/dialogs.rs` | source-choice button | outlined button | hover, focus, pressed | labeled checkpoint |
-| Startup YouTube source | `src/dialogs.rs` | suggested source-choice | filled button | hover, focus, pressed | labeled checkpoint |
-| Startup cancel | `src/dialogs.rs` | low-emphasis action | text button | hover, focus, pressed | labeled checkpoint |
-| Onboarding back | `src/onboarding.rs` | generic labeled button | outlined button | hover, focus, pressed, disabled | labeled checkpoint |
-| Onboarding next | `src/onboarding.rs` | suggested action | filled button | hover, focus, pressed | labeled checkpoint |
-| Onboarding finish | `src/onboarding.rs` | suggested action | filled button | hover, focus, pressed | labeled checkpoint |
-| Stream source configure | `src/ui/settings/stream_sources.rs` | suggested action | filled tonal button | hover, focus, pressed | labeled checkpoint |
+| Startup local source | `src/dialogs.rs` | source-choice button | outlined button | hover, focus, pressed | migrated |
+| Startup YouTube source | `src/dialogs.rs` | suggested source-choice | filled button | hover, focus, pressed | migrated |
+| Startup cancel | `src/dialogs.rs` | low-emphasis action | text button | hover, focus, pressed | migrated |
+| Onboarding back | `src/onboarding.rs` | generic labeled button | outlined button | hover, focus, pressed, disabled | migrated |
+| Onboarding next | `src/onboarding.rs` | suggested action | filled tonal button | hover, focus, pressed | migrated |
+| Onboarding finish | `src/onboarding.rs` | suggested action | filled button | hover, focus, pressed | migrated |
+| Stream source configure | `src/ui/settings/stream_sources.rs` | suggested action | filled tonal button | hover, focus, pressed | migrated |
 | Stream source move up/down | `src/ui/settings/stream_sources.rs` | flat icon buttons | standard icon buttons | hover, focus, pressed, disabled | later icon checkpoint |
-| Assisted-login cancel | `src/youtube/assisted_login.rs` | flat labeled button | text button | hover, focus, pressed | labeled checkpoint |
+| Stream source reset | `src/ui/settings/stream_sources.rs` | flat labeled button | text button | hover, focus, pressed | migrated |
+| Assisted-login cancel | `src/youtube/assisted_login.rs` | flat labeled button | text button | hover, focus, pressed | migrated |
 | Home card surface | `src/browser.rs` | full-card button | clickable surface, not common button | hover, focus, pressed, playing | preserve architecture |
 | Home card play/context | `src/browser.rs` | contextual icon action | filled/elevated icon button | hover, focus, pressed, selected | later icon checkpoint |
 | Home card overflow | `src/browser.rs` | compact icon button | standard icon button with 48 px target | hover, focus, pressed | later icon checkpoint |
@@ -139,6 +140,15 @@ The second Settings batch migrated six more labeled controls:
 
 No transport control, card surface, page switcher or icon-only action is
 changed by these checkpoints.
+
+The first dialog/onboarding batch migrated:
+
+1. Startup source choices — local outlined, YouTube filled.
+2. Startup cancel — text.
+3. Onboarding navigation — back outlined, next filled tonal, finish filled.
+4. Stream-source configure — filled tonal.
+5. Stream-source reset — text.
+6. Assisted-login cancel — text.
 
 ## Loading contract for a later checkpoint
 

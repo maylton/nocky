@@ -2,6 +2,9 @@ use crate::{
     config::{AppConfig, AppLanguage, BlurMode, FooterMode, StartupSource, VisualTheme},
     i18n::{self, Message},
     ui::settings::stream_sources,
+    ui::widgets::material_button::{
+        apply_material_button, MaterialButtonSize, MaterialButtonSpec, MaterialButtonVariant,
+    },
 };
 use adw::prelude::*;
 use std::rc::Rc;
@@ -150,12 +153,22 @@ pub(crate) fn present_startup_source<F>(
 
     let local_button = gtk::Button::with_label(tr(Message::UseLocalLibrary));
     local_button.set_tooltip_text(Some(tr(Message::UseLocalLibraryTooltip)));
+    apply_material_button(
+        &local_button,
+        MaterialButtonSpec::new(
+            MaterialButtonVariant::Outlined,
+            MaterialButtonSize::Standard,
+        ),
+    );
     local_button.add_css_class("source-choice-button");
 
     let youtube_button = gtk::Button::with_label(tr(Message::UseYoutubeMusic));
     youtube_button.set_tooltip_text(Some(tr(Message::UseYoutubeMusicTooltip)));
+    apply_material_button(
+        &youtube_button,
+        MaterialButtonSpec::new(MaterialButtonVariant::Filled, MaterialButtonSize::Standard),
+    );
     youtube_button.add_css_class("source-choice-button");
-    youtube_button.add_css_class("suggested-action");
 
     let choices = gtk::Box::new(gtk::Orientation::Vertical, 10);
     choices.add_css_class("startup-choice-group");
@@ -169,6 +182,10 @@ pub(crate) fn present_startup_source<F>(
     if !first_run {
         let cancel_button = gtk::Button::with_label(tr(Message::Cancel));
         cancel_button.set_halign(gtk::Align::End);
+        apply_material_button(
+            &cancel_button,
+            MaterialButtonSpec::new(MaterialButtonVariant::Text, MaterialButtonSize::Compact),
+        );
         cancel_button.add_css_class("startup-cancel-action");
         content.append(&cancel_button);
 
