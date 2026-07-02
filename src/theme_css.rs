@@ -188,6 +188,31 @@ mod tests {
     }
 
     #[test]
+    fn material_home_preserves_featured_card_hierarchy() {
+        let home_css = MATERIAL_EXPRESSIVE_MODULES
+            .iter()
+            .find_map(|(name, css)| (*name == "080-home-browser.css").then_some(*css))
+            .expect("080-home-browser.css module should be registered");
+
+        for required in [
+            ".home-section-featured button.home-card-button",
+            ".collection-card.home-card-featured",
+            ".home-card-featured .collection-artwork",
+            "min-width: 220px;",
+            "min-width: 196px;",
+            "min-width: 176px;",
+            "min-height: 288px;",
+            ".home-section-compact .home-card-context-overlay",
+            "min-width: 168px;",
+        ] {
+            assert!(
+                home_css.contains(required),
+                "missing Featured/Compact hierarchy CSS: {required}"
+            );
+        }
+    }
+
+    #[test]
     fn material_modules_are_not_empty() {
         assert!(MATERIAL_EXPRESSIVE_MODULES
             .iter()
