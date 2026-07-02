@@ -139,6 +139,30 @@ impl MaterialCarousel {
         self.imp().viewport_width.get()
     }
 
+    pub(crate) fn variant(&self) -> MaterialCarouselVariant {
+        self.imp().variant.get()
+    }
+
+    pub(crate) fn debug_keyline_positions(&self) -> Vec<f64> {
+        let imp = self.imp();
+        let strategy = match imp.variant.get() {
+            MaterialCarouselVariant::Hero => MaterialCarouselStrategy::Hero,
+            MaterialCarouselVariant::MultiBrowse => MaterialCarouselStrategy::MultiBrowse,
+            MaterialCarouselVariant::Uncontained => MaterialCarouselStrategy::Uncontained,
+        };
+
+        KeylineState::for_strategy(
+            strategy,
+            finite_non_negative(imp.viewport_width.get()),
+            finite_positive(imp.base_item_width.get()),
+            finite_non_negative(imp.spacing.get()),
+        )
+        .keylines
+        .iter()
+        .map(|keyline| keyline.position)
+        .collect()
+    }
+
     fn request_coalesced_layout(&self) {
         let imp = self.imp();
         if imp.pending_layout.replace(true) {
