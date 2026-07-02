@@ -348,6 +348,66 @@ mod tests {
         }
     }
 
+    fn assert_uses_fixed_origin_accumulated_sum(input: CarouselGeometryInput) {
+        let items = layout_items(input);
+        let state = KeylineState::for_strategy(
+            input.variant,
+            input.viewport_width,
+            input.base_item_width,
+            input.spacing,
+        );
+        let mut accumulated_reduction = 0.0;
+
+        for (index, item) in items.iter().enumerate() {
+            let fixed_origin_x =
+                input.leading_padding + index as f64 * (input.base_item_width + input.spacing);
+            let logical_viewport_x = fixed_origin_x - input.scroll_offset;
+            let width = if input.variant == MaterialCarouselStrategy::Uncontained {
+                input.base_item_width
+            } else {
+                state.item_width_at(logical_viewport_x + input.base_item_width / 2.0)
+            };
+            let expected_viewport_x = logical_viewport_x - accumulated_reduction;
+            let expected_content_x = expected_viewport_x + input.scroll_offset;
+
+            assert!((item.visible_width - width).abs() < EPSILON);
+            assert!((item.viewport_x - expected_viewport_x).abs() < EPSILON);
+            assert!((item.content_x - expected_content_x).abs() < EPSILON);
+
+            accumulated_reduction += (input.base_item_width - width).max(0.0);
+        }
+    }
+
+    #[test]
+    fn source_rejects_discrete_focus_selection() {
+        let source = include_str!("keyline.rs");
+        assert!(!source.contains(&format!("{}{}", "nearest", "_item")));
+        assert!(!source.contains(&format!("{} {}", "nearest", "item")));
+        assert!(!source.contains(&format!("{}{}", "anchor", "_index")));
+        assert!(!source.contains(&format!("{} = ", "anchor")));
+    }
+
+    #[test]
+    fn visual_positions_are_fixed_origin_plus_continuous_accumulated_sum() {
+        for variant in [
+            MaterialCarouselStrategy::Hero,
+            MaterialCarouselStrategy::MultiBrowse,
+            MaterialCarouselStrategy::Uncontained,
+        ] {
+            for scroll_offset in (0..60).map(|step| step as f64 * 6.25 + 0.375) {
+                assert_uses_fixed_origin_accumulated_sum(CarouselGeometryInput {
+                    item_count: 11,
+                    viewport_width: 672.0,
+                    scroll_offset,
+                    base_item_width: 120.0,
+                    spacing: 12.0,
+                    leading_padding: 24.0,
+                    variant,
+                });
+            }
+        }
+    }
+
     #[test]
     fn all_widths_and_positions_are_finite_and_positive() {
         for variant in [
