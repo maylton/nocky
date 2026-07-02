@@ -181,7 +181,6 @@ window.theme-material-expressive
   box-shadow: 0 11px 28px alpha(black, 0.25);
 }
 
-
 /* Stronger tonal state while the edge spring is active */
 
 /*
@@ -197,9 +196,34 @@ window.theme-material-expressive
   border-color: alpha(@m3_primary, 0.58);
   box-shadow: 0 12px 30px alpha(black, 0.27);
 }
-/* Keep each Home overlay aligned with its presentation geometry. */
+
+/*
+ * Home presentation hierarchy
+ * ---------------------------
+ *
+ * Featured is intentionally larger than Compact. The Material card semantic
+ * classes style the surface, but must not flatten the browser-owned content
+ * hierarchy introduced for Nocky 0.6.0.
+ */
+.home-section-featured button.home-card-button,
 .home-section-featured .home-card-context-overlay {
-  min-width: 168px;
+  min-width: 220px;
+  min-height: 268px;
+}
+
+.home-section-featured .collection-card.home-card-featured {
+  min-width: 196px;
+  min-height: 252px;
+}
+
+.home-section-featured .home-card-featured .collection-artwork {
+  min-width: 176px;
+  min-height: 176px;
+}
+
+.home-section-featured .home-carousel-scroll,
+.home-section-featured .home-card-grid-scroll {
+  min-height: 288px;
 }
 
 .home-section-compact .home-card-context-overlay {
