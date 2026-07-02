@@ -247,6 +247,10 @@ uses a homogeneous stack with the normal label and the shared
 `MaterialLoadingIndicator`, disables duplicate activation and restores the label
 once the refresh timeout updates the report.
 
+The YouTube Home load-more action uses the same shared loading-content helper
+while the next continuation request is dispatched, replacing the old label-only
+loading feedback.
+
 ## Manual validation matrix
 
 Validate the migrated Settings buttons in Material Expressive, Noctalia and

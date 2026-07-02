@@ -8,9 +8,9 @@ use crate::{
     search_text::{normalize_search_text, search_matches, search_score},
     ui::widgets::{
         material_button::{
-            apply_material_button, apply_material_chip, set_material_button_loading,
-            MaterialButtonSemantic, MaterialButtonSize, MaterialButtonSpec, MaterialButtonVariant,
-            MaterialChipSpec, MaterialChipVariant,
+            apply_material_button, apply_material_chip, install_material_button_loading_content,
+            set_material_button_loading, MaterialButtonSemantic, MaterialButtonSize,
+            MaterialButtonSpec, MaterialButtonVariant, MaterialChipSpec, MaterialChipVariant,
         },
         material_card::{
             apply_material_card, apply_material_carousel, MaterialCardSpec, MaterialCardVariant,
@@ -5658,12 +5658,7 @@ fn youtube_home_load_more_button(
         return None;
     }
     let copy = home_copy(language);
-    let loading_label = match language {
-        AppLanguage::Portuguese => "Carregando…",
-        AppLanguage::English => "Loading…",
-        AppLanguage::Spanish => "Cargando…",
-    };
-    let load_more = gtk::Button::with_label(copy.youtube_load_more);
+    let load_more = gtk::Button::new();
     load_more.set_halign(gtk::Align::Center);
     apply_material_button(
         &load_more,
@@ -5672,14 +5667,15 @@ fn youtube_home_load_more_button(
             MaterialButtonSize::Compact,
         ),
     );
+    let loading_content =
+        install_material_button_loading_content(&load_more, copy.youtube_load_more);
     load_more.add_css_class("youtube-home-load-more");
     let continuation = page.continuation.clone();
     let params = page.selected_chip_params.clone();
     let event_tx = event_tx.clone();
     load_more.connect_clicked(move |button| {
-        button.set_label(loading_label);
         button.set_sensitive(false);
-        set_material_button_loading(button, true);
+        loading_content.set_loading(button, true);
         let _ = event_tx.send(BrowserEvent::LoadYouTubeHome {
             continuation: continuation.clone(),
             params: params.clone(),
