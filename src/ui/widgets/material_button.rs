@@ -40,3 +40,32 @@ impl MaterialButtonSize {
         }
     }
 }
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum MaterialButtonSemantic {
+    #[default]
+    Standard,
+    Destructive,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MaterialButtonSpec {
+    pub variant: MaterialButtonVariant,
+    pub size: MaterialButtonSize,
+    pub semantic: MaterialButtonSemantic,
+}
+
+impl MaterialButtonSpec {
+    pub const fn new(variant: MaterialButtonVariant, size: MaterialButtonSize) -> Self {
+        Self {
+            variant,
+            size,
+            semantic: MaterialButtonSemantic::Standard,
+        }
+    }
+
+    pub const fn with_semantic(mut self, semantic: MaterialButtonSemantic) -> Self {
+        self.semantic = semantic;
+        self
+    }
+}
