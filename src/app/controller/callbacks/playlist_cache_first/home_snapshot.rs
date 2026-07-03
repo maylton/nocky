@@ -1,7 +1,13 @@
-use crate::{app::controller::AppController, youtube::YouTubeHomePage};
+use crate::{
+    app::controller::AppController,
+    youtube::{cached_cover_for_item, YouTubeHomePage},
+};
 use gtk::glib;
 use serde::{Deserialize, Serialize};
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 const HOME_SNAPSHOT_VERSION: u32 = 1;
 
@@ -85,6 +91,30 @@ fn valid_page(page: &YouTubeHomePage) -> Option<YouTubeHomePage> {
     (!page.sections.is_empty()).then_some(page)
 }
 
+fn repair_home_snapshot_cover_paths(page: &mut YouTubeHomePage) -> bool {
+    let mut changed = false;
+
+    for section in &mut page.sections {
+        for item in &mut section.items {
+            let cover_missing_or_invalid =
+                item.cover_path.trim().is_empty() || !Path::new(item.cover_path.trim()).is_file();
+            if !cover_missing_or_invalid {
+                continue;
+            }
+
+            if let Some(path) = cached_cover_for_item(item) {
+                let repaired = path.to_string_lossy().into_owned();
+                if item.cover_path != repaired {
+                    item.cover_path = repaired;
+                    changed = true;
+                }
+            }
+        }
+    }
+
+    changed
+}
+
 fn decode_snapshot(raw: &str) -> Option<YouTubeHomePage> {
     let snapshot = serde_json::from_str::<PersistedYouTubeHomeSnapshot>(raw).ok()?;
     if snapshot.version != HOME_SNAPSHOT_VERSION {
@@ -92,6 +122,7 @@ fn decode_snapshot(raw: &str) -> Option<YouTubeHomePage> {
     }
 
     let mut page = valid_page(&snapshot.page)?;
+    repair_home_snapshot_cover_paths(&mut page);
     page.stale = true;
     Some(page)
 }
@@ -214,6 +245,36 @@ mod tests {
     #[test]
     fn empty_home_is_not_persisted() {
         assert!(valid_page(&YouTubeHomePage::default()).is_none());
+    }
+
+    #[test]
+    fn restored_snapshot_preserves_thumbnail_when_cover_path_is_missing() {
+        let mut item = playlist("One", "VL1");
+        item.thumbnail_url = "https://example.invalid/cover.jpg".to_string();
+        item.cover_path = String::new();
+        let page = YouTubeHomePage {
+            sections: vec![YouTubeHomeSection {
+                id: "first".to_string(),
+                title: "First".to_string(),
+                items: vec![item],
+                ..YouTubeHomeSection::default()
+            }],
+            ..YouTubeHomePage::default()
+        };
+        let snapshot = PersistedYouTubeHomeSnapshot {
+            version: HOME_SNAPSHOT_VERSION,
+            page,
+        };
+        let raw = serde_json::to_string(&snapshot).expect("serializable Home snapshot");
+        let restored = decode_snapshot(&raw).expect("restorable Home snapshot");
+
+        let restored_item = &restored.sections[0].items[0];
+        assert_eq!(
+            restored_item.thumbnail_url,
+            "https://example.invalid/cover.jpg"
+        );
+        assert!(restored_item.cover_path.is_empty());
+        assert!(restored.stale);
     }
 
     #[test]

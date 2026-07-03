@@ -252,6 +252,16 @@ mod tests {
         }
     }
 
+    fn section(id: &str, layout: &str, items: Vec<YouTubeItem>) -> YouTubeHomeSection {
+        YouTubeHomeSection {
+            id: id.to_string(),
+            title: id.to_string(),
+            layout: layout.to_string(),
+            items,
+            ..YouTubeHomeSection::default()
+        }
+    }
+
     #[test]
     fn merges_continuation_pages_without_duplicates() {
         let mut first = YouTubeHomePage {
@@ -524,5 +534,83 @@ mod tests {
         assert!(page.stale);
         assert_eq!(page.selected_chip_params, "mood-energy");
         assert_eq!(page.item_count(), 1);
+    }
+
+    #[test]
+    fn cover_delta_reports_changed_cover_paths() {
+        let mut current_item = item("one", "One");
+        current_item.thumbnail_url = "https://example.invalid/old.jpg".to_string();
+        current_item.cover_path = "/tmp/old.cover".to_string();
+        let mut incoming_item = item("one", "One");
+        incoming_item.thumbnail_url = "https://example.invalid/new.jpg".to_string();
+        incoming_item.cover_path = "/tmp/new.cover".to_string();
+        let mut current = YouTubeHomePage {
+            sections: vec![section("first", "carousel", vec![current_item])],
+            ..YouTubeHomePage::default()
+        };
+        let incoming = YouTubeHomePage {
+            sections: vec![section("first", "carousel", vec![incoming_item])],
+            ..YouTubeHomePage::default()
+        };
+
+        let delta = current.update_cover_paths_delta(&incoming);
+
+        assert_eq!(delta.sections.len(), 1);
+        assert_eq!(
+            current.sections[0].items[0].thumbnail_url,
+            "https://example.invalid/new.jpg"
+        );
+        assert_eq!(current.sections[0].items[0].cover_path, "/tmp/new.cover");
+    }
+
+    #[test]
+    fn cover_delta_ignores_empty_incoming_artwork() {
+        let mut current_item = item("one", "One");
+        current_item.thumbnail_url = "https://example.invalid/old.jpg".to_string();
+        current_item.cover_path = "/tmp/old.cover".to_string();
+        let incoming_item = item("one", "One");
+        let mut current = YouTubeHomePage {
+            sections: vec![section("first", "carousel", vec![current_item])],
+            ..YouTubeHomePage::default()
+        };
+        let incoming = YouTubeHomePage {
+            sections: vec![section("first", "carousel", vec![incoming_item])],
+            ..YouTubeHomePage::default()
+        };
+
+        let delta = current.update_cover_paths_delta(&incoming);
+
+        assert!(delta.sections.is_empty());
+        assert_eq!(
+            current.sections[0].items[0].thumbnail_url,
+            "https://example.invalid/old.jpg"
+        );
+        assert_eq!(current.sections[0].items[0].cover_path, "/tmp/old.cover");
+    }
+
+    #[test]
+    fn cover_delta_updates_thumbnail_without_clearing_existing_cover() {
+        let mut current_item = item("one", "One");
+        current_item.thumbnail_url = "https://example.invalid/old.jpg".to_string();
+        current_item.cover_path = "/tmp/old.cover".to_string();
+        let mut incoming_item = item("one", "One");
+        incoming_item.thumbnail_url = "https://example.invalid/new.jpg".to_string();
+        let mut current = YouTubeHomePage {
+            sections: vec![section("first", "carousel", vec![current_item])],
+            ..YouTubeHomePage::default()
+        };
+        let incoming = YouTubeHomePage {
+            sections: vec![section("first", "carousel", vec![incoming_item])],
+            ..YouTubeHomePage::default()
+        };
+
+        let delta = current.update_cover_paths_delta(&incoming);
+
+        assert_eq!(delta.sections.len(), 1);
+        assert_eq!(
+            current.sections[0].items[0].thumbnail_url,
+            "https://example.invalid/new.jpg"
+        );
+        assert_eq!(current.sections[0].items[0].cover_path, "/tmp/old.cover");
     }
 }

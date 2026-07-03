@@ -1170,23 +1170,12 @@ impl AppController {
                             self.config.borrow().startup_source == Some(StartupSource::YouTube);
                         let mut current = self.youtube_home_page.borrow_mut();
                         let delta = current.update_cover_paths_delta(&page);
-                        let current_page = current.clone();
                         drop(current);
                         if !delta.sections.is_empty() && youtube_active {
-                            if append {
-                                let playback = self.browser_playback_state();
-                                let appended = self.browser.append_youtube_home_page(
-                                    &current_page,
-                                    &delta,
-                                    &playback,
-                                    &self.config.borrow(),
-                                );
-                                if !appended {
-                                    self.refresh_browser();
-                                }
-                            } else {
-                                self.refresh_browser();
-                            }
+                            // Cover-cache deltas mutate artwork on existing Home items. They are
+                            // not continuation deltas, so rebuild the visible Home instead of
+                            // routing them through append_youtube_home_page.
+                            self.refresh_browser();
                         }
                     }
                     if !append {
