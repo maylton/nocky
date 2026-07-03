@@ -24,7 +24,9 @@ const CAROUSEL_VARIANT_CLASSES: &[&str] = &[
 
 const CAROUSEL_INSTALLED_CLASS: &str = "material-carousel-motion-installed";
 const CAROUSEL_ITEM_CLASS: &str = "home-card-context-overlay";
+const CAROUSEL_SURFACE_CLASS: &str = "collection-card";
 const SPRING_CLASS: &str = "material-carousel-edge-spring";
+const SPRING_SURFACE_CLASS: &str = "material-carousel-edge-spring-surface";
 const SPRING_DURATION_MICROS: f64 = 520_000.0;
 const SPRING_CARD_LIMIT: usize = 3;
 const SPRING_STRENGTHS: [f64; SPRING_CARD_LIMIT] = [1.0, 0.60, 0.32];
@@ -126,8 +128,11 @@ pub fn apply_material_carousel(widget: &impl IsA<gtk::Widget>, spec: MaterialCar
 #[derive(Clone)]
 struct SpringCard {
     widget: gtk::Widget,
+    surface: Option<gtk::Widget>,
     original_width_request: i32,
+    original_surface_width_request: Option<i32>,
     base_width: i32,
+    base_surface_width: i32,
 }
 
 type SpringCards = Rc<RefCell<Vec<SpringCard>>>;
@@ -204,13 +209,28 @@ fn install_material_carousel_spring(
             {
                 let mut stored = active_cards.borrow_mut();
                 for widget in cards {
+                    let surface = first_descendant_with_css(&widget, CAROUSEL_SURFACE_CLASS);
                     let original_width_request = widget.width_request();
+                    let original_surface_width_request =
+                        surface.as_ref().map(gtk::prelude::WidgetExt::width_request);
                     let base_width = widget.width().max(original_width_request).max(1);
+                    let base_surface_width = surface
+                        .as_ref()
+                        .map(|surface| surface.width().max(surface.width_request()).max(1))
+                        .unwrap_or(base_width);
+
                     widget.add_css_class(SPRING_CLASS);
+                    if let Some(surface) = surface.as_ref() {
+                        surface.add_css_class(SPRING_SURFACE_CLASS);
+                    }
+
                     stored.push(SpringCard {
                         widget,
+                        surface,
                         original_width_request,
+                        original_surface_width_request,
                         base_width,
+                        base_surface_width,
                     });
                 }
             }
@@ -249,8 +269,14 @@ fn install_material_carousel_spring(
                             .copied()
                             .unwrap_or(*SPRING_STRENGTHS.last().unwrap());
                         let stretch = (displacement * strength).round() as i32;
+
                         card.widget
                             .set_width_request((card.base_width + stretch).max(1));
+                        if let Some(surface) = card.surface.as_ref() {
+                            surface.set_width_request(
+                                (card.base_surface_width + stretch).max(1),
+                            );
+                        }
                     }
                 }
 
@@ -294,6 +320,32 @@ fn install_material_carousel_spring(
     {
         let trigger = trigger.clone();
         scroll.connect_edge_overshot(move |_, position| trigger(position));
+    }
+
+    {
+        let adjustment = scroll.hadjustment();
+        let last_value = Rc::new(Cell::new(adjustment.value()));
+        let ready = ready.clone();
+        let trigger = trigger.clone();
+
+        adjustment.connect_value_changed(move |adjustment| {
+            let value = adjustment.value();
+            let previous = last_value.replace(value);
+
+            if !ready.get() {
+                return;
+            }
+
+            let lower = adjustment.lower();
+            let upper = (adjustment.upper() - adjustment.page_size()).max(lower);
+            const EDGE_EPSILON: f64 = 0.75;
+
+            if value <= lower + EDGE_EPSILON && previous > value + EDGE_EPSILON {
+                trigger(gtk::PositionType::Left);
+            } else if value >= upper - EDGE_EPSILON && previous < value - EDGE_EPSILON {
+                trigger(gtk::PositionType::Right);
+            }
+        });
     }
 
     {
@@ -342,19 +394,23 @@ fn collect_descendants_with_css(
     }
 }
 
-fn widget_or_descendant_has_css(root: &gtk::Widget, class_name: &str) -> bool {
+fn first_descendant_with_css(root: &gtk::Widget, class_name: &str) -> Option<gtk::Widget> {
     if root.has_css_class(class_name) {
-        return true;
+        return Some(root.clone());
     }
 
     let mut child = root.first_child();
     while let Some(current) = child {
-        if widget_or_descendant_has_css(&current, class_name) {
-            return true;
+        if let Some(found) = first_descendant_with_css(&current, class_name) {
+            return Some(found);
         }
         child = current.next_sibling();
     }
-    false
+    None
+}
+
+fn widget_or_descendant_has_css(root: &gtk::Widget, class_name: &str) -> bool {
+    first_descendant_with_css(root, class_name).is_some()
 }
 
 fn widget_or_ancestor_has_css(widget: &gtk::Widget, class_name: &str) -> bool {
@@ -372,6 +428,11 @@ fn restore_spring_cards(cards: &SpringCards) {
     for card in cards.borrow_mut().drain(..) {
         card.widget.set_width_request(card.original_width_request);
         card.widget.remove_css_class(SPRING_CLASS);
+
+        if let Some(surface) = card.surface {
+            surface.set_width_request(card.original_surface_width_request.unwrap_or(-1));
+            surface.remove_css_class(SPRING_SURFACE_CLASS);
+        }
     }
 }
 
