@@ -1,14 +1,14 @@
 //! Material Expressive card and carousel contracts.
 //!
-//! Cards are content surfaces for a single subject. Carousels are horizontal
-//! collections of visual cards. Besides applying semantic classes, this module
-//! installs browser-independent Material 3 keyline masking behavior on GTK
-//! scrolled windows. Every card keeps an immutable outer slot; a nested viewport
-//! owns the changing visible mask so scrolling never feeds deformed geometry
-//! back into the next keyline calculation.
+//! Cards keep their normal, stable geometry while carousels add bounded
+//! elastic feedback when the user reaches either horizontal edge.
 
-use gtk::prelude::*;
-use std::rc::Rc;
+use gtk::{glib, prelude::*};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+    time::Duration,
+};
 
 const CARD_VARIANT_CLASSES: &[&str] = &[
     "material-card-elevated",
@@ -22,23 +22,12 @@ const CAROUSEL_VARIANT_CLASSES: &[&str] = &[
     "material-carousel-uncontained",
 ];
 
-const CAROUSEL_STATE_CLASSES: &[&str] = &[
-    "material-carousel-item-large",
-    "material-carousel-item-medium",
-    "material-carousel-item-small",
-    "material-carousel-item-leading",
-    "material-carousel-item-trailing",
-];
-
-const CAROUSEL_ITEM_CLASS: &str = "home-card-context-overlay";
 const CAROUSEL_INSTALLED_CLASS: &str = "material-carousel-motion-installed";
-const CAROUSEL_SLOT_CLASS: &str = "material-carousel-slot";
-const CAROUSEL_MASK_CLASS: &str = "material-carousel-mask";
-const CAROUSEL_CONTENT_CLASS: &str = "material-carousel-content";
-
-const FEATURED_OUTER_WIDTH: i32 = 220;
-const COMPACT_OUTER_WIDTH: i32 = 168;
-const TRACK_ROW_OUTER_WIDTH: i32 = 312;
+const CAROUSEL_ITEM_CLASS: &str = "home-card-context-overlay";
+const SPRING_CLASS: &str = "material-carousel-edge-spring";
+const SPRING_DURATION_MICROS: f64 = 520_000.0;
+const SPRING_CARD_LIMIT: usize = 3;
+const SPRING_STRENGTHS: [f64; SPRING_CARD_LIMIT] = [1.0, 0.60, 0.32];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MaterialCardVariant {
@@ -130,11 +119,20 @@ pub fn apply_material_carousel(widget: &impl IsA<gtk::Widget>, spec: MaterialCar
     }
 
     if let Ok(scroll) = widget.clone().downcast::<gtk::ScrolledWindow>() {
-        install_material_carousel_motion(&scroll, spec.variant);
+        install_material_carousel_spring(&scroll, spec.variant);
     }
 }
 
-fn install_material_carousel_motion(
+#[derive(Clone)]
+struct SpringCard {
+    widget: gtk::Widget,
+    original_width_request: i32,
+    base_width: i32,
+}
+
+type SpringCards = Rc<RefCell<Vec<SpringCard>>>;
+
+fn install_material_carousel_spring(
     scroll: &gtk::ScrolledWindow,
     requested_variant: MaterialCarouselVariant,
 ) {
@@ -145,314 +143,202 @@ fn install_material_carousel_motion(
     scroll.add_css_class(CAROUSEL_INSTALLED_CLASS);
     scroll.set_kinetic_scrolling(true);
 
-    let weak_scroll = scroll.downgrade();
-    let update: Rc<dyn Fn()> = Rc::new(move || {
-        let Some(scroll) = weak_scroll.upgrade() else {
-            return;
-        };
-        update_material_carousel_masks(&scroll, requested_variant);
-    });
+    let ready = Rc::new(Cell::new(false));
+    let active = Rc::new(Cell::new(false));
+    let generation = Rc::new(Cell::new(0_u64));
+    let active_cards: SpringCards = Rc::new(RefCell::new(Vec::new()));
 
-    {
-        let update = update.clone();
-        scroll.connect_map(move |_| update());
-    }
-    {
-        let update = update.clone();
-        scroll.connect_notify_local(Some("width"), move |_, _| update());
-    }
-    {
-        let update = update.clone();
-        scroll
-            .hadjustment()
-            .connect_value_changed(move |_| update());
-    }
-}
+    let trigger: Rc<dyn Fn(gtk::PositionType)> = {
+        let scroll_weak = scroll.downgrade();
+        let ready = ready.clone();
+        let active = active.clone();
+        let generation = generation.clone();
+        let active_cards = active_cards.clone();
 
-fn update_material_carousel_masks(
-    scroll: &gtk::ScrolledWindow,
-    requested_variant: MaterialCarouselVariant,
-) {
-    let viewport_width = scroll.width();
-    if viewport_width <= 1 {
-        return;
-    }
+        Rc::new(move |position| {
+            if !ready.get() || active.replace(true) {
+                return;
+            }
 
-    let Some(child) = scroll.child() else {
-        return;
+            let from_start = match position {
+                gtk::PositionType::Left => true,
+                gtk::PositionType::Right => false,
+                _ => {
+                    active.set(false);
+                    return;
+                }
+            };
+
+            let Some(scroll) = scroll_weak.upgrade() else {
+                active.set(false);
+                return;
+            };
+
+            if !widget_or_ancestor_has_css(
+                scroll.upcast_ref::<gtk::Widget>(),
+                "theme-material-expressive",
+            ) {
+                active.set(false);
+                return;
+            }
+
+            let Some(child) = scroll.child() else {
+                active.set(false);
+                return;
+            };
+
+            if requested_variant == MaterialCarouselVariant::Uncontained
+                || widget_or_descendant_has_css(&child, "home-track-card")
+            {
+                active.set(false);
+                return;
+            }
+
+            let cards = carousel_edge_cards(&child, from_start, SPRING_CARD_LIMIT);
+            if cards.is_empty() {
+                active.set(false);
+                return;
+            }
+
+            restore_spring_cards(&active_cards);
+            {
+                let mut stored = active_cards.borrow_mut();
+                for widget in cards {
+                    let original_width_request = widget.width_request();
+                    let base_width = widget.width().max(original_width_request).max(1);
+                    widget.add_css_class(SPRING_CLASS);
+                    stored.push(SpringCard {
+                        widget,
+                        original_width_request,
+                        base_width,
+                    });
+                }
+            }
+
+            let token = generation.get().wrapping_add(1);
+            generation.set(token);
+            let start_time = Cell::new(None::<i64>);
+            let active = active.clone();
+            let generation = generation.clone();
+            let active_cards = active_cards.clone();
+
+            scroll.add_tick_callback(move |scroll, frame_clock| {
+                if generation.get() != token {
+                    restore_spring_cards(&active_cards);
+                    active.set(false);
+                    return glib::ControlFlow::Break;
+                }
+
+                let now = frame_clock.frame_time();
+                let start = match start_time.get() {
+                    Some(start) => start,
+                    None => {
+                        start_time.set(Some(now));
+                        now
+                    }
+                };
+                let progress =
+                    ((now - start) as f64 / SPRING_DURATION_MICROS).clamp(0.0, 1.0);
+                let displacement = spring_displacement(progress);
+
+                {
+                    let stored = active_cards.borrow();
+                    for (index, card) in stored.iter().enumerate() {
+                        let strength = SPRING_STRENGTHS
+                            .get(index)
+                            .copied()
+                            .unwrap_or(*SPRING_STRENGTHS.last().unwrap());
+                        let stretch = (displacement * strength).round() as i32;
+                        card.widget
+                            .set_width_request((card.base_width + stretch).max(1));
+                    }
+                }
+
+                if !from_start {
+                    let adjustment = scroll.hadjustment();
+                    let end =
+                        (adjustment.upper() - adjustment.page_size()).max(adjustment.lower());
+                    adjustment.set_value(end);
+                }
+
+                if progress >= 1.0 {
+                    restore_spring_cards(&active_cards);
+                    active.set(false);
+                    glib::ControlFlow::Break
+                } else {
+                    glib::ControlFlow::Continue
+                }
+            });
+        })
     };
 
-    let mut items = Vec::new();
-    collect_descendants_with_css(&child, CAROUSEL_ITEM_CLASS, &mut items);
-    if items.is_empty() {
-        return;
-    }
-
-    let material_theme_active = widget_or_ancestor_has_css(scroll, "theme-material-expressive");
-    let effective_variant = infer_carousel_variant(scroll, &items, requested_variant);
-    let viewport_width = f64::from(viewport_width);
-
-    for item in items {
-        let base_width = carousel_item_base_width(&item);
-        restore_stable_slot_geometry(&item, base_width);
-
-        if !material_theme_active || effective_variant == MaterialCarouselVariant::Uncontained {
-            reset_carousel_item(&item, base_width);
-            continue;
-        }
-
-        let Some(bounds) = item.compute_bounds(scroll) else {
-            continue;
-        };
-        let center_x = f64::from(bounds.x() + bounds.width() / 2.0);
-        let base_width_f64 = f64::from(base_width);
-
-        let (visible_width, focal_x) = match effective_variant {
-            MaterialCarouselVariant::MultiBrowse => (
-                multi_browse_visible_width(center_x, viewport_width, base_width_f64),
-                viewport_width / 2.0,
-            ),
-            MaterialCarouselVariant::Hero => (
-                hero_visible_width(center_x, viewport_width, base_width_f64),
-                viewport_width * 0.42,
-            ),
-            MaterialCarouselVariant::Uncontained => (base_width_f64, viewport_width / 2.0),
-        };
-
-        let Some(mask) = ensure_carousel_mask(&item, base_width) else {
-            continue;
-        };
-        apply_carousel_mask(
-            &item,
-            &mask,
-            base_width,
-            visible_width.round() as i32,
-            center_x,
-            focal_x,
-        );
-    }
-}
-
-fn infer_carousel_variant(
-    scroll: &gtk::ScrolledWindow,
-    items: &[gtk::Widget],
-    requested_variant: MaterialCarouselVariant,
-) -> MaterialCarouselVariant {
-    if requested_variant == MaterialCarouselVariant::Uncontained
-        || items
-            .iter()
-            .any(|item| widget_or_descendant_has_css(item, "home-track-card"))
     {
-        return MaterialCarouselVariant::Uncontained;
+        let ready = ready.clone();
+        scroll.connect_map(move |scroll| {
+            ready.set(false);
+            let ready = ready.clone();
+            let weak_scroll = scroll.downgrade();
+            glib::timeout_add_local_once(Duration::from_millis(180), move || {
+                if weak_scroll.upgrade().is_some() {
+                    ready.set(true);
+                }
+            });
+        });
     }
 
-    if requested_variant == MaterialCarouselVariant::Hero
-        || widget_or_ancestor_has_css(scroll, "home-section-featured")
-        || items
-            .iter()
-            .any(|item| widget_or_descendant_has_css(item, "home-card-featured"))
     {
-        MaterialCarouselVariant::Hero
+        let trigger = trigger.clone();
+        scroll.connect_edge_reached(move |_, position| trigger(position));
+    }
+
+    {
+        let trigger = trigger.clone();
+        scroll.connect_edge_overshot(move |_, position| trigger(position));
+    }
+
+    {
+        let ready = ready.clone();
+        let active = active.clone();
+        let generation = generation.clone();
+        let active_cards = active_cards.clone();
+
+        scroll.connect_unmap(move |_| {
+            ready.set(false);
+            generation.set(generation.get().wrapping_add(1));
+            restore_spring_cards(&active_cards);
+            active.set(false);
+        });
+    }
+}
+
+fn carousel_edge_cards(
+    root: &gtk::Widget,
+    from_start: bool,
+    limit: usize,
+) -> Vec<gtk::Widget> {
+    let mut cards = Vec::new();
+    collect_descendants_with_css(root, CAROUSEL_ITEM_CLASS, &mut cards);
+
+    if from_start {
+        cards.into_iter().take(limit).collect()
     } else {
-        MaterialCarouselVariant::MultiBrowse
-    }
-}
-
-fn carousel_item_base_width(item: &gtk::Widget) -> i32 {
-    if widget_or_descendant_has_css(item, "home-track-card") {
-        TRACK_ROW_OUTER_WIDTH
-    } else if widget_or_descendant_has_css(item, "home-card-featured") {
-        FEATURED_OUTER_WIDTH
-    } else {
-        COMPACT_OUTER_WIDTH
-    }
-}
-
-fn multi_browse_visible_width(center_x: f64, viewport_width: f64, base_width: f64) -> f64 {
-    let minimum_width = (base_width * 0.62).max(88.0);
-    let edge_transition = (base_width * 0.92).min(viewport_width * 0.24).max(72.0);
-    let distance_to_edge = center_x.min(viewport_width - center_x).max(0.0);
-    let progress = smoothstep((distance_to_edge / edge_transition).clamp(0.0, 1.0));
-    lerp(minimum_width, base_width, progress)
-}
-
-fn hero_visible_width(center_x: f64, viewport_width: f64, base_width: f64) -> f64 {
-    let focal_x = viewport_width * 0.42;
-    let minimum_width = (base_width * 0.58).max(96.0);
-    let full_radius = base_width * 0.18;
-    let transition_radius = (base_width * 1.35).max(full_radius + 1.0);
-    let distance = (center_x - focal_x).abs();
-    let collapse =
-        smoothstep(((distance - full_radius) / (transition_radius - full_radius)).clamp(0.0, 1.0));
-    lerp(base_width, minimum_width, collapse)
-}
-
-fn ensure_carousel_mask(item: &gtk::Widget, base_width: i32) -> Option<gtk::Viewport> {
-    let overlay = item.clone().downcast::<gtk::Overlay>().ok()?;
-
-    if item.has_css_class(CAROUSEL_SLOT_CLASS) {
-        return overlay.child()?.downcast::<gtk::Viewport>().ok();
-    }
-
-    let main_child = overlay.child()?;
-    overlay.set_child(None::<&gtk::Widget>);
-
-    let content = gtk::Overlay::new();
-    content.set_size_request(base_width, -1);
-    content.set_hexpand(false);
-    content.set_vexpand(false);
-    content.set_halign(gtk::Align::Start);
-    content.set_valign(gtk::Align::Start);
-    content.add_css_class(CAROUSEL_CONTENT_CLASS);
-    content.set_child(Some(&main_child));
-
-    let mut overlay_children = Vec::new();
-    let mut child = overlay.first_child();
-    while let Some(current) = child {
-        child = current.next_sibling();
-        overlay_children.push(current);
-    }
-
-    for child in overlay_children {
-        overlay.remove_overlay(&child);
-        content.add_overlay(&child);
-    }
-
-    let mask = gtk::Viewport::new(None::<&gtk::Adjustment>, None::<&gtk::Adjustment>);
-    mask.set_width_request(base_width);
-    mask.set_hexpand(false);
-    mask.set_vexpand(true);
-    mask.set_halign(gtk::Align::Start);
-    mask.set_valign(gtk::Align::Fill);
-    mask.set_overflow(gtk::Overflow::Hidden);
-    mask.add_css_class(CAROUSEL_MASK_CLASS);
-    mask.set_child(Some(&content));
-
-    overlay.set_child(Some(&mask));
-    overlay.add_css_class(CAROUSEL_SLOT_CLASS);
-    overlay.set_overflow(gtk::Overflow::Visible);
-
-    Some(mask)
-}
-
-fn restore_stable_slot_geometry(item: &gtk::Widget, base_width: i32) {
-    item.set_width_request(base_width);
-    item.set_margin_start(0);
-    item.set_margin_end(0);
-    item.set_overflow(gtk::Overflow::Visible);
-    item.remove_css_class(CAROUSEL_MASK_CLASS);
-
-    for class_name in CAROUSEL_STATE_CLASSES {
-        item.remove_css_class(class_name);
-    }
-}
-
-fn configure_mask_adjustment(
-    mask: &gtk::Viewport,
-    base_width: i32,
-    visible_width: i32,
-    value: i32,
-) {
-    let Some(adjustment) = mask.hadjustment() else {
-        return;
-    };
-
-    let visible_width = visible_width.clamp(1, base_width);
-    let maximum_value = base_width.saturating_sub(visible_width);
-    let value = value.clamp(0, maximum_value);
-
-    adjustment.configure(
-        f64::from(value),
-        0.0,
-        f64::from(base_width),
-        1.0,
-        f64::from(visible_width),
-        f64::from(visible_width),
-    );
-}
-
-fn apply_carousel_mask(
-    item: &gtk::Widget,
-    mask: &gtk::Viewport,
-    base_width: i32,
-    visible_width: i32,
-    center_x: f64,
-    focal_x: f64,
-) {
-    let visible_width = visible_width.clamp(1, base_width);
-    let hidden_width = base_width.saturating_sub(visible_width);
-    let ratio = f64::from(visible_width) / f64::from(base_width.max(1));
-
-    restore_stable_slot_geometry(item, base_width);
-    mask.set_overflow(gtk::Overflow::Hidden);
-    mask.set_width_request(visible_width);
-
-    for class_name in CAROUSEL_STATE_CLASSES {
-        mask.remove_css_class(class_name);
-    }
-
-    if ratio >= 0.88 {
-        mask.add_css_class("material-carousel-item-large");
-    } else if ratio >= 0.64 {
-        mask.add_css_class("material-carousel-item-medium");
-    } else {
-        mask.add_css_class("material-carousel-item-small");
-    }
-
-    if hidden_width == 0 {
-        mask.set_halign(gtk::Align::Start);
-        configure_mask_adjustment(mask, base_width, visible_width, 0);
-        return;
-    }
-
-    if center_x < focal_x {
-        mask.set_halign(gtk::Align::End);
-        mask.add_css_class("material-carousel-item-leading");
-        configure_mask_adjustment(mask, base_width, visible_width, hidden_width);
-    } else {
-        mask.set_halign(gtk::Align::Start);
-        mask.add_css_class("material-carousel-item-trailing");
-        configure_mask_adjustment(mask, base_width, visible_width, 0);
-    }
-}
-
-fn reset_carousel_item(item: &gtk::Widget, base_width: i32) {
-    restore_stable_slot_geometry(item, base_width);
-
-    let Ok(overlay) = item.clone().downcast::<gtk::Overlay>() else {
-        return;
-    };
-    let Some(mask) = overlay
-        .child()
-        .and_then(|child| child.downcast::<gtk::Viewport>().ok())
-    else {
-        return;
-    };
-
-    mask.set_width_request(base_width);
-    mask.set_halign(gtk::Align::Start);
-    mask.set_overflow(gtk::Overflow::Hidden);
-    configure_mask_adjustment(&mask, base_width, base_width, 0);
-
-    for class_name in CAROUSEL_STATE_CLASSES {
-        mask.remove_css_class(class_name);
+        cards.into_iter().rev().take(limit).collect()
     }
 }
 
 fn collect_descendants_with_css(
     root: &gtk::Widget,
     class_name: &str,
-    output: &mut Vec<gtk::Widget>,
+    matches: &mut Vec<gtk::Widget>,
 ) {
     if root.has_css_class(class_name) {
-        output.push(root.clone());
-        return;
+        matches.push(root.clone());
     }
 
     let mut child = root.first_child();
     while let Some(current) = child {
         child = current.next_sibling();
-        collect_descendants_with_css(&current, class_name, output);
+        collect_descendants_with_css(&current, class_name, matches);
     }
 }
 
@@ -471,8 +357,8 @@ fn widget_or_descendant_has_css(root: &gtk::Widget, class_name: &str) -> bool {
     false
 }
 
-fn widget_or_ancestor_has_css(widget: &impl IsA<gtk::Widget>, class_name: &str) -> bool {
-    let mut current = Some(widget.as_ref().clone());
+fn widget_or_ancestor_has_css(widget: &gtk::Widget, class_name: &str) -> bool {
+    let mut current = Some(widget.clone());
     while let Some(widget) = current {
         if widget.has_css_class(class_name) {
             return true;
@@ -482,12 +368,53 @@ fn widget_or_ancestor_has_css(widget: &impl IsA<gtk::Widget>, class_name: &str) 
     false
 }
 
-fn smoothstep(value: f64) -> f64 {
-    value * value * (3.0 - 2.0 * value)
+fn restore_spring_cards(cards: &SpringCards) {
+    for card in cards.borrow_mut().drain(..) {
+        card.widget.set_width_request(card.original_width_request);
+        card.widget.remove_css_class(SPRING_CLASS);
+    }
 }
 
-fn lerp(start: f64, end: f64, progress: f64) -> f64 {
-    start + (end - start) * progress
+fn spring_displacement(progress: f64) -> f64 {
+    let progress = progress.clamp(0.0, 1.0);
+    if progress < 0.20 {
+        24.0 * ease_out_cubic(progress / 0.20)
+    } else if progress < 0.48 {
+        lerp(
+            24.0,
+            -7.0,
+            ease_in_out_cubic((progress - 0.20) / 0.28),
+        )
+    } else if progress < 0.73 {
+        lerp(
+            -7.0,
+            4.0,
+            ease_in_out_cubic((progress - 0.48) / 0.25),
+        )
+    } else {
+        lerp(
+            4.0,
+            0.0,
+            ease_out_cubic((progress - 0.73) / 0.27),
+        )
+    }
+}
+
+fn lerp(from: f64, to: f64, progress: f64) -> f64 {
+    from + (to - from) * progress.clamp(0.0, 1.0)
+}
+
+fn ease_out_cubic(progress: f64) -> f64 {
+    1.0 - (1.0 - progress.clamp(0.0, 1.0)).powi(3)
+}
+
+fn ease_in_out_cubic(progress: f64) -> f64 {
+    let progress = progress.clamp(0.0, 1.0);
+    if progress < 0.5 {
+        4.0 * progress.powi(3)
+    } else {
+        1.0 - (-2.0 * progress + 2.0).powi(3) / 2.0
+    }
 }
 
 #[cfg(test)]
@@ -495,72 +422,47 @@ mod tests {
     use super::*;
 
     #[test]
-    fn card_variants_map_to_expected_classes() {
-        let cases = [
-            (MaterialCardVariant::Elevated, "material-card-elevated"),
-            (MaterialCardVariant::Filled, "material-card-filled"),
-            (MaterialCardVariant::Outlined, "material-card-outlined"),
-        ];
-
-        for (variant, expected) in cases {
-            let spec = MaterialCardSpec::new(variant);
-            let classes = spec.css_classes();
-            assert_eq!(classes, vec![expected]);
-        }
+    fn material_card_variants_map_to_expected_classes() {
+        assert_eq!(
+            MaterialCardVariant::Elevated.css_class(),
+            "material-card-elevated"
+        );
+        assert_eq!(
+            MaterialCardVariant::Filled.css_class(),
+            "material-card-filled"
+        );
+        assert_eq!(
+            MaterialCardVariant::Outlined.css_class(),
+            "material-card-outlined"
+        );
     }
 
     #[test]
-    fn carousel_variants_map_to_expected_classes() {
-        let cases = [
-            (
-                MaterialCarouselVariant::MultiBrowse,
-                "material-carousel-multi-browse",
-            ),
-            (MaterialCarouselVariant::Hero, "material-carousel-hero"),
-            (
-                MaterialCarouselVariant::Uncontained,
-                "material-carousel-uncontained",
-            ),
-        ];
-
-        for (variant, expected) in cases {
-            let spec = MaterialCarouselSpec::new(variant);
-            let classes = spec.css_classes();
-            assert_eq!(classes, vec![expected]);
-        }
+    fn material_carousel_variants_map_to_expected_classes() {
+        assert_eq!(
+            MaterialCarouselVariant::MultiBrowse.css_class(),
+            "material-carousel-multi-browse"
+        );
+        assert_eq!(
+            MaterialCarouselVariant::Hero.css_class(),
+            "material-carousel-hero"
+        );
+        assert_eq!(
+            MaterialCarouselVariant::Uncontained.css_class(),
+            "material-carousel-uncontained"
+        );
     }
 
     #[test]
-    fn multi_browse_masks_edge_items_but_keeps_center_items_large() {
-        let base = f64::from(COMPACT_OUTER_WIDTH);
-        let viewport = 900.0;
-        let edge = multi_browse_visible_width(8.0, viewport, base);
-        let center = multi_browse_visible_width(viewport / 2.0, viewport, base);
-
-        assert!(edge < base * 0.72);
-        assert!((center - base).abs() < f64::EPSILON);
+    fn spring_curve_starts_and_finishes_at_rest() {
+        assert!(spring_displacement(0.0).abs() < f64::EPSILON);
+        assert!(spring_displacement(1.0).abs() < f64::EPSILON);
     }
 
     #[test]
-    fn hero_has_one_strong_focal_keyline() {
-        let base = f64::from(FEATURED_OUTER_WIDTH);
-        let viewport = 900.0;
-        let focal = viewport * 0.42;
-        let focused = hero_visible_width(focal, viewport, base);
-        let distant = hero_visible_width(focal + base * 1.5, viewport, base);
-
-        assert!((focused - base).abs() < f64::EPSILON);
-        assert!(distant < base * 0.68);
-    }
-
-    #[test]
-    fn smoothstep_is_bounded_and_monotonic() {
-        let start = smoothstep(0.0);
-        let middle = smoothstep(0.5);
-        let end = smoothstep(1.0);
-
-        assert_eq!(start, 0.0);
-        assert!(middle > start && middle < end);
-        assert_eq!(end, 1.0);
+    fn spring_curve_has_positive_and_negative_overshoot() {
+        assert!(spring_displacement(0.20) > 20.0);
+        assert!(spring_displacement(0.48) < 0.0);
+        assert!(spring_displacement(0.73) > 0.0);
     }
 }
