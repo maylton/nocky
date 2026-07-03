@@ -212,7 +212,7 @@ fn install_material_carousel_spring(
                     let surface = first_descendant_with_css(&widget, CAROUSEL_SURFACE_CLASS);
                     let original_width_request = widget.width_request();
                     let original_surface_width_request =
-                        surface.as_ref().map(gtk::prelude::WidgetExt::width_request);
+                        surface.as_ref().map(|surface| surface.width_request());
                     let base_width = widget.width().max(original_width_request).max(1);
                     let base_surface_width = surface
                         .as_ref()
