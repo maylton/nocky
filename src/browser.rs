@@ -2533,10 +2533,29 @@ impl LibraryBrowser {
         }
         self.search_content.append(&track_section);
 
+        let album_matches = search_album_cards(tracks, youtube, &query, online_state_matches);
+        let artist_matches = search_artist_cards(tracks, youtube, &query, online_state_matches);
+        let playlist_matches =
+            search_playlist_cards(tracks, config, youtube, &query, online_state_matches);
+        update_search_results_accessible_summary(
+            &self.search_content,
+            config.language,
+            raw_query,
+            track_matches.len()
+                + album_matches.len()
+                + artist_matches.len()
+                + playlist_matches.len(),
+            track_matches.len(),
+            album_matches.len(),
+            artist_matches.len(),
+            playlist_matches.len(),
+            loading,
+        );
+
         self.search_content.append(&search_list_section(
             copy.albums,
             copy.no_albums,
-            search_album_cards(tracks, youtube, &query, online_state_matches),
+            album_matches,
             self.search_album_limit.clone(),
             &self.event_tx,
             loading,
@@ -2554,7 +2573,7 @@ impl LibraryBrowser {
         self.search_content.append(&search_list_section(
             copy.artists,
             copy.no_artists,
-            search_artist_cards(tracks, youtube, &query, online_state_matches),
+            artist_matches,
             self.search_artist_limit.clone(),
             &self.event_tx,
             loading,
@@ -2572,7 +2591,7 @@ impl LibraryBrowser {
         self.search_content.append(&search_list_section(
             copy.playlists,
             copy.no_playlists,
-            search_playlist_cards(tracks, config, youtube, &query, online_state_matches),
+            playlist_matches,
             self.search_playlist_limit.clone(),
             &self.event_tx,
             loading,
@@ -4739,6 +4758,68 @@ fn youtube_playlist_subtitle(item: &YouTubeItem) -> &str {
         "recommended" => "Recomendação do YouTube Music",
         _ => "Playlist sincronizada",
     }
+}
+
+fn search_results_announcement(
+    language: AppLanguage,
+    query: &str,
+    total: usize,
+    tracks: usize,
+    albums: usize,
+    artists: usize,
+    playlists: usize,
+    loading: bool,
+) -> String {
+    let query = query.trim();
+    match language {
+        AppLanguage::Portuguese => {
+            let state = if loading {
+                "Atualizando resultados"
+            } else {
+                "Resultados atualizados"
+            };
+            format!(
+                "{state} para ‘{query}’: {total} no total, {tracks} faixas, {albums} álbuns, {artists} artistas e {playlists} playlists."
+            )
+        }
+        AppLanguage::English => {
+            let state = if loading {
+                "Updating results"
+            } else {
+                "Results updated"
+            };
+            format!(
+                "{state} for ‘{query}’: {total} total, {tracks} tracks, {albums} albums, {artists} artists and {playlists} playlists."
+            )
+        }
+        AppLanguage::Spanish => {
+            let state = if loading {
+                "Actualizando resultados"
+            } else {
+                "Resultados actualizados"
+            };
+            format!(
+                "{state} para ‘{query}’: {total} en total, {tracks} canciones, {albums} álbumes, {artists} artistas y {playlists} playlists."
+            )
+        }
+    }
+}
+
+fn update_search_results_accessible_summary(
+    widget: &gtk::Box,
+    language: AppLanguage,
+    query: &str,
+    total: usize,
+    tracks: usize,
+    albums: usize,
+    artists: usize,
+    playlists: usize,
+    loading: bool,
+) {
+    let message = search_results_announcement(
+        language, query, total, tracks, albums, artists, playlists, loading,
+    );
+    widget.update_property(&[gtk::accessible::Property::Label(&message)]);
 }
 
 fn search_section_heading(
@@ -10355,5 +10436,38 @@ mod youtube_home_browser_tests {
             }
             _ => panic!("expected YouTube track card"),
         }
+    }
+}
+
+#[cfg(test)]
+mod search_accessibility_tests {
+    use super::*;
+
+    #[test]
+    fn portuguese_announcement_mentions_loading_query_and_counts() {
+        let message =
+            search_results_announcement(AppLanguage::Portuguese, "Muse", 10, 4, 2, 3, 1, true);
+        assert!(message.contains("Atualizando resultados"));
+        assert!(message.contains("Muse"));
+        assert!(message.contains("10 no total"));
+        assert!(message.contains("4 faixas"));
+    }
+
+    #[test]
+    fn english_announcement_switches_to_updated_state() {
+        let message =
+            search_results_announcement(AppLanguage::English, "Radiohead", 3, 1, 1, 1, 0, false);
+        assert!(message.starts_with("Results updated"));
+        assert!(message.contains("3 total"));
+        assert!(message.contains("0 playlists"));
+    }
+
+    #[test]
+    fn spanish_announcement_keeps_category_totals() {
+        let message =
+            search_results_announcement(AppLanguage::Spanish, "Soda Stereo", 7, 2, 2, 2, 1, false);
+        assert!(message.contains("7 en total"));
+        assert!(message.contains("2 canciones"));
+        assert!(message.contains("1 playlists"));
     }
 }
