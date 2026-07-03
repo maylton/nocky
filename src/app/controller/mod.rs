@@ -46,7 +46,7 @@ use crate::{
     visualizer::SpectrumVisualizer,
     youtube::{
         LikeMutationRegistry, YouTubeBridge, YouTubeHomePage, YouTubeItem, YouTubeLibraryCache,
-        YouTubePage,
+        YouTubePage, YouTubeSearchCache,
     },
 };
 use std::{
@@ -126,6 +126,7 @@ pub(crate) struct ControllerRuntime {
     pub(crate) youtube_state: RefCell<Option<YouTubePlaybackState>>,
     pub(crate) youtube_request_id: Cell<u64>,
     pub(crate) youtube_search_request_id: Cell<u64>,
+    pub(crate) youtube_search_cache: RefCell<YouTubeSearchCache>,
     pub(crate) youtube_home_request_id: Cell<u64>,
     pub(crate) youtube_home_loading: Cell<bool>,
     pub(crate) youtube_home_continuation_loading: Cell<bool>,

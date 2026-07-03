@@ -126,6 +126,7 @@ impl AppController {
                             }
                             self.load_youtube_home_page(String::new(), String::new());
                         } else {
+                            self.youtube_search_cache.borrow_mut().clear();
                             self.youtube_library.borrow_mut().clear();
                             clear_library_cache();
                             self.clear_youtube_cache_first_data();
@@ -139,6 +140,7 @@ impl AppController {
                         self.youtube_page.set_status(&status);
                         self.youtube_page
                             .set_loading(false, "YouTube Music connected");
+                        self.youtube_search_cache.borrow_mut().clear();
                         {
                             let mut library = self.youtube_library.borrow_mut();
                             library.connected = true;
@@ -159,6 +161,7 @@ impl AppController {
                         self.youtube_page.set_loading(false, "YouTube Music");
                         self.youtube_page
                             .show_empty("Search for music or connect your account.");
+                        self.youtube_search_cache.borrow_mut().clear();
                         self.youtube_library.borrow_mut().clear();
                         clear_library_cache();
                         self.clear_youtube_cache_first_data();
@@ -958,22 +961,33 @@ impl AppController {
                         continue;
                     }
 
+                    let mut cache_snapshot = None;
                     let mut library = self.youtube_library.borrow_mut();
                     match result {
                         Ok(mut categorized) => {
+                            // Cache only the remote response. Current library-derived
+                            // matches are merged at read time so removed local data
+                            // cannot linger inside the query cache.
+                            cache_snapshot = Some(categorized.clone());
                             categorized.merge_cached_results(&library.search);
                             categorized.loading = false;
                             library.search = categorized;
                         }
                         Err(error) => {
                             let mut cached = library.search.clone();
-                            cached.query = query;
+                            cached.query = query.clone();
                             cached.loading = false;
                             cached.error = error;
                             library.search = cached;
                         }
                     }
                     drop(library);
+
+                    if let Some(results) = cache_snapshot {
+                        self.youtube_search_cache
+                            .borrow_mut()
+                            .insert(&query, results);
+                    }
                     self.refresh_browser();
                 }
                 BackgroundMessage::YouTubeItems { title, result } => match result {

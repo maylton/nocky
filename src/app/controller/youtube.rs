@@ -13,7 +13,8 @@ use crate::{
         self as youtube_domain, cache_first_items_for_browser, cache_home_page_covers,
         cache_items_for_browser, repair_home_page_cover_paths, resolve_youtube_collection_item,
         youtube_collection_cache_key, youtube_collection_key, youtube_home_prefetch_candidates,
-        LikeMutationStartError, YouTubeItem, YouTubePageEvent, YouTubeSearchResults, YouTubeStatus,
+        LikeMutationStartError, YouTubeItem, YouTubePageEvent, YouTubeSearchCacheLookup,
+        YouTubeSearchResults, YouTubeStatus,
     },
 };
 use gtk::prelude::*;
@@ -579,29 +580,57 @@ impl AppController {
     }
 
     pub(crate) fn request_global_youtube_search(&self, query: String) {
-        if query.trim().is_empty()
+        let query = query.trim().to_string();
+        if query.is_empty()
             || self.config.borrow().startup_source != Some(StartupSource::YouTube)
             || self.search_query.borrow().trim() != query.as_str()
         {
             return;
         }
 
+        // Increment before consulting the cache so a fresh cache hit also
+        // invalidates any older in-flight response for another query.
+        let request_id = self.youtube_search_request_id.get().wrapping_add(1);
+        self.youtube_search_request_id.set(request_id);
+
+        let local_results = self.youtube_library.borrow().cached_search_results(&query);
+        match self.youtube_search_cache.borrow_mut().lookup(&query) {
+            YouTubeSearchCacheLookup::Fresh(mut cached) => {
+                cached.query = query;
+                cached.loading = false;
+                cached.error.clear();
+                cached.merge_cached_results(&local_results);
+                self.youtube_library.borrow_mut().search = cached;
+                self.refresh_browser();
+                return;
+            }
+            YouTubeSearchCacheLookup::Stale(mut cached) => {
+                cached.query = query.clone();
+                cached.loading = true;
+                cached.error.clear();
+                cached.merge_cached_results(&local_results);
+                self.youtube_library.borrow_mut().search = cached;
+            }
+            YouTubeSearchCacheLookup::Miss => {
+                let mut cached = local_results;
+                cached.query = query.clone();
+                cached.loading = true;
+                cached.error.clear();
+                self.youtube_library.borrow_mut().search = cached;
+            }
+        }
+        self.refresh_browser();
+
         let Some(bridge) = self.youtube_bridge.clone() else {
-            self.youtube_library.borrow_mut().search = YouTubeSearchResults {
-                query,
-                error: "As dependências do YouTube Music não estão instaladas".to_string(),
-                ..YouTubeSearchResults::default()
-            };
+            let mut library = self.youtube_library.borrow_mut();
+            let mut visible = library.search.clone();
+            visible.loading = false;
+            visible.error = "As dependências do YouTube Music não estão instaladas".to_string();
+            library.search = visible;
+            drop(library);
             self.refresh_browser();
             return;
         };
-
-        let request_id = self.youtube_search_request_id.get().wrapping_add(1);
-        self.youtube_search_request_id.set(request_id);
-        let mut cached = self.youtube_library.borrow().cached_search_results(&query);
-        cached.loading = true;
-        self.youtube_library.borrow_mut().search = cached;
-        self.refresh_browser();
 
         let sender = self.background.sender();
         thread::spawn(move || {

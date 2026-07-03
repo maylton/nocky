@@ -37,7 +37,7 @@ use crate::{
     visual_theme,
     youtube::{
         diagnostics as youtube_diagnostics, load_library_cache, LikeMutationRegistry,
-        YouTubeBridge, YouTubeHomePage, YouTubePage, YouTubeSearchResults,
+        YouTubeBridge, YouTubeHomePage, YouTubePage, YouTubeSearchCache, YouTubeSearchResults,
     },
     APP_ID, HOME_PLAYER_WIDTH,
 };
@@ -594,6 +594,7 @@ impl AppController {
                 youtube_state: RefCell::new(None),
                 youtube_request_id: Cell::new(0),
                 youtube_search_request_id: Cell::new(0),
+                youtube_search_cache: RefCell::new(YouTubeSearchCache::default()),
                 youtube_home_request_id: Cell::new(0),
                 youtube_home_loading: Cell::new(false),
                 youtube_home_continuation_loading: Cell::new(false),

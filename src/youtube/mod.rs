@@ -10,6 +10,7 @@ mod login_policy;
 mod playback;
 mod playlist_create;
 mod routing;
+mod search_cache;
 mod structured_cards;
 
 use crate::search_text::{normalize_search_text, search_matches, search_score};
@@ -50,6 +51,7 @@ pub(crate) use feed::{
 pub(crate) use like_mutation::{LikeMutationRegistry, LikeMutationStartError};
 pub(crate) use playlist_create::{playlist_creation_error_message, YouTubePlaylistCreation};
 pub(crate) use routing::{youtube_item_action, YouTubeItemAction};
+pub(crate) use search_cache::{YouTubeSearchCache, YouTubeSearchCacheLookup};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
