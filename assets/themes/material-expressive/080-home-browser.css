@@ -405,3 +405,114 @@ window.theme-material-expressive
 .material-card-menu-action:disabled {
   opacity: 0.72;
 }
+
+/* Dedicated first-paint rails for an empty remote YouTube Home. */
+window.theme-material-expressive
+  .youtube-home-loading-placeholders
+  .home-card-loading-slot {
+  opacity: 0.84;
+}
+
+window.theme-material-expressive
+  .youtube-home-loading-placeholders
+  .home-card-loading-placeholder {
+  background-color: @m3_surface_container;
+  border-color: alpha(@m3_outline_variant, 0.32);
+  box-shadow: none;
+}
+
+window.theme-material-expressive
+  .youtube-home-loading-placeholders
+  .home-card-loading-placeholder
+  .collection-artwork {
+  background-color: @m3_surface_container_highest;
+  box-shadow: inset 0 0 0 1px alpha(@m3_outline_variant, 0.18);
+}
+
+window.theme-material-expressive
+  .youtube-home-loading-placeholders
+  .home-card-loading-placeholder
+  .cover-icon {
+  opacity: 0;
+}
+
+window.theme-material-expressive
+  .youtube-home-loading-placeholders
+  .home-card-loading-placeholder
+  .collection-card-title,
+window.theme-material-expressive
+  .youtube-home-loading-placeholders
+  .home-card-loading-placeholder
+  .collection-card-subtitle,
+window.theme-material-expressive
+  .youtube-home-loading-placeholders
+  .home-card-loading-placeholder
+  .collection-card-detail {
+  min-height: 10px;
+  color: transparent;
+  background-color: alpha(@m3_on_surface_variant, 0.14);
+  border-radius: 999px;
+}
+
+/* Collection-page card actions */
+window.theme-material-expressive .collection-grid-action-overlay {
+  min-width: 240px;
+  min-height: 222px;
+}
+
+window.theme-material-expressive
+  .collection-grid-action-overlay
+  .collection-card-context-action,
+window.theme-material-expressive
+  .collection-grid-action-overlay
+  .collection-card-overflow-button {
+  opacity: 1;
+}
+
+window.theme-material-expressive
+  .playlist-card-row-with-actions
+  .collection-card-context-action {
+  min-width: 38px;
+  min-height: 38px;
+}
+
+window.theme-material-expressive
+  .playlist-card-row-with-actions
+  .collection-card-overflow-button {
+  min-width: 34px;
+  min-height: 34px;
+}
+
+window.theme-material-expressive
+  .playlist-card-row-with-actions.collection-card-playing {
+  background-color: alpha(@m3_primary_container, 0.34);
+  box-shadow: inset 3px 0 0 @m3_primary;
+}
+
+window.theme-material-expressive
+  .playlist-card-row-with-actions.collection-card-loading {
+  opacity: 0.78;
+}
+
+/* Keyboard focus for collection actions */
+window.theme-material-expressive
+  .collection-action-focusable:focus {
+  box-shadow:
+    0 0 0 3px alpha(@m3_primary, 0.28),
+    0 8px 20px alpha(black, 0.16);
+}
+
+window.theme-material-expressive
+  .playlist-card-row-with-actions.collection-action-focusable:focus {
+  background-color: alpha(@m3_primary_container, 0.26);
+  box-shadow:
+    inset 3px 0 0 @m3_primary,
+    0 0 0 2px alpha(@m3_primary, 0.22);
+}
+
+window.theme-material-expressive
+  .collection-card-overflow-popover
+  .collection-action-focusable:focus {
+  background-color: alpha(@m3_primary_container, 0.38);
+  box-shadow: inset 0 0 0 2px alpha(@m3_primary, 0.24);
+}

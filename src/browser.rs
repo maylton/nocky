@@ -2176,7 +2176,7 @@ impl LibraryBrowser {
 
         match self.route() {
             BrowserRoute::Albums => {
-                self.rebuild_albums(tracks, youtube, query);
+                self.rebuild_albums(tracks, config, youtube, query, context.playback);
                 self.root.set_visible_child_name("albums");
             }
             BrowserRoute::Artists => {
@@ -2188,7 +2188,7 @@ impl LibraryBrowser {
                 self.root.set_visible_child_name("albums");
             }
             BrowserRoute::Playlists => {
-                self.rebuild_playlists(config, youtube, query);
+                self.rebuild_playlists(config, youtube, query, context.playback);
                 self.root.set_visible_child_name("playlists");
             }
             BrowserRoute::All if query.trim().is_empty() => {
@@ -3083,6 +3083,11 @@ impl LibraryBrowser {
             _ => ListeningSource::Local,
         };
         let youtube_home = active_source == ListeningSource::YouTube;
+        let show_youtube_loading_placeholders = should_show_youtube_home_loading_placeholders(
+            youtube_home,
+            youtube_home_loading,
+            youtube_home_page.sections.len(),
+        );
 
         let next_home = gtk::Box::new(gtk::Orientation::Vertical, 22);
         next_home.set_hexpand(true);
@@ -3090,7 +3095,30 @@ impl LibraryBrowser {
         next_home.add_css_class("library-home");
         next_home.add_css_class("expressive-library-home");
 
-        if youtube_home && !youtube_home_page.sections.is_empty() {
+        if show_youtube_loading_placeholders {
+            next_home.add_css_class("youtube-home-loading-placeholders");
+            next_home.append(&youtube_home_loading_banner(youtube_home_page, language));
+            next_home.append(&home_loading_placeholder_section(
+                copy.mixtapes_title,
+                HomeSectionPresentation::Featured,
+                language,
+            ));
+            next_home.append(&home_loading_placeholder_section(
+                copy.albums_title,
+                HomeSectionPresentation::Compact,
+                language,
+            ));
+            next_home.append(&home_loading_placeholder_section(
+                copy.playlists_title,
+                HomeSectionPresentation::Compact,
+                language,
+            ));
+        }
+
+        if !show_youtube_loading_placeholders
+            && youtube_home
+            && !youtube_home_page.sections.is_empty()
+        {
             next_home.add_css_class("youtube-home-v2");
             next_home.append(&youtube_home_chip_bar(
                 youtube_home_page,
@@ -3147,73 +3175,88 @@ impl LibraryBrowser {
             return;
         }
 
-        if matches!(config.startup_source, Some(StartupSource::YouTube)) {
-            let mixes = youtube
-                .playlists
-                .iter()
-                .filter(|playlist| is_mix_playlist(playlist))
-                .cloned()
-                .chain(
-                    youtube
-                        .playlists
-                        .iter()
-                        .filter(|playlist| !is_mix_playlist(playlist))
-                        .cloned(),
-                )
-                .take(12)
-                .map(HomeCard::YouTubePlaylist)
-                .collect::<Vec<_>>();
+        if !show_youtube_loading_placeholders {
+            if matches!(config.startup_source, Some(StartupSource::YouTube)) {
+                let mixes = youtube
+                    .playlists
+                    .iter()
+                    .filter(|playlist| is_mix_playlist(playlist))
+                    .cloned()
+                    .chain(
+                        youtube
+                            .playlists
+                            .iter()
+                            .filter(|playlist| !is_mix_playlist(playlist))
+                            .cloned(),
+                    )
+                    .take(12)
+                    .map(HomeCard::YouTubePlaylist)
+                    .collect::<Vec<_>>();
+
+                next_home.append(&home_section(
+                    copy.mixtapes_title,
+                    copy.mixtapes_subtitle,
+                    copy.mixtapes_empty,
+                    mixes,
+                    HomeSectionPresentation::Featured,
+                    playback,
+                    config,
+                    &self.event_tx,
+                    language,
+                    card_effects,
+                ));
+            } else {
+                let mixes = local_home_mix_cards(tracks, history, language);
+                next_home.append(&home_section(
+                    copy.local_mixes_title,
+                    copy.local_mixes_subtitle,
+                    copy.local_mixes_empty,
+                    mixes,
+                    HomeSectionPresentation::Featured,
+                    playback,
+                    config,
+                    &self.event_tx,
+                    language,
+                    card_effects,
+                ));
+            }
+
+            if config.show_personalized_home_history {
+                let recent_activity = history.recent_activity(active_source, 12);
+                let recent = history_home_activity(tracks, youtube, recent_activity);
+                next_home.append(&home_history_section(
+                    copy.recent_activity_title,
+                    copy.recent_activity_subtitle,
+                    copy.recent_activity_empty,
+                    recent,
+                    &self.event_tx,
+                    language,
+                    material_carousel_v2_enabled(config),
+                ));
+            }
+
+            if active_source == ListeningSource::Local {
+                let recently_added =
+                    recently_added_local_album_cards(tracks, language, copy.recently_added_detail);
+                next_home.append(&home_section(
+                    copy.recently_added_title,
+                    copy.recently_added_subtitle,
+                    copy.recently_added_empty,
+                    recently_added,
+                    HomeSectionPresentation::Compact,
+                    playback,
+                    config,
+                    &self.event_tx,
+                    language,
+                    card_effects,
+                ));
+            }
 
             next_home.append(&home_section(
-                copy.mixtapes_title,
-                copy.mixtapes_subtitle,
-                copy.mixtapes_empty,
-                mixes,
-                HomeSectionPresentation::Featured,
-                playback,
-                config,
-                &self.event_tx,
-                language,
-                card_effects,
-            ));
-        } else {
-            let mixes = local_home_mix_cards(tracks, history, language);
-            next_home.append(&home_section(
-                copy.local_mixes_title,
-                copy.local_mixes_subtitle,
-                copy.local_mixes_empty,
-                mixes,
-                HomeSectionPresentation::Featured,
-                playback,
-                config,
-                &self.event_tx,
-                language,
-                card_effects,
-            ));
-        }
-
-        if config.show_personalized_home_history {
-            let recent_activity = history.recent_activity(active_source, 12);
-            let recent = history_home_activity(tracks, youtube, recent_activity);
-            next_home.append(&home_history_section(
-                copy.recent_activity_title,
-                copy.recent_activity_subtitle,
-                copy.recent_activity_empty,
-                recent,
-                &self.event_tx,
-                language,
-                material_carousel_v2_enabled(config),
-            ));
-        }
-
-        if active_source == ListeningSource::Local {
-            let recently_added =
-                recently_added_local_album_cards(tracks, language, copy.recently_added_detail);
-            next_home.append(&home_section(
-                copy.recently_added_title,
-                copy.recently_added_subtitle,
-                copy.recently_added_empty,
-                recently_added,
+                copy.albums_title,
+                copy.albums_subtitle,
+                copy.albums_empty,
+                ranked_home_album_cards(tracks, youtube, history, active_source, language),
                 HomeSectionPresentation::Compact,
                 playback,
                 config,
@@ -3221,70 +3264,57 @@ impl LibraryBrowser {
                 language,
                 card_effects,
             ));
-        }
 
-        next_home.append(&home_section(
-            copy.albums_title,
-            copy.albums_subtitle,
-            copy.albums_empty,
-            ranked_home_album_cards(tracks, youtube, history, active_source, language),
-            HomeSectionPresentation::Compact,
-            playback,
-            config,
-            &self.event_tx,
-            language,
-            card_effects,
-        ));
+            next_home.append(&home_section(
+                copy.artists_title,
+                copy.artists_subtitle,
+                copy.artists_empty,
+                ranked_home_artist_cards(tracks, youtube, history, active_source, language),
+                HomeSectionPresentation::Compact,
+                playback,
+                config,
+                &self.event_tx,
+                language,
+                card_effects,
+            ));
 
-        next_home.append(&home_section(
-            copy.artists_title,
-            copy.artists_subtitle,
-            copy.artists_empty,
-            ranked_home_artist_cards(tracks, youtube, history, active_source, language),
-            HomeSectionPresentation::Compact,
-            playback,
-            config,
-            &self.event_tx,
-            language,
-            card_effects,
-        ));
+            let playlist_cards = if youtube_home {
+                youtube
+                    .playlists
+                    .iter()
+                    .filter(|playlist| !is_mix_playlist(playlist))
+                    .take(12)
+                    .cloned()
+                    .map(HomeCard::YouTubePlaylist)
+                    .collect::<Vec<_>>()
+            } else {
+                config
+                    .playlists
+                    .iter()
+                    .take(8)
+                    .map(|playlist| HomeCard::LocalPlaylist {
+                        title: playlist.name.clone(),
+                        subtitle: format_local_track_count(language, playlist.tracks.len()),
+                    })
+                    .collect::<Vec<_>>()
+            };
 
-        let playlist_cards = if youtube_home {
-            youtube
-                .playlists
-                .iter()
-                .filter(|playlist| !is_mix_playlist(playlist))
-                .take(12)
-                .cloned()
-                .map(HomeCard::YouTubePlaylist)
-                .collect::<Vec<_>>()
-        } else {
-            config
-                .playlists
-                .iter()
-                .take(8)
-                .map(|playlist| HomeCard::LocalPlaylist {
-                    title: playlist.name.clone(),
-                    subtitle: format_local_track_count(language, playlist.tracks.len()),
-                })
-                .collect::<Vec<_>>()
-        };
+            next_home.append(&home_section(
+                copy.playlists_title,
+                copy.playlists_subtitle,
+                copy.playlists_empty,
+                playlist_cards,
+                HomeSectionPresentation::Compact,
+                playback,
+                config,
+                &self.event_tx,
+                language,
+                card_effects,
+            ));
 
-        next_home.append(&home_section(
-            copy.playlists_title,
-            copy.playlists_subtitle,
-            copy.playlists_empty,
-            playlist_cards,
-            HomeSectionPresentation::Compact,
-            playback,
-            config,
-            &self.event_tx,
-            language,
-            card_effects,
-        ));
-
-        if youtube_home && youtube.syncing {
-            next_home.append(&home_syncing_hint(language));
+            if youtube_home && youtube.syncing {
+                next_home.append(&home_syncing_hint(language));
+            }
         }
 
         let generation = self.home_generation.get().wrapping_add(1);
@@ -3308,7 +3338,14 @@ impl LibraryBrowser {
         self.home_dirty.set(false);
     }
 
-    fn rebuild_albums(&self, tracks: &[Track], youtube: &YouTubeLibraryCache, query: &str) {
+    fn rebuild_albums(
+        &self,
+        tracks: &[Track],
+        config: &AppConfig,
+        youtube: &YouTubeLibraryCache,
+        query: &str,
+        playback: &BrowserPlaybackState,
+    ) {
         clear_box(&self.albums_context_header);
         self.albums_context_header.set_visible(false);
         self.albums_default_header.set_visible(true);
@@ -3348,10 +3385,11 @@ impl LibraryBrowser {
             let cover = album_tracks
                 .iter()
                 .find_map(|track| track.cover_path.as_deref());
+            let actions = local_album_action_spec(&album, playback, config);
             append_collection_grid_card(
                 &self.albums_grid,
                 position,
-                collection_button(
+                collection_grid_card_with_actions(
                     collection_card(
                         cover,
                         &album,
@@ -3359,8 +3397,9 @@ impl LibraryBrowser {
                         &format!("Local • {} faixas", album_tracks.len()),
                         false,
                     ),
-                    BrowserRoute::Album(album),
+                    actions,
                     &self.event_tx,
+                    config.language,
                 ),
             );
             position += 1;
@@ -3375,10 +3414,16 @@ impl LibraryBrowser {
                 hidden += 1;
                 continue;
             }
+            let actions = youtube_album_action_spec(
+                &album_entry.source,
+                &album_entry.title,
+                playback,
+                config,
+            );
             append_collection_grid_card(
                 &self.albums_grid,
                 position,
-                collection_event_button(
+                collection_grid_card_with_actions(
                     collection_card(
                         album_entry.cached_cover(),
                         &album_entry.title,
@@ -3386,8 +3431,9 @@ impl LibraryBrowser {
                         &album_entry.detail,
                         true,
                     ),
-                    BrowserEvent::OpenYouTubeCollection(album_entry.source.clone()),
+                    actions,
                     &self.event_tx,
+                    config.language,
                 ),
             );
             position += 1;
@@ -3673,7 +3719,13 @@ impl LibraryBrowser {
         }
     }
 
-    fn rebuild_playlists(&self, config: &AppConfig, youtube: &YouTubeLibraryCache, query: &str) {
+    fn rebuild_playlists(
+        &self,
+        config: &AppConfig,
+        youtube: &YouTubeLibraryCache,
+        query: &str,
+        playback: &BrowserPlaybackState,
+    ) {
         clear_list_box(&self.playlists_list);
         let query = query.trim().to_lowercase();
         let previous = self.playlist_dropdown.selected() as usize;
@@ -3699,12 +3751,16 @@ impl LibraryBrowser {
             if !query.is_empty() && !playlist.name.to_lowercase().contains(&query) {
                 continue;
             }
-            self.playlists_list.append(&playlist_row(
+            let actions = local_playlist_action_spec(&playlist.name, playback, config);
+            self.playlists_list.append(&playlist_row_with_actions(
                 None,
                 &playlist.name,
                 "Playlist local",
                 &format!("{} faixas", playlist.tracks.len()),
                 false,
+                actions,
+                &self.event_tx,
+                config.language,
             ));
             row_refs.push(Some(PlaylistRef::Local(playlist.name.clone())));
         }
@@ -3738,8 +3794,15 @@ impl LibraryBrowser {
                 .and_then(|tracks| tracks.iter().find_map(YouTubeItem::cached_cover))
                 .or_else(|| mix.cached_cover());
 
-            self.playlists_list
-                .append(&youtube_mix_row(mix, track_count, preferred_cover));
+            let actions = youtube_playlist_action_spec(mix, playback, config);
+            self.playlists_list.append(&youtube_mix_row_with_actions(
+                mix,
+                track_count,
+                preferred_cover,
+                actions,
+                &self.event_tx,
+                config.language,
+            ));
             row_refs.push(Some(PlaylistRef::YouTube(Box::new(mix.clone()))));
         }
 
@@ -3757,12 +3820,16 @@ impl LibraryBrowser {
                 .map(|count| format!("{count} {}", if count == 1 { "faixa" } else { "faixas" }))
                 .unwrap_or_else(|| youtube_playlist_detail(playlist).to_string());
 
-            self.playlists_list.append(&playlist_row(
+            let actions = youtube_playlist_action_spec(playlist, playback, config);
+            self.playlists_list.append(&playlist_row_with_actions(
                 playlist.cached_cover(),
                 &playlist.title,
                 youtube_playlist_subtitle(playlist),
                 &detail,
                 true,
+                actions,
+                &self.event_tx,
+                config.language,
             ));
             row_refs.push(Some(PlaylistRef::YouTube(Box::new(playlist.clone()))));
         }
@@ -5893,6 +5960,105 @@ fn youtube_home_loading_banner(page: &YouTubeHomePage, language: AppLanguage) ->
     row
 }
 
+fn should_show_youtube_home_loading_placeholders(
+    youtube_home: bool,
+    loading: bool,
+    section_count: usize,
+) -> bool {
+    youtube_home && loading && section_count == 0
+}
+
+fn home_loading_placeholder_section(
+    title: &str,
+    presentation: HomeSectionPresentation,
+    language: AppLanguage,
+) -> gtk::Box {
+    let title_label = gtk::Label::new(Some(title));
+    title_label.set_xalign(0.0);
+    title_label.add_css_class("home-section-title");
+
+    let subtitle = match language {
+        AppLanguage::Portuguese => "Preparando recomendações…",
+        AppLanguage::English => "Preparing recommendations…",
+        AppLanguage::Spanish => "Preparando recomendaciones…",
+    };
+    let subtitle_label = gtk::Label::new(Some(subtitle));
+    subtitle_label.set_xalign(0.0);
+    subtitle_label.add_css_class("dim-label");
+
+    let heading = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    heading.set_vexpand(false);
+    heading.set_valign(gtk::Align::Start);
+    heading.add_css_class("home-section-heading");
+    heading.append(&title_label);
+    heading.append(&subtitle_label);
+
+    let count = match presentation {
+        HomeSectionPresentation::Featured => 5,
+        HomeSectionPresentation::Compact => 7,
+        HomeSectionPresentation::TrackRows => 4,
+    };
+    let cards = (0..count)
+        .map(|_| home_loading_placeholder_card(presentation))
+        .collect::<Vec<_>>();
+    let content = metrolist_home_section_content(cards, presentation, language, "", false);
+    content.set_vexpand(false);
+    content.set_valign(gtk::Align::Start);
+
+    let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    section.set_vexpand(false);
+    section.set_valign(gtk::Align::Start);
+    section.add_css_class("home-section");
+    section.add_css_class(presentation.css_class());
+    section.add_css_class("home-loading-placeholder-section");
+    section.append(&heading);
+    section.append(&content);
+    section
+}
+
+fn home_loading_placeholder_card(presentation: HomeSectionPresentation) -> gtk::Widget {
+    let card = home_collection_card(
+        None,
+        "\u{00a0}",
+        "\u{00a0}",
+        "\u{00a0}",
+        false,
+        presentation,
+    );
+    card.add_css_class("home-card");
+    card.add_css_class("home-card-loading-placeholder");
+    card.add_css_class("collection-card-skeleton");
+
+    let slot = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    slot.set_size_request(presentation.outer_width(), presentation.outer_height());
+    slot.set_hexpand(false);
+    slot.set_vexpand(false);
+    slot.set_halign(gtk::Align::Start);
+    slot.set_valign(gtk::Align::Start);
+    slot.add_css_class("home-card-loading-slot");
+    slot.append(&card);
+    slot.upcast::<gtk::Widget>()
+}
+
+#[cfg(test)]
+mod youtube_home_loading_placeholder_tests {
+    use super::should_show_youtube_home_loading_placeholders;
+
+    #[test]
+    fn placeholders_require_youtube_loading_with_no_sections() {
+        assert!(should_show_youtube_home_loading_placeholders(true, true, 0));
+        assert!(!should_show_youtube_home_loading_placeholders(
+            false, true, 0
+        ));
+        assert!(!should_show_youtube_home_loading_placeholders(
+            true, false, 0
+        ));
+        assert!(!should_show_youtube_home_loading_placeholders(
+            true, true, 1
+        ));
+    }
+}
+
 fn youtube_feed_section_cards(
     section: &YouTubeHomeSection,
     language: AppLanguage,
@@ -7311,23 +7477,28 @@ fn collection_page_header(title: &str, subtitle: &str, icon_name: &str) -> gtk::
     header
 }
 
-fn append_collection_grid_card(grid: &gtk::FlowBox, _position: i32, button: gtk::Button) {
+fn append_collection_grid_card<W: IsA<gtk::Widget>>(
+    grid: &gtk::FlowBox,
+    _position: i32,
+    widget: W,
+) {
+    let widget = widget.upcast::<gtk::Widget>();
     if grid.has_css_class("skip-card-entry-animation") {
-        button.set_opacity(1.0);
-        button.set_margin_top(0);
-        grid.insert(&button, -1);
+        widget.set_opacity(1.0);
+        widget.set_margin_top(0);
+        grid.insert(&widget, -1);
         return;
     }
 
-    button.set_opacity(0.0);
-    button.set_margin_top(14);
-    button.add_css_class("collection-card-entering");
-    grid.insert(&button, -1);
+    widget.set_opacity(0.0);
+    widget.set_margin_top(14);
+    widget.add_css_class("collection-card-entering");
+    grid.insert(&widget, -1);
 
-    let button_weak = button.downgrade();
+    let widget_weak = widget.downgrade();
     let started_at = Rc::new(Cell::new(None::<i64>));
-    button.add_tick_callback(move |_, frame_clock| {
-        let Some(button) = button_weak.upgrade() else {
+    widget.add_tick_callback(move |_, frame_clock| {
+        let Some(widget) = widget_weak.upgrade() else {
             return glib::ControlFlow::Break;
         };
 
@@ -7346,18 +7517,736 @@ fn append_collection_grid_card(grid: &gtk::FlowBox, _position: i32, button: gtk:
         let opacity = (progress / 0.42).clamp(0.0, 1.0);
         let displacement = (1.0 - spring) * 18.0;
 
-        button.set_opacity(opacity);
-        button.set_margin_top(displacement.round().clamp(-4.0, 18.0) as i32);
+        widget.set_opacity(opacity);
+        widget.set_margin_top(displacement.round().clamp(-4.0, 18.0) as i32);
 
         if progress >= 1.0 {
-            button.set_opacity(1.0);
-            button.set_margin_top(0);
-            button.remove_css_class("collection-card-entering");
+            widget.set_opacity(1.0);
+            widget.set_margin_top(0);
+            widget.remove_css_class("collection-card-entering");
             glib::ControlFlow::Break
         } else {
             glib::ControlFlow::Continue
         }
     });
+}
+
+#[derive(Clone)]
+struct CollectionActionSpec {
+    play_event: BrowserEvent,
+    play_next_event: BrowserEvent,
+    append_event: BrowserEvent,
+    open_event: BrowserEvent,
+    favorite_identity: String,
+    favorite_selected: bool,
+    offline_collection: Option<(String, BrowserEvent)>,
+    is_active: bool,
+    is_loading: bool,
+    inline_loading_on_click: bool,
+    playing: bool,
+    widget_key: String,
+}
+
+fn local_album_action_spec(
+    title: &str,
+    playback: &BrowserPlaybackState,
+    config: &AppConfig,
+) -> CollectionActionSpec {
+    let id = title.trim().to_lowercase();
+    let favorite_identity = format!("local-album:{id}");
+    CollectionActionSpec {
+        play_event: BrowserEvent::PlayLocalAlbum(title.to_string()),
+        play_next_event: BrowserEvent::QueueLocalCollection {
+            kind: "album".to_string(),
+            title: title.to_string(),
+            play_next: true,
+        },
+        append_event: BrowserEvent::QueueLocalCollection {
+            kind: "album".to_string(),
+            title: title.to_string(),
+            play_next: false,
+        },
+        open_event: BrowserEvent::Navigate(BrowserRoute::Album(title.to_string())),
+        favorite_selected: config.is_collection_favorite(&favorite_identity),
+        favorite_identity,
+        offline_collection: None,
+        is_active: playback.matches_collection("album", &id, title),
+        is_loading: playback.collection_is_loading("album", &id, title),
+        inline_loading_on_click: false,
+        playing: playback.playing,
+        widget_key: home_playback_key("album", &id, title).unwrap_or_else(|| format!("album:{id}")),
+    }
+}
+
+fn youtube_album_action_spec(
+    item: &YouTubeItem,
+    display_title: &str,
+    playback: &BrowserPlaybackState,
+    config: &AppConfig,
+) -> CollectionActionSpec {
+    let id = youtube_collection_cache_key(item);
+    let favorite_identity = format!("youtube-album:{}", display_title.to_lowercase());
+    let is_active = playback.matches_collection("album", &id, display_title);
+    CollectionActionSpec {
+        play_event: BrowserEvent::PlayYouTubeAlbum(item.clone()),
+        play_next_event: BrowserEvent::QueueYouTubeCollection {
+            item: item.clone(),
+            playlist: false,
+            play_next: true,
+        },
+        append_event: BrowserEvent::QueueYouTubeCollection {
+            item: item.clone(),
+            playlist: false,
+            play_next: false,
+        },
+        open_event: BrowserEvent::OpenYouTubeCollection(item.clone()),
+        favorite_selected: config.is_collection_favorite(&favorite_identity),
+        favorite_identity,
+        offline_collection: Some((
+            format!("album:{id}"),
+            BrowserEvent::DownloadYouTubeCollection {
+                item: item.clone(),
+                playlist: false,
+            },
+        )),
+        is_active,
+        is_loading: playback.collection_is_loading("album", &id, display_title),
+        inline_loading_on_click: !is_active,
+        playing: playback.playing,
+        widget_key: home_playback_key("album", &id, display_title)
+            .unwrap_or_else(|| format!("album:{id}")),
+    }
+}
+
+fn local_playlist_action_spec(
+    title: &str,
+    playback: &BrowserPlaybackState,
+    config: &AppConfig,
+) -> CollectionActionSpec {
+    let id = title.trim().to_lowercase();
+    let favorite_identity = format!("local-playlist:{id}");
+    CollectionActionSpec {
+        play_event: BrowserEvent::PlayLocalPlaylist(title.to_string()),
+        play_next_event: BrowserEvent::QueueLocalCollection {
+            kind: "playlist".to_string(),
+            title: title.to_string(),
+            play_next: true,
+        },
+        append_event: BrowserEvent::QueueLocalCollection {
+            kind: "playlist".to_string(),
+            title: title.to_string(),
+            play_next: false,
+        },
+        open_event: BrowserEvent::Navigate(BrowserRoute::Playlist(title.to_string())),
+        favorite_selected: config.is_collection_favorite(&favorite_identity),
+        favorite_identity,
+        offline_collection: None,
+        is_active: playback.matches_collection("playlist", &id, title),
+        is_loading: playback.collection_is_loading("playlist", &id, title),
+        inline_loading_on_click: false,
+        playing: playback.playing,
+        widget_key: home_playback_key("playlist", &id, title)
+            .unwrap_or_else(|| format!("playlist:{id}")),
+    }
+}
+
+fn youtube_playlist_action_spec(
+    item: &YouTubeItem,
+    playback: &BrowserPlaybackState,
+    config: &AppConfig,
+) -> CollectionActionSpec {
+    let id = if item.browse_id.trim().is_empty() {
+        item.title.to_lowercase()
+    } else {
+        item.browse_id.clone()
+    };
+    let favorite_identity = format!("youtube-playlist:{}", item.title.to_lowercase());
+    let is_active = playback.matches_collection("playlist", &id, &item.title);
+    CollectionActionSpec {
+        play_event: BrowserEvent::PlayYouTubePlaylist(item.clone()),
+        play_next_event: BrowserEvent::QueueYouTubeCollection {
+            item: item.clone(),
+            playlist: true,
+            play_next: true,
+        },
+        append_event: BrowserEvent::QueueYouTubeCollection {
+            item: item.clone(),
+            playlist: true,
+            play_next: false,
+        },
+        open_event: BrowserEvent::OpenYouTubePlaylist(item.clone()),
+        favorite_selected: config.is_collection_favorite(&favorite_identity),
+        favorite_identity,
+        offline_collection: Some((
+            format!("playlist:{}", item.browse_id),
+            BrowserEvent::DownloadYouTubeCollection {
+                item: item.clone(),
+                playlist: true,
+            },
+        )),
+        is_active,
+        is_loading: playback.collection_is_loading("playlist", &id, &item.title),
+        inline_loading_on_click: !is_active,
+        playing: playback.playing,
+        widget_key: home_playback_key("playlist", &id, &item.title)
+            .unwrap_or_else(|| format!("playlist:{id}")),
+    }
+}
+
+fn collection_action_title(spec: &CollectionActionSpec) -> &str {
+    match &spec.open_event {
+        BrowserEvent::Navigate(BrowserRoute::Album(title))
+        | BrowserEvent::Navigate(BrowserRoute::Playlist(title)) => title,
+        BrowserEvent::OpenYouTubeCollection(item) | BrowserEvent::OpenYouTubePlaylist(item) => {
+            &item.title
+        }
+        _ => "",
+    }
+}
+
+fn collection_action_kind(spec: &CollectionActionSpec) -> &'static str {
+    match &spec.open_event {
+        BrowserEvent::Navigate(BrowserRoute::Album(_)) | BrowserEvent::OpenYouTubeCollection(_) => {
+            "album"
+        }
+        BrowserEvent::Navigate(BrowserRoute::Playlist(_))
+        | BrowserEvent::OpenYouTubePlaylist(_) => "playlist",
+        _ => "collection",
+    }
+}
+
+fn localized_collection_kind(language: AppLanguage, kind: &str) -> &'static str {
+    match (language, kind) {
+        (AppLanguage::Portuguese, "album") => "álbum",
+        (AppLanguage::Portuguese, "playlist") => "playlist",
+        (AppLanguage::Portuguese, _) => "coleção",
+        (AppLanguage::English, "album") => "album",
+        (AppLanguage::English, "playlist") => "playlist",
+        (AppLanguage::English, _) => "collection",
+        (AppLanguage::Spanish, "album") => "álbum",
+        (AppLanguage::Spanish, "playlist") => "playlist",
+        (AppLanguage::Spanish, _) => "colección",
+    }
+}
+
+fn collection_open_accessible_label(language: AppLanguage, kind: &str, title: &str) -> String {
+    let kind = localized_collection_kind(language, kind);
+    match language {
+        AppLanguage::Portuguese => format!("Abrir {kind}: {title}"),
+        AppLanguage::English => format!("Open {kind}: {title}"),
+        AppLanguage::Spanish => format!("Abrir {kind}: {title}"),
+    }
+}
+
+fn collection_play_accessible_label(
+    language: AppLanguage,
+    title: &str,
+    is_active: bool,
+    playing: bool,
+) -> String {
+    match (language, is_active, playing) {
+        (AppLanguage::Portuguese, true, true) => format!("Pausar: {title}"),
+        (AppLanguage::Portuguese, true, false) => format!("Continuar: {title}"),
+        (AppLanguage::Portuguese, false, _) => format!("Reproduzir: {title}"),
+        (AppLanguage::English, true, true) => format!("Pause: {title}"),
+        (AppLanguage::English, true, false) => format!("Resume: {title}"),
+        (AppLanguage::English, false, _) => format!("Play: {title}"),
+        (AppLanguage::Spanish, true, true) => format!("Pausar: {title}"),
+        (AppLanguage::Spanish, true, false) => format!("Continuar: {title}"),
+        (AppLanguage::Spanish, false, _) => format!("Reproducir: {title}"),
+    }
+}
+
+fn collection_loading_accessible_label(language: AppLanguage, title: &str) -> String {
+    match language {
+        AppLanguage::Portuguese => format!("Carregando coleção: {title}"),
+        AppLanguage::English => format!("Loading collection: {title}"),
+        AppLanguage::Spanish => format!("Cargando colección: {title}"),
+    }
+}
+
+fn collection_more_options_accessible_label(language: AppLanguage, title: &str) -> String {
+    match language {
+        AppLanguage::Portuguese => format!("Mais opções para: {title}"),
+        AppLanguage::English => format!("More options for: {title}"),
+        AppLanguage::Spanish => format!("Más opciones para: {title}"),
+    }
+}
+
+fn collection_menu_accessible_label(label: &str, title: &str) -> String {
+    format!("{label}: {title}")
+}
+
+fn collection_loading_label(language: AppLanguage) -> &'static str {
+    match language {
+        AppLanguage::Portuguese => "Carregando coleção…",
+        AppLanguage::English => "Loading collection…",
+        AppLanguage::Spanish => "Cargando colección…",
+    }
+}
+
+fn collection_play_tooltip(language: AppLanguage, is_active: bool, playing: bool) -> &'static str {
+    match (language, is_active, playing) {
+        (AppLanguage::Portuguese, true, true) => "Pausar coleção",
+        (AppLanguage::Portuguese, true, false) => "Continuar coleção",
+        (AppLanguage::Portuguese, false, _) => "Reproduzir coleção",
+        (AppLanguage::English, true, true) => "Pause collection",
+        (AppLanguage::English, true, false) => "Resume collection",
+        (AppLanguage::English, false, _) => "Play collection",
+        (AppLanguage::Spanish, true, true) => "Pausar colección",
+        (AppLanguage::Spanish, true, false) => "Continuar colección",
+        (AppLanguage::Spanish, false, _) => "Reproducir colección",
+    }
+}
+
+fn collection_primary_action_button(
+    spec: &CollectionActionSpec,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> gtk::Button {
+    let control = gtk::Button::new();
+    control.add_css_class("circular");
+    control.add_css_class("collection-card-context-action");
+    control.add_css_class("material-card-primary-action");
+    control.set_widget_name(&format!("collection-play-control:{}", spec.widget_key));
+
+    let title = collection_action_title(spec);
+    control.set_focusable(true);
+    control.add_css_class("collection-action-focusable");
+
+    if spec.is_loading {
+        let tooltip = collection_loading_label(language);
+        let accessible_label = collection_loading_accessible_label(language, title);
+        let loading = MaterialLoadingIndicator::compact();
+        loading
+            .widget()
+            .update_property(&[gtk::accessible::Property::Label(&accessible_label)]);
+        control.set_child(Some(loading.widget()));
+        control.set_sensitive(false);
+        control.add_css_class("loading");
+        control.set_tooltip_text(Some(tooltip));
+        control.update_property(&[gtk::accessible::Property::Label(&accessible_label)]);
+        return control;
+    }
+
+    let tooltip = collection_play_tooltip(language, spec.is_active, spec.playing);
+    let accessible_label =
+        collection_play_accessible_label(language, title, spec.is_active, spec.playing);
+    control.set_icon_name(if spec.is_active && spec.playing {
+        "media-playback-pause-symbolic"
+    } else {
+        "media-playback-start-symbolic"
+    });
+    control.set_tooltip_text(Some(tooltip));
+    control.update_property(&[gtk::accessible::Property::Label(&accessible_label)]);
+    if spec.is_active {
+        control.add_css_class("active");
+    }
+
+    let sender = event_tx.clone();
+    let play_event = spec.play_event.clone();
+    let inline_loading_on_click = spec.inline_loading_on_click;
+    control.connect_clicked(move |button| {
+        let active = button.has_css_class("active");
+        if inline_loading_on_click && !active {
+            let label = collection_loading_label(language);
+            let loading = MaterialLoadingIndicator::compact();
+            loading
+                .widget()
+                .update_property(&[gtk::accessible::Property::Label(label)]);
+            button.set_child(Some(loading.widget()));
+            button.set_sensitive(false);
+            button.add_css_class("loading");
+            button.set_tooltip_text(Some(label));
+            button.update_property(&[gtk::accessible::Property::Label(label)]);
+        }
+
+        let event = if active {
+            BrowserEvent::TogglePlayback
+        } else {
+            play_event.clone()
+        };
+        let _ = sender.send(event);
+    });
+    control
+}
+
+fn collection_menu_action_button(
+    label: &str,
+    accessible_label: String,
+    icon_name: &str,
+    selected: bool,
+    event: BrowserEvent,
+    popover: &gtk::Popover,
+    event_tx: &Sender<BrowserEvent>,
+) -> gtk::Button {
+    let icon = gtk::Image::from_icon_name(icon_name);
+    icon.set_pixel_size(if icon_name == "go-next-symbolic" {
+        20
+    } else {
+        18
+    });
+    icon.set_size_request(20, 20);
+    icon.set_halign(gtk::Align::Center);
+    icon.set_valign(gtk::Align::Center);
+    icon.add_css_class("collection-card-overflow-action-icon");
+
+    let text = gtk::Label::new(Some(label));
+    text.set_xalign(0.0);
+    text.set_hexpand(true);
+    text.add_css_class("collection-card-overflow-action-label");
+
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    content.set_hexpand(true);
+    content.set_halign(gtk::Align::Fill);
+    content.append(&icon);
+    content.append(&text);
+
+    let button = gtk::Button::new();
+    button.set_child(Some(&content));
+    button.set_halign(gtk::Align::Fill);
+    button.set_hexpand(true);
+    button.add_css_class("flat");
+    button.add_css_class("collection-card-overflow-action");
+    button.add_css_class("material-card-menu-action");
+    button.set_focusable(true);
+    button.add_css_class("collection-action-focusable");
+    button.update_property(&[gtk::accessible::Property::Label(&accessible_label)]);
+    if selected {
+        button.add_css_class("material-card-menu-action-selected");
+    }
+
+    let sender = event_tx.clone();
+    let popover = popover.clone();
+    button.connect_clicked(move |_| {
+        popover.popdown();
+        let _ = sender.send(event.clone());
+    });
+    button
+}
+
+fn collection_overflow_menu(
+    spec: &CollectionActionSpec,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> gtk::MenuButton {
+    let title = collection_action_title(spec);
+    let more_options_label = collection_more_options_accessible_label(language, title);
+    let menu = gtk::MenuButton::builder()
+        .icon_name("view-more-symbolic")
+        .tooltip_text(more_options_label.as_str())
+        .build();
+    menu.update_property(&[gtk::accessible::Property::Label(&more_options_label)]);
+    menu.set_focusable(true);
+    menu.add_css_class("collection-action-focusable");
+    menu.add_css_class("circular");
+    menu.add_css_class("collection-card-overflow-button");
+    menu.add_css_class("material-card-overflow-trigger");
+    menu.set_sensitive(!spec.is_loading);
+    menu.set_widget_name(&format!("collection-overflow:{}", spec.widget_key));
+
+    let popover = gtk::Popover::new();
+    popover.set_autohide(true);
+    popover.add_css_class("collection-card-overflow-popover");
+
+    let actions = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    actions.set_margin_top(8);
+    actions.set_margin_bottom(8);
+    actions.set_margin_start(8);
+    actions.set_margin_end(8);
+
+    let labels = match language {
+        AppLanguage::Portuguese => (
+            "Reproduzir em seguida",
+            "Adicionar ao fim da fila",
+            "Abrir coleção",
+            if spec.favorite_selected {
+                "Remover dos favoritos"
+            } else {
+                "Adicionar aos favoritos"
+            },
+        ),
+        AppLanguage::English => (
+            "Play next",
+            "Add to queue",
+            "Open collection",
+            if spec.favorite_selected {
+                "Remove from favorites"
+            } else {
+                "Add to favorites"
+            },
+        ),
+        AppLanguage::Spanish => (
+            "Reproducir a continuación",
+            "Añadir al final de la cola",
+            "Abrir colección",
+            if spec.favorite_selected {
+                "Quitar de favoritos"
+            } else {
+                "Añadir a favoritos"
+            },
+        ),
+    };
+
+    for button in [
+        collection_menu_action_button(
+            labels.0,
+            collection_menu_accessible_label(labels.0, title),
+            "media-skip-forward-symbolic",
+            false,
+            spec.play_next_event.clone(),
+            &popover,
+            event_tx,
+        ),
+        collection_menu_action_button(
+            labels.1,
+            collection_menu_accessible_label(labels.1, title),
+            "list-add-symbolic",
+            false,
+            spec.append_event.clone(),
+            &popover,
+            event_tx,
+        ),
+        collection_menu_action_button(
+            labels.2,
+            collection_menu_accessible_label(labels.2, title),
+            "go-next-symbolic",
+            false,
+            spec.open_event.clone(),
+            &popover,
+            event_tx,
+        ),
+        collection_menu_action_button(
+            labels.3,
+            collection_menu_accessible_label(labels.3, title),
+            if spec.favorite_selected {
+                "emblem-favorite-symbolic"
+            } else {
+                "non-starred-symbolic"
+            },
+            spec.favorite_selected,
+            BrowserEvent::ToggleCollectionFavorite(spec.favorite_identity.clone()),
+            &popover,
+            event_tx,
+        ),
+    ] {
+        actions.append(&button);
+    }
+
+    if let Some((offline_collection_id, offline_event)) = spec.offline_collection.clone() {
+        let separator = gtk::Separator::new(gtk::Orientation::Horizontal);
+        separator.add_css_class("collection-card-overflow-separator");
+        actions.append(&separator);
+
+        let label = match language {
+            AppLanguage::Portuguese => "Disponibilizar offline",
+            AppLanguage::English => "Make available offline",
+            AppLanguage::Spanish => "Hacer disponible sin conexión",
+        };
+        let button = collection_menu_action_button(
+            label,
+            collection_menu_accessible_label(label, title),
+            "folder-download-symbolic",
+            false,
+            offline_event.clone(),
+            &popover,
+            event_tx,
+        );
+        button.set_widget_name(&format!(
+            "youtube-home-offline-menu:{offline_collection_id}"
+        ));
+        button.add_css_class("collection-card-offline-action");
+
+        actions.append(&button);
+    }
+
+    popover.set_child(Some(&actions));
+    menu.set_popover(Some(&popover));
+    menu
+}
+
+fn apply_collection_action_state(card: &gtk::Box, spec: &CollectionActionSpec) {
+    card.set_widget_name(&format!("collection-play-card:{}", spec.widget_key));
+    if spec.is_active {
+        card.add_css_class("collection-card-playing");
+    }
+    if spec.is_loading {
+        card.add_css_class("collection-card-loading");
+        card.add_css_class("collection-card-skeleton");
+    }
+    if let Some((offline_collection_id, _)) = &spec.offline_collection {
+        let target_name = format!("youtube-home-offline:{offline_collection_id}");
+        tag_home_collection_cache_indicator(&card.clone().upcast::<gtk::Widget>(), &target_name);
+    }
+}
+
+fn collection_grid_card_with_actions(
+    card: gtk::Box,
+    spec: CollectionActionSpec,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> gtk::Widget {
+    apply_collection_action_state(&card, &spec);
+    let main_button = collection_event_button(card, spec.open_event.clone(), event_tx);
+    let open_label = collection_open_accessible_label(
+        language,
+        collection_action_kind(&spec),
+        collection_action_title(&spec),
+    );
+    main_button.set_focusable(true);
+    main_button.add_css_class("collection-action-focusable");
+    main_button.set_tooltip_text(Some(&open_label));
+    main_button.update_property(&[gtk::accessible::Property::Label(&open_label)]);
+
+    let overlay = gtk::Overlay::new();
+    overlay.set_size_request(
+        COLLECTION_CARD_MAX_WIDTH + 20,
+        COLLECTION_CARD_MIN_HEIGHT + 12,
+    );
+    overlay.set_hexpand(true);
+    overlay.set_halign(gtk::Align::Fill);
+    overlay.set_valign(gtk::Align::Start);
+    overlay.set_child(Some(&main_button));
+    overlay.add_css_class("collection-grid-action-overlay");
+
+    let play = collection_primary_action_button(&spec, event_tx, language);
+    play.set_halign(gtk::Align::End);
+    play.set_valign(gtk::Align::Start);
+    play.set_margin_top(10);
+    play.set_margin_end(10);
+    play.add_css_class("collection-grid-primary-action");
+    overlay.add_overlay(&play);
+
+    let menu = collection_overflow_menu(&spec, event_tx, language);
+    menu.set_halign(gtk::Align::Start);
+    menu.set_valign(gtk::Align::Start);
+    menu.set_margin_top(10);
+    menu.set_margin_start(10);
+    menu.add_css_class("collection-grid-overflow-action");
+    overlay.add_overlay(&menu);
+    overlay.upcast()
+}
+
+fn decorate_playlist_row_with_actions(
+    row: &gtk::ListBoxRow,
+    spec: &CollectionActionSpec,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) {
+    let Some(content) = row
+        .child()
+        .and_then(|child| child.downcast::<gtk::Box>().ok())
+    else {
+        return;
+    };
+
+    let trailing_arrow = content.last_child();
+    if let Some(arrow) = trailing_arrow.as_ref() {
+        content.remove(arrow);
+    }
+
+    let menu = collection_overflow_menu(spec, event_tx, language);
+    menu.set_halign(gtk::Align::End);
+    menu.set_valign(gtk::Align::Center);
+    menu.add_css_class("playlist-row-overflow-action");
+    content.append(&menu);
+
+    let play = collection_primary_action_button(spec, event_tx, language);
+    play.set_halign(gtk::Align::End);
+    play.set_valign(gtk::Align::Center);
+    play.add_css_class("playlist-row-primary-action");
+    content.append(&play);
+
+    if let Some(arrow) = trailing_arrow {
+        content.append(&arrow);
+    }
+
+    let open_label = collection_open_accessible_label(
+        language,
+        collection_action_kind(spec),
+        collection_action_title(spec),
+    );
+    row.set_focusable(true);
+    row.add_css_class("collection-action-focusable");
+    row.update_property(&[gtk::accessible::Property::Label(&open_label)]);
+    row.add_css_class("playlist-card-row-with-actions");
+    row.set_widget_name(&format!("collection-play-row:{}", spec.widget_key));
+    if spec.is_active {
+        row.add_css_class("collection-card-playing");
+    }
+    if spec.is_loading {
+        row.add_css_class("collection-card-loading");
+    }
+    if let Some((offline_collection_id, _)) = &spec.offline_collection {
+        let target_name = format!("youtube-home-offline:{offline_collection_id}");
+        tag_home_collection_cache_indicator(&content.clone().upcast::<gtk::Widget>(), &target_name);
+    }
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Playlist action rows keep navigation, playback and source state explicit"
+)]
+fn playlist_row_with_actions(
+    cover_path: Option<&Path>,
+    name: &str,
+    subtitle: &str,
+    detail: &str,
+    online: bool,
+    spec: CollectionActionSpec,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> gtk::ListBoxRow {
+    let row = playlist_row(cover_path, name, subtitle, detail, online);
+    decorate_playlist_row_with_actions(&row, &spec, event_tx, language);
+    row
+}
+
+fn youtube_mix_row_with_actions(
+    item: &YouTubeItem,
+    track_count: Option<usize>,
+    cover_path: Option<&Path>,
+    spec: CollectionActionSpec,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> gtk::ListBoxRow {
+    let row = youtube_mix_row(item, track_count, cover_path);
+    decorate_playlist_row_with_actions(&row, &spec, event_tx, language);
+    row
+}
+
+#[cfg(test)]
+mod collection_action_accessibility_tests {
+    use super::*;
+
+    #[test]
+    fn collection_action_labels_include_the_collection_title() {
+        let title = "Discovery";
+        assert_eq!(
+            collection_open_accessible_label(AppLanguage::English, "album", title),
+            "Open album: Discovery"
+        );
+        assert_eq!(
+            collection_play_accessible_label(AppLanguage::Portuguese, title, false, false),
+            "Reproduzir: Discovery"
+        );
+        assert_eq!(
+            collection_more_options_accessible_label(AppLanguage::Spanish, title),
+            "Más opciones para: Discovery"
+        );
+    }
+
+    #[test]
+    fn active_collection_labels_distinguish_pause_and_resume() {
+        assert_eq!(
+            collection_play_accessible_label(AppLanguage::English, "Mix", true, true),
+            "Pause: Mix"
+        );
+        assert_eq!(
+            collection_play_accessible_label(AppLanguage::English, "Mix", true, false),
+            "Resume: Mix"
+        );
+    }
 }
 
 fn collection_button(

@@ -125,6 +125,11 @@ mod tests {
             ".material-carousel-motion-installed",
             ".material-carousel-edge-spring",
             ".material-carousel-edge-spring-surface",
+            ".youtube-home-loading-placeholders",
+            ".home-card-loading-placeholder",
+            ".collection-grid-action-overlay",
+            ".playlist-card-row-with-actions",
+            ".collection-action-focusable",
         ] {
             assert!(css.contains(required), "missing required CSS: {required}");
         }

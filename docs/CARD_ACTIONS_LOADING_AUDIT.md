@@ -46,18 +46,18 @@ Remaining inconsistencies:
 
 Current behavior:
 
-- album cards and artist-album cards are navigation-only;
-- compact artist cards are navigation-only;
-- collection-grid buttons do not yet reuse the Home action overlay;
-- loading currently falls back to one placeholder card or one status row.
+- local and YouTube album grids use the reusable collection action component;
+- playlist rows use the same play/pause and overflow semantics without replacing row navigation;
+- artist-album and compact artist cards remain navigation-only;
+- loading disables overflow and uses the inline Material Loading Indicator in the primary action.
 
 Recommended action follow-up:
 
-1. extract a reusable collection-card action overlay from the Home card builder;
-2. add play/pause and overflow to album and playlist grid cards;
+1. ✅ contextual accessible names identify both the action and collection title;
+2. ✅ visible focus treatment covers navigation, play/pause, overflow and menu actions;
 3. keep artist cards navigation-only until artist queue resolution is explicit;
-4. preserve a single full-card navigation target and independent accessible
-   names for floating controls.
+4. decide separately whether artist-album cards should gain actions after async artist-page refreshes can preserve playback context;
+5. keep search rows compact and add only keyboard-first trailing actions.
 
 ### Search
 
@@ -121,5 +121,6 @@ The first implementation should be limited to the YouTube Home first paint:
 1. update the active documentation and roadmap contract;
 2. add first-paint YouTube Home placeholder rails;
 3. validate replacement with cached and fresh Home responses;
-4. extract reusable album/playlist action overlays for collection grids;
-5. audit keyboard and screen-reader behavior before extending search-row actions.
+4. ✅ extract reusable album/playlist action overlays for collection pages;
+5. ✅ audit keyboard and screen-reader behavior before extending search-row actions;
+6. add compact trailing actions to search results without copying the complete card cluster.

@@ -6,7 +6,7 @@
 
 <!-- roadmap_rebaseline_2026_06_24_v2 -->
 
-> Last updated: 2026-07-01
+> Last updated: 2026-07-03
 > Status legend: ✅ completed · 🟡 in progress · ⬜ planned  
 > Current development priority: **Material 3 Expressive visual-system consolidation**
 
@@ -189,8 +189,7 @@ Noctalia, Frosted Glass and dynamic album-palette identities.
 
 ### Active checkpoint
 
-- 🟡 Reusable native Material Loading Indicator for page, inline/action and
-  load-more loading states.
+- 🟡 Compact search-result actions and keyboard-first result navigation.
 
 ### Planned checkpoints
 
@@ -217,13 +216,16 @@ Noctalia, Frosted Glass and dynamic album-palette identities.
 - Listening-based details for artists and albums.
 - Navigation from cards to collection pages.
 - Current playback information on media rows.
+- ✅ Contextual play/pause and overflow actions on supported Home collection cards.
+- ✅ Dedicated first-paint placeholder rails for an empty remote YouTube Home.
 
 ### Remaining
 
-- Contextual play button on collection cards.
+- ✅ Reusable play/pause and overflow actions are applied to album grids and playlist rows.
+- ✅ Collection actions have contextual accessible names and visible keyboard focus.
+- Keep artist cards navigation-first until deterministic artist queue resolution is available.
 - ✅ Favorite action inside each collection card overflow menu.
-- Overflow menu.
-- 🟡 Skeleton treatment during remote loading is implemented on active collection cards; dedicated placeholder rails remain planned.
+- ✅ Skeleton treatment during remote loading is implemented on active collection cards and initial Home placeholder rails.
 - 🟡 Type-aware placeholders for missing artwork; palette-derived variants remain planned.
 - 🟡 Spring-based animated insertion is implemented for collection grids; animated removal remains planned.
 - ✅ Vertical top/end overscroll matches the Home carousel's 520 ms spring timing and responds to wheel, touch and scrollbar dragging.
@@ -471,8 +473,8 @@ create less review and merge noise.
 3. ✅ Integrate previous, next, repeat and shuffle with the new queue.
 4. ✅ Build the dedicated Queue 2.0 interface.
 5. ✅ Persist and restore queue state.
-6. 🟡 Consolidate Material Expressive loading indicators and visual-system primitives.
-7. Finish card actions and loading placeholders.
+6. ✅ Consolidate Material Expressive loading indicators and visual-system primitives.
+7. 🟡 Finish card actions and loading placeholders.
 8. Finish search pagination, caching and keyboard navigation.
 9. Harden YouTube unavailable-track and recovery behavior.
 10. Resume remote playlist metadata editing, removal and deletion checkpoints.

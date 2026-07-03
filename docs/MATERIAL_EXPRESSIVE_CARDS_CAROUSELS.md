@@ -24,7 +24,11 @@ surface:
 - `material-card-menu-action` for actions inside the card overflow menu;
 - state classes `material-card-menu-action-selected`,
   `material-card-menu-action-loading`, and `material-card-menu-action-success`
-  for favorite/offline feedback.
+  for favorite/offline feedback;
+- contextual accessible names include the collection title for navigation,
+  play/pause, overflow and menu actions;
+- `.collection-action-focusable` provides a visible Material focus treatment
+  without changing pointer-hover geometry.
 
 ## Carousel contract
 
