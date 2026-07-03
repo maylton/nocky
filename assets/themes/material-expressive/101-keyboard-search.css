@@ -1,0 +1,37 @@
+/* Loaded after 100-buttons.css so keyboard focus remains visible. */
+window.theme-material-expressive
+  flowboxchild.collection-grid-wrapper:focus {
+  box-shadow: none;
+}
+
+window.theme-material-expressive
+  .collection-action-focusable:focus,
+window.theme-material-expressive
+  row.search-result-keyboard-row:focus {
+  box-shadow:
+    0 0 0 3px alpha(@m3_primary, 0.30),
+    0 8px 20px alpha(black, 0.16);
+}
+
+window.theme-material-expressive
+  row.search-result-keyboard-row:selected {
+  background-color: alpha(@m3_primary_container, 0.30);
+}
+
+window.theme-material-expressive
+  row.search-result-keyboard-row:hover {
+  background-color: alpha(@m3_on_surface, 0.05);
+}
+
+window.theme-material-expressive
+  .search-result-primary-action {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+window.theme-material-expressive
+  .search-result-primary-action.loading {
+  opacity: 0.78;
+}

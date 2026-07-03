@@ -64,15 +64,16 @@ Recommended action follow-up:
 Current behavior:
 
 - track rows already provide track-level actions through the queue/action menu;
-- album, artist and playlist result rows are navigation-only;
+- album and playlist results expose one compact play/pause action;
+- artist results remain navigation-only;
+- collection rows use arrow navigation and Enter/Space activation;
 - loading uses section headings, status banners and empty/searching rows.
 
 Recommended follow-up:
 
-- keep search rows compact;
-- add only the most useful trailing action rather than reproducing the complete
-  Home overlay;
-- prioritize keyboard-first navigation before adding several icon-only actions.
+- keep search rows compact and avoid reproducing the complete Home overlay;
+- implement true remote pagination and an expiring result cache;
+- announce result refreshes only if a future assistive-technology pass requires it.
 
 ## Current loading coverage
 
@@ -123,4 +124,4 @@ The first implementation should be limited to the YouTube Home first paint:
 3. validate replacement with cached and fresh Home responses;
 4. ✅ extract reusable album/playlist action overlays for collection pages;
 5. ✅ audit keyboard and screen-reader behavior before extending search-row actions;
-6. add compact trailing actions to search results without copying the complete card cluster.
+6. ✅ add compact trailing actions and keyboard navigation to search results.

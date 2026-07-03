@@ -73,6 +73,10 @@ const MATERIAL_EXPRESSIVE_MODULES: &[(&str, &str)] = &[
         "100-buttons.css",
         include_str!("../assets/themes/material-expressive/100-buttons.css"),
     ),
+    (
+        "101-keyboard-search.css",
+        include_str!("../assets/themes/material-expressive/101-keyboard-search.css"),
+    ),
 ];
 
 pub(crate) fn frosted_glass_css() -> &'static str {
@@ -130,6 +134,9 @@ mod tests {
             ".collection-grid-action-overlay",
             ".playlist-card-row-with-actions",
             ".collection-action-focusable",
+            ".collection-grid-wrapper",
+            ".search-result-keyboard-row",
+            ".search-result-primary-action",
         ] {
             assert!(css.contains(required), "missing required CSS: {required}");
         }
@@ -159,6 +166,23 @@ mod tests {
         assert!(!css.contains(
             "window.theme-material-expressive,\nwindow.theme-material-expressive > toastoverlay"
         ));
+    }
+
+    #[test]
+    fn keyboard_search_css_loads_after_button_rules() {
+        let names = MATERIAL_EXPRESSIVE_MODULES
+            .iter()
+            .map(|(name, _)| *name)
+            .collect::<Vec<_>>();
+        let buttons = names
+            .iter()
+            .position(|name| *name == "100-buttons.css")
+            .expect("button module should be registered");
+        let keyboard = names
+            .iter()
+            .position(|name| *name == "101-keyboard-search.css")
+            .expect("keyboard/search module should be registered");
+        assert!(keyboard > buttons);
     }
 
     #[test]

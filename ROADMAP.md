@@ -189,7 +189,7 @@ Noctalia, Frosted Glass and dynamic album-palette identities.
 
 ### Active checkpoint
 
-- 🟡 Compact search-result actions and keyboard-first result navigation.
+- 🟡 Remote search pagination and cache expiration.
 
 ### Planned checkpoints
 
@@ -244,12 +244,13 @@ Noctalia, Frosted Glass and dynamic album-palette identities.
 - Independent incremental limits for each result category.
 - Loading, empty and error state foundations.
 - Local and YouTube results remain source-aware.
+- ✅ Album and playlist results expose one compact play/pause action.
+- ✅ Collection-result rows support arrow navigation and Enter/Space activation.
 
 ### Remaining
 
 - True remote pagination beyond the initial batches.
 - Search-result cache with expiration.
-- Keyboard-first result navigation.
 - Search history and recent queries.
 - Better ranking across mixed local and remote results.
 - Cancellation of unnecessary remote requests after route changes.

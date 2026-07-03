@@ -2169,7 +2169,7 @@ impl LibraryBrowser {
         query: &str,
     ) {
         if matches!(self.route(), BrowserRoute::All) && !query.trim().is_empty() {
-            self.rebuild_search(tracks, config, youtube, query);
+            self.rebuild_search(tracks, config, youtube, query, context.playback);
             self.root.set_visible_child_name("search");
             return;
         }
@@ -2323,6 +2323,7 @@ impl LibraryBrowser {
         config: &AppConfig,
         youtube: &YouTubeLibraryCache,
         raw_query: &str,
+        playback: &BrowserPlaybackState,
     ) {
         let query = normalize_search_text(raw_query);
         let changed = self.last_search_query.borrow().as_str() != query.as_str();
@@ -2523,6 +2524,8 @@ impl LibraryBrowser {
             &self.event_tx,
             loading,
             copy,
+            config,
+            playback,
         ));
         self.search_content.append(&search_list_section(
             copy.artists,
@@ -2532,6 +2535,8 @@ impl LibraryBrowser {
             &self.event_tx,
             loading,
             copy,
+            config,
+            playback,
         ));
         self.search_content.append(&search_list_section(
             copy.playlists,
@@ -2541,6 +2546,8 @@ impl LibraryBrowser {
             &self.event_tx,
             loading,
             copy,
+            config,
+            playback,
         ));
     }
 
@@ -4780,6 +4787,10 @@ fn search_more_button(
     button
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Search sections keep paging, rendering and playback context explicit"
+)]
 fn search_list_section(
     title: &str,
     empty_message: &str,
@@ -4788,6 +4799,8 @@ fn search_list_section(
     event_tx: &Sender<BrowserEvent>,
     loading: bool,
     copy: SearchCopy,
+    config: &AppConfig,
+    playback: &BrowserPlaybackState,
 ) -> gtk::Box {
     let total = cards.len();
     let visible = total.min(limit.get());
@@ -4799,10 +4812,24 @@ fn search_list_section(
     ));
 
     let list = gtk::ListBox::new();
-    list.set_selection_mode(gtk::SelectionMode::None);
+    list.set_selection_mode(gtk::SelectionMode::Single);
+    list.set_activate_on_single_click(true);
     list.add_css_class("boxed-list");
     list.add_css_class("search-results-list");
     list.add_css_class("search-results-surface");
+    list.add_css_class("search-keyboard-list");
+
+    let visible_cards = Rc::new(RefCell::new(Vec::<HomeCard>::new()));
+    {
+        let sender = event_tx.clone();
+        let cards = visible_cards.clone();
+        list.connect_row_activated(move |_, row| {
+            let Some(card) = cards.borrow().get(row.index() as usize).cloned() else {
+                return;
+            };
+            let _ = sender.send(card.open_event());
+        });
+    }
 
     if total == 0 {
         list.append(&empty_row(if loading {
@@ -4812,7 +4839,9 @@ fn search_list_section(
         }));
     } else {
         for card in cards.into_iter().take(visible) {
-            list.append(&search_collection_button(card, event_tx));
+            let row = search_collection_row(&card, event_tx, config, playback);
+            list.append(&row);
+            visible_cards.borrow_mut().push(card);
         }
     }
     section.append(&list);
@@ -4829,8 +4858,91 @@ fn search_list_section(
     section
 }
 
-fn search_collection_button(card: HomeCard, event_tx: &Sender<BrowserEvent>) -> gtk::Button {
-    let (cover_path, icon_name, title, subtitle, detail, online) = match &card {
+fn search_collection_action_spec(
+    card: &HomeCard,
+    config: &AppConfig,
+    playback: &BrowserPlaybackState,
+) -> Option<CollectionActionSpec> {
+    match card {
+        HomeCard::LocalAlbum { title, .. } => {
+            Some(local_album_action_spec(title, playback, config))
+        }
+        HomeCard::YouTubeAlbum { item, .. } => Some(youtube_album_action_spec(
+            item,
+            &item.title,
+            playback,
+            config,
+        )),
+        HomeCard::LocalPlaylist { title, .. } => {
+            Some(local_playlist_action_spec(title, playback, config))
+        }
+        HomeCard::YouTubePlaylist(item) => {
+            Some(youtube_playlist_action_spec(item, playback, config))
+        }
+        _ => None,
+    }
+}
+
+fn is_keyboard_activation_key(key: gdk::Key) -> bool {
+    key == gdk::Key::Return || key == gdk::Key::KP_Enter || key == gdk::Key::space
+}
+
+fn install_widget_keyboard_activation(
+    widget: &gtk::Widget,
+    event: BrowserEvent,
+    event_tx: &Sender<BrowserEvent>,
+) {
+    let controller = gtk::EventControllerKey::new();
+    let widget_weak = widget.downgrade();
+    let sender = event_tx.clone();
+
+    controller.connect_key_pressed(move |_, key, _, _| {
+        let Some(widget) = widget_weak.upgrade() else {
+            return glib::Propagation::Proceed;
+        };
+
+        // Do not open the card when Enter/Space belongs to a focused
+        // child control such as play/pause or overflow.
+        if !widget.has_focus() || !is_keyboard_activation_key(key) {
+            return glib::Propagation::Proceed;
+        }
+
+        let _ = sender.send(event.clone());
+        glib::Propagation::Stop
+    });
+
+    widget.add_controller(controller);
+}
+
+fn install_row_keyboard_activation(
+    row: &gtk::ListBoxRow,
+    event: BrowserEvent,
+    event_tx: &Sender<BrowserEvent>,
+) {
+    let controller = gtk::EventControllerKey::new();
+    let row_weak = row.downgrade();
+    let sender = event_tx.clone();
+    controller.connect_key_pressed(move |_, key, _, _| {
+        let Some(row) = row_weak.upgrade() else {
+            return glib::Propagation::Proceed;
+        };
+        if !row.has_focus() || !is_keyboard_activation_key(key) {
+            return glib::Propagation::Proceed;
+        }
+
+        let _ = sender.send(event.clone());
+        glib::Propagation::Stop
+    });
+    row.add_controller(controller);
+}
+
+fn search_collection_row(
+    card: &HomeCard,
+    event_tx: &Sender<BrowserEvent>,
+    config: &AppConfig,
+    playback: &BrowserPlaybackState,
+) -> gtk::ListBoxRow {
+    let (cover_path, icon_name, title, subtitle, detail, online) = match card {
         HomeCard::LocalAlbum {
             title,
             subtitle,
@@ -4957,50 +5069,48 @@ fn search_collection_button(card: HomeCard, event_tx: &Sender<BrowserEvent>) -> 
     arrow.add_css_class("dim-label");
     arrow.add_css_class("search-result-arrow");
 
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    row.add_css_class("search-result-row");
-    row.set_margin_top(8);
-    row.set_margin_bottom(8);
-    row.set_margin_start(10);
-    row.set_margin_end(10);
-    row.append(&leading);
-    row.append(&text);
-    row.append(&source);
-    row.append(&arrow);
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    content.add_css_class("search-result-row");
+    content.set_margin_top(8);
+    content.set_margin_bottom(8);
+    content.set_margin_start(10);
+    content.set_margin_end(10);
+    content.append(&leading);
+    content.append(&text);
+    content.append(&source);
 
-    let button = gtk::Button::new();
-    button.set_child(Some(&row));
-    button.set_hexpand(true);
-    button.set_halign(gtk::Align::Fill);
-    button.add_css_class("flat");
-    button.add_css_class("search-result-button");
+    if let Some(spec) = search_collection_action_spec(card, config, playback) {
+        let action = collection_primary_action_button(&spec, event_tx, config.language);
+        action.set_size_request(36, 36);
+        action.set_halign(gtk::Align::End);
+        action.set_valign(gtk::Align::Center);
+        action.add_css_class("search-result-primary-action");
+        content.append(&action);
+    }
 
-    let sender = event_tx.clone();
-    button.connect_clicked(move |_| {
-        let event = match card.clone() {
-            HomeCard::LocalAlbum { title, .. } => {
-                BrowserEvent::Navigate(BrowserRoute::Album(title))
-            }
-            HomeCard::YouTubeAlbum { item, .. } => BrowserEvent::OpenYouTubeCollection(item),
-            HomeCard::LocalArtist { title, .. } => {
-                BrowserEvent::Navigate(BrowserRoute::Artist(title))
-            }
-            HomeCard::YouTubeArtist { item, .. } => BrowserEvent::OpenYouTubeCollection(item),
-            HomeCard::LocalPlaylist { title, .. } => {
-                BrowserEvent::Navigate(BrowserRoute::Playlist(title))
-            }
-            HomeCard::LocalMix { title, indices, .. } => {
-                BrowserEvent::PlayLocalMix { title, indices }
-            }
-            HomeCard::YouTubeTrack { item, queue, index } => {
-                BrowserEvent::YouTubeTrackActivated { item, queue, index }
-            }
-            HomeCard::YouTubePlaylist(item) => BrowserEvent::OpenYouTubePlaylist(item),
-        };
-        let _ = sender.send(event);
-    });
+    content.append(&arrow);
 
-    button
+    let row = gtk::ListBoxRow::new();
+    row.set_child(Some(&content));
+    row.set_focusable(true);
+    row.set_activatable(true);
+    row.set_selectable(true);
+    row.add_css_class("search-result-keyboard-row");
+    install_row_keyboard_activation(&row, card.open_event(), event_tx);
+    row
+}
+
+#[cfg(test)]
+mod keyboard_search_action_tests {
+    use super::*;
+
+    #[test]
+    fn enter_space_and_keypad_enter_activate_rows() {
+        assert!(is_keyboard_activation_key(gdk::Key::Return));
+        assert!(is_keyboard_activation_key(gdk::Key::KP_Enter));
+        assert!(is_keyboard_activation_key(gdk::Key::space));
+        assert!(!is_keyboard_activation_key(gdk::Key::Escape));
+    }
 }
 
 fn search_result_artwork(cover_path: Option<&Path>, icon_name: &str) -> gtk::Stack {
@@ -7477,6 +7587,18 @@ fn collection_page_header(title: &str, subtitle: &str, icon_name: &str) -> gtk::
     header
 }
 
+fn neutralize_generated_flow_box_focus(widget: &gtk::Widget) {
+    let Some(parent) = widget.parent() else {
+        return;
+    };
+    let Ok(child) = parent.downcast::<gtk::FlowBoxChild>() else {
+        return;
+    };
+
+    child.set_focusable(false);
+    child.add_css_class("collection-grid-wrapper");
+}
+
 fn append_collection_grid_card<W: IsA<gtk::Widget>>(
     grid: &gtk::FlowBox,
     _position: i32,
@@ -7487,6 +7609,7 @@ fn append_collection_grid_card<W: IsA<gtk::Widget>>(
         widget.set_opacity(1.0);
         widget.set_margin_top(0);
         grid.insert(&widget, -1);
+        neutralize_generated_flow_box_focus(&widget);
         return;
     }
 
@@ -7494,6 +7617,7 @@ fn append_collection_grid_card<W: IsA<gtk::Widget>>(
     widget.set_margin_top(14);
     widget.add_css_class("collection-card-entering");
     grid.insert(&widget, -1);
+    neutralize_generated_flow_box_focus(&widget);
 
     let widget_weak = widget.downgrade();
     let started_at = Rc::new(Cell::new(None::<i64>));
@@ -8093,8 +8217,9 @@ fn collection_grid_card_with_actions(
         collection_action_kind(&spec),
         collection_action_title(&spec),
     );
-    main_button.set_focusable(true);
-    main_button.add_css_class("collection-action-focusable");
+    // The overlay is the keyboard target for the complete card. Keeping the
+    // inner navigation button out of the focus chain prevents duplicate stops.
+    main_button.set_focusable(false);
     main_button.set_tooltip_text(Some(&open_label));
     main_button.update_property(&[gtk::accessible::Property::Label(&open_label)]);
 
@@ -8108,6 +8233,12 @@ fn collection_grid_card_with_actions(
     overlay.set_valign(gtk::Align::Start);
     overlay.set_child(Some(&main_button));
     overlay.add_css_class("collection-grid-action-overlay");
+
+    // Forward Tab order: complete card -> play/pause -> overflow.
+    overlay.set_focusable(true);
+    overlay.add_css_class("collection-action-focusable");
+    let overlay_widget = overlay.clone().upcast::<gtk::Widget>();
+    install_widget_keyboard_activation(&overlay_widget, spec.open_event.clone(), event_tx);
 
     let play = collection_primary_action_button(&spec, event_tx, language);
     play.set_halign(gtk::Align::End);
@@ -8171,6 +8302,7 @@ fn decorate_playlist_row_with_actions(
     row.update_property(&[gtk::accessible::Property::Label(&open_label)]);
     row.add_css_class("playlist-card-row-with-actions");
     row.set_widget_name(&format!("collection-play-row:{}", spec.widget_key));
+    install_row_keyboard_activation(row, spec.open_event.clone(), event_tx);
     if spec.is_active {
         row.add_css_class("collection-card-playing");
     }
