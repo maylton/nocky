@@ -6,22 +6,16 @@ from pathlib import Path
 SOURCE = Path(__file__).with_name("apply-keyboard-search-actions.py")
 text = SOURCE.read_text(encoding="utf-8")
 
-old = '''        "fn search_result_artwork(\n",
-        SEARCH_SECTION,
-        "Keyboard-first search collection rows",
-'''
-new = '''        "fn search_result_artwork(",
-        SEARCH_SECTION,
-        "Keyboard-first search collection rows",
-'''
+old = r'"fn search_result_artwork(\n",'
+new = '"fn search_result_artwork(",'
 
-count = text.count(old)
-if count != 1:
+if old in text:
+    text = text.replace(old, new, 1)
+elif new not in text:
     raise SystemExit(
-        f"Expected one search artwork boundary in {SOURCE}, found {count}."
+        f"Could not find either the old or corrected search artwork boundary in {SOURCE}."
     )
 
-text = text.replace(old, new, 1)
 namespace = {
     "__name__": "__main__",
     "__file__": str(SOURCE),
