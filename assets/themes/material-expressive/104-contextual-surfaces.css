@@ -1,0 +1,102 @@
+/* Material Expressive contextual surfaces: menus, popovers and transient action sheets. */
+
+window.theme-material-expressive popover.background > contents,
+window.theme-material-expressive popover.menu > contents,
+window.theme-material-expressive popover.context-menu > contents,
+window.theme-material-expressive .contextual-surface,
+window.theme-material-expressive .material-contextual-surface {
+  background-color: @m3_surface_container_high;
+  color: @m3_on_surface;
+  border: 1px solid alpha(@m3_outline, 0.28);
+  border-radius: 24px;
+  padding: 8px;
+  box-shadow:
+    0 14px 34px alpha(black, 0.24),
+    0 2px 6px alpha(black, 0.18),
+    inset 0 0 0 1px alpha(@m3_primary, 0.04);
+}
+
+window.theme-material-expressive popover.background > arrow,
+window.theme-material-expressive popover.menu > arrow {
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_outline, 0.28);
+}
+
+window.theme-material-expressive popover.menu modelbutton,
+window.theme-material-expressive popover.background modelbutton,
+window.theme-material-expressive .contextual-surface modelbutton,
+window.theme-material-expressive .material-contextual-menu-item {
+  min-height: 42px;
+  padding: 8px 14px;
+  border-radius: 16px;
+  color: @m3_on_surface;
+}
+
+window.theme-material-expressive popover.menu modelbutton:hover,
+window.theme-material-expressive popover.background modelbutton:hover,
+window.theme-material-expressive .contextual-surface modelbutton:hover,
+window.theme-material-expressive .material-contextual-menu-item:hover {
+  background-color: alpha(@m3_primary, 0.10);
+}
+
+window.theme-material-expressive popover.menu modelbutton:active,
+window.theme-material-expressive popover.background modelbutton:active,
+window.theme-material-expressive .contextual-surface modelbutton:active,
+window.theme-material-expressive .material-contextual-menu-item:active {
+  background-color: alpha(@m3_primary, 0.16);
+}
+
+window.theme-material-expressive popover.menu modelbutton:focus-visible,
+window.theme-material-expressive popover.background modelbutton:focus-visible,
+window.theme-material-expressive .contextual-surface modelbutton:focus-visible,
+window.theme-material-expressive .material-contextual-menu-item:focus-visible {
+  outline: 2px solid alpha(@m3_primary, 0.76);
+  outline-offset: 2px;
+  background-color: alpha(@m3_primary, 0.12);
+}
+
+window.theme-material-expressive popover.menu separator,
+window.theme-material-expressive popover.background separator,
+window.theme-material-expressive .contextual-surface separator,
+window.theme-material-expressive .material-contextual-separator {
+  min-height: 1px;
+  margin: 6px 8px;
+  background-color: alpha(@m3_outline_variant, 0.56);
+}
+
+window.theme-material-expressive popover.menu label,
+window.theme-material-expressive popover.background label,
+window.theme-material-expressive .contextual-surface label {
+  color: @m3_on_surface;
+}
+
+window.theme-material-expressive popover.menu .dim-label,
+window.theme-material-expressive popover.background .dim-label,
+window.theme-material-expressive .contextual-surface .dim-label {
+  color: @m3_on_surface_variant;
+}
+
+window.theme-material-expressive .destructive-action,
+window.theme-material-expressive popover.menu modelbutton.destructive-action,
+window.theme-material-expressive popover.background modelbutton.destructive-action {
+  color: @m3_error;
+}
+
+window.theme-material-expressive .destructive-action:hover,
+window.theme-material-expressive popover.menu modelbutton.destructive-action:hover,
+window.theme-material-expressive popover.background modelbutton.destructive-action:hover {
+  background-color: alpha(@m3_error, 0.12);
+}
+
+window.theme-material-expressive .destructive-action:active,
+window.theme-material-expressive popover.menu modelbutton.destructive-action:active,
+window.theme-material-expressive popover.background modelbutton.destructive-action:active {
+  background-color: alpha(@m3_error, 0.18);
+}
+
+window.theme-material-expressive .collection-action-popover,
+window.theme-material-expressive .search-action-popover,
+window.theme-material-expressive .playlist-action-popover,
+window.theme-material-expressive .queue-action-popover {
+  min-width: 220px;
+}

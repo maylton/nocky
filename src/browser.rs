@@ -4760,6 +4760,10 @@ fn youtube_playlist_subtitle(item: &YouTubeItem) -> &str {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Search announcement copy keeps localized category counts explicit"
+)]
 fn search_results_announcement(
     language: AppLanguage,
     query: &str,
@@ -4805,6 +4809,10 @@ fn search_results_announcement(
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Search accessible summary mirrors the categorized result counts"
+)]
 fn update_search_results_accessible_summary(
     widget: &gtk::Box,
     language: AppLanguage,

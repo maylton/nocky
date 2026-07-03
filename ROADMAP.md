@@ -187,14 +187,17 @@ The active priority is making Nocky's reusable GTK widgets, loading states and
 surface treatments feel coherent with Material 3 Expressive while preserving
 Noctalia, Frosted Glass and dynamic album-palette identities.
 
+### Implemented
+
+- ✅ Material Expressive contextual menu and popover surfaces.
+
 ### Active checkpoint
 
-- 🟡 Expressive buttons and button-state motion.
+- 🟡 Dialogs and confirmation surfaces.
 
 ### Planned checkpoints
 
 - Expressive buttons and button-state motion.
-- Menus and contextual surfaces.
 - Dialogs and confirmation surfaces.
 - Switches, toggles and segmented controls.
 - Cards, containers and shape hierarchy.
@@ -477,7 +480,7 @@ create less review and merge noise.
 5. ✅ Persist and restore queue state.
 6. ✅ Consolidate Material Expressive loading indicators and visual-system primitives.
 7. 🟡 Finish card actions and loading placeholders.
-8. Continue with expressive button-state motion.
+8. Continue with dialogs and confirmation surfaces.
 9. Harden YouTube unavailable-track and recovery behavior.
 10. Resume remote playlist metadata editing, removal and deletion checkpoints.
 11. Add shared card-to-page transitions.

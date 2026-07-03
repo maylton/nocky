@@ -85,6 +85,10 @@ const MATERIAL_EXPRESSIVE_MODULES: &[(&str, &str)] = &[
         "103-home-player-polish.css",
         include_str!("../assets/themes/material-expressive/103-home-player-polish.css"),
     ),
+    (
+        "104-contextual-surfaces.css",
+        include_str!("../assets/themes/material-expressive/104-contextual-surfaces.css"),
+    ),
 ];
 
 pub(crate) fn frosted_glass_css() -> &'static str {
@@ -145,6 +149,8 @@ mod tests {
             ".collection-grid-wrapper",
             ".search-result-keyboard-row",
             ".search-result-primary-action",
+            ".contextual-surface",
+            ".material-contextual-menu-item",
         ] {
             assert!(css.contains(required), "missing required CSS: {required}");
         }
