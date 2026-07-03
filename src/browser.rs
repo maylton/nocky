@@ -4822,6 +4822,17 @@ fn update_search_results_accessible_summary(
     widget.update_property(&[gtk::accessible::Property::Label(&message)]);
 }
 
+fn search_result_row_accessible_label(title: &str, secondary: &str, source: &str) -> String {
+    let mut parts = vec![title.trim().to_string()];
+    if !secondary.trim().is_empty() {
+        parts.push(secondary.trim().to_string());
+    }
+    if !source.trim().is_empty() {
+        parts.push(source.trim().to_string());
+    }
+    parts.join(". ")
+}
+
 fn search_section_heading(
     title: &str,
     visible: usize,
@@ -4848,6 +4859,8 @@ fn search_section_heading(
     heading.add_css_class("search-section-heading");
     heading.append(&title_label);
     heading.append(&subtitle_label);
+    let accessible_label = format!("{title}. {subtitle}");
+    heading.update_property(&[gtk::accessible::Property::Label(&accessible_label)]);
     heading
 }
 
@@ -4883,6 +4896,12 @@ fn search_status_banner(message: &str, is_error: bool, detail: &str) -> gtk::Box
         banner.append(&detail_label);
     }
 
+    let accessible_label = if is_error && !detail.trim().is_empty() {
+        format!("{message}. {detail}")
+    } else {
+        message.to_string()
+    };
+    banner.update_property(&[gtk::accessible::Property::Label(&accessible_label)]);
     banner
 }
 
@@ -4894,8 +4913,10 @@ fn search_more_button(
     copy: SearchCopy,
 ) -> gtk::Button {
     let next = remaining.min(SEARCH_BATCH_SIZE);
-    let button = gtk::Button::with_label(&format!("{} {next} {category}", copy.load_more));
+    let label = format!("{} {next} {category}", copy.load_more);
+    let button = gtk::Button::with_label(&label);
     button.set_halign(gtk::Align::Start);
+    button.update_property(&[gtk::accessible::Property::Label(&label)]);
     apply_material_button(
         &button,
         MaterialButtonSpec::new(
@@ -4926,6 +4947,7 @@ fn search_remote_more_button(
     let button = gtk::Button::with_label(&label);
     button.set_halign(gtk::Align::Start);
     button.set_sensitive(!loading);
+    button.update_property(&[gtk::accessible::Property::Label(&label)]);
     button.add_css_class("search-remote-more");
     apply_material_button(
         &button,
@@ -5225,7 +5247,9 @@ fn search_collection_row(
     text.append(&title_label);
     text.append(&subtitle_label);
 
-    let source = gtk::Label::new(Some(if online { "YouTube" } else { "Local" }));
+    let source_text = if online { "YouTube" } else { "Local" };
+    let row_accessible_label = search_result_row_accessible_label(title, secondary, source_text);
+    let source = gtk::Label::new(Some(source_text));
     source.add_css_class("pill");
     source.add_css_class("search-source-badge");
 
@@ -5261,6 +5285,7 @@ fn search_collection_row(
     row.set_activatable(true);
     row.set_selectable(true);
     row.add_css_class("search-result-keyboard-row");
+    row.update_property(&[gtk::accessible::Property::Label(&row_accessible_label)]);
     install_row_keyboard_activation(&row, card.open_event(), event_tx);
     row
 }
@@ -10469,5 +10494,26 @@ mod search_accessibility_tests {
         assert!(message.contains("7 en total"));
         assert!(message.contains("2 canciones"));
         assert!(message.contains("1 playlists"));
+    }
+}
+
+#[cfg(test)]
+mod search_release_polish_tests {
+    use super::search_result_row_accessible_label;
+
+    #[test]
+    fn row_accessible_label_keeps_title_secondary_and_source() {
+        assert_eq!(
+            search_result_row_accessible_label("Hysteria", "Muse", "YouTube"),
+            "Hysteria. Muse. YouTube"
+        );
+    }
+
+    #[test]
+    fn row_accessible_label_skips_empty_secondary() {
+        assert_eq!(
+            search_result_row_accessible_label("Origin of Symmetry", "", "Local"),
+            "Origin of Symmetry. Local"
+        );
     }
 }

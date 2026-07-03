@@ -189,7 +189,7 @@ Noctalia, Frosted Glass and dynamic album-palette identities.
 
 ### Active checkpoint
 
-- 🟡 Final search release polish and keyboard/a11y audit.
+- 🟡 Expressive buttons and button-state motion.
 
 ### Planned checkpoints
 
@@ -249,6 +249,7 @@ Noctalia, Frosted Glass and dynamic album-palette identities.
 - ✅ Local recent-query history with MRU ordering, individual removal and clear-all controls.
 - ✅ Route-aware cancellation for stale YouTube Music search responses.
 - ✅ Accessible search-result summaries update after each categorized result rebuild.
+- ✅ Search rows, result headings, status banners and pagination controls expose descriptive accessible labels.
 - ✅ Relevance-ranked mixed local and remote results while YouTube Music is active.
 - ✅ Album and playlist results expose one compact play/pause action.
 - ✅ Collection-result rows support arrow navigation and Enter/Space activation.
@@ -476,7 +477,7 @@ create less review and merge noise.
 5. ✅ Persist and restore queue state.
 6. ✅ Consolidate Material Expressive loading indicators and visual-system primitives.
 7. 🟡 Finish card actions and loading placeholders.
-8. Complete final search release polish and accessibility audit.
+8. Continue with expressive button-state motion.
 9. Harden YouTube unavailable-track and recovery behavior.
 10. Resume remote playlist metadata editing, removal and deletion checkpoints.
 11. Add shared card-to-page transitions.
