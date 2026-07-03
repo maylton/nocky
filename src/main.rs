@@ -18,6 +18,7 @@ mod offline_store;
 mod onboarding;
 pub mod playback;
 mod reveal_bounce;
+mod search_history;
 mod search_text;
 mod theme;
 mod theme_css;

@@ -77,6 +77,14 @@ const MATERIAL_EXPRESSIVE_MODULES: &[(&str, &str)] = &[
         "101-keyboard-search.css",
         include_str!("../assets/themes/material-expressive/101-keyboard-search.css"),
     ),
+    (
+        "102-search-history.css",
+        include_str!("../assets/themes/material-expressive/102-search-history.css"),
+    ),
+    (
+        "103-home-player-polish.css",
+        include_str!("../assets/themes/material-expressive/103-home-player-polish.css"),
+    ),
 ];
 
 pub(crate) fn frosted_glass_css() -> &'static str {

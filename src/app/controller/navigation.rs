@@ -14,6 +14,27 @@ use gtk::prelude::*;
 use std::{collections::HashSet, rc::Rc};
 
 impl AppController {
+    pub(crate) fn global_youtube_search_visible(&self, query: &str) -> bool {
+        self.config.borrow().startup_source == Some(StartupSource::YouTube)
+            && matches!(self.browser.route(), BrowserRoute::All)
+            && !query.trim().is_empty()
+            && self.search_query.borrow().trim() == query.trim()
+    }
+
+    pub(crate) fn cancel_global_youtube_search_for_route_change(&self) {
+        self.youtube_search_request_id
+            .set(self.youtube_search_request_id.get().wrapping_add(1));
+        let mut library = self.youtube_library.borrow_mut();
+        library.search.clear_transient_state();
+    }
+
+    pub(crate) fn restart_global_youtube_search_after_route_return(&self) {
+        let query = self.search_query.borrow().trim().to_string();
+        if self.global_youtube_search_visible(&query) {
+            self.request_global_youtube_search(query);
+        }
+    }
+
     pub(crate) fn browser_playback_state(&self) -> BrowserPlaybackState {
         let context = self.listening_history_context.borrow();
         let youtube = self.youtube_library.borrow();
@@ -152,6 +173,11 @@ impl AppController {
         self.apply_footer_mode();
         if previous_route != route {
             self.browser.reset_queue_scroll_position();
+            if !matches!(route, BrowserRoute::All) {
+                self.cancel_global_youtube_search_for_route_change();
+            } else {
+                self.restart_global_youtube_search_after_route_return();
+            }
         }
     }
 

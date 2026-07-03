@@ -955,8 +955,7 @@ impl AppController {
                     result,
                 } => {
                     if request_id != self.youtube_search_request_id.get()
-                        || self.search_query.borrow().trim() != query.as_str()
-                        || self.config.borrow().startup_source != Some(StartupSource::YouTube)
+                        || !self.global_youtube_search_visible(&query)
                     {
                         continue;
                     }
@@ -997,8 +996,7 @@ impl AppController {
                     result,
                 } => {
                     if request_id != self.youtube_search_request_id.get()
-                        || self.search_query.borrow().trim() != query.as_str()
-                        || self.config.borrow().startup_source != Some(StartupSource::YouTube)
+                        || !self.global_youtube_search_visible(&query)
                     {
                         continue;
                     }

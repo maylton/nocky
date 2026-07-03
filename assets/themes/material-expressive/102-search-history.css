@@ -1,0 +1,102 @@
+window.theme-material-expressive .search-history-dropdown {
+  margin: 0;
+  background-color: transparent;
+}
+
+window.theme-material-expressive .search-history-content {
+  margin: 4px 0 10px;
+  padding: 6px 8px 8px;
+  border-radius: 20px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_high;
+  border: 1px solid alpha(@m3_outline, 0.34);
+  box-shadow:
+    0 8px 22px alpha(black, 0.18),
+    inset 0 0 0 1px alpha(@m3_primary, 0.04);
+}
+
+window.theme-material-expressive .search-history-header {
+  min-height: 32px;
+  margin: 0 2px 2px;
+  padding: 0 2px 0 8px;
+}
+
+window.theme-material-expressive .search-history-title {
+  color: @m3_on_surface_variant;
+  font-size: 0.78rem;
+  font-weight: 760;
+  letter-spacing: 0.15px;
+}
+
+window.theme-material-expressive .search-history-clear {
+  min-height: 32px;
+  padding: 0 10px;
+  color: @m3_primary;
+  background-color: transparent;
+}
+
+window.theme-material-expressive .search-history-clear:hover {
+  background-color: alpha(@m3_primary, 0.10);
+}
+
+window.theme-material-expressive .search-history-list,
+window.theme-material-expressive .search-history-list > row,
+window.theme-material-expressive .search-history-scroll,
+window.theme-material-expressive .search-history-scroll > viewport {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .search-history-row {
+  min-height: 40px;
+  margin: 1px 0;
+  padding: 0 2px;
+  border-radius: 16px;
+  color: @m3_on_surface_variant;
+  background-color: transparent;
+  border: 1px solid transparent;
+}
+
+window.theme-material-expressive .search-history-row:hover,
+window.theme-material-expressive .search-history-row:focus-within {
+  color: @m3_on_surface;
+  background-color: alpha(@m3_primary, 0.09);
+  border-color: alpha(@m3_primary, 0.18);
+}
+
+window.theme-material-expressive .search-history-row > box {
+  min-height: 40px;
+}
+
+window.theme-material-expressive .search-history-icon {
+  margin-left: 8px;
+  color: @m3_on_surface_variant;
+}
+
+window.theme-material-expressive .search-history-query {
+  min-height: 38px;
+  padding: 0 10px;
+  color: @m3_on_surface;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .search-history-query:hover,
+window.theme-material-expressive .search-history-query:active,
+window.theme-material-expressive .search-history-query:focus {
+  background-color: transparent;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .search-history-remove {
+  min-width: 34px;
+  min-height: 34px;
+  color: @m3_on_surface_variant;
+  background-color: transparent;
+}
+
+window.theme-material-expressive .search-history-remove:hover {
+  color: @m3_on_surface;
+  background-color: alpha(@m3_primary, 0.12);
+}

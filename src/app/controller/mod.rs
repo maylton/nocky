@@ -15,6 +15,7 @@ mod persistence;
 mod playback;
 mod queue;
 mod queue_presentation;
+mod search_history;
 mod settings;
 mod youtube;
 mod youtube_playlist_metadata;
@@ -36,6 +37,7 @@ use crate::{
         PlaybackEngine,
     },
     reveal_bounce::RevealBounce,
+    search_history::SearchHistory,
     theme,
     ui::{
         player::PlayerViewHandle,
@@ -118,6 +120,7 @@ pub(crate) struct ControllerRuntime {
     pub(crate) shuffle_navigation: RefCell<ShuffleNavigator>,
     pub(crate) rng_state: Cell<u64>,
     pub(crate) search_query: RefCell<String>,
+    pub(crate) search_history: RefCell<SearchHistory>,
     pub(crate) lyrics_pending: RefCell<HashSet<PathBuf>>,
     pub(crate) background: BackgroundChannel,
     pub(crate) mpris: crate::playback::mpris::MprisBridge,
@@ -181,6 +184,7 @@ pub(crate) struct AppController {
     pub(crate) search_button: gtk::ToggleButton,
     pub(crate) folder_button: gtk::Button,
     pub(crate) search_entry: gtk::SearchEntry,
+    pub(crate) search_history_revealer: gtk::Revealer,
     pub(crate) settings_button: gtk::ToggleButton,
     pub(crate) content_stack: gtk::Stack,
     pub(crate) settings_page: Rc<SettingsPage>,

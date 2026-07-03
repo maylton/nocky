@@ -581,10 +581,7 @@ impl AppController {
 
     pub(crate) fn request_global_youtube_search(&self, query: String) {
         let query = query.trim().to_string();
-        if query.is_empty()
-            || self.config.borrow().startup_source != Some(StartupSource::YouTube)
-            || self.search_query.borrow().trim() != query.as_str()
-        {
+        if !self.global_youtube_search_visible(&query) {
             return;
         }
 
@@ -696,7 +693,7 @@ impl AppController {
 
     pub(crate) fn load_more_youtube_search(&self, category: YouTubeSearchCategory) {
         let query = self.search_query.borrow().trim().to_string();
-        if query.is_empty() || self.config.borrow().startup_source != Some(StartupSource::YouTube) {
+        if !self.global_youtube_search_visible(&query) {
             return;
         }
 

@@ -1,0 +1,53 @@
+/*
+ * Home player surface polish
+ * --------------------------
+ * The Rust view already exposes semantic wrappers for metadata, transport,
+ * visualizer and inline lyrics. Keep the outer card hierarchy, but ensure the
+ * child widgets cannot paint square backgrounds over those rounded surfaces.
+ */
+
+window.theme-material-expressive .player-transport-surface {
+  padding: 10px 14px 12px;
+  border-radius: 28px;
+  color: @m3_on_surface;
+  background-color: alpha(@m3_surface_container_low, 0.86);
+  border: 1px solid alpha(@m3_outline_variant, 0.48);
+  box-shadow: none;
+}
+
+window.theme-material-expressive .player-visualizer-surface,
+window.theme-material-expressive .player-lyrics-surface {
+  border-radius: 28px;
+  color: @m3_on_surface;
+  background-color: alpha(@m3_surface_container_low, 0.78);
+  border: 1px solid alpha(@m3_outline_variant, 0.42);
+  box-shadow: none;
+}
+
+window.theme-material-expressive .player-visualizer-surface .audio-visualizer,
+window.theme-material-expressive .player-lyrics-surface .inline-lyrics-viewport,
+window.theme-material-expressive .player-lyrics-surface .inline-lyrics-viewport > viewport,
+window.theme-material-expressive .player-lyrics-surface .inline-lyrics-panel {
+  border-radius: 22px;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .player-visualizer-surface .audio-visualizer {
+  margin: 5px 14px;
+}
+
+window.theme-material-expressive .player-lyrics-surface .inline-lyrics-viewport {
+  margin: 0 14px;
+}
+
+window.theme-material-expressive .player-time-row,
+window.theme-material-expressive .player-progress-track,
+window.theme-material-expressive .player-progress-wave,
+window.theme-material-expressive .player-transport-controls {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+}

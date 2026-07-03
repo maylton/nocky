@@ -18,6 +18,7 @@ use crate::{
         PlaybackEngine,
     },
     reveal_bounce::RevealBounce,
+    search_history::SearchHistory,
     theme,
     ui::{
         footer::{build_footer_view, FooterViewParts, FOOTER_ARTWORK_SOURCE_SIZE},
@@ -217,7 +218,24 @@ impl AppController {
             .hexpand(true)
             .build();
         search_entry.add_css_class("expressive-search-entry");
-        search_bar.set_child(Some(&search_entry));
+        let search_history_revealer = gtk::Revealer::new();
+        search_history_revealer.set_transition_type(gtk::RevealerTransitionType::SlideDown);
+        search_history_revealer.set_transition_duration(180);
+        search_history_revealer.set_reveal_child(false);
+        search_history_revealer.set_hexpand(true);
+        search_history_revealer.set_halign(gtk::Align::Fill);
+        search_history_revealer.set_margin_start(12);
+        search_history_revealer.set_margin_end(12);
+        search_history_revealer.add_css_class("search-history-dropdown");
+
+        // Keep the entry and its recent-query surface inside the same SearchBar
+        // child. Both now share the exact content width before the close button.
+        let search_surface = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        search_surface.set_hexpand(true);
+        search_surface.add_css_class("search-surface-stack");
+        search_surface.append(&search_entry);
+        search_surface.append(&search_history_revealer);
+        search_bar.set_child(Some(&search_surface));
         search_bar.connect_entry(&search_entry);
         search_bar.set_key_capture_widget(Some(&window));
         search_bar.set_show_close_button(true);
@@ -586,6 +604,7 @@ impl AppController {
                 shuffle_navigation: RefCell::new(ShuffleNavigator::default()),
                 rng_state: Cell::new(seed),
                 search_query: RefCell::new(String::new()),
+                search_history: RefCell::new(SearchHistory::load()),
                 lyrics_pending: RefCell::new(HashSet::new()),
                 background,
                 mpris,
@@ -643,6 +662,7 @@ impl AppController {
             search_button: search_button.clone(),
             folder_button: folder_button.clone(),
             search_entry: search_entry.clone(),
+            search_history_revealer: search_history_revealer.clone(),
             settings_button: settings_button.clone(),
             content_stack: content_stack.clone(),
             settings_page: settings_page.clone(),
@@ -929,9 +949,21 @@ impl AppController {
 
         {
             let search_bar = search_bar.clone();
+            let weak = Rc::downgrade(&controller);
             search_button.connect_toggled(move |button| {
                 set_material_icon_button_selected(button, button.is_active());
                 search_bar.set_search_mode(button.is_active());
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+                if button.is_active() {
+                    controller.search_entry.grab_focus();
+                    if controller.search_entry.text().trim().is_empty() {
+                        controller.refresh_recent_searches(true);
+                    }
+                } else {
+                    controller.search_history_revealer.set_reveal_child(false);
+                }
             });
         }
 
@@ -948,12 +980,16 @@ impl AppController {
         {
             let weak = Rc::downgrade(&controller);
             let pending_search = Rc::new(RefCell::new(None::<glib::SourceId>));
+            let pending_history = Rc::new(RefCell::new(None::<glib::SourceId>));
             search_entry.connect_search_changed(move |entry| {
                 let Some(controller) = weak.upgrade() else {
                     return;
                 };
 
                 if let Some(source) = pending_search.borrow_mut().take() {
+                    source.remove();
+                }
+                if let Some(source) = pending_history.borrow_mut().take() {
                     source.remove();
                 }
 
@@ -963,6 +999,7 @@ impl AppController {
                     controller.config.borrow().startup_source == Some(StartupSource::YouTube);
 
                 if query.is_empty() {
+                    controller.refresh_recent_searches(true);
                     controller
                         .youtube_search_request_id
                         .set(controller.youtube_search_request_id.get().wrapping_add(1));
@@ -972,6 +1009,7 @@ impl AppController {
                     return;
                 }
 
+                controller.search_history_revealer.set_reveal_child(false);
                 if youtube_only {
                     let mut cached = controller
                         .youtube_library
@@ -981,6 +1019,18 @@ impl AppController {
                     controller.youtube_library.borrow_mut().search = cached;
                 }
                 controller.navigate_browser(BrowserRoute::All);
+
+                let history_controller = Rc::downgrade(&controller);
+                let history_pending = pending_history.clone();
+                let history_query = query.clone();
+                let history_source =
+                    glib::timeout_add_local_once(Duration::from_millis(800), move || {
+                        history_pending.borrow_mut().take();
+                        if let Some(controller) = history_controller.upgrade() {
+                            controller.record_recent_search(&history_query);
+                        }
+                    });
+                pending_history.borrow_mut().replace(history_source);
 
                 if !youtube_only {
                     return;
@@ -996,6 +1046,34 @@ impl AppController {
                 });
                 pending_search.borrow_mut().replace(source);
             });
+        }
+
+        {
+            let weak = Rc::downgrade(&controller);
+            search_entry.connect_activate(move |entry| {
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+                let query = entry.text().trim().to_string();
+                if !query.is_empty() {
+                    controller.record_recent_search(&query);
+                    controller.search_history_revealer.set_reveal_child(false);
+                }
+            });
+        }
+
+        {
+            let weak = Rc::downgrade(&controller);
+            let focus = gtk::EventControllerFocus::new();
+            focus.connect_enter(move |_| {
+                let Some(controller) = weak.upgrade() else {
+                    return;
+                };
+                if controller.search_entry.text().trim().is_empty() {
+                    controller.refresh_recent_searches(true);
+                }
+            });
+            search_entry.add_controller(focus);
         }
 
         {
