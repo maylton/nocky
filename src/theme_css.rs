@@ -123,9 +123,8 @@ mod tests {
             ".material-button-text",
             ".material-button-loading",
             ".material-carousel-motion-installed",
-            ".material-carousel-item-large",
-            ".material-carousel-item-medium",
-            ".material-carousel-item-small",
+            ".material-carousel-edge-spring",
+            ".material-carousel-edge-spring-surface",
         ] {
             assert!(css.contains(required), "missing required CSS: {required}");
         }
@@ -225,8 +224,21 @@ mod tests {
         assert!(motion_index > home_index);
 
         let motion_css = MATERIAL_EXPRESSIVE_MODULES[motion_index].1;
-        assert!(motion_css.contains("window.theme-material-expressive"));
-        assert!(motion_css.contains("min-width: 0;"));
+        for required in [
+            "window.theme-material-expressive",
+            ".material-carousel-edge-spring",
+            ".material-carousel-edge-spring-surface",
+            ".collection-card-context-action",
+            "opacity: 1;",
+        ] {
+            assert!(
+                motion_css.contains(required),
+                "missing carousel spring CSS contract: {required}"
+            );
+        }
+        assert!(!motion_css.contains(".material-carousel-item-large"));
+        assert!(!motion_css.contains(".material-carousel-item-medium"));
+        assert!(!motion_css.contains(".material-carousel-item-small"));
         assert!(!motion_css.contains("theme-noctalia"));
         assert!(!motion_css.contains("theme-frosted-glass"));
     }
