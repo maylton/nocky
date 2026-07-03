@@ -527,6 +527,7 @@ impl AppController {
                                     .borrow_mut()
                                     .playlist_tracks
                                     .insert(cache_key.clone(), items);
+                                self.browser.mark_home_dirty();
                             } else {
                                 self.youtube_library
                                     .borrow_mut()
@@ -558,6 +559,7 @@ impl AppController {
                                     .borrow_mut()
                                     .playlist_tracks
                                     .remove(&cache_key);
+                                self.browser.mark_home_dirty();
                             } else {
                                 self.youtube_library
                                     .borrow_mut()
@@ -578,6 +580,7 @@ impl AppController {
                                     .borrow_mut()
                                     .playlist_tracks
                                     .remove(&cache_key);
+                                self.browser.mark_home_dirty();
                             } else {
                                 self.youtube_library
                                     .borrow_mut()
@@ -621,6 +624,7 @@ impl AppController {
                                 .borrow_mut()
                                 .playlist_tracks
                                 .insert(browse_id.clone(), items);
+                            self.browser.mark_home_dirty();
                             if cacheable_youtube_playlist(&playlist) {
                                 if let Err(error) =
                                     queue_library_cache_save(&self.youtube_library.borrow())
@@ -675,6 +679,7 @@ impl AppController {
                                 .borrow_mut()
                                 .playlist_tracks
                                 .insert(browse_id.clone(), items);
+                            self.browser.mark_home_dirty();
                             self.mark_youtube_playlist_revalidation_succeeded(&browse_id);
 
                             if cacheable_youtube_playlist(&playlist) {
@@ -729,6 +734,7 @@ impl AppController {
                         .borrow_mut()
                         .playlist_tracks
                         .insert(browse_id.clone(), items);
+                    self.browser.mark_home_dirty();
                     if cacheable_youtube_playlist(&playlist) {
                         if let Err(error) = queue_library_cache_save(&self.youtube_library.borrow())
                         {
@@ -938,11 +944,17 @@ impl AppController {
                             .borrow_mut()
                             .playlist_tracks
                             .extend(cached);
+                        self.browser.mark_home_dirty();
                         if let Err(error) = queue_library_cache_save(&self.youtube_library.borrow())
                         {
                             eprintln!("Could not save the YouTube playlist cache: {error}");
                         }
                         self.sync_followed_offline_collections();
+                        if matches!(self.browser.route(), crate::browser::BrowserRoute::All)
+                            && self.search_query.borrow().trim().is_empty()
+                        {
+                            self.refresh_browser();
+                        }
                     }
                     Err(error) => {
                         self.youtube_playlist_prefetching.set(false);

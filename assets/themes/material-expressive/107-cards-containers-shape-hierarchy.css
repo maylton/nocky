@@ -1,0 +1,178 @@
+/* Material Expressive cards, containers and shape hierarchy. */
+
+window.theme-material-expressive .material-container-surface,
+window.theme-material-expressive .material-page-container,
+window.theme-material-expressive .collection-page,
+window.theme-material-expressive .expressive-library-page,
+window.theme-material-expressive .queue2-page-scroll,
+window.theme-material-expressive .search-results-surface {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  background-image: none;
+  border: 1px solid alpha(@m3_outline, 0.16);
+  border-radius: 32px;
+  box-shadow: none;
+}
+
+window.theme-material-expressive .material-card {
+  background-clip: padding-box;
+  border-style: solid;
+  border-width: 1px;
+}
+
+window.theme-material-expressive .material-card-elevated {
+  border-radius: 28px;
+  background-color: @m3_surface_container;
+  border-color: alpha(@m3_outline, 0.18);
+  box-shadow: 0 5px 16px alpha(black, 0.12);
+}
+
+window.theme-material-expressive .material-card-filled {
+  border-radius: 24px;
+  background-color: @m3_surface_container_high;
+  border-color: alpha(@m3_outline_variant, 0.14);
+  box-shadow: none;
+}
+
+window.theme-material-expressive .material-card-outlined {
+  border-radius: 20px;
+  background-color: @m3_surface;
+  border-color: alpha(@m3_outline_variant, 0.72);
+  box-shadow: none;
+}
+
+window.theme-material-expressive .material-card-hero-shape,
+window.theme-material-expressive .home-card-featured {
+  border-radius: 32px;
+}
+
+window.theme-material-expressive .material-card-standard-shape,
+window.theme-material-expressive .home-card-compact,
+window.theme-material-expressive .collection-card:not(.compact-artist-card):not(.home-track-card) {
+  border-radius: 26px;
+}
+
+window.theme-material-expressive .material-card-compact-shape,
+window.theme-material-expressive .compact-artist-card,
+window.theme-material-expressive .home-track-card,
+window.theme-material-expressive .playlist-card-row-with-actions,
+window.theme-material-expressive .search-result-row {
+  border-radius: 22px;
+}
+
+window.theme-material-expressive .material-card-row-shape,
+window.theme-material-expressive .settings-surface-row,
+window.theme-material-expressive .settings-stream-source-row,
+window.theme-material-expressive .queue2-row,
+window.theme-material-expressive .artist-list-button {
+  border-radius: 20px;
+}
+
+window.theme-material-expressive .home-card-featured .collection-artwork,
+window.theme-material-expressive .home-card-featured .collection-artwork .cover-picture {
+  border-radius: 24px;
+}
+
+window.theme-material-expressive .home-card-compact .collection-artwork,
+window.theme-material-expressive .home-card-compact .collection-artwork .cover-picture,
+window.theme-material-expressive .collection-card:not(.home-card-featured) .collection-artwork,
+window.theme-material-expressive
+  .collection-card:not(.home-card-featured)
+  .collection-artwork
+  .cover-picture {
+  border-radius: 20px;
+}
+
+window.theme-material-expressive .home-track-card .collection-artwork,
+window.theme-material-expressive .home-track-card .collection-artwork .cover-picture,
+window.theme-material-expressive .search-result-row .collection-artwork,
+window.theme-material-expressive .search-result-row .collection-artwork .cover-picture {
+  border-radius: 16px;
+}
+
+window.theme-material-expressive .settings-group,
+window.theme-material-expressive .settings-stream-source-entry,
+window.theme-material-expressive .queue2-page-header,
+window.theme-material-expressive .search-section-card,
+window.theme-material-expressive .collection-page-header,
+window.theme-material-expressive .expressive-page-header,
+window.theme-material-expressive .playlist-editor-surface,
+window.theme-material-expressive .youtube-auth-card {
+  background-clip: padding-box;
+  border-style: solid;
+  border-width: 1px;
+}
+
+window.theme-material-expressive .settings-group,
+window.theme-material-expressive .settings-stream-source-entry,
+window.theme-material-expressive .search-section-card {
+  border-radius: 28px;
+  background-color: @m3_surface_container_low;
+  border-color: alpha(@m3_outline, 0.17);
+  box-shadow: 0 5px 16px alpha(black, 0.10);
+}
+
+window.theme-material-expressive .queue2-page-header,
+window.theme-material-expressive .collection-page-header,
+window.theme-material-expressive .expressive-page-header {
+  border-radius: 24px;
+  background-color: @m3_surface_container;
+  border-color: alpha(@m3_outline, 0.18);
+  box-shadow: inset 0 1px 0 alpha(@m3_on_surface, 0.035);
+}
+
+window.theme-material-expressive .playlist-editor-surface,
+window.theme-material-expressive .youtube-auth-card {
+  border-radius: 24px;
+  background-color: @m3_surface_container;
+  border-color: alpha(@m3_outline, 0.16);
+  box-shadow: none;
+}
+
+window.theme-material-expressive .settings-group-rows,
+window.theme-material-expressive .stream-sources-dialog .settings-group-rows {
+  border-radius: 24px;
+  background-color: alpha(@m3_surface, 0.20);
+  border: 1px solid alpha(@m3_outline_variant, 0.18);
+}
+
+window.theme-material-expressive .settings-surface-row:hover,
+window.theme-material-expressive .settings-stream-source-row:hover,
+window.theme-material-expressive .queue2-row:hover,
+window.theme-material-expressive .artist-list-button:hover,
+window.theme-material-expressive .playlist-card-row-with-actions:hover,
+window.theme-material-expressive .search-result-row:hover {
+  border-radius: 24px;
+}
+
+window.theme-material-expressive .material-card-elevated.collection-card-playing,
+window.theme-material-expressive .collection-card.collection-card-playing,
+window.theme-material-expressive .queue2-row.active {
+  border-color: alpha(@m3_primary, 0.52);
+  box-shadow:
+    inset 0 0 0 1px alpha(@m3_primary, 0.42),
+    0 7px 20px alpha(@m3_primary, 0.13);
+}
+
+window.theme-material-expressive .collection-card-loading,
+window.theme-material-expressive .home-card-loading-placeholder,
+window.theme-material-expressive .collection-card-skeleton {
+  background-color: @m3_surface_container;
+  border-color: alpha(@m3_outline_variant, 0.24);
+}
+
+window.theme-material-expressive .material-shape-extra-large {
+  border-radius: 32px;
+}
+
+window.theme-material-expressive .material-shape-large {
+  border-radius: 28px;
+}
+
+window.theme-material-expressive .material-shape-medium {
+  border-radius: 24px;
+}
+
+window.theme-material-expressive .material-shape-small {
+  border-radius: 20px;
+}

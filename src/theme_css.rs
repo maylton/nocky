@@ -99,6 +99,12 @@ const MATERIAL_EXPRESSIVE_MODULES: &[(&str, &str)] = &[
             "../assets/themes/material-expressive/106-switches-toggles-segmented-controls.css"
         ),
     ),
+    (
+        "107-cards-containers-shape-hierarchy.css",
+        include_str!(
+            "../assets/themes/material-expressive/107-cards-containers-shape-hierarchy.css"
+        ),
+    ),
 ];
 
 pub(crate) fn frosted_glass_css() -> &'static str {
@@ -167,6 +173,9 @@ mod tests {
             ".material-switch",
             ".material-toggle-control",
             ".material-segmented-control",
+            ".material-container-surface",
+            ".material-card-hero-shape",
+            ".material-shape-extra-large",
         ] {
             assert!(css.contains(required), "missing required CSS: {required}");
         }
@@ -279,6 +288,39 @@ mod tests {
         }
         assert!(!controls_css.contains("theme-noctalia"));
         assert!(!controls_css.contains("theme-frosted-glass"));
+    }
+
+    #[test]
+    fn cards_containers_and_shape_hierarchy_load_after_controls() {
+        let names = MATERIAL_EXPRESSIVE_MODULES
+            .iter()
+            .map(|(name, _)| *name)
+            .collect::<Vec<_>>();
+        let controls = names
+            .iter()
+            .position(|name| *name == "106-switches-toggles-segmented-controls.css")
+            .expect("switch/toggle/segmented controls module should be registered");
+        let cards = names
+            .iter()
+            .position(|name| *name == "107-cards-containers-shape-hierarchy.css")
+            .expect("card/container/shape module should be registered");
+        assert!(cards > controls);
+
+        let card_css = MATERIAL_EXPRESSIVE_MODULES[cards].1;
+        for required in [
+            ".material-container-surface",
+            ".material-card-hero-shape",
+            ".material-card-standard-shape",
+            ".material-card-compact-shape",
+            ".material-shape-extra-large",
+        ] {
+            assert!(
+                card_css.contains(required),
+                "missing card/container shape CSS contract: {required}"
+            );
+        }
+        assert!(!card_css.contains("theme-noctalia"));
+        assert!(!card_css.contains("theme-frosted-glass"));
     }
 
     #[test]

@@ -192,15 +192,15 @@ Noctalia, Frosted Glass and dynamic album-palette identities.
 - ✅ Material Expressive contextual menu and popover surfaces.
 - ✅ Material Expressive dialogs and confirmation surfaces.
 - ✅ Material Expressive switches, toggles and segmented controls.
+- ✅ Material Expressive cards, containers and shape hierarchy.
 
 ### Active checkpoint
 
-- 🟡 Cards, containers and shape hierarchy.
+- 🟡 Shared navigation transitions.
 
 ### Planned checkpoints
 
 - Expressive buttons and button-state motion.
-- Cards, containers and shape hierarchy.
 - Shared navigation transitions.
 - Global motion tokens.
 - Reduced-motion behavior.
