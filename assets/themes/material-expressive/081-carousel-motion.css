@@ -47,6 +47,5 @@ window.theme-material-expressive
   .home-card-context-overlay
   .material-card-overflow-trigger {
   opacity: 1;
-  visibility: visible;
   transition: none;
 }
