@@ -27,6 +27,7 @@ use crate::{
         youtube_collection_cache_key, youtube_collection_key, youtube_home_section_key,
         YouTubeCacheVisualState, YouTubeCollectionEntry, YouTubeHomeContinuationDelta,
         YouTubeHomePage, YouTubeHomeSection, YouTubeItem, YouTubeLibraryCache,
+        YouTubeSearchCategory,
     },
 };
 use gtk::{gdk, gio::prelude::ListModelExt, glib, prelude::*};
@@ -150,6 +151,7 @@ pub enum BrowserEvent {
     LoadMoreAlbums,
     LoadMoreArtists,
     RefreshSearch,
+    LoadMoreSearch(YouTubeSearchCategory),
     Navigate(BrowserRoute),
     CreatePlaylist(String),
     AddCurrentToPlaylist(String),
@@ -2513,6 +2515,21 @@ impl LibraryBrowser {
                 &self.event_tx,
                 copy,
             ));
+        } else if online_state_matches
+            && !loading
+            && (!youtube
+                .search
+                .continuation(YouTubeSearchCategory::Songs)
+                .is_empty()
+                || youtube.search.loading_more(YouTubeSearchCategory::Songs))
+        {
+            track_section.append(&search_remote_more_button(
+                copy.tracks,
+                YouTubeSearchCategory::Songs,
+                youtube.search.loading_more(YouTubeSearchCategory::Songs),
+                &self.event_tx,
+                copy,
+            ));
         }
         self.search_content.append(&track_section);
 
@@ -2526,6 +2543,13 @@ impl LibraryBrowser {
             copy,
             config,
             playback,
+            YouTubeSearchCategory::Albums,
+            if online_state_matches {
+                youtube.search.continuation(YouTubeSearchCategory::Albums)
+            } else {
+                ""
+            },
+            online_state_matches && youtube.search.loading_more(YouTubeSearchCategory::Albums),
         ));
         self.search_content.append(&search_list_section(
             copy.artists,
@@ -2537,6 +2561,13 @@ impl LibraryBrowser {
             copy,
             config,
             playback,
+            YouTubeSearchCategory::Artists,
+            if online_state_matches {
+                youtube.search.continuation(YouTubeSearchCategory::Artists)
+            } else {
+                ""
+            },
+            online_state_matches && youtube.search.loading_more(YouTubeSearchCategory::Artists),
         ));
         self.search_content.append(&search_list_section(
             copy.playlists,
@@ -2548,6 +2579,18 @@ impl LibraryBrowser {
             copy,
             config,
             playback,
+            YouTubeSearchCategory::Playlists,
+            if online_state_matches {
+                youtube
+                    .search
+                    .continuation(YouTubeSearchCategory::Playlists)
+            } else {
+                ""
+            },
+            online_state_matches
+                && youtube
+                    .search
+                    .loading_more(YouTubeSearchCategory::Playlists),
         ));
     }
 
@@ -4787,6 +4830,36 @@ fn search_more_button(
     button
 }
 
+fn search_remote_more_button(
+    category_label: &str,
+    category: YouTubeSearchCategory,
+    loading: bool,
+    event_tx: &Sender<BrowserEvent>,
+    copy: SearchCopy,
+) -> gtk::Button {
+    let label = if loading {
+        copy.searching.to_string()
+    } else {
+        format!("{} {category_label}", copy.load_more)
+    };
+    let button = gtk::Button::with_label(&label);
+    button.set_halign(gtk::Align::Start);
+    button.set_sensitive(!loading);
+    button.add_css_class("search-remote-more");
+    apply_material_button(
+        &button,
+        MaterialButtonSpec::new(
+            MaterialButtonVariant::FilledTonal,
+            MaterialButtonSize::Compact,
+        ),
+    );
+    let sender = event_tx.clone();
+    button.connect_clicked(move |_| {
+        let _ = sender.send(BrowserEvent::LoadMoreSearch(category));
+    });
+    button
+}
+
 #[expect(
     clippy::too_many_arguments,
     reason = "Search sections keep paging, rendering and playback context explicit"
@@ -4801,6 +4874,9 @@ fn search_list_section(
     copy: SearchCopy,
     config: &AppConfig,
     playback: &BrowserPlaybackState,
+    category: YouTubeSearchCategory,
+    continuation: &str,
+    loading_more: bool,
 ) -> gtk::Box {
     let total = cards.len();
     let visible = total.min(limit.get());
@@ -4851,6 +4927,14 @@ fn search_list_section(
             title,
             total - visible,
             limit,
+            event_tx,
+            copy,
+        ));
+    } else if !loading && (!continuation.is_empty() || loading_more) {
+        section.append(&search_remote_more_button(
+            title,
+            category,
+            loading_more,
             event_tx,
             copy,
         ));

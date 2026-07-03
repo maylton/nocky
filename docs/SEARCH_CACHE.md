@@ -29,8 +29,13 @@ Request generation remains authoritative: using a fresh cache entry increments
 the request ID and invalidates older in-flight responses, so a late response can
 never replace the active query.
 
+## Pagination integration
+
+Successful continuation pages now append directly to the remote-only cache
+entry, refresh its age and replace the category continuation. Synchronized local
+library matches are still merged only when the cached query is displayed.
+
 ## Deferred
 
-True remote pagination and continuation tokens remain the next search
-checkpoint. The current cache stores the initial categorized batches and is
-structured so paginated batches can update the same query entry later.
+Search history, mixed local/remote ranking and route-aware cancellation remain
+separate checkpoints.

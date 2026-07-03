@@ -3,7 +3,8 @@ use crate::{
     model::TrackData,
     youtube::{
         YouTubeArtistOverview, YouTubeHomePage, YouTubeItem, YouTubeLibrarySnapshot,
-        YouTubePlaylistCreation, YouTubeSearchResults, YouTubeStatus, YouTubeStream,
+        YouTubePlaylistCreation, YouTubeSearchCategory, YouTubeSearchPage, YouTubeSearchResults,
+        YouTubeStatus, YouTubeStream,
     },
 };
 use std::{
@@ -109,6 +110,12 @@ pub(crate) enum BackgroundMessage {
         request_id: u64,
         query: String,
         result: Result<YouTubeSearchResults, String>,
+    },
+    YouTubeSearchPageLoaded {
+        request_id: u64,
+        query: String,
+        category: YouTubeSearchCategory,
+        result: Result<YouTubeSearchPage, String>,
     },
     OfflineCollectionProgress {
         collection_id: String,

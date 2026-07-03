@@ -1,4 +1,4 @@
-use super::YouTubeSearchResults;
+use super::{YouTubeSearchCategory, YouTubeSearchPage, YouTubeSearchResults};
 use crate::search_text::normalize_search_text;
 use std::{
     collections::HashMap,
@@ -51,6 +51,15 @@ impl YouTubeSearchCache {
         self.insert_at(raw_query, results, Instant::now());
     }
 
+    pub(crate) fn append_page(
+        &mut self,
+        raw_query: &str,
+        category: YouTubeSearchCategory,
+        page: YouTubeSearchPage,
+    ) -> bool {
+        self.append_page_at(raw_query, category, page, Instant::now())
+    }
+
     pub(crate) fn clear(&mut self) {
         self.entries.clear();
     }
@@ -96,8 +105,7 @@ impl YouTubeSearchCache {
         }
 
         results.query = raw_query.trim().to_string();
-        results.loading = false;
-        results.error.clear();
+        results.clear_transient_state();
         self.prune_expired(now);
         self.entries.insert(
             key,
@@ -108,6 +116,29 @@ impl YouTubeSearchCache {
             },
         );
         self.enforce_capacity();
+    }
+
+    fn append_page_at(
+        &mut self,
+        raw_query: &str,
+        category: YouTubeSearchCategory,
+        page: YouTubeSearchPage,
+        now: Instant,
+    ) -> bool {
+        let key = normalize_search_text(raw_query);
+        if key.is_empty() {
+            return false;
+        }
+
+        self.prune_expired(now);
+        let Some(entry) = self.entries.get_mut(&key) else {
+            return false;
+        };
+        entry.results.append_page(category, page);
+        entry.results.clear_transient_state();
+        entry.stored_at = now;
+        entry.last_accessed = now;
+        true
     }
 
     fn prune_expired(&mut self, now: Instant) {
@@ -162,6 +193,7 @@ mod tests {
                 video_id: format!("video-{title}"),
                 ..YouTubeItem::default()
             }],
+            songs_continuation: "page-2".to_string(),
             ..YouTubeSearchResults::default()
         }
     }
@@ -193,13 +225,16 @@ mod tests {
         let start = Instant::now();
         let mut cache =
             YouTubeSearchCache::with_policy(Duration::from_secs(10), Duration::from_secs(30), 4);
-        cache.insert_at("Muse", results("Muse", "Hysteria"), start);
+        let mut pending = results("Muse", "Hysteria");
+        pending.songs_loading_more = true;
+        cache.insert_at("Muse", pending, start);
 
         let YouTubeSearchCacheLookup::Fresh(cached) = cache.lookup_at("muse", start) else {
             panic!("expected a fresh cache hit");
         };
         assert!(!cached.loading);
         assert!(cached.error.is_empty());
+        assert!(!cached.songs_loading_more);
     }
 
     #[test]
@@ -232,5 +267,43 @@ mod tests {
             cache.lookup_at("third", start + Duration::from_secs(4)),
             YouTubeSearchCacheLookup::Fresh(_)
         ));
+    }
+
+    #[test]
+    fn appending_a_remote_page_deduplicates_and_refreshes_the_continuation() {
+        let start = Instant::now();
+        let mut cache =
+            YouTubeSearchCache::with_policy(Duration::from_secs(60), Duration::from_secs(120), 4);
+        cache.insert_at("Muse", results("Muse", "Hysteria"), start);
+        assert!(cache.append_page_at(
+            "muse",
+            YouTubeSearchCategory::Songs,
+            YouTubeSearchPage {
+                items: vec![
+                    YouTubeItem {
+                        result_type: "song".to_string(),
+                        title: "Hysteria".to_string(),
+                        video_id: "video-Hysteria".to_string(),
+                        ..YouTubeItem::default()
+                    },
+                    YouTubeItem {
+                        result_type: "song".to_string(),
+                        title: "Starlight".to_string(),
+                        video_id: "video-Starlight".to_string(),
+                        ..YouTubeItem::default()
+                    },
+                ],
+                continuation: "page-3".to_string(),
+            },
+            start + Duration::from_secs(5),
+        ));
+
+        let YouTubeSearchCacheLookup::Fresh(cached) =
+            cache.lookup_at("muse", start + Duration::from_secs(6))
+        else {
+            panic!("expected a fresh cache hit");
+        };
+        assert_eq!(cached.songs.len(), 2);
+        assert_eq!(cached.songs_continuation, "page-3");
     }
 }

@@ -14,7 +14,7 @@ use crate::{
         cache_items_for_browser, repair_home_page_cover_paths, resolve_youtube_collection_item,
         youtube_collection_cache_key, youtube_collection_key, youtube_home_prefetch_candidates,
         LikeMutationStartError, YouTubeItem, YouTubePageEvent, YouTubeSearchCacheLookup,
-        YouTubeSearchResults, YouTubeStatus,
+        YouTubeSearchCategory, YouTubeSearchResults, YouTubeStatus,
     },
 };
 use gtk::prelude::*;
@@ -634,18 +634,23 @@ impl AppController {
 
         let sender = self.background.sender();
         thread::spawn(move || {
-            let filters = ["songs", "albums", "artists", "playlists"];
-            let expected = filters.len();
+            let categories = [
+                YouTubeSearchCategory::Songs,
+                YouTubeSearchCategory::Albums,
+                YouTubeSearchCategory::Artists,
+                YouTubeSearchCategory::Playlists,
+            ];
+            let expected = categories.len();
             let (result_tx, result_rx) = mpsc::channel();
             let mut workers = Vec::with_capacity(expected);
 
-            for filter in filters {
+            for category in categories {
                 let bridge = bridge.clone();
                 let result_tx = result_tx.clone();
                 let worker_query = query.clone();
                 workers.push(thread::spawn(move || {
-                    let result = bridge.search(&worker_query, filter);
-                    let _ = result_tx.send((filter, result));
+                    let result = bridge.search_page(&worker_query, category, "");
+                    let _ = result_tx.send((category, result));
                 }));
             }
             drop(result_tx);
@@ -656,19 +661,15 @@ impl AppController {
             };
             let mut errors = Vec::new();
 
-            for (filter, result) in result_rx {
+            for (category, result) in result_rx {
                 match result {
-                    Ok(items) => match filter {
-                        "songs" => {
-                            categorized.songs =
-                                items.into_iter().filter(YouTubeItem::playable).collect()
+                    Ok(mut page) => {
+                        if category == YouTubeSearchCategory::Songs {
+                            page.items.retain(YouTubeItem::playable);
                         }
-                        "albums" => categorized.albums = items,
-                        "artists" => categorized.artists = items,
-                        "playlists" => categorized.playlists = items,
-                        _ => {}
-                    },
-                    Err(error) => errors.push(format!("{filter}: {error}")),
+                        categorized.replace_page(category, page);
+                    }
+                    Err(error) => errors.push(format!("{}: {error}", category.filter())),
                 }
             }
 
@@ -688,6 +689,52 @@ impl AppController {
             let _ = sender.send(BackgroundMessage::YouTubeGlobalSearch {
                 request_id,
                 query,
+                result,
+            });
+        });
+    }
+
+    pub(crate) fn load_more_youtube_search(&self, category: YouTubeSearchCategory) {
+        let query = self.search_query.borrow().trim().to_string();
+        if query.is_empty() || self.config.borrow().startup_source != Some(StartupSource::YouTube) {
+            return;
+        }
+
+        let continuation = {
+            let mut library = self.youtube_library.borrow_mut();
+            if !library.search.query.eq_ignore_ascii_case(&query)
+                || library.search.loading
+                || library.search.loading_more(category)
+            {
+                return;
+            }
+            let continuation = library.search.continuation(category).trim().to_string();
+            if continuation.is_empty() {
+                return;
+            }
+            library.search.set_loading_more(category, true);
+            continuation
+        };
+        self.refresh_browser();
+
+        let Some(bridge) = self.youtube_bridge.clone() else {
+            let mut library = self.youtube_library.borrow_mut();
+            library.search.set_loading_more(category, false);
+            library.search.error =
+                "As dependências do YouTube Music não estão instaladas".to_string();
+            drop(library);
+            self.refresh_browser();
+            return;
+        };
+
+        let request_id = self.youtube_search_request_id.get();
+        let sender = self.background.sender();
+        thread::spawn(move || {
+            let result = bridge.search_page(&query, category, &continuation);
+            let _ = sender.send(BackgroundMessage::YouTubeSearchPageLoaded {
+                request_id,
+                query,
+                category,
                 result,
             });
         });

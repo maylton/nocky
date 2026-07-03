@@ -775,6 +775,32 @@ pub struct YouTubeHomeSuggestions {
     pub artists: Vec<YouTubeItem>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum YouTubeSearchCategory {
+    Songs,
+    Albums,
+    Artists,
+    Playlists,
+}
+
+impl YouTubeSearchCategory {
+    pub(crate) fn filter(self) -> &'static str {
+        match self {
+            Self::Songs => "songs",
+            Self::Albums => "albums",
+            Self::Artists => "artists",
+            Self::Playlists => "playlists",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct YouTubeSearchPage {
+    pub items: Vec<YouTubeItem>,
+    pub continuation: String,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct YouTubeSearchResults {
     pub query: String,
@@ -784,6 +810,14 @@ pub struct YouTubeSearchResults {
     pub albums: Vec<YouTubeItem>,
     pub artists: Vec<YouTubeItem>,
     pub playlists: Vec<YouTubeItem>,
+    pub songs_continuation: String,
+    pub albums_continuation: String,
+    pub artists_continuation: String,
+    pub playlists_continuation: String,
+    pub songs_loading_more: bool,
+    pub albums_loading_more: bool,
+    pub artists_loading_more: bool,
+    pub playlists_loading_more: bool,
 }
 
 fn youtube_search_item_key(item: &YouTubeItem) -> String {
@@ -847,6 +881,94 @@ fn cached_search_items<'a>(
 }
 
 impl YouTubeSearchResults {
+    fn items_mut(&mut self, category: YouTubeSearchCategory) -> &mut Vec<YouTubeItem> {
+        match category {
+            YouTubeSearchCategory::Songs => &mut self.songs,
+            YouTubeSearchCategory::Albums => &mut self.albums,
+            YouTubeSearchCategory::Artists => &mut self.artists,
+            YouTubeSearchCategory::Playlists => &mut self.playlists,
+        }
+    }
+
+    fn continuation_mut(&mut self, category: YouTubeSearchCategory) -> &mut String {
+        match category {
+            YouTubeSearchCategory::Songs => &mut self.songs_continuation,
+            YouTubeSearchCategory::Albums => &mut self.albums_continuation,
+            YouTubeSearchCategory::Artists => &mut self.artists_continuation,
+            YouTubeSearchCategory::Playlists => &mut self.playlists_continuation,
+        }
+    }
+
+    pub(crate) fn continuation(&self, category: YouTubeSearchCategory) -> &str {
+        match category {
+            YouTubeSearchCategory::Songs => &self.songs_continuation,
+            YouTubeSearchCategory::Albums => &self.albums_continuation,
+            YouTubeSearchCategory::Artists => &self.artists_continuation,
+            YouTubeSearchCategory::Playlists => &self.playlists_continuation,
+        }
+    }
+
+    pub(crate) fn loading_more(&self, category: YouTubeSearchCategory) -> bool {
+        match category {
+            YouTubeSearchCategory::Songs => self.songs_loading_more,
+            YouTubeSearchCategory::Albums => self.albums_loading_more,
+            YouTubeSearchCategory::Artists => self.artists_loading_more,
+            YouTubeSearchCategory::Playlists => self.playlists_loading_more,
+        }
+    }
+
+    pub(crate) fn set_loading_more(&mut self, category: YouTubeSearchCategory, loading: bool) {
+        match category {
+            YouTubeSearchCategory::Songs => self.songs_loading_more = loading,
+            YouTubeSearchCategory::Albums => self.albums_loading_more = loading,
+            YouTubeSearchCategory::Artists => self.artists_loading_more = loading,
+            YouTubeSearchCategory::Playlists => self.playlists_loading_more = loading,
+        }
+    }
+
+    pub(crate) fn replace_page(
+        &mut self,
+        category: YouTubeSearchCategory,
+        page: YouTubeSearchPage,
+    ) {
+        let YouTubeSearchPage {
+            items,
+            continuation,
+        } = page;
+        *self.items_mut(category) = items;
+        *self.continuation_mut(category) = continuation;
+        self.set_loading_more(category, false);
+    }
+
+    pub(crate) fn append_page(
+        &mut self,
+        category: YouTubeSearchCategory,
+        page: YouTubeSearchPage,
+    ) -> usize {
+        let YouTubeSearchPage {
+            items,
+            continuation,
+        } = page;
+        let added = {
+            let target = self.items_mut(category);
+            let before = target.len();
+            append_unique_search_items(target, items);
+            target.len().saturating_sub(before)
+        };
+        *self.continuation_mut(category) = continuation;
+        self.set_loading_more(category, false);
+        added
+    }
+
+    pub(crate) fn clear_transient_state(&mut self) {
+        self.loading = false;
+        self.error.clear();
+        self.songs_loading_more = false;
+        self.albums_loading_more = false;
+        self.artists_loading_more = false;
+        self.playlists_loading_more = false;
+    }
+
     pub(crate) fn merge_cached_results(&mut self, cached: &Self) {
         append_unique_search_items(&mut self.songs, cached.songs.clone());
         append_unique_search_items(&mut self.albums, cached.albums.clone());
@@ -974,6 +1096,22 @@ impl YouTubeBridge {
         self.run(
             "search",
             json!({ "query": query, "filter": filter, "limit": 30 }),
+        )
+    }
+
+    pub fn search_page(
+        &self,
+        query: &str,
+        category: YouTubeSearchCategory,
+        continuation: &str,
+    ) -> Result<YouTubeSearchPage, String> {
+        self.run(
+            "search_page",
+            json!({
+                "query": query,
+                "filter": category.filter(),
+                "continuation": continuation,
+            }),
         )
     }
 

@@ -55,11 +55,25 @@ try:
     from ytmusicapi.exceptions import YTMusicServerError, YTMusicUserError
     from ytmusicapi.parsers import playlists as ytmusic_playlist_parsers
     try:
-        from ytmusicapi.continuations import get_continuation_params as ytmusic_get_continuation_params
-        from ytmusicapi.parsers.browsing import parse_mixed_content as ytmusic_parse_mixed_content
+        from ytmusicapi.continuations import (
+            get_continuation_params as ytmusic_get_continuation_params,
+            get_continuation_string as ytmusic_get_continuation_string,
+            get_continuation_token as ytmusic_get_continuation_token,
+        )
+        from ytmusicapi.parsers.browsing import (
+            parse_mixed_content as ytmusic_parse_mixed_content,
+        )
+        from ytmusicapi.parsers.search import (
+            get_search_params as ytmusic_get_search_params,
+            parse_search_results as ytmusic_parse_search_results,
+        )
     except Exception:
         ytmusic_get_continuation_params = None
+        ytmusic_get_continuation_string = None
+        ytmusic_get_continuation_token = None
+        ytmusic_get_search_params = None
         ytmusic_parse_mixed_content = None
+        ytmusic_parse_search_results = None
     try:
         from ytmusicapi.setup import setup as ytmusicapi_setup
     except Exception:
@@ -71,7 +85,11 @@ except Exception as error:  # pragma: no cover - reported to the native app
     YTMusicUserError = RuntimeError
     ytmusic_playlist_parsers = None
     ytmusic_get_continuation_params = None
+    ytmusic_get_continuation_string = None
+    ytmusic_get_continuation_token = None
+    ytmusic_get_search_params = None
     ytmusic_parse_mixed_content = None
+    ytmusic_parse_search_results = None
     ytmusicapi_setup = None
     IMPORT_ERROR = error
 else:
@@ -1476,6 +1494,133 @@ def command_search(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return _dedupe([item for result in results if isinstance(result, dict) if (item := _search_item(result))])
 
 
+def _find_renderer(node: Any, key: str) -> dict[str, Any] | None:
+    if isinstance(node, dict):
+        renderer = node.get(key)
+        if isinstance(renderer, dict):
+            return renderer
+        for value in node.values():
+            found = _find_renderer(value, key)
+            if found is not None:
+                return found
+    elif isinstance(node, list):
+        for value in node:
+            found = _find_renderer(value, key)
+            if found is not None:
+                return found
+    return None
+
+
+def _search_page_renderer(
+    response: dict[str, Any],
+    continuation: str,
+) -> dict[str, Any] | None:
+    if continuation:
+        continuation_contents = response.get("continuationContents") or {}
+        renderer = continuation_contents.get("musicShelfContinuation")
+        if isinstance(renderer, dict):
+            return renderer
+
+        append_action = _find_renderer(response, "appendContinuationItemsAction")
+        if isinstance(append_action, dict):
+            items = append_action.get("continuationItems") or []
+            if isinstance(items, list):
+                return {"contents": items}
+        return None
+
+    return _find_renderer(response.get("contents"), "musicShelfRenderer")
+
+
+def _search_page_continuation(renderer: dict[str, Any]) -> str:
+    if renderer.get("continuations") and ytmusic_get_continuation_params is not None:
+        try:
+            return str(ytmusic_get_continuation_params(renderer) or "")
+        except Exception:
+            pass
+
+    contents = renderer.get("contents") or renderer.get("items") or []
+    if not isinstance(contents, list) or ytmusic_get_continuation_token is None:
+        return ""
+    try:
+        token = ytmusic_get_continuation_token(contents)
+    except Exception:
+        token = None
+    if not token:
+        return ""
+    if ytmusic_get_continuation_string is not None:
+        return str(ytmusic_get_continuation_string(token) or "")
+    return f"&ctoken={token}&continuation={token}"
+
+
+def _search_page_items(
+    renderer: dict[str, Any],
+    result_type: str,
+) -> list[dict[str, Any]]:
+    if ytmusic_parse_search_results is None:
+        raise RuntimeError("The installed ytmusicapi search parser is unavailable")
+
+    contents = renderer.get("contents") or renderer.get("items") or []
+    if not isinstance(contents, list):
+        return []
+    list_items = [
+        item
+        for item in contents
+        if isinstance(item, dict) and "musicResponsiveListItemRenderer" in item
+    ]
+    if not list_items:
+        return []
+
+    parsed = ytmusic_parse_search_results(list_items, result_type, None)
+    return _dedupe(
+        [
+            item
+            for result in parsed
+            if isinstance(result, dict)
+            if (item := _search_item(result))
+        ]
+    )
+
+
+def command_search_page(payload: dict[str, Any]) -> dict[str, Any]:
+    query = str(payload.get("query") or "").strip()
+    if not query:
+        return {"items": [], "continuation": ""}
+
+    filter_name = str(payload.get("filter") or "songs").strip().lower()
+    result_types = {
+        "songs": "song",
+        "albums": "album",
+        "artists": "artist",
+        "playlists": "playlist",
+    }
+    if filter_name not in result_types:
+        raise RuntimeError(f"Unsupported paginated search filter: {filter_name}")
+    if ytmusic_get_search_params is None:
+        raise RuntimeError("The installed ytmusicapi search parameter helper is unavailable")
+
+    continuation = str(payload.get("continuation") or "").strip()
+    body: dict[str, Any] = {"query": query}
+    params = ytmusic_get_search_params(filter_name, None, False)
+    if params:
+        body["params"] = params
+
+    client = _create_client(authenticated=True)
+    request = getattr(client, "_send_request", None)
+    if not callable(request):
+        raise RuntimeError("The installed ytmusicapi search transport is unavailable")
+    response = request("search", body, continuation) if continuation else request("search", body)
+    if not isinstance(response, dict):
+        return {"items": [], "continuation": ""}
+
+    renderer = _search_page_renderer(response, continuation)
+    if renderer is None:
+        return {"items": [], "continuation": ""}
+    return {
+        "items": _search_page_items(renderer, result_types[filter_name]),
+        "continuation": _search_page_continuation(renderer),
+    }
+
+
 def command_library(payload: dict[str, Any]) -> list[dict[str, Any]]:
     client = _create_client(authenticated=True)
     if not _load_session().get("headers"):
@@ -2125,6 +2270,7 @@ COMMANDS = {
     "connect": command_connect,
     "disconnect": command_disconnect,
     "search": command_search,
+    "search_page": command_search_page,
     "library": command_library,
     "liked": command_liked,
     "rate": command_rate,
@@ -2144,7 +2290,7 @@ COMMANDS = {
 def main() -> int:
     try:
         if len(sys.argv) != 2 or sys.argv[1] not in COMMANDS:
-            raise RuntimeError("Usage: nocky_youtube.py <status|stream_clients|connect|disconnect|search|library|library_v2|library_page_v2|liked|liked_v2|rate|home|home_v2|playlists|playlist|collection|artist|resolve>")
+            raise RuntimeError("Usage: nocky_youtube.py <status|stream_clients|connect|disconnect|search|search_page|library|library_v2|library_page_v2|liked|liked_v2|rate|home|home_v2|playlists|playlist|collection|artist|resolve>")
         payload = _read_input()
         result = COMMANDS[sys.argv[1]](payload)
         _emit({"ok": True, "result": result})

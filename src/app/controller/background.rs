@@ -10,7 +10,7 @@ use crate::{
     youtube::{
         cacheable_youtube_playlist, clear_library_cache, playlist_creation_error_message,
         queue_library_cache_save, youtube_collection_cache_key, youtube_collection_key,
-        YouTubeItem,
+        YouTubeItem, YouTubeSearchCategory,
     },
 };
 
@@ -987,6 +987,49 @@ impl AppController {
                         self.youtube_search_cache
                             .borrow_mut()
                             .insert(&query, results);
+                    }
+                    self.refresh_browser();
+                }
+                BackgroundMessage::YouTubeSearchPageLoaded {
+                    request_id,
+                    query,
+                    category,
+                    result,
+                } => {
+                    if request_id != self.youtube_search_request_id.get()
+                        || self.search_query.borrow().trim() != query.as_str()
+                        || self.config.borrow().startup_source != Some(StartupSource::YouTube)
+                    {
+                        continue;
+                    }
+
+                    let mut cache_page = None;
+                    let mut library = self.youtube_library.borrow_mut();
+                    match result {
+                        Ok(mut page) => {
+                            if category == YouTubeSearchCategory::Songs {
+                                page.items.retain(YouTubeItem::playable);
+                            }
+                            cache_page = Some(page.clone());
+                            library.search.append_page(category, page);
+                        }
+                        Err(error) => {
+                            library.search.set_loading_more(category, false);
+                            library.search.error = format!("{}: {error}", category.filter());
+                        }
+                    }
+                    drop(library);
+
+                    if let Some(page) = cache_page {
+                        if !self
+                            .youtube_search_cache
+                            .borrow_mut()
+                            .append_page(&query, category, page)
+                        {
+                            eprintln!(
+                                "Search pagination cache entry expired before append: {query}"
+                            );
+                        }
                     }
                     self.refresh_browser();
                 }

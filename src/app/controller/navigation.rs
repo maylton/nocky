@@ -219,6 +219,9 @@ impl AppController {
         while let Some(event) = self.browser.try_recv() {
             match event {
                 BrowserEvent::RefreshSearch => self.refresh_browser(),
+                BrowserEvent::LoadMoreSearch(category) => {
+                    self.load_more_youtube_search(category);
+                }
                 BrowserEvent::TrackActivated(index) => {
                     self.update_listening_history_context_from_route();
                     self.pending_resume_position_us.set(None);
