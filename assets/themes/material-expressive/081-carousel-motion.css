@@ -13,7 +13,10 @@ window.theme-material-expressive
   .collection-card,
 window.theme-material-expressive
   .material-carousel-motion-installed
-  .home-card-context-overlay.material-carousel-edge-spring.collection-card {
+  .home-card-context-overlay.material-carousel-edge-spring.collection-card,
+window.theme-material-expressive
+  .material-carousel-motion-installed
+  .collection-card.material-carousel-edge-spring-surface {
   border-color: alpha(@m3_primary, 0.42);
   box-shadow:
     0 10px 26px alpha(black, 0.22),
@@ -24,20 +27,26 @@ window.theme-material-expressive
 }
 
 /*
- * Keep floating controls allocation-stable. These selectors remain explicit
- * because narrow carousel items may contain any of the supported action types.
+ * The abandoned keyline experiment used opacity changes for narrow previews.
+ * Home carousels now keep their action controls stable throughout scrolling.
  */
 window.theme-material-expressive
   .material-carousel-motion-installed
+  .home-card-context-overlay
   .collection-card-context-action,
 window.theme-material-expressive
   .material-carousel-motion-installed
+  .home-card-context-overlay
   .collection-card-overflow-button,
 window.theme-material-expressive
   .material-carousel-motion-installed
+  .home-card-context-overlay
   .material-card-primary-action,
 window.theme-material-expressive
   .material-carousel-motion-installed
+  .home-card-context-overlay
   .material-card-overflow-trigger {
-  transition: opacity 120ms ease-out;
+  opacity: 1;
+  visibility: visible;
+  transition: none;
 }
