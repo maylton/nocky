@@ -190,16 +190,16 @@ Noctalia, Frosted Glass and dynamic album-palette identities.
 ### Implemented
 
 - ✅ Material Expressive contextual menu and popover surfaces.
+- ✅ Material Expressive dialogs and confirmation surfaces.
+- ✅ Material Expressive switches, toggles and segmented controls.
 
 ### Active checkpoint
 
-- 🟡 Dialogs and confirmation surfaces.
+- 🟡 Cards, containers and shape hierarchy.
 
 ### Planned checkpoints
 
 - Expressive buttons and button-state motion.
-- Dialogs and confirmation surfaces.
-- Switches, toggles and segmented controls.
 - Cards, containers and shape hierarchy.
 - Shared navigation transitions.
 - Global motion tokens.
@@ -480,7 +480,7 @@ create less review and merge noise.
 5. ✅ Persist and restore queue state.
 6. ✅ Consolidate Material Expressive loading indicators and visual-system primitives.
 7. 🟡 Finish card actions and loading placeholders.
-8. Continue with dialogs and confirmation surfaces.
+8. ✅ Polish dialogs and confirmation surfaces.
 9. Harden YouTube unavailable-track and recovery behavior.
 10. Resume remote playlist metadata editing, removal and deletion checkpoints.
 11. Add shared card-to-page transitions.

@@ -89,6 +89,16 @@ const MATERIAL_EXPRESSIVE_MODULES: &[(&str, &str)] = &[
         "104-contextual-surfaces.css",
         include_str!("../assets/themes/material-expressive/104-contextual-surfaces.css"),
     ),
+    (
+        "105-dialog-confirmation-surfaces.css",
+        include_str!("../assets/themes/material-expressive/105-dialog-confirmation-surfaces.css"),
+    ),
+    (
+        "106-switches-toggles-segmented-controls.css",
+        include_str!(
+            "../assets/themes/material-expressive/106-switches-toggles-segmented-controls.css"
+        ),
+    ),
 ];
 
 pub(crate) fn frosted_glass_css() -> &'static str {
@@ -151,6 +161,12 @@ mod tests {
             ".search-result-primary-action",
             ".contextual-surface",
             ".material-contextual-menu-item",
+            ".material-dialog-surface",
+            ".confirmation-dialog",
+            ".material-dialog-destructive-action",
+            ".material-switch",
+            ".material-toggle-control",
+            ".material-segmented-control",
         ] {
             assert!(css.contains(required), "missing required CSS: {required}");
         }
@@ -197,6 +213,72 @@ mod tests {
             .position(|name| *name == "101-keyboard-search.css")
             .expect("keyboard/search module should be registered");
         assert!(keyboard > buttons);
+    }
+
+    #[test]
+    fn dialog_confirmation_css_loads_after_contextual_surfaces() {
+        let names = MATERIAL_EXPRESSIVE_MODULES
+            .iter()
+            .map(|(name, _)| *name)
+            .collect::<Vec<_>>();
+        let contextual = names
+            .iter()
+            .position(|name| *name == "104-contextual-surfaces.css")
+            .expect("contextual surfaces module should be registered");
+        let dialogs = names
+            .iter()
+            .position(|name| *name == "105-dialog-confirmation-surfaces.css")
+            .expect("dialog confirmation module should be registered");
+        assert!(dialogs > contextual);
+
+        let dialog_css = MATERIAL_EXPRESSIVE_MODULES[dialogs].1;
+        for required in [
+            ".material-dialog-action-row",
+            ".destructive-confirmation-area",
+            "button.material-dialog-primary-action",
+            "button.material-dialog-secondary-action",
+            "button.material-dialog-destructive-action",
+        ] {
+            assert!(
+                dialog_css.contains(required),
+                "missing dialog confirmation CSS contract: {required}"
+            );
+        }
+        assert!(!dialog_css.contains("theme-noctalia"));
+        assert!(!dialog_css.contains("theme-frosted-glass"));
+    }
+
+    #[test]
+    fn switches_toggles_and_segmented_controls_load_after_dialogs() {
+        let names = MATERIAL_EXPRESSIVE_MODULES
+            .iter()
+            .map(|(name, _)| *name)
+            .collect::<Vec<_>>();
+        let dialogs = names
+            .iter()
+            .position(|name| *name == "105-dialog-confirmation-surfaces.css")
+            .expect("dialog confirmation module should be registered");
+        let controls = names
+            .iter()
+            .position(|name| *name == "106-switches-toggles-segmented-controls.css")
+            .expect("switch/toggle/segmented controls module should be registered");
+        assert!(controls > dialogs);
+
+        let controls_css = MATERIAL_EXPRESSIVE_MODULES[controls].1;
+        for required in [
+            "switch.material-switch",
+            "button.material-toggle-control",
+            ".material-segmented-control-track",
+            ".material-segmented-control-indicator",
+            "dropdown.material-option-control",
+        ] {
+            assert!(
+                controls_css.contains(required),
+                "missing switch/toggle CSS contract: {required}"
+            );
+        }
+        assert!(!controls_css.contains("theme-noctalia"));
+        assert!(!controls_css.contains("theme-frosted-glass"));
     }
 
     #[test]

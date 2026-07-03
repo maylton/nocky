@@ -71,6 +71,7 @@ impl AnimatedPageSwitcher {
         root.set_halign(gtk::Align::Center);
         root.set_overflow(gtk::Overflow::Hidden);
         root.add_css_class("animated-page-switcher");
+        root.add_css_class("material-segmented-control");
 
         let mut buttons = Vec::with_capacity(specs.len());
         let mut labels = Vec::with_capacity(specs.len());
@@ -101,6 +102,7 @@ impl AnimatedPageSwitcher {
         track.set_size_request(switcher_width, SWITCHER_HEIGHT);
         track.set_can_target(false);
         track.add_css_class("animated-page-switcher-track");
+        track.add_css_class("material-segmented-control-track");
         root.put(&track, 0.0, 0.0);
 
         let initial_indicator_width = segment_widths[0] - INDICATOR_INSET;
@@ -108,6 +110,7 @@ impl AnimatedPageSwitcher {
         indicator.set_size_request(initial_indicator_width, INDICATOR_HEIGHT);
         indicator.set_can_target(false);
         indicator.add_css_class("animated-page-switcher-indicator");
+        indicator.add_css_class("material-segmented-control-indicator");
         root.put(&indicator, INDICATOR_MARGIN_X, INDICATOR_Y);
 
         for (index, button) in buttons.iter().enumerate() {
@@ -313,12 +316,17 @@ fn navigation_button(icon_name: &str, text: &str) -> (gtk::Button, gtk::Label) {
     button.set_tooltip_text(Some(text));
     button.add_css_class("flat");
     button.add_css_class("animated-page-switcher-button");
+    button.add_css_class("material-segmented-control-button");
 
     (button, label)
 }
 
 fn page_button_classes(active: bool) -> Vec<&'static str> {
-    let mut classes = vec!["flat", "animated-page-switcher-button"];
+    let mut classes = vec![
+        "flat",
+        "animated-page-switcher-button",
+        "material-segmented-control-button",
+    ];
     if active {
         classes.push("active");
     }

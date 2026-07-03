@@ -318,6 +318,23 @@ window.theme-material-expressive
   color: @m3_on_primary_container;
 }
 
+.collection-card-context-action.loading,
+.material-card-primary-action.loading {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  box-shadow:
+    0 3px 12px alpha(black, 0.28),
+    0 0 0 3px alpha(@m3_primary, 0.18);
+}
+
+.collection-card-context-action.loading .material-loading-indicator,
+.material-card-primary-action.loading .material-loading-indicator,
+.collection-card-context-action.loading .expressive-loading-indicator,
+.material-card-primary-action.loading .expressive-loading-indicator {
+  color: inherit;
+  opacity: 1;
+}
+
 .collection-card.collection-card-playing {
   border-color: alpha(@m3_primary, 0.68);
   box-shadow:

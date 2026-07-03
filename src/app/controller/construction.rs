@@ -133,6 +133,7 @@ impl AppController {
             MaterialIconButtonSpec::new(MaterialIconButtonVariant::Standard),
         );
         sidebar_button.add_css_class("header-navigation-button");
+        sidebar_button.add_css_class("material-toggle-control");
         header.pack_start(&sidebar_button);
 
         let brand = gtk::Label::new(Some("NOCKY"));
@@ -173,6 +174,7 @@ impl AppController {
             MaterialIconButtonSpec::new(MaterialIconButtonVariant::Standard),
         );
         search_button.add_css_class("header-action-button");
+        search_button.add_css_class("material-toggle-control");
         header.pack_end(&search_button);
 
         let sync_button = gtk::Button::builder()
@@ -207,6 +209,7 @@ impl AppController {
         );
         settings_button.add_css_class("header-action-button");
         settings_button.add_css_class("settings-navigation-button");
+        settings_button.add_css_class("material-toggle-control");
         header.pack_end(&settings_button);
 
         shell.append(&header);
@@ -815,7 +818,11 @@ impl AppController {
                 };
                 controller.close_settings_page();
                 controller.views.set_visible_child_name("queue");
-                controller.refresh_queue_page();
+                glib::idle_add_local_once(move || {
+                    if controller.views.visible_child_name().as_deref() == Some("queue") {
+                        controller.refresh_queue_page();
+                    }
+                });
             });
         }
 

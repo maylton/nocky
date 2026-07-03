@@ -1063,6 +1063,7 @@ impl AppController {
         } else {
             "Carregando álbum do YouTube Music…"
         });
+        self.refresh_browser();
 
         let sender = self.background.sender();
         thread::spawn(move || {

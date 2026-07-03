@@ -1276,6 +1276,7 @@ fn settings_switch(active: bool) -> gtk::Switch {
         .valign(gtk::Align::Center)
         .build();
     switch.add_css_class("settings-switch");
+    switch.add_css_class("material-switch");
     switch
 }
 
@@ -1287,6 +1288,7 @@ fn dropdown_row(title: &str, subtitle: &str, dropdown: &gtk::DropDown) -> gtk::B
     dropdown.set_valign(gtk::Align::Center);
     dropdown.set_width_request(170);
     dropdown.add_css_class("settings-dropdown");
+    dropdown.add_css_class("material-option-control");
     row_with_control(title, subtitle, dropdown)
 }
 

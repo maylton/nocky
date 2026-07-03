@@ -355,6 +355,8 @@ impl YouTubePage {
         toolbar.add_top_bar(&adw::HeaderBar::new());
 
         let content = gtk::Box::new(gtk::Orientation::Vertical, 14);
+        content.add_css_class("playlist-create-content");
+        content.add_css_class("material-dialog-content");
         content.set_margin_top(20);
         content.set_margin_bottom(20);
         content.set_margin_start(20);
@@ -366,10 +368,12 @@ impl YouTubePage {
         intro.set_wrap(true);
         intro.set_xalign(0.0);
         intro.add_css_class("dim-label");
+        intro.add_css_class("material-dialog-description");
 
         let title_label = gtk::Label::new(Some("Título"));
         title_label.set_xalign(0.0);
         title_label.add_css_class("heading");
+        title_label.add_css_class("material-dialog-title");
         let title_entry = gtk::Entry::new();
         title_entry.set_placeholder_text(Some("Nome da playlist"));
         title_entry.set_max_length(150);
@@ -377,6 +381,7 @@ impl YouTubePage {
         let description_label = gtk::Label::new(Some("Descrição opcional"));
         description_label.set_xalign(0.0);
         description_label.add_css_class("heading");
+        description_label.add_css_class("material-dialog-title");
         let description_entry = gtk::Entry::new();
         description_entry.set_placeholder_text(Some("Uma breve descrição"));
         description_entry.set_max_length(500);
@@ -384,6 +389,7 @@ impl YouTubePage {
         let privacy_label = gtk::Label::new(Some("Privacidade"));
         privacy_label.set_xalign(0.0);
         privacy_label.add_css_class("heading");
+        privacy_label.add_css_class("material-dialog-title");
         let privacy = gtk::DropDown::from_strings(&["Privada", "Não listada", "Pública"]);
         privacy.set_selected(0);
         privacy.set_hexpand(true);
@@ -393,15 +399,19 @@ impl YouTubePage {
             &cancel,
             MaterialButtonSpec::new(MaterialButtonVariant::Text, MaterialButtonSize::Compact),
         );
+        cancel.add_css_class("material-dialog-secondary-action");
         let create = gtk::Button::with_label("Criar playlist");
         apply_material_button(
             &create,
             MaterialButtonSpec::new(MaterialButtonVariant::Filled, MaterialButtonSize::Compact),
         );
+        create.add_css_class("material-dialog-primary-action");
         create.set_sensitive(false);
 
         let actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         actions.set_halign(gtk::Align::End);
+        actions.add_css_class("playlist-create-actions");
+        actions.add_css_class("material-dialog-action-row");
         actions.append(&cancel);
         actions.append(&create);
 

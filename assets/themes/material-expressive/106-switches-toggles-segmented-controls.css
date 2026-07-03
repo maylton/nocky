@@ -1,0 +1,220 @@
+/* Material Expressive switches, toggles and segmented controls. */
+
+window.theme-material-expressive switch,
+.theme-material-expressive switch.material-switch {
+  min-width: 52px;
+  min-height: 32px;
+  border-radius: 999px;
+  color: @m3_on_surface_variant;
+  background-color: @m3_surface_container_highest;
+  background-image: none;
+  border: 2px solid alpha(@m3_outline, 0.44);
+  box-shadow: none;
+  transition:
+    background-color 180ms ease-out,
+    border-color 180ms ease-out,
+    box-shadow 180ms ease-out;
+}
+
+window.theme-material-expressive switch slider,
+.theme-material-expressive switch.material-switch slider {
+  min-width: 20px;
+  min-height: 20px;
+  margin: 4px;
+  border-radius: 999px;
+  background-color: @m3_on_surface_variant;
+  background-image: none;
+  box-shadow: none;
+  transition:
+    background-color 180ms ease-out,
+    margin 180ms ease-out,
+    min-width 180ms ease-out;
+}
+
+window.theme-material-expressive switch:hover,
+.theme-material-expressive switch.material-switch:hover {
+  border-color: alpha(@m3_primary, 0.44);
+  background-color: mix(@m3_surface_container_highest, @m3_primary, 0.08);
+}
+
+window.theme-material-expressive switch:focus,
+window.theme-material-expressive switch:focus-visible,
+.theme-material-expressive switch.material-switch:focus,
+.theme-material-expressive switch.material-switch:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px alpha(@m3_primary, 0.28);
+}
+
+window.theme-material-expressive switch:checked,
+.theme-material-expressive switch.material-switch:checked {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  border-color: transparent;
+}
+
+window.theme-material-expressive switch:checked:hover,
+.theme-material-expressive switch.material-switch:checked:hover {
+  background-color: shade(@m3_primary, 1.06);
+}
+
+window.theme-material-expressive switch:checked slider,
+.theme-material-expressive switch.material-switch:checked slider {
+  min-width: 24px;
+  background-color: @m3_on_primary;
+}
+
+window.theme-material-expressive switch:disabled,
+.theme-material-expressive switch.material-switch:disabled {
+  opacity: 0.52;
+  box-shadow: none;
+}
+
+window.theme-material-expressive button.header-navigation-button,
+window.theme-material-expressive button.header-action-button,
+window.theme-material-expressive button.material-toggle-control {
+  transition:
+    background-color 180ms ease-out,
+    color 180ms ease-out,
+    border-color 180ms ease-out,
+    box-shadow 200ms ease-out,
+    border-radius 180ms ease-out;
+}
+
+window.theme-material-expressive button.header-navigation-button:checked,
+window.theme-material-expressive button.header-action-button:checked,
+window.theme-material-expressive button.header-action-button.active,
+window.theme-material-expressive button.material-toggle-control:checked,
+window.theme-material-expressive button.material-toggle-control.active {
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  border-color: alpha(@m3_primary, 0.30);
+  box-shadow: inset 0 0 0 1px alpha(@m3_primary, 0.10);
+}
+
+window.theme-material-expressive button.header-navigation-button:checked:hover,
+window.theme-material-expressive button.header-action-button:checked:hover,
+window.theme-material-expressive button.header-action-button.active:hover,
+window.theme-material-expressive button.material-toggle-control:checked:hover,
+window.theme-material-expressive button.material-toggle-control.active:hover {
+  background-color: mix(@m3_primary_container, @m3_primary, 0.12);
+}
+
+window.theme-material-expressive button.header-navigation-button:focus-visible,
+window.theme-material-expressive button.header-action-button:focus-visible,
+window.theme-material-expressive button.material-toggle-control:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px alpha(@m3_primary, 0.30);
+}
+
+window.theme-material-expressive button.playback-mode-toggle {
+  transition:
+    background-color 180ms ease-out,
+    color 180ms ease-out,
+    box-shadow 200ms ease-out,
+    border-radius 180ms ease-out;
+}
+
+window.theme-material-expressive button.playback-mode-toggle:checked {
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  box-shadow:
+    inset 0 0 0 1px alpha(@m3_primary, 0.16),
+    0 4px 12px alpha(black, 0.13);
+}
+
+window.theme-material-expressive button.playback-mode-toggle:active,
+window.theme-material-expressive button.playback-mode-toggle:checked:active {
+  border-radius: 16px;
+}
+
+window.theme-material-expressive .material-segmented-control,
+window.theme-material-expressive .animated-page-switcher {
+  border-radius: 24px;
+}
+
+window.theme-material-expressive .material-segmented-control-track,
+window.theme-material-expressive .animated-page-switcher-track {
+  background-color: @m3_surface_container_high;
+  background-image: none;
+  border: 1px solid alpha(@m3_outline, 0.26);
+  box-shadow:
+    inset 0 0 0 1px alpha(@m3_primary, 0.03),
+    0 3px 10px alpha(black, 0.10);
+}
+
+window.theme-material-expressive .material-segmented-control-indicator,
+window.theme-material-expressive .animated-page-switcher-indicator {
+  background-color: @m3_secondary_container;
+  background-image: none;
+  border: 1px solid alpha(@m3_primary, 0.22);
+  box-shadow:
+    0 5px 14px alpha(black, 0.18),
+    inset 0 0 0 1px alpha(@m3_primary, 0.05);
+}
+
+window.theme-material-expressive .material-segmented-control-button,
+window.theme-material-expressive .animated-page-switcher-button {
+  color: @m3_on_surface_variant;
+  background-color: transparent;
+  background-image: none;
+  border-color: transparent;
+  box-shadow: none;
+  transition:
+    color 160ms ease-out,
+    background-color 160ms ease-out,
+    border-radius 160ms ease-out;
+}
+
+window.theme-material-expressive .material-segmented-control-button:hover,
+window.theme-material-expressive .animated-page-switcher-button:hover {
+  color: @m3_on_surface;
+  background-color: alpha(@m3_primary, 0.08);
+}
+
+window.theme-material-expressive .material-segmented-control-button:active,
+window.theme-material-expressive .animated-page-switcher-button:active {
+  border-radius: 18px;
+  background-color: alpha(@m3_primary, 0.13);
+}
+
+window.theme-material-expressive .material-segmented-control-button.active,
+window.theme-material-expressive .animated-page-switcher-button.active {
+  color: @m3_on_secondary_container;
+  font-weight: 760;
+}
+
+window.theme-material-expressive .material-segmented-control-button:focus-visible,
+window.theme-material-expressive .animated-page-switcher-button:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px alpha(@m3_primary, 0.72);
+}
+
+window.theme-material-expressive dropdown.settings-dropdown,
+window.theme-material-expressive dropdown.material-option-control,
+.theme-material-expressive .playlist-create-dialog dropdown {
+  min-height: 44px;
+  border-radius: 22px;
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  background-image: none;
+  border: 1px solid alpha(@m3_outline, 0.30);
+  box-shadow: none;
+}
+
+window.theme-material-expressive dropdown.settings-dropdown:hover,
+window.theme-material-expressive dropdown.material-option-control:hover,
+.theme-material-expressive .playlist-create-dialog dropdown:hover {
+  border-color: alpha(@m3_primary, 0.40);
+  background-color: @m3_surface_container_high;
+}
+
+window.theme-material-expressive dropdown.settings-dropdown:focus,
+window.theme-material-expressive dropdown.settings-dropdown:focus-visible,
+window.theme-material-expressive dropdown.material-option-control:focus,
+window.theme-material-expressive dropdown.material-option-control:focus-visible,
+.theme-material-expressive .playlist-create-dialog dropdown:focus,
+.theme-material-expressive .playlist-create-dialog dropdown:focus-visible {
+  outline: none;
+  border-color: @m3_primary;
+  box-shadow: 0 0 0 3px alpha(@m3_primary, 0.24);
+}

@@ -257,8 +257,7 @@ fn install_material_carousel_spring(
                         now
                     }
                 };
-                let progress =
-                    ((now - start) as f64 / SPRING_DURATION_MICROS).clamp(0.0, 1.0);
+                let progress = ((now - start) as f64 / SPRING_DURATION_MICROS).clamp(0.0, 1.0);
                 let displacement = spring_displacement(progress);
 
                 {
@@ -273,17 +272,14 @@ fn install_material_carousel_spring(
                         card.widget
                             .set_width_request((card.base_width + stretch).max(1));
                         if let Some(surface) = card.surface.as_ref() {
-                            surface.set_width_request(
-                                (card.base_surface_width + stretch).max(1),
-                            );
+                            surface.set_width_request((card.base_surface_width + stretch).max(1));
                         }
                     }
                 }
 
                 if !from_start {
                     let adjustment = scroll.hadjustment();
-                    let end =
-                        (adjustment.upper() - adjustment.page_size()).max(adjustment.lower());
+                    let end = (adjustment.upper() - adjustment.page_size()).max(adjustment.lower());
                     adjustment.set_value(end);
                 }
 
@@ -363,11 +359,7 @@ fn install_material_carousel_spring(
     }
 }
 
-fn carousel_edge_cards(
-    root: &gtk::Widget,
-    from_start: bool,
-    limit: usize,
-) -> Vec<gtk::Widget> {
+fn carousel_edge_cards(root: &gtk::Widget, from_start: bool, limit: usize) -> Vec<gtk::Widget> {
     let mut cards = Vec::new();
     collect_descendants_with_css(root, CAROUSEL_ITEM_CLASS, &mut cards);
 
@@ -441,23 +433,11 @@ fn spring_displacement(progress: f64) -> f64 {
     if progress < 0.20 {
         24.0 * ease_out_cubic(progress / 0.20)
     } else if progress < 0.48 {
-        lerp(
-            24.0,
-            -7.0,
-            ease_in_out_cubic((progress - 0.20) / 0.28),
-        )
+        lerp(24.0, -7.0, ease_in_out_cubic((progress - 0.20) / 0.28))
     } else if progress < 0.73 {
-        lerp(
-            -7.0,
-            4.0,
-            ease_in_out_cubic((progress - 0.48) / 0.25),
-        )
+        lerp(-7.0, 4.0, ease_in_out_cubic((progress - 0.48) / 0.25))
     } else {
-        lerp(
-            4.0,
-            0.0,
-            ease_out_cubic((progress - 0.73) / 0.27),
-        )
+        lerp(4.0, 0.0, ease_out_cubic((progress - 0.73) / 0.27))
     }
 }
 

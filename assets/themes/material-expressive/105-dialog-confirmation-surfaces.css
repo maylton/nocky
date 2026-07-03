@@ -1,0 +1,187 @@
+/* Material Expressive dialogs and confirmation surfaces. */
+
+dialog.theme-material-expressive,
+.theme-material-expressive dialog,
+window.theme-material-expressive dialog,
+.theme-material-expressive .material-dialog-surface,
+.theme-material-expressive .confirmation-dialog,
+.theme-material-expressive .alert-dialog,
+.theme-material-expressive .modal-surface {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container_low;
+  background-image: none;
+  border: 1px solid alpha(@m3_outline, 0.24);
+  border-radius: 32px;
+  box-shadow:
+    0 18px 46px alpha(black, 0.30),
+    0 2px 8px alpha(black, 0.18);
+}
+
+dialog.theme-material-expressive > *,
+.theme-material-expressive dialog > *,
+.theme-material-expressive .material-dialog-surface > *,
+.theme-material-expressive .modal-surface > * {
+  background-color: transparent;
+  background-image: none;
+}
+
+.theme-material-expressive .material-dialog-content,
+.theme-material-expressive .startup-dialog-content,
+.theme-material-expressive .playlist-create-content,
+.theme-material-expressive .stream-sources-dialog-content {
+  color: @m3_on_surface;
+  background-color: transparent;
+  background-image: none;
+}
+
+.theme-material-expressive .material-dialog-title,
+.theme-material-expressive .startup-dialog-title,
+.theme-material-expressive .playlist-create-dialog .heading,
+.theme-material-expressive .stream-sources-dialog .heading {
+  color: @m3_on_surface;
+  font-weight: 820;
+  letter-spacing: 0;
+}
+
+.theme-material-expressive .material-dialog-description,
+.theme-material-expressive .startup-dialog-description,
+.theme-material-expressive .playlist-create-dialog .dim-label,
+.theme-material-expressive .stream-sources-dialog .dim-label {
+  color: @m3_on_surface_variant;
+}
+
+.theme-material-expressive .material-dialog-divider,
+.theme-material-expressive .confirmation-divider,
+.theme-material-expressive .alert-dialog separator,
+.theme-material-expressive .confirmation-dialog separator {
+  min-height: 1px;
+  margin: 8px 0;
+  background-color: alpha(@m3_outline_variant, 0.64);
+}
+
+.theme-material-expressive .material-dialog-action-row,
+.theme-material-expressive .startup-choice-group,
+.theme-material-expressive .playlist-create-actions,
+.theme-material-expressive .stream-sources-dialog-actions {
+  padding-top: 6px;
+}
+
+.theme-material-expressive .confirmation-surface,
+.theme-material-expressive .destructive-confirmation-area,
+.theme-material-expressive .danger-confirmation-area {
+  color: @m3_error;
+  background-color: alpha(@m3_error, 0.10);
+  border: 1px solid alpha(@m3_error, 0.34);
+  border-radius: 24px;
+  padding: 14px;
+}
+
+.theme-material-expressive .confirmation-surface .dim-label,
+.theme-material-expressive .destructive-confirmation-area .dim-label,
+.theme-material-expressive .danger-confirmation-area .dim-label {
+  color: alpha(@m3_error, 0.86);
+}
+
+.theme-material-expressive button.material-dialog-primary-action,
+.theme-material-expressive dialog button.suggested-action,
+.theme-material-expressive .confirmation-dialog button.suggested-action {
+  color: @m3_on_primary;
+  background-color: @m3_primary;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.theme-material-expressive button.material-dialog-primary-action:hover,
+.theme-material-expressive dialog button.suggested-action:hover,
+.theme-material-expressive .confirmation-dialog button.suggested-action:hover {
+  background-color: shade(@m3_primary, 1.06);
+  box-shadow: 0 3px 10px alpha(black, 0.18);
+}
+
+.theme-material-expressive button.material-dialog-primary-action:active,
+.theme-material-expressive dialog button.suggested-action:active,
+.theme-material-expressive .confirmation-dialog button.suggested-action:active {
+  border-radius: 18px;
+  background-color: shade(@m3_primary, 0.94);
+  box-shadow: none;
+}
+
+.theme-material-expressive button.material-dialog-secondary-action,
+.theme-material-expressive dialog button.flat,
+.theme-material-expressive .confirmation-dialog button.flat {
+  color: @m3_primary;
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.theme-material-expressive button.material-dialog-secondary-action:hover,
+.theme-material-expressive dialog button.flat:hover,
+.theme-material-expressive .confirmation-dialog button.flat:hover {
+  background-color: alpha(@m3_primary, 0.10);
+}
+
+.theme-material-expressive button.material-dialog-secondary-action:active,
+.theme-material-expressive dialog button.flat:active,
+.theme-material-expressive .confirmation-dialog button.flat:active {
+  border-radius: 18px;
+  background-color: alpha(@m3_primary, 0.16);
+}
+
+.theme-material-expressive button.material-dialog-destructive-action,
+.theme-material-expressive dialog button.destructive-action,
+.theme-material-expressive .confirmation-dialog button.destructive-action {
+  color: @m3_error;
+  background-color: transparent;
+  border-color: alpha(@m3_error, 0.72);
+  box-shadow: none;
+}
+
+.theme-material-expressive button.material-dialog-destructive-action:hover,
+.theme-material-expressive dialog button.destructive-action:hover,
+.theme-material-expressive .confirmation-dialog button.destructive-action:hover {
+  background-color: alpha(@m3_error, 0.12);
+}
+
+.theme-material-expressive button.material-dialog-destructive-action:active,
+.theme-material-expressive dialog button.destructive-action:active,
+.theme-material-expressive .confirmation-dialog button.destructive-action:active {
+  border-radius: 18px;
+  background-color: alpha(@m3_error, 0.18);
+}
+
+.theme-material-expressive dialog button:focus,
+.theme-material-expressive dialog button:focus-visible,
+.theme-material-expressive .material-dialog-action-row button:focus,
+.theme-material-expressive .material-dialog-action-row button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px alpha(@m3_primary, 0.34);
+}
+
+.theme-material-expressive dialog button.destructive-action:focus,
+.theme-material-expressive dialog button.destructive-action:focus-visible,
+.theme-material-expressive button.material-dialog-destructive-action:focus,
+.theme-material-expressive button.material-dialog-destructive-action:focus-visible {
+  box-shadow: 0 0 0 3px alpha(@m3_error, 0.34);
+}
+
+.theme-material-expressive dialog button:disabled,
+.theme-material-expressive .material-dialog-action-row button:disabled,
+.theme-material-expressive .playlist-create-actions button:disabled,
+.theme-material-expressive .stream-sources-dialog-actions button:disabled {
+  opacity: 0.56;
+  box-shadow: none;
+}
+
+.theme-material-expressive .playlist-create-dialog entry,
+.theme-material-expressive .playlist-create-dialog dropdown,
+.theme-material-expressive .stream-sources-dialog scrolledwindow {
+  color: @m3_on_surface;
+  background-color: @m3_surface_container;
+  border-color: alpha(@m3_outline, 0.30);
+}
+
+.theme-material-expressive .stream-sources-dialog .settings-stream-source-row {
+  background-color: alpha(@m3_surface_container, 0.82);
+  border-color: alpha(@m3_outline, 0.22);
+}

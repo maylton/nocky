@@ -47,6 +47,7 @@ pub(crate) fn new_mode_toggle(
     button.set_valign(gtk::Align::Center);
     button.add_css_class("flat");
     button.add_css_class("playback-mode-toggle");
+    button.add_css_class("material-toggle-control");
 
     match kind {
         ModeToggleKind::Shuffle => {

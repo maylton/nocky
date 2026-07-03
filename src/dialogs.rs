@@ -69,6 +69,7 @@ where
 
     let surface = gtk::Box::new(gtk::Orientation::Vertical, 0);
     surface.add_css_class("youtube-dialog-surface");
+    surface.add_css_class("material-dialog-surface");
     inherit_visual_theme(parent, &surface);
 
     let config = AppConfig::load();
@@ -129,6 +130,7 @@ pub(crate) fn present_startup_source<F>(
 
     let content = gtk::Box::new(gtk::Orientation::Vertical, 14);
     content.add_css_class("startup-dialog-content");
+    content.add_css_class("material-dialog-content");
     dialog.set_child(Some(&content));
     content.set_margin_top(22);
     content.set_margin_bottom(22);
@@ -144,12 +146,14 @@ pub(crate) fn present_startup_source<F>(
     title.set_xalign(0.0);
     title.add_css_class("title-2");
     title.add_css_class("startup-dialog-title");
+    title.add_css_class("material-dialog-title");
 
     let description = gtk::Label::new(Some(tr(Message::StartupDescription)));
     description.set_wrap(true);
     description.set_xalign(0.0);
     description.add_css_class("dim-label");
     description.add_css_class("startup-dialog-description");
+    description.add_css_class("material-dialog-description");
 
     let local_button = gtk::Button::with_label(tr(Message::UseLocalLibrary));
     local_button.set_tooltip_text(Some(tr(Message::UseLocalLibraryTooltip)));
@@ -161,6 +165,7 @@ pub(crate) fn present_startup_source<F>(
         ),
     );
     local_button.add_css_class("source-choice-button");
+    local_button.add_css_class("material-dialog-secondary-action");
 
     let youtube_button = gtk::Button::with_label(tr(Message::UseYoutubeMusic));
     youtube_button.set_tooltip_text(Some(tr(Message::UseYoutubeMusicTooltip)));
@@ -169,9 +174,11 @@ pub(crate) fn present_startup_source<F>(
         MaterialButtonSpec::new(MaterialButtonVariant::Filled, MaterialButtonSize::Standard),
     );
     youtube_button.add_css_class("source-choice-button");
+    youtube_button.add_css_class("material-dialog-primary-action");
 
     let choices = gtk::Box::new(gtk::Orientation::Vertical, 10);
     choices.add_css_class("startup-choice-group");
+    choices.add_css_class("material-dialog-action-row");
     choices.append(&local_button);
     choices.append(&youtube_button);
 
@@ -187,6 +194,7 @@ pub(crate) fn present_startup_source<F>(
             MaterialButtonSpec::new(MaterialButtonVariant::Text, MaterialButtonSize::Compact),
         );
         cancel_button.add_css_class("startup-cancel-action");
+        cancel_button.add_css_class("material-dialog-secondary-action");
         content.append(&cancel_button);
 
         let dialog = dialog.clone();

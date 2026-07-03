@@ -315,6 +315,7 @@ impl DialogState {
             enabled.set_active(current.is_enabled(key));
             enabled.set_valign(gtk::Align::Center);
             enabled.set_sensitive(enabled_count > 1 || !current.is_enabled(key));
+            enabled.add_css_class("material-switch");
             enabled.set_tooltip_text(Some(text(
                 self.language,
                 "Ativar ou desativar esta fonte",
@@ -417,11 +418,14 @@ pub(crate) fn present_dialog<W>(
         .content_width(680)
         .content_height(620)
         .build();
+    dialog.add_css_class("stream-sources-dialog");
 
     let toolbar = adw::ToolbarView::new();
     toolbar.add_top_bar(&adw::HeaderBar::new());
 
     let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    content.add_css_class("stream-sources-dialog-content");
+    content.add_css_class("material-dialog-content");
     content.set_margin_top(18);
     content.set_margin_bottom(18);
     content.set_margin_start(18);
@@ -431,11 +435,13 @@ pub(crate) fn present_dialog<W>(
     summary.set_xalign(0.0);
     summary.set_wrap(true);
     summary.add_css_class("dim-label");
+    summary.add_css_class("material-dialog-description");
 
     let diagnostic = gtk::Label::new(Some(&last_stream_diagnostic(language)));
     diagnostic.set_xalign(0.0);
     diagnostic.set_wrap(true);
     diagnostic.add_css_class("dim-label");
+    diagnostic.add_css_class("material-dialog-description");
     diagnostic.set_tooltip_text(Some(text(
         language,
         "Mostra apenas cliente e formato. URLs, cookies e cabeçalhos nunca são exibidos.",
@@ -464,6 +470,7 @@ pub(crate) fn present_dialog<W>(
         &reset,
         MaterialButtonSpec::new(MaterialButtonVariant::Text, MaterialButtonSize::Compact),
     );
+    reset.add_css_class("material-dialog-secondary-action");
     {
         let weak = Rc::downgrade(&state);
         reset.connect_clicked(move |_| {
@@ -488,7 +495,12 @@ pub(crate) fn present_dialog<W>(
     content.append(&summary);
     content.append(&diagnostic);
     content.append(&rows);
-    content.append(&reset);
+    let actions = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    actions.set_halign(gtk::Align::End);
+    actions.add_css_class("stream-sources-dialog-actions");
+    actions.add_css_class("material-dialog-action-row");
+    actions.append(&reset);
+    content.append(&actions);
 
     let scroll = gtk::ScrolledWindow::new();
     scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
