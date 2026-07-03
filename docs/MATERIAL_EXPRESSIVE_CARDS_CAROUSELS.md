@@ -1,13 +1,12 @@
 # Material Expressive Cards And Carousels
 
-This document records the Material card and carousel implementation used by
-Nocky.
+This document records the Material card and carousel implementation currently
+used by Nocky.
 
 References:
 
 - Cards: <https://m3.material.io/components/cards>
-- Carousel: <https://m3.material.io/components/carousel>
-- Compose carousel implementation: <https://developer.android.com/develop/ui/compose/components/carousel>
+- Motion: <https://m3.material.io/styles/motion/overview>
 
 ## Card contract
 
@@ -29,49 +28,76 @@ surface:
 
 ## Carousel contract
 
-Material carousels use:
+Nocky keeps horizontal collection rails as regular GTK scrollers with stable
+card geometry. The experimental Hero/MultiBrowse keyline and mask implementation
+was retired after review because it introduced unstable card density, control
+clipping and layout complexity that did not improve the desktop Home.
 
-- `material-carousel`;
-- one variant class: `material-carousel-multi-browse`,
-  `material-carousel-hero`, or `material-carousel-uncontained`.
+The active carousel behavior is a bounded edge spring implemented in
+`src/ui/widgets/material_card.rs`:
 
-The controller in `src/ui/widgets/material_card.rs` implements the M3 keyline
-behavior for GTK:
+- card geometry remains unchanged while browsing normally;
+- kinetic scrolling stays owned by `GtkScrolledWindow`;
+- reaching the leading or trailing edge triggers a short 520 ms spring;
+- the three cards closest to the edge receive decreasing strengths of `1.0`,
+  `0.60`, and `0.32`;
+- both the outer slot and the visible `.collection-card` surface participate in
+  the animation;
+- original width requests are restored when the animation finishes or the
+  scroller is unmapped;
+- the effect is scoped to Material Expressive and does not affect TrackRows;
+- play/pause and overflow controls keep stable opacity while scrolling.
 
-- each item retains a stable layout slot;
-- only its visible mask width changes while scrolling;
-- the outside edge is clipped while the visible edge remains aimed at the focal
-  keyline;
-- mask width is interpolated continuously instead of switching between fixed
-  CSS sizes;
-- large, medium and small mask states adjust corner shape and content density;
-- kinetic scrolling remains owned by `GtkScrolledWindow`.
+The semantic variant classes remain available for presentation metadata and CSS
+compatibility:
 
-This avoids the layout feedback and horizontal jumping that would happen if the
-real widget allocation were repeatedly expanded and collapsed.
+- `material-carousel-multi-browse`;
+- `material-carousel-hero`;
+- `material-carousel-uncontained`.
+
+They no longer imply Android-style keyline resizing.
 
 ### Nocky mapping
 
-- Featured Home sections are inferred as **Hero** carousels. One item receives a
-  strong focal keyline while neighboring cards collapse into medium and small
-  previews.
-- Compact collection sections use **Multi-browse**. Cards remain large in the
-  central browsing region and progressively collapse near either viewport edge.
-- TrackRows use **Uncontained** behavior. Track cards keep one stable width and
-  are not masked like image-first collection cards.
-- Chip rails are not Material carousels because they are filter controls rather
-  than visual item collections.
+- Featured and Compact Home sections both use stable collection-card geometry
+  and the same edge-spring interaction.
+- TrackRows keep their horizontal row geometry and do not receive card-width
+  spring animation.
+- Chip rails are filter controls rather than visual collection carousels.
 
 ## Preserved Home hierarchy
 
-Material semantics do not flatten the Home hierarchy introduced in Nocky 0.6.0:
+The current production Home intentionally keeps Featured and Compact card
+metrics uniform while the earlier responsive Hero experiment remains archived
+outside the active path:
 
-- Featured outer/card/artwork widths remain `220/196/176 px`;
-- Compact outer/card/artwork widths remain `168/152/128 px`;
-- TrackRows retain their horizontal row geometry.
+- outer width: `168 px`;
+- card width: `152 px`;
+- artwork width: `128 px`;
+- TrackRows retain their dedicated horizontal row geometry.
 
-The keyline mask may temporarily reveal a smaller portion of a card, but the
-underlying Featured and Compact geometry remains distinct.
+The edge spring is temporary visual feedback and never becomes a persistent
+layout allocation.
+
+## Loading-state contract
+
+Collection loading follows three levels:
+
+1. inline Material Loading Indicator inside an action that initiated work;
+2. skeleton treatment on an existing active collection card;
+3. dedicated non-interactive placeholder rails when remote Home content has not
+   produced its first real section yet.
+
+Placeholder rails must:
+
+- preserve the final section and card geometry;
+- avoid fake clickable actions;
+- keep source-aware loading copy outside the card skeletons;
+- avoid layout shifts when real sections replace them;
+- remain calm when reduced motion is requested.
+
+The detailed action and loading audit lives in
+`docs/CARD_ACTIONS_LOADING_AUDIT.md`.
 
 ## Typography
 
@@ -114,11 +140,11 @@ Gate.
 
 Manual validation should cover:
 
-- Featured Hero rails at narrow, normal and wide widths;
-- Compact Multi-browse rails while dragging, wheel-scrolling and using kinetic
-  touch scrolling;
-- leading and trailing small previews;
+- leading and trailing spring feedback on Featured and Compact rails;
+- wheel, touchpad, kinetic and scrollbar-driven edge arrival;
+- widths returning exactly to their original values;
 - TrackRows remaining uniform;
-- card play/overflow controls staying clipped and aligned correctly;
+- card play/pause and overflow controls remaining visible and aligned;
+- initial remote Home placeholder rails transitioning to real content;
 - theme switching between Material Expressive, Noctalia and Frosted Glass;
 - Google Sans Flex selection and fallback behavior.
