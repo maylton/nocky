@@ -215,14 +215,19 @@ window.theme-material-expressive
 def patch_theme_tests(text: str) -> str:
     return replace_once(
         text,
-        """            \".material-carousel-edge-spring\",\n            \".material-carousel-edge-spring-surface\",\n""",
-        """            \".material-carousel-edge-spring\",\n            \".material-carousel-edge-spring-surface\",\n            \".youtube-home-loading-placeholders\",\n            \".home-card-loading-placeholder\",\n""",
+        """            \".material-carousel-motion-installed\",\n            \".material-carousel-edge-spring\",\n            \".material-carousel-edge-spring-surface\",\n        ] {\n""",
+        """            \".material-carousel-motion-installed\",\n            \".material-carousel-edge-spring\",\n            \".material-carousel-edge-spring-surface\",\n            \".youtube-home-loading-placeholders\",\n            \".home-card-loading-placeholder\",\n        ] {\n""",
         "placeholder CSS contract",
     )
 
 
 def patch_roadmap(text: str) -> str:
-    text = replace_once(text, "> Last updated: 2026-07-01", "> Last updated: 2026-07-03", "roadmap date")
+    text = replace_once(
+        text,
+        "> Last updated: 2026-07-01",
+        "> Last updated: 2026-07-03",
+        "roadmap date",
+    )
     text = replace_once(
         text,
         """### Active checkpoint\n\n- 🟡 Reusable native Material Loading Indicator for page, inline/action and\n  load-more loading states.\n""",
