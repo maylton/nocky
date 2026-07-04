@@ -7,6 +7,7 @@ mod feed;
 mod home_v3;
 mod home_v3_action;
 mod home_v3_adapter;
+mod home_v3_legacy_adapter;
 mod home_v3_render_plan;
 mod home_v3_shell;
 mod like_mutation;
@@ -46,6 +47,9 @@ pub(crate) use feed::{
     youtube_home_section_key, YouTubeHomeChip, YouTubeHomeContinuationDelta, YouTubeHomePage,
     YouTubeHomeSection,
 };
+pub(crate) use home_v3::{HomeV3Item, HomeV3Page};
+pub(crate) use home_v3_adapter::adapt_source_page;
+pub(crate) use home_v3_legacy_adapter::legacy_youtube_home_page_source;
 pub(crate) use like_mutation::{LikeMutationRegistry, LikeMutationStartError};
 pub(crate) use playlist_create::{playlist_creation_error_message, YouTubePlaylistCreation};
 pub(crate) use routing::{youtube_item_action, YouTubeItemAction};

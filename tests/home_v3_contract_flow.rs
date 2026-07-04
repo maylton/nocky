@@ -32,6 +32,7 @@ fn home_v3_contract_flow_matches_metrolist_behavior() {
                 video_id: "video-id".to_string(),
                 browse_id: String::new(),
                 params: String::new(),
+                ..HomeV3SourceItem::default()
             }],
         }],
         continuation: "next-page".to_string(),

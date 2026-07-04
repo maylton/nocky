@@ -50,10 +50,16 @@ pub(crate) enum HomeV3SectionLayout {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct HomeV3Item {
+    pub result_type: String,
     pub title: String,
     pub subtitle: String,
-    pub thumbnail_url: String,
     pub video_id: String,
     pub browse_id: String,
+    pub album: String,
+    pub artist: String,
+    pub playlist_kind: String,
     pub params: String,
+    pub duration_seconds: u64,
+    pub thumbnail_url: String,
+    pub cover_path: String,
 }

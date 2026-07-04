@@ -20,6 +20,7 @@ fn home_v3_page_preserves_metrolist_feed_shape() {
                 video_id: "video123".to_string(),
                 browse_id: String::new(),
                 params: String::new(),
+                ..HomeV3Item::default()
             }],
         }],
         continuation: "next-token".to_string(),

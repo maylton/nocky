@@ -30,12 +30,18 @@ pub(crate) struct HomeV3SourceSection {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct HomeV3SourceItem {
+    pub result_type: String,
     pub title: String,
     pub subtitle: String,
-    pub thumbnail_url: String,
     pub video_id: String,
     pub browse_id: String,
+    pub album: String,
+    pub artist: String,
+    pub playlist_kind: String,
     pub params: String,
+    pub duration_seconds: u64,
+    pub thumbnail_url: String,
+    pub cover_path: String,
 }
 
 pub(crate) fn adapt_source_page(source: HomeV3SourcePage) -> HomeV3Page {
@@ -59,12 +65,18 @@ pub(crate) fn adapt_source_page(source: HomeV3SourcePage) -> HomeV3Page {
                     .items
                     .into_iter()
                     .map(|item| HomeV3Item {
+                        result_type: item.result_type,
                         title: item.title,
                         subtitle: item.subtitle,
-                        thumbnail_url: item.thumbnail_url,
                         video_id: item.video_id,
                         browse_id: item.browse_id,
+                        album: item.album,
+                        artist: item.artist,
+                        playlist_kind: item.playlist_kind,
                         params: item.params,
+                        duration_seconds: item.duration_seconds,
+                        thumbnail_url: item.thumbnail_url,
+                        cover_path: item.cover_path,
                     })
                     .collect(),
             })

@@ -43,4 +43,12 @@ This bridge must remain visible in code review so we do not confuse:
 - native Home V3 source/parser readiness.
 
 The next functional step is to replace this legacy bridge with a native Home V3
-feed source that produces the `HomeV3Page` contract directly.
+feed source that produces the `HomeV3Page` contract directly.\n\n## HomeV3Page renderer boundary
+
+The mounted GTK shell now receives `HomeV3Page` instead of `YouTubeHomePage`
+directly. While the feed still originates from the legacy YouTube Home payload,
+that payload is first converted by `legacy_youtube_home_page_source` and then
+adapted through `adapt_source_page`.
+
+This keeps the next cut clear: replace only the legacy source bridge with the
+native Home V3 helper/parser while preserving the renderer contract.\n

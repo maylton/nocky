@@ -25,6 +25,7 @@ fn adapter_preserves_metrolist_feed_contract() {
                 video_id: "video-id".to_string(),
                 browse_id: String::new(),
                 params: String::new(),
+                ..HomeV3SourceItem::default()
             }],
         }],
         continuation: "next-page".to_string(),

@@ -8,8 +8,9 @@ use crate::{
     search_text::{normalize_search_text, search_matches, search_score},
     ui::widgets::MaterialLoadingIndicator,
     youtube::{
-        artist_credit_contains, credited_artists, youtube_cache_visual_state,
-        youtube_collection_cache_key, youtube_collection_key, youtube_home_section_key,
+        adapt_source_page, artist_credit_contains, credited_artists,
+        legacy_youtube_home_page_source, youtube_cache_visual_state, youtube_collection_cache_key,
+        youtube_collection_key, youtube_home_section_key, HomeV3Item, HomeV3Page,
         YouTubeCacheVisualState, YouTubeCollectionEntry, YouTubeHomeContinuationDelta,
         YouTubeHomePage, YouTubeHomeSection, YouTubeItem, YouTubeLibraryCache,
     },
@@ -1444,11 +1445,11 @@ mod home_render_reuse_tests {
     }
 }
 
-// Transitional bridge: this is the Home V3 shell, but it still receives the
-// legacy YouTubeHomePage payload. Keep this explicit until the native Home V3
-// helper/parser produces a HomeV3Page directly.
+// Transitional bridge: this is the Home V3 shell fed by a HomeV3Page contract.
+// The caller may still create that contract from the legacy YouTubeHomePage
+// source until the native Home V3 helper/parser is wired.
 fn youtube_home_v3_legacy_feed_shell(
-    page: &YouTubeHomePage,
+    page: &HomeV3Page,
     loading: bool,
     event_tx: &Sender<BrowserEvent>,
     language: AppLanguage,
@@ -1563,8 +1564,6 @@ fn youtube_home_v3_legacy_feed_shell(
 
         let section_title = if !section.title.trim().is_empty() {
             section.title.trim()
-        } else if !section.label.trim().is_empty() {
-            section.label.trim()
         } else {
             untitled_section
         };
@@ -1584,7 +1583,12 @@ fn youtube_home_v3_legacy_feed_shell(
         row.set_hexpand(true);
         row.add_css_class("youtube-home-v3-row");
 
-        let queue = section.playable_queue();
+        let queue = section
+            .items
+            .iter()
+            .filter(|item| !item.video_id.trim().is_empty())
+            .map(home_v3_item_to_youtube_item)
+            .collect::<Vec<_>>();
 
         for (index, item) in section.items.iter().take(12).enumerate() {
             let button = gtk::Button::new();
@@ -1622,27 +1626,28 @@ fn youtube_home_v3_legacy_feed_shell(
             card.append(&subtitle);
             button.set_child(Some(&card));
 
-            let actionable = item.playable() || !item.browse_id.trim().is_empty();
+            let actionable = !item.video_id.trim().is_empty() || !item.browse_id.trim().is_empty();
             button.set_sensitive(actionable);
 
             let tx = event_tx.clone();
             let item = item.clone();
             let queue = queue.clone();
             button.connect_clicked(move |_| {
-                if item.playable() {
+                let youtube_item = home_v3_item_to_youtube_item(&item);
+                if !item.video_id.trim().is_empty() {
                     let playback_index = queue
                         .iter()
                         .position(|candidate| candidate.video_id == item.video_id)
                         .unwrap_or(index);
                     let _ = tx.send(BrowserEvent::YouTubeTrackActivated {
-                        item: item.clone(),
+                        item: youtube_item,
                         queue: queue.clone(),
                         index: playback_index,
                     });
                 } else if item.result_type.eq_ignore_ascii_case("playlist") {
-                    let _ = tx.send(BrowserEvent::OpenYouTubePlaylist(item.clone()));
+                    let _ = tx.send(BrowserEvent::OpenYouTubePlaylist(youtube_item));
                 } else if !item.browse_id.trim().is_empty() {
-                    let _ = tx.send(BrowserEvent::OpenYouTubeCollection(item.clone()));
+                    let _ = tx.send(BrowserEvent::OpenYouTubeCollection(youtube_item));
                 }
             });
 
@@ -1672,6 +1677,23 @@ fn youtube_home_v3_legacy_feed_shell(
     }
 
     home
+}
+
+fn home_v3_item_to_youtube_item(item: &HomeV3Item) -> YouTubeItem {
+    YouTubeItem {
+        result_type: item.result_type.clone(),
+        title: item.title.clone(),
+        subtitle: item.subtitle.clone(),
+        video_id: item.video_id.clone(),
+        browse_id: item.browse_id.clone(),
+        album: item.album.clone(),
+        artist: item.artist.clone(),
+        playlist_kind: item.playlist_kind.clone(),
+        params: item.params.clone(),
+        duration_seconds: item.duration_seconds,
+        thumbnail_url: item.thumbnail_url.clone(),
+        cover_path: item.cover_path.clone(),
+    }
 }
 
 impl LibraryBrowser {
@@ -3256,8 +3278,10 @@ impl LibraryBrowser {
         next_home.add_css_class("expressive-library-home");
 
         if youtube_home {
+            let home_v3_page =
+                adapt_source_page(legacy_youtube_home_page_source(youtube_home_page));
             let next_home = youtube_home_v3_legacy_feed_shell(
-                youtube_home_page,
+                &home_v3_page,
                 youtube_home_loading,
                 &self.event_tx,
                 language,
