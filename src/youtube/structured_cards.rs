@@ -4,6 +4,9 @@ use super::{
 use gtk::prelude::*;
 use std::{rc::Rc, sync::mpsc::Sender};
 
+#[path = "artwork_trace.rs"]
+mod artwork_trace;
+
 const CARD_WIDTH: i32 = 176;
 const ARTWORK_SIZE: i32 = 152;
 const CAROUSEL_HEIGHT: i32 = 238;
@@ -28,6 +31,7 @@ pub(crate) fn youtube_carousel_row(
 
     for item in &section.items {
         cards.append(&youtube_card(
+            &section.title,
             item,
             Rc::clone(&playable_queue),
             event_tx.clone(),
@@ -49,6 +53,7 @@ pub(crate) fn youtube_carousel_row(
 }
 
 fn youtube_card(
+    section_title: &str,
     item: &YouTubeItem,
     playable_queue: Rc<Vec<YouTubeItem>>,
     event_tx: Sender<YouTubePageEvent>,
@@ -61,7 +66,9 @@ fn youtube_card(
     content.set_margin_start(10);
     content.set_margin_end(10);
 
+    artwork_trace::trace_item("card_before_cover", section_title, item, None, "before");
     if let Some(path) = item.cached_cover() {
+        artwork_trace::trace_item("card_using_cover", section_title, item, Some(path), "cover");
         let artwork = gtk::Picture::for_filename(path);
         artwork.set_content_fit(gtk::ContentFit::Cover);
         artwork.set_can_shrink(true);
@@ -72,6 +79,7 @@ fn youtube_card(
         }
         content.append(&artwork);
     } else {
+        artwork_trace::trace_item("card_placeholder", section_title, item, None, "placeholder");
         let placeholder = gtk::Box::new(gtk::Orientation::Vertical, 0);
         placeholder.set_size_request(ARTWORK_SIZE, ARTWORK_SIZE);
         placeholder.set_halign(gtk::Align::Center);
