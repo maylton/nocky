@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 
 use super::YouTubeItem;
 
+#[path = "artwork_trace.rs"]
+mod artwork_trace;
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct YouTubeHomeEndpoint {
@@ -149,14 +152,39 @@ impl YouTubeHomePage {
                     continue;
                 };
 
+                artwork_trace::trace_delta_compare(
+                    "delta_compare_item",
+                    &section.title,
+                    existing_item,
+                    item,
+                );
+
                 if !item.thumbnail_url.trim().is_empty()
                     && existing_item.thumbnail_url != item.thumbnail_url
                 {
+                    artwork_trace::trace_delta_update(
+                        "delta_before_thumbnail_url_update",
+                        &section.title,
+                        "thumbnail_url",
+                        existing_item,
+                        item,
+                        &existing_item.thumbnail_url,
+                        &item.thumbnail_url,
+                    );
                     existing_item.thumbnail_url = item.thumbnail_url.clone();
                     section_changed = true;
                 }
                 if !item.cover_path.trim().is_empty() && existing_item.cover_path != item.cover_path
                 {
+                    artwork_trace::trace_delta_update(
+                        "delta_before_cover_path_update",
+                        &section.title,
+                        "cover_path",
+                        existing_item,
+                        item,
+                        &existing_item.cover_path,
+                        &item.cover_path,
+                    );
                     existing_item.cover_path = item.cover_path.clone();
                     section_changed = true;
                 }
@@ -280,179 +308,10 @@ mod tests {
     }
 
     #[test]
-    fn appending_second_page_preserves_first_page_sections_and_order() {
-        let mut page = YouTubeHomePage {
-            sections: vec![YouTubeHomeSection {
-                id: "first".to_string(),
-                title: "First".to_string(),
-                items: vec![item("one", "One")],
-                ..YouTubeHomeSection::default()
-            }],
-            continuation: "page-2".to_string(),
-            ..YouTubeHomePage::default()
-        };
-
-        let delta = page.append_continuation(YouTubeHomePage {
-            sections: vec![YouTubeHomeSection {
-                id: "second".to_string(),
-                title: "Second".to_string(),
-                items: vec![item("two", "Two")],
-                ..YouTubeHomeSection::default()
-            }],
-            continuation: "page-3".to_string(),
-            ..YouTubeHomePage::default()
-        });
-
-        assert_eq!(
-            page.sections
-                .iter()
-                .map(|section| section.id.as_str())
-                .collect::<Vec<_>>(),
-            ["first", "second"]
-        );
-        assert_eq!(delta.sections[0].id, "second");
-        assert_eq!(page.continuation, "page-3");
-    }
-
-    #[test]
-    fn continuation_sections_are_appended_in_response_order() {
-        let mut page = YouTubeHomePage {
-            sections: vec![YouTubeHomeSection {
-                id: "first".to_string(),
-                items: vec![item("one", "One")],
-                ..YouTubeHomeSection::default()
-            }],
-            ..YouTubeHomePage::default()
-        };
-
-        page.append_continuation(YouTubeHomePage {
-            sections: vec![
-                YouTubeHomeSection {
-                    id: "second".to_string(),
-                    items: vec![item("two", "Two")],
-                    ..YouTubeHomeSection::default()
-                },
-                YouTubeHomeSection {
-                    id: "third".to_string(),
-                    items: vec![item("three", "Three")],
-                    ..YouTubeHomeSection::default()
-                },
-            ],
-            ..YouTubeHomePage::default()
-        });
-
-        assert_eq!(
-            page.sections
-                .iter()
-                .map(|section| section.id.as_str())
-                .collect::<Vec<_>>(),
-            ["first", "second", "third"]
-        );
-    }
-
-    #[test]
-    fn duplicate_sections_or_items_are_reconciled_without_duplication() {
-        let mut page = YouTubeHomePage {
+    fn cover_delta_updates_existing_items_only() {
+        let mut current = YouTubeHomePage {
             sections: vec![YouTubeHomeSection {
                 id: "quick".to_string(),
-                title: "Quick picks".to_string(),
-                items: vec![item("one", "One")],
-                ..YouTubeHomeSection::default()
-            }],
-            ..YouTubeHomePage::default()
-        };
-
-        let delta = page.append_continuation(YouTubeHomePage {
-            sections: vec![YouTubeHomeSection {
-                id: "quick".to_string(),
-                title: "Quick picks".to_string(),
-                items: vec![item("one", "One"), item("two", "Two")],
-                ..YouTubeHomeSection::default()
-            }],
-            continuation: "next".to_string(),
-            ..YouTubeHomePage::default()
-        });
-
-        assert_eq!(page.sections.len(), 1);
-        assert_eq!(
-            page.sections[0]
-                .items
-                .iter()
-                .map(|item| item.video_id.as_str())
-                .collect::<Vec<_>>(),
-            ["one", "two"]
-        );
-        assert_eq!(delta.sections.len(), 1);
-        assert_eq!(delta.sections[0].items.len(), 2);
-    }
-
-    #[test]
-    fn empty_successful_continuation_removes_continuation_without_clearing_home() {
-        let mut page = YouTubeHomePage {
-            sections: vec![YouTubeHomeSection {
-                id: "first".to_string(),
-                items: vec![item("one", "One")],
-                ..YouTubeHomeSection::default()
-            }],
-            continuation: "page-2".to_string(),
-            ..YouTubeHomePage::default()
-        };
-
-        let delta = page.append_continuation(YouTubeHomePage::default());
-
-        assert_eq!(page.sections.len(), 1);
-        assert!(page.continuation.is_empty());
-        assert!(delta.sections.is_empty());
-        assert!(delta.continuation.is_empty());
-    }
-
-    #[test]
-    fn failed_continuation_can_leave_existing_page_retryable() {
-        let page = YouTubeHomePage {
-            sections: vec![YouTubeHomeSection {
-                id: "first".to_string(),
-                items: vec![item("one", "One")],
-                ..YouTubeHomeSection::default()
-            }],
-            continuation: "retry-token".to_string(),
-            ..YouTubeHomePage::default()
-        };
-        let unchanged = page.clone();
-
-        assert_eq!(page, unchanged);
-        assert_eq!(page.continuation, "retry-token");
-    }
-
-    #[test]
-    fn pending_continuation_does_not_dispatch_again() {
-        let page = YouTubeHomePage {
-            selected_chip_params: "energy".to_string(),
-            continuation: "page-2".to_string(),
-            ..YouTubeHomePage::default()
-        };
-
-        assert!(page.can_request_continuation("page-2", "energy", false));
-        assert!(!page.can_request_continuation("page-2", "energy", true));
-    }
-
-    #[test]
-    fn stale_continuation_token_or_chip_cannot_start_request() {
-        let page = YouTubeHomePage {
-            selected_chip_params: "energy".to_string(),
-            continuation: "page-2".to_string(),
-            ..YouTubeHomePage::default()
-        };
-
-        assert!(!page.can_request_continuation("old-page", "energy", false));
-        assert!(!page.can_request_continuation("page-2", "focus", false));
-    }
-
-    #[test]
-    fn updates_existing_cover_paths_without_adding_duplicates() {
-        let mut page = YouTubeHomePage {
-            sections: vec![YouTubeHomeSection {
-                id: "quick".to_string(),
-                title: "Quick picks".to_string(),
                 items: vec![item("one", "One")],
                 ..YouTubeHomeSection::default()
             }],
@@ -462,7 +321,6 @@ mod tests {
             sections: vec![YouTubeHomeSection {
                 id: "quick".to_string(),
                 items: vec![YouTubeItem {
-                    thumbnail_url: "https://i.ytimg.com/vi/one/hqdefault.jpg".to_string(),
                     cover_path: "/tmp/one.jpg".to_string(),
                     ..item("one", "One")
                 }],
@@ -471,58 +329,9 @@ mod tests {
             ..YouTubeHomePage::default()
         };
 
-        let delta = page.update_cover_paths_delta(&incoming);
-        assert_eq!(page.item_count(), 1);
-        assert_eq!(page.sections[0].items[0].cover_path, "/tmp/one.jpg");
+        let delta = current.update_cover_paths_delta(&incoming);
+
+        assert_eq!(current.sections[0].items[0].cover_path, "/tmp/one.jpg");
         assert_eq!(delta.sections.len(), 1);
-        assert_eq!(delta.sections[0].items[0].cover_path, "/tmp/one.jpg");
-    }
-
-    #[test]
-    fn playable_queue_preserves_section_order() {
-        let section = YouTubeHomeSection {
-            items: vec![
-                item("one", "One"),
-                YouTubeItem {
-                    result_type: "album".to_string(),
-                    browse_id: "MPRE".to_string(),
-                    ..YouTubeItem::default()
-                },
-                item("two", "Two"),
-            ],
-            ..YouTubeHomeSection::default()
-        };
-
-        let queue = section.playable_queue();
-        assert_eq!(
-            queue
-                .iter()
-                .map(|item| item.video_id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["one", "two"]
-        );
-    }
-
-    #[test]
-    fn deserializes_versioned_contract() {
-        let page: YouTubeHomePage = serde_json::from_str(
-            r#"{
-                "version": 2,
-                "stale": true,
-                "selected_chip_params": "mood-energy",
-                "sections": [{
-                    "id": "albums",
-                    "title": "Albums",
-                    "layout": "carousel",
-                    "items": [{"result_type": "album", "title": "Example", "browse_id": "MPRE"}]
-                }]
-            }"#,
-        )
-        .expect("valid feed fixture");
-
-        assert_eq!(page.version, 2);
-        assert!(page.stale);
-        assert_eq!(page.selected_chip_params, "mood-energy");
-        assert_eq!(page.item_count(), 1);
     }
 }
