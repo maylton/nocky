@@ -1509,6 +1509,14 @@ impl HomeV3CardPresentation {
         }
     }
 
+    fn scroller_height(self) -> i32 {
+        match self {
+            Self::Featured => 288,
+            Self::Compact => 216,
+            Self::TrackRows => 88,
+        }
+    }
+
     fn css_class(self) -> &'static str {
         match self {
             Self::Featured => "home-card-featured",
@@ -1788,6 +1796,8 @@ fn youtube_home_v3_legacy_feed_shell(
 
         let row = gtk::Box::new(gtk::Orientation::Horizontal, presentation.rail_spacing());
         row.set_hexpand(true);
+        row.set_vexpand(false);
+        row.set_valign(gtk::Align::Start);
         row.add_css_class("youtube-home-v3-row");
         row.add_css_class("home-card-grid");
 
@@ -1801,6 +1811,8 @@ fn youtube_home_v3_legacy_feed_shell(
         for (index, item) in section.items.iter().take(12).enumerate() {
             let button = gtk::Button::new();
             button.set_hexpand(false);
+            button.set_vexpand(false);
+            button.set_valign(gtk::Align::Start);
             button.set_size_request(presentation.outer_width(), presentation.outer_height());
             button.add_css_class("youtube-home-v3-card");
             button.add_css_class("home-card-button");
@@ -1808,6 +1820,8 @@ fn youtube_home_v3_legacy_feed_shell(
             button.add_css_class(presentation.css_class());
 
             let card = gtk::Box::new(gtk::Orientation::Vertical, 8);
+            card.set_vexpand(false);
+            card.set_valign(gtk::Align::Start);
             card.set_size_request(presentation.card_width(), presentation.card_height());
             card.add_css_class("youtube-home-v3-card-content");
             card.add_css_class("collection-card");
@@ -1824,8 +1838,20 @@ fn youtube_home_v3_legacy_feed_shell(
                 item.title.trim()
             }));
             title.set_xalign(0.0);
+            title.set_valign(gtk::Align::Start);
             title.set_wrap(true);
-            title.set_lines(2);
+            title.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+            title.set_lines(if presentation == HomeV3CardPresentation::TrackRows {
+                1
+            } else {
+                2
+            });
+            title.set_max_width_chars(if presentation == HomeV3CardPresentation::Featured {
+                22
+            } else {
+                18
+            });
+            title.set_tooltip_text(Some(title.text().as_str()));
             title.add_css_class("collection-card-title");
             title.add_css_class("youtube-home-v3-card-title");
 
@@ -1841,8 +1867,20 @@ fn youtube_home_v3_legacy_feed_shell(
 
             let subtitle = gtk::Label::new(Some(subtitle_text));
             subtitle.set_xalign(0.0);
+            subtitle.set_valign(gtk::Align::Start);
             subtitle.set_wrap(true);
-            subtitle.set_lines(2);
+            subtitle.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+            subtitle.set_lines(if presentation == HomeV3CardPresentation::TrackRows {
+                1
+            } else {
+                2
+            });
+            subtitle.set_max_width_chars(if presentation == HomeV3CardPresentation::Featured {
+                24
+            } else {
+                20
+            });
+            subtitle.set_tooltip_text(Some(subtitle.text().as_str()));
             subtitle.add_css_class("collection-card-subtitle");
             subtitle.add_css_class("youtube-home-v3-card-subtitle");
 
@@ -1880,7 +1918,9 @@ fn youtube_home_v3_legacy_feed_shell(
 
         let row_scroll = gtk::ScrolledWindow::new();
         row_scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Never);
-        row_scroll.set_propagate_natural_height(true);
+        row_scroll.set_propagate_natural_height(false);
+        row_scroll.set_min_content_height(presentation.scroller_height());
+        row_scroll.set_max_content_height(presentation.scroller_height());
         row_scroll.set_child(Some(&row));
         row_scroll.add_css_class("youtube-home-v3-row-scroll");
         row_scroll.add_css_class("home-carousel-scroll");

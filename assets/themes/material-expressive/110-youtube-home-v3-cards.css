@@ -151,3 +151,42 @@ button.youtube-home-v3-card:hover .youtube-home-v3-card-content.material-card-el
 .youtube-home-v3-artist-picture {
   border-radius: 999px;
 }
+/* Fase 2: stable density and clipping. */
+.youtube-home-v3-row-scroll {
+  min-height: 0;
+}
+
+.youtube-home-v3-card-content {
+  overflow: hidden;
+}
+
+.youtube-home-v3-card-title,
+.youtube-home-v3-card-subtitle {
+  margin: 0;
+  padding: 0;
+}
+
+.home-section-featured .youtube-home-v3-card-title {
+  min-height: 40px;
+}
+
+.home-section-featured .youtube-home-v3-card-subtitle {
+  min-height: 38px;
+}
+
+.home-section-compact .youtube-home-v3-card-title {
+  min-height: 36px;
+}
+
+.home-section-compact .youtube-home-v3-card-subtitle {
+  min-height: 34px;
+}
+
+.home-section-trackrows .youtube-home-v3-card-title,
+.home-section-trackrows .youtube-home-v3-card-subtitle {
+  min-height: 0;
+}
+
+.home-section-trackrows .youtube-home-v3-card-content {
+  padding: 8px;
+}
