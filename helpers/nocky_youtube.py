@@ -678,19 +678,24 @@ def _duration_seconds(result: dict[str, Any]) -> int:
     )
 
 
+def _normalized_playlist_id(value: Any) -> str:
+    playlist_id = _text(value)
+    if playlist_id.startswith("VL") and len(playlist_id) > 2:
+        return playlist_id[2:]
+    return playlist_id
+
+
 def _playlist_id(result: dict[str, Any]) -> str:
     for key in ("playlistId", "playlist_id", "audioPlaylistId", "playlist"):
-        value = _text(result.get(key))
+        value = _normalized_playlist_id(result.get(key))
         if value:
             return value
     result_type = _text(result.get("resultType") or result.get("result_type")).lower()
     if result_type == "playlist":
-        value = _text(result.get("id"))
+        value = _normalized_playlist_id(result.get("id"))
         if value:
             return value
-    browse_id = _text(result.get("browseId") or result.get("browse_id"))
-    if browse_id.startswith("VL") and len(browse_id) > 2:
-        return browse_id[2:]
+    browse_id = _normalized_playlist_id(result.get("browseId") or result.get("browse_id"))
     if browse_id.startswith(("PL", "RD", "OLAK5uy_")):
         return browse_id
     return ""
@@ -1043,6 +1048,7 @@ def _playlist_tracks_from_watch(
     limit: int,
     radio: bool,
 ) -> list[dict[str, Any]]:
+    playlist_id = _normalized_playlist_id(playlist_id)
     if not hasattr(client, "get_watch_playlist"):
         return []
     attempts: list[dict[str, Any]] = []
@@ -2042,7 +2048,7 @@ def command_liked_v2(payload: dict[str, Any]) -> dict[str, Any]:
 
 def command_playlist(payload: dict[str, Any]) -> list[dict[str, Any]]:
     client = _create_client(authenticated=True)
-    browse_id = str(payload.get("browse_id") or "").strip()
+    browse_id = _normalized_playlist_id(payload.get("browse_id"))
     video_id = str(payload.get("video_id") or "").strip()
     playlist_kind = str(payload.get("playlist_kind") or "").strip()
     if not browse_id and not video_id:
@@ -2064,7 +2070,10 @@ def command_playlist(payload: dict[str, Any]) -> list[dict[str, Any]]:
     if not tracks:
         tracks = _playlist_tracks_from_watch(client, browse_id, video_id, limit, playlist_kind == "mix")
     if not tracks and playlist_error is not None:
-        raise playlist_error
+        print(
+            f"Nocky playlist browse parser skipped for {browse_id}: {playlist_error}",
+            file=sys.stderr,
+        )
     if not tracks:
         raise RuntimeError("No playable tracks were returned for this YouTube Music playlist")
     return _dedupe(tracks)
