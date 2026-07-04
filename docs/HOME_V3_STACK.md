@@ -79,3 +79,16 @@ Current state:
 The next stack step is to make the helper produce populated `chips`, `sections`,
 items and continuation using YouTube's native Home response shape, then pass that
 payload through this parser before the source resolver.\n
+
+## Native helper extraction
+
+`helpers/nocky_youtube_home_v3.py` now extracts the native Home V3 source
+contract from YouTube Music browse responses:
+
+- chip titles and params from chip renderers;
+- carousel/list sections from Music shelf renderers;
+- item title, subtitle, thumbnail, video id, browse id and params;
+- continuation tokens.
+
+The helper remains non-fallback: empty or unknown responses produce an empty
+Home V3 payload instead of reusing Home V2 data.
