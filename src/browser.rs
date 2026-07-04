@@ -1636,17 +1636,6 @@ fn home_v3_artwork_widget(item: &HomeV3Item, presentation: HomeV3CardPresentatio
     }
 
     overlay.set_child(Some(&frame));
-
-    if home_v3_item_is_playable(item) && presentation != HomeV3CardPresentation::TrackRows {
-        let play = gtk::Image::from_icon_name("media-playback-start-symbolic");
-        play.set_pixel_size(34);
-        play.set_halign(gtk::Align::Center);
-        play.set_valign(gtk::Align::Center);
-        play.add_css_class("youtube-home-v3-play-badge");
-        play.add_css_class("material-card-primary-action");
-        overlay.add_overlay(&play);
-    }
-
     overlay
 }
 
@@ -1819,98 +1808,158 @@ fn youtube_home_v3_legacy_feed_shell(
             button.add_css_class("home-card-context-overlay");
             button.add_css_class(presentation.css_class());
 
-            let card = gtk::Box::new(gtk::Orientation::Vertical, 8);
-            card.set_vexpand(false);
-            card.set_valign(gtk::Align::Start);
-            card.set_size_request(presentation.card_width(), presentation.card_height());
-            card.add_css_class("youtube-home-v3-card-content");
-            card.add_css_class("collection-card");
-            card.add_css_class("material-card");
-            card.add_css_class("material-card-elevated");
-            card.add_css_class(presentation.css_class());
-
-            let artwork = home_v3_artwork_widget(item, presentation);
-            card.append(&artwork);
-
-            let title = gtk::Label::new(Some(if item.title.trim().is_empty() {
-                untitled_section
-            } else {
-                item.title.trim()
-            }));
-            title.set_xalign(0.0);
-            title.set_valign(gtk::Align::Start);
-            title.set_wrap(true);
-            title.set_wrap_mode(gtk::pango::WrapMode::WordChar);
-            title.set_lines(if presentation == HomeV3CardPresentation::TrackRows {
-                1
-            } else {
-                2
-            });
-            title.set_max_width_chars(if presentation == HomeV3CardPresentation::Featured {
-                22
-            } else {
-                18
-            });
-            title.set_tooltip_text(Some(title.text().as_str()));
-            title.add_css_class("collection-card-title");
-            title.add_css_class("youtube-home-v3-card-title");
-
-            let subtitle_text = if !item.subtitle.trim().is_empty() {
-                item.subtitle.trim()
-            } else if !item.artist.trim().is_empty() {
-                item.artist.trim()
-            } else if !item.album.trim().is_empty() {
-                item.album.trim()
-            } else {
-                "YouTube Music"
-            };
-
-            let subtitle = gtk::Label::new(Some(subtitle_text));
-            subtitle.set_xalign(0.0);
-            subtitle.set_valign(gtk::Align::Start);
-            subtitle.set_wrap(true);
-            subtitle.set_wrap_mode(gtk::pango::WrapMode::WordChar);
-            subtitle.set_lines(if presentation == HomeV3CardPresentation::TrackRows {
-                1
-            } else {
-                2
-            });
-            subtitle.set_max_width_chars(if presentation == HomeV3CardPresentation::Featured {
-                24
-            } else {
-                20
-            });
-            subtitle.set_tooltip_text(Some(subtitle.text().as_str()));
-            subtitle.add_css_class("collection-card-subtitle");
-            subtitle.add_css_class("youtube-home-v3-card-subtitle");
-
-            card.append(&title);
-            card.append(&subtitle);
-            button.set_child(Some(&card));
-
             let actionable = !item.video_id.trim().is_empty() || !item.browse_id.trim().is_empty();
             button.set_sensitive(actionable);
+
+            let title_text = home_v3_display_title(item, untitled_section);
+            let subtitle_text = home_v3_display_subtitle(item);
+
+            let card_overlay = gtk::Overlay::new();
+            card_overlay.set_size_request(presentation.card_width(), presentation.card_height());
+            card_overlay.add_css_class("youtube-home-v3-card-overlay");
+
+            let card = if presentation == HomeV3CardPresentation::TrackRows {
+                let row_card = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+                row_card.set_vexpand(false);
+                row_card.set_valign(gtk::Align::Start);
+                row_card.set_size_request(presentation.card_width(), presentation.card_height());
+                row_card.add_css_class("youtube-home-v3-card-content");
+                row_card.add_css_class("youtube-home-v3-track-card-content");
+                row_card.add_css_class("collection-card");
+                row_card.add_css_class("material-card");
+                row_card.add_css_class("material-card-elevated");
+                row_card.add_css_class(presentation.css_class());
+
+                let artwork = home_v3_artwork_widget(item, presentation);
+                artwork.set_size_request(48, 48);
+                row_card.append(&artwork);
+
+                let text_box = gtk::Box::new(gtk::Orientation::Vertical, 2);
+                text_box.set_hexpand(true);
+                text_box.set_vexpand(false);
+                text_box.set_valign(gtk::Align::Center);
+                text_box.add_css_class("youtube-home-v3-track-text");
+
+                let title = gtk::Label::new(Some(title_text));
+                title.set_xalign(0.0);
+                title.set_valign(gtk::Align::Start);
+                title.set_ellipsize(gtk::pango::EllipsizeMode::End);
+                title.set_lines(1);
+                title.set_max_width_chars(28);
+                title.set_tooltip_text(Some(title_text));
+                title.add_css_class("collection-card-title");
+                title.add_css_class("youtube-home-v3-card-title");
+                title.add_css_class("youtube-home-v3-track-title");
+
+                let subtitle = gtk::Label::new(Some(&subtitle_text));
+                subtitle.set_xalign(0.0);
+                subtitle.set_valign(gtk::Align::Start);
+                subtitle.set_ellipsize(gtk::pango::EllipsizeMode::End);
+                subtitle.set_lines(1);
+                subtitle.set_max_width_chars(30);
+                subtitle.set_tooltip_text(Some(&subtitle_text));
+                subtitle.add_css_class("collection-card-subtitle");
+                subtitle.add_css_class("youtube-home-v3-card-subtitle");
+                subtitle.add_css_class("youtube-home-v3-track-subtitle");
+
+                text_box.append(&title);
+                text_box.append(&subtitle);
+                row_card.append(&text_box);
+
+                let action_hint = gtk::Image::from_icon_name(if home_v3_item_is_playable(item) {
+                    "media-playback-start-symbolic"
+                } else {
+                    "go-next-symbolic"
+                });
+                action_hint.set_pixel_size(18);
+                action_hint.set_valign(gtk::Align::Center);
+                action_hint.add_css_class("youtube-home-v3-track-action-hint");
+                row_card.append(&action_hint);
+
+                row_card
+            } else {
+                let column_card = gtk::Box::new(gtk::Orientation::Vertical, 8);
+                column_card.set_vexpand(false);
+                column_card.set_valign(gtk::Align::Start);
+                column_card.set_size_request(presentation.card_width(), presentation.card_height());
+                column_card.add_css_class("youtube-home-v3-card-content");
+                column_card.add_css_class("collection-card");
+                column_card.add_css_class("material-card");
+                column_card.add_css_class("material-card-elevated");
+                column_card.add_css_class(presentation.css_class());
+
+                let artwork = home_v3_artwork_widget(item, presentation);
+                column_card.append(&artwork);
+
+                let title = gtk::Label::new(Some(title_text));
+                title.set_xalign(0.0);
+                title.set_valign(gtk::Align::Start);
+                title.set_wrap(true);
+                title.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+                title.set_lines(2);
+                title.set_max_width_chars(if presentation == HomeV3CardPresentation::Featured {
+                    22
+                } else {
+                    18
+                });
+                title.set_tooltip_text(Some(title_text));
+                title.add_css_class("collection-card-title");
+                title.add_css_class("youtube-home-v3-card-title");
+
+                let subtitle = gtk::Label::new(Some(&subtitle_text));
+                subtitle.set_xalign(0.0);
+                subtitle.set_valign(gtk::Align::Start);
+                subtitle.set_wrap(true);
+                subtitle.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+                subtitle.set_lines(2);
+                subtitle.set_max_width_chars(if presentation == HomeV3CardPresentation::Featured {
+                    24
+                } else {
+                    20
+                });
+                subtitle.set_tooltip_text(Some(&subtitle_text));
+                subtitle.add_css_class("collection-card-subtitle");
+                subtitle.add_css_class("youtube-home-v3-card-subtitle");
+
+                column_card.append(&title);
+                column_card.append(&subtitle);
+
+                column_card
+            };
+
+            card_overlay.set_child(Some(&card));
+
+            if home_v3_item_is_playable(item) && presentation != HomeV3CardPresentation::TrackRows {
+                let play = gtk::Image::from_icon_name("media-playback-start-symbolic");
+                play.set_pixel_size(24);
+                play.set_halign(gtk::Align::End);
+                play.set_valign(gtk::Align::End);
+                play.set_margin_end(14);
+                play.set_margin_bottom(14);
+                play.add_css_class("collection-card-context-action");
+                play.add_css_class("material-card-primary-action");
+                play.add_css_class("youtube-home-v3-play-button");
+                card_overlay.add_overlay(&play);
+            }
+
+            if actionable {
+                let overflow =
+                    home_v3_overflow_menu_button(item, &queue, index, event_tx, language);
+                if presentation == HomeV3CardPresentation::TrackRows {
+                    overflow.set_valign(gtk::Align::Center);
+                    overflow.set_margin_top(0);
+                    overflow.set_margin_end(6);
+                }
+                card_overlay.add_overlay(&overflow);
+            }
+
+            button.set_child(Some(&card_overlay));
 
             let tx = event_tx.clone();
             let item = item.clone();
             let queue = queue.clone();
             button.connect_clicked(move |_| {
-                let youtube_item = home_v3_item_to_youtube_item(&item);
-                if !item.video_id.trim().is_empty() {
-                    let playback_index = queue
-                        .iter()
-                        .position(|candidate| candidate.video_id == item.video_id)
-                        .unwrap_or(index);
-                    let _ = tx.send(BrowserEvent::YouTubeTrackActivated {
-                        item: youtube_item,
-                        queue: queue.clone(),
-                        index: playback_index,
-                    });
-                } else if item.result_type.eq_ignore_ascii_case("playlist") {
-                    let _ = tx.send(BrowserEvent::OpenYouTubePlaylist(youtube_item));
-                } else if !item.browse_id.trim().is_empty() {
-                    let _ = tx.send(BrowserEvent::OpenYouTubeCollection(youtube_item));
-                }
+                home_v3_dispatch_item(&tx, &item, &queue, index);
             });
 
             row.append(&button);
@@ -1968,6 +2017,144 @@ fn home_v3_item_to_youtube_item(item: &HomeV3Item) -> YouTubeItem {
         thumbnail_url: item.thumbnail_url.clone(),
         cover_path: item.cover_path.clone(),
     }
+}
+
+fn home_v3_display_title<'a>(item: &'a HomeV3Item, fallback: &'a str) -> &'a str {
+    let title = item.title.trim();
+    if title.is_empty() {
+        fallback
+    } else {
+        title
+    }
+}
+
+fn home_v3_display_subtitle(item: &HomeV3Item) -> String {
+    for candidate in [
+        item.subtitle.trim(),
+        item.artist.trim(),
+        item.album.trim(),
+        item.playlist_kind.trim(),
+    ] {
+        if !candidate.is_empty() {
+            return candidate.to_string();
+        }
+    }
+
+    "YouTube Music".to_string()
+}
+
+fn home_v3_dispatch_item(
+    event_tx: &Sender<BrowserEvent>,
+    item: &HomeV3Item,
+    queue: &[YouTubeItem],
+    fallback_index: usize,
+) {
+    let youtube_item = home_v3_item_to_youtube_item(item);
+
+    if !item.video_id.trim().is_empty() {
+        let playback_index = queue
+            .iter()
+            .position(|candidate| candidate.video_id == item.video_id)
+            .unwrap_or(fallback_index);
+
+        let _ = event_tx.send(BrowserEvent::YouTubeTrackActivated {
+            item: youtube_item,
+            queue: queue.to_vec(),
+            index: playback_index,
+        });
+    } else if item.result_type.eq_ignore_ascii_case("playlist") {
+        let _ = event_tx.send(BrowserEvent::OpenYouTubePlaylist(youtube_item));
+    } else if !item.browse_id.trim().is_empty() {
+        let _ = event_tx.send(BrowserEvent::OpenYouTubeCollection(youtube_item));
+    }
+}
+
+fn home_v3_overflow_menu_button(
+    item: &HomeV3Item,
+    queue: &[YouTubeItem],
+    index: usize,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> gtk::MenuButton {
+    let more_options = match language {
+        AppLanguage::Portuguese => "Mais opções",
+        AppLanguage::English => "More options",
+        AppLanguage::Spanish => "Más opciones",
+    };
+
+    let primary_label = if home_v3_item_is_playable(item) {
+        match language {
+            AppLanguage::Portuguese => "Tocar agora",
+            AppLanguage::English => "Play now",
+            AppLanguage::Spanish => "Reproducir ahora",
+        }
+    } else {
+        match language {
+            AppLanguage::Portuguese => "Abrir",
+            AppLanguage::English => "Open",
+            AppLanguage::Spanish => "Abrir",
+        }
+    };
+
+    let copy_label = match language {
+        AppLanguage::Portuguese => "Copiar título",
+        AppLanguage::English => "Copy title",
+        AppLanguage::Spanish => "Copiar título",
+    };
+
+    let menu_button = gtk::MenuButton::builder()
+        .icon_name("open-menu-symbolic")
+        .tooltip_text(more_options)
+        .build();
+
+    menu_button.set_halign(gtk::Align::End);
+    menu_button.set_valign(gtk::Align::Start);
+    menu_button.set_margin_top(8);
+    menu_button.set_margin_end(8);
+    menu_button.add_css_class("collection-card-overflow-button");
+    menu_button.add_css_class("material-card-overflow-trigger");
+    menu_button.add_css_class("youtube-home-v3-overflow-button");
+
+    let popover = gtk::Popover::new();
+    popover.set_has_arrow(true);
+
+    let menu_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    menu_box.set_margin_top(8);
+    menu_box.set_margin_bottom(8);
+    menu_box.set_margin_start(8);
+    menu_box.set_margin_end(8);
+    menu_box.add_css_class("youtube-home-v3-overflow-menu");
+
+    let primary = gtk::Button::with_label(primary_label);
+    primary.add_css_class("collection-card-overflow-action");
+    primary.add_css_class("material-card-menu-action");
+    {
+        let item = item.clone();
+        let queue = queue.to_vec();
+        let tx = event_tx.clone();
+        primary.connect_clicked(move |_| {
+            home_v3_dispatch_item(&tx, &item, &queue, index);
+        });
+    }
+    menu_box.append(&primary);
+
+    let copy = gtk::Button::with_label(copy_label);
+    copy.add_css_class("collection-card-overflow-action");
+    copy.add_css_class("material-card-menu-action");
+    {
+        let title = item.title.clone();
+        copy.connect_clicked(move |_| {
+            if let Some(display) = gtk::gdk::Display::default() {
+                display.clipboard().set_text(title.trim());
+            }
+        });
+    }
+    menu_box.append(&copy);
+
+    popover.set_child(Some(&menu_box));
+    menu_button.set_popover(Some(&popover));
+
+    menu_button
 }
 
 impl LibraryBrowser {

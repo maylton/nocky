@@ -171,4 +171,11 @@ carousel work:
 
 Home V3 cards now use stable scroller heights and density-aware title/subtitle
 limits so long YouTube Music metadata does not stretch or destabilize carousel
-rows. Featured, Compact and TrackRows keep separate vertical budgets.\n
+rows. Featured, Compact and TrackRows keep separate vertical budgets.\n\n\n## Home V3 card actions and TrackRows
+
+Home V3 restores the card action layer from the previous Home work:
+
+- media cards expose a primary play affordance;
+- cards expose an overflow menu with primary action and copy-title action;
+- song-like TrackRows use a compact horizontal layout with small artwork,
+  single-line metadata and aligned contextual controls.\n
