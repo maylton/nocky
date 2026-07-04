@@ -1,9 +1,9 @@
 #[path = "../src/youtube/home_v3.rs"]
 mod home_v3;
-#[path = "../src/youtube/home_v3_shell.rs"]
-mod home_v3_shell;
 #[path = "../src/youtube/home_v3_render_plan.rs"]
 mod home_v3_render_plan;
+#[path = "../src/youtube/home_v3_shell.rs"]
+mod home_v3_shell;
 
 use home_v3::{HomeV3Chip, HomeV3Item, HomeV3Page, HomeV3Section, HomeV3SectionLayout};
 use home_v3_render_plan::{render_plan, HomeV3RenderBlock};
@@ -29,7 +29,10 @@ fn render_plan_shows_empty_without_old_home_fallback() {
 
     assert_eq!(
         plan.blocks,
-        vec![HomeV3RenderBlock::Chips { count: 1 }, HomeV3RenderBlock::Empty]
+        vec![
+            HomeV3RenderBlock::Chips { count: 1 },
+            HomeV3RenderBlock::Empty
+        ]
     );
 }
 
