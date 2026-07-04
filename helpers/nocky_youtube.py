@@ -1750,7 +1750,19 @@ def command_home_v2(payload: dict[str, Any]) -> dict[str, Any]:
     section_limit = max(1, min(12, int(payload.get("section_limit") or 6)))
     include_native_v3_source = bool(payload.get("include_native_v3_source"))
     force_live = bool(payload.get("force_live"))
+    cache_only = bool(payload.get("cache_only"))
     cache_key = _feed_cache_key("home", continuation, section_limit, params)
+
+    if cache_only:
+        cached = load_cached_page(
+            _home_feed_cache_path(),
+            cache_key,
+            allow_stale=True,
+        )
+        if cached is None:
+            raise RuntimeError("No cached YouTube Music Home page is available for this request")
+        return cached
+
     client = _create_client(authenticated=True)
 
     try:

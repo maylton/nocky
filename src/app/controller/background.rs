@@ -1020,6 +1020,7 @@ impl AppController {
                                         continue;
                                     }
                                     unchanged_filtered_feed = !append
+                                        && !page.stale
                                         && !page.selected_chip_params.is_empty()
                                         && !youtube_home_sections_changed(&current, &page);
                                     if append {

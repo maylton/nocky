@@ -1018,6 +1018,24 @@ impl YouTubeBridge {
         )
     }
 
+    pub fn cached_home_page(
+        &self,
+        continuation: Option<&str>,
+        params: Option<&str>,
+    ) -> Result<YouTubeHomePage, String> {
+        self.run(
+            "home_v2",
+            json!({
+                "continuation": continuation.unwrap_or_default(),
+                "params": params.unwrap_or_default(),
+                "section_limit": 6,
+                "include_native_v3_source": true,
+                "cache_only": true,
+                "force_live": false,
+            }),
+        )
+    }
+
     pub fn library_overview(&self) -> Result<YouTubeHomePage, String> {
         self.run("library_v2", json!({ "limit": 120 }))
     }

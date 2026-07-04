@@ -804,10 +804,24 @@ impl AppController {
         }
         let sender = self.background.sender();
         thread::spawn(move || {
-            match bridge.home_page(
-                (!continuation.is_empty()).then_some(continuation.as_str()),
-                (!params.is_empty()).then_some(params.as_str()),
-            ) {
+            let requested_continuation =
+                (!continuation.is_empty()).then_some(continuation.as_str());
+            let requested_params = (!params.is_empty()).then_some(params.as_str());
+
+            if !append {
+                if let Ok(mut cached_page) = bridge.cached_home_page(None, requested_params) {
+                    repair_home_page_cover_paths(&mut cached_page);
+                    let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
+                        request_id,
+                        title: "Para você".to_string(),
+                        home: true,
+                        append: false,
+                        result: Ok(cached_page),
+                    });
+                }
+            }
+
+            match bridge.home_page(requested_continuation, requested_params) {
                 Ok(mut page) => {
                     repair_home_page_cover_paths(&mut page);
                     let title = "Para você".to_string();
