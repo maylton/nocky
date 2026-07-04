@@ -1012,6 +1012,7 @@ impl YouTubeBridge {
                 "continuation": continuation.unwrap_or_default(),
                 "params": params.unwrap_or_default(),
                 "section_limit": 6,
+                "include_native_v3_source": true,
             }),
         )
     }

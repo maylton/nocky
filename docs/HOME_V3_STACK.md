@@ -107,4 +107,16 @@ parse the helper stdout into `HomeV3SourcePage`.
 
 This still does not change the mounted Home UI. The next runtime cut is to make
 the existing Home request path preserve the raw browse response long enough to
-feed this method, then pass the resulting native source into the source resolver.\n
+feed this method, then pass the resulting native source into the source resolver.\n\n\n## Embedded native Home V3 source
+
+The `home_v2` helper command can now embed a `native_v3_source` candidate in the
+returned `YouTubeHomePage`. The Rust page model accepts this field as
+`Option<HomeV3SourcePage>`.
+
+Current runtime state:
+- Home requests ask the Python helper to compute the native V3 source candidate;
+- the renderer still resolves with `None` for native source, so the UI remains on
+  the safe legacy bridge;
+- the next cut is to pass `youtube_home_page.native_v3_source.clone()` into
+  `resolve_home_v3_source`, which will require visual validation because native
+  data will start winning over the legacy bridge.\n

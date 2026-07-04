@@ -35,6 +35,7 @@ from nocky_youtube_feed import (
     save_cached_page,
 )
 from nocky_youtube_home_debug import write_home_debug_dump
+from nocky_youtube_home_v3 import build as build_home_v3_source
 from nocky_youtube_innertube_home import (
     missing_artwork_by_section,
     parse_inner_tube_home_sections,
@@ -1673,6 +1674,7 @@ def command_home_v2(payload: dict[str, Any]) -> dict[str, Any]:
     except ValueError as error:
         raise RuntimeError("Invalid YouTube Music feed continuation") from error
     section_limit = max(1, min(12, int(payload.get("section_limit") or 6)))
+    include_native_v3_source = bool(payload.get("include_native_v3_source"))
     cache_key = _feed_cache_key("home", continuation, section_limit, params)
     client = _create_client(authenticated=True)
 
@@ -1699,6 +1701,18 @@ def command_home_v2(payload: dict[str, Any]) -> dict[str, Any]:
         )
         if chips:
             page["chips"] = chips
+        if include_native_v3_source:
+            try:
+                page["native_v3_source"] = build_home_v3_source(
+                    raw_response,
+                    selected_chip_params=params,
+                    section_limit=section_limit,
+                )
+            except Exception as native_v3_error:
+                print(
+                    f"Nocky YouTube native Home V3 source unavailable: {native_v3_error}",
+                    file=sys.stderr,
+                )
         save_cached_page(_home_feed_cache_path(), cache_key, page)
         return page
     except Exception as error:

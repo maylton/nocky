@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::YouTubeItem;
+use super::{home_v3_adapter::HomeV3SourcePage, YouTubeItem};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -39,6 +39,7 @@ pub struct YouTubeHomePage {
     pub chips: Vec<YouTubeHomeChip>,
     pub sections: Vec<YouTubeHomeSection>,
     pub continuation: String,
+    pub native_v3_source: Option<HomeV3SourcePage>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
