@@ -4,6 +4,11 @@ mod collections;
 pub(crate) mod diagnostics;
 pub(crate) mod error;
 mod feed;
+mod home_v3;
+mod home_v3_action;
+mod home_v3_adapter;
+mod home_v3_render_plan;
+mod home_v3_shell;
 mod like_mutation;
 #[cfg(feature = "assisted-login")]
 mod login_policy;

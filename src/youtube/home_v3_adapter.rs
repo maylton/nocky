@@ -3,9 +3,6 @@
 //! The first implementation uses a small neutral source shape so the contract
 //! can be tested before it is wired to the existing YouTube feed structs.
 
-#[cfg(test)]
-use crate::home_v3::{HomeV3Chip, HomeV3Item, HomeV3Page, HomeV3Section, HomeV3SectionLayout};
-#[cfg(not(test))]
 use super::home_v3::{HomeV3Chip, HomeV3Item, HomeV3Page, HomeV3Section, HomeV3SectionLayout};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

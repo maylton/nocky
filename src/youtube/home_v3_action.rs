@@ -3,9 +3,6 @@
 //! MetroList-style Home items should preserve their endpoint behavior: playable
 //! items play, browse endpoints navigate, and incomplete items do nothing.
 
-#[cfg(test)]
-use crate::home_v3::HomeV3Item;
-#[cfg(not(test))]
 use super::home_v3::HomeV3Item;
 
 #[derive(Clone, Debug, PartialEq, Eq)]

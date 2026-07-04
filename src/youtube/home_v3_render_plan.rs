@@ -3,21 +3,21 @@
 //! The GTK renderer should consume this plan instead of making fallback
 //! decisions inline. That keeps the old Home V2 path out of the new surface.
 
-#[cfg(test)]
-use crate::home_v3::HomeV3Page;
-#[cfg(test)]
-use crate::home_v3_shell::{shell_summary, HomeV3ShellState};
-#[cfg(not(test))]
 use super::home_v3::HomeV3Page;
-#[cfg(not(test))]
 use super::home_v3_shell::{shell_summary, HomeV3ShellState};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum HomeV3RenderBlock {
-    Chips { count: usize },
+    Chips {
+        count: usize,
+    },
     Loading,
     Empty,
-    Section { index: usize, title: String, item_count: usize },
+    Section {
+        index: usize,
+        title: String,
+        item_count: usize,
+    },
     Continuation,
 }
 
