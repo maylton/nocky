@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 from pathlib import Path
 import urllib.request
 
@@ -9,6 +10,9 @@ import argparse
 import json
 import sys
 from typing import Any
+
+
+VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 
 def build(
@@ -170,12 +174,57 @@ def _item_renderers(value: Any):
                 yield renderer
 
 
-def _item_from_renderer(renderer: dict[str, Any]) -> dict[str, Any]:
-    endpoint = _first_endpoint(renderer)
-    watch = endpoint.get("watchEndpoint", {}) if isinstance(endpoint, dict) else {}
-    browse = endpoint.get("browseEndpoint", {}) if isinstance(endpoint, dict) else {}
+def _first_watch_endpoint(value: Any) -> dict[str, Any]:
+    direct = _dig(value, "navigationEndpoint", "watchEndpoint")
+    if isinstance(direct, dict):
+        return direct
 
-    video_id = _str(watch.get("videoId"))
+    for node in _walk(value):
+        if not isinstance(node, dict):
+            continue
+        watch = node.get("watchEndpoint")
+        if isinstance(watch, dict):
+            return watch
+
+    return {}
+
+
+def _first_browse_endpoint(value: Any) -> dict[str, Any]:
+    direct = _dig(value, "navigationEndpoint", "browseEndpoint")
+    if isinstance(direct, dict):
+        return direct
+
+    for node in _walk(value):
+        if not isinstance(node, dict):
+            continue
+        browse = node.get("browseEndpoint")
+        if isinstance(browse, dict):
+            return browse
+
+    return {}
+
+
+def _video_id_from_renderer(value: Any) -> str:
+    for node in _walk(value):
+        if not isinstance(node, dict):
+            continue
+
+        for key in ("videoId", "video_id"):
+            candidate = _str(node.get(key)).strip()
+            if VIDEO_ID_PATTERN.fullmatch(candidate):
+                return candidate
+
+    return ""
+
+
+def _item_from_renderer(renderer: dict[str, Any]) -> dict[str, Any]:
+    watch = _first_watch_endpoint(renderer)
+    browse = _first_browse_endpoint(renderer)
+
+    video_id = _str(watch.get("videoId")).strip()
+    if not video_id:
+        video_id = _video_id_from_renderer(renderer)
+
     browse_id = _str(browse.get("browseId"))
     params = _str(browse.get("params"))
 

@@ -151,7 +151,9 @@ def _stream_cache_lock_path() -> Path:
 
 
 def _home_feed_cache_path() -> Path:
-    return _cache_dir() / "home-feed-v4.json"
+    # v5 invalidates Home V3 payloads cached before playable video cards were
+    # classified by recovered watch/video endpoints.
+    return _cache_dir() / "home-feed-v5.json"
 
 
 def _emit(payload: Any) -> None:
@@ -685,6 +687,25 @@ def _normalized_playlist_id(value: Any) -> str:
     return playlist_id
 
 
+def _playlist_id_variants(value: Any) -> list[str]:
+    raw = _text(value)
+    variants: list[str] = []
+
+    def add(candidate: str) -> None:
+        candidate = (candidate or "").strip()
+        if candidate and candidate not in variants:
+            variants.append(candidate)
+
+    add(raw)
+    normalized = _normalized_playlist_id(raw)
+    add(normalized)
+
+    if normalized and not normalized.startswith("VL") and normalized.startswith(("PL", "RD", "OLAK5uy_")):
+        add(f"VL{normalized}")
+
+    return variants
+
+
 def _playlist_id(result: dict[str, Any]) -> str:
     for key in ("playlistId", "playlist_id", "audioPlaylistId", "playlist"):
         value = _normalized_playlist_id(result.get(key))
@@ -1048,16 +1069,27 @@ def _playlist_tracks_from_watch(
     limit: int,
     radio: bool,
 ) -> list[dict[str, Any]]:
-    playlist_id = _normalized_playlist_id(playlist_id)
     if not hasattr(client, "get_watch_playlist"):
         return []
+
     attempts: list[dict[str, Any]] = []
-    if video_id and playlist_id:
-        attempts.append({"videoId": video_id, "playlistId": playlist_id, "limit": limit, "radio": radio})
-    if playlist_id:
-        attempts.append({"playlistId": playlist_id, "limit": limit, "radio": radio})
+    seen_attempts: set[tuple[tuple[str, Any], ...]] = set()
+
+    def add_attempt(**kwargs: Any) -> None:
+        normalized = tuple(sorted(kwargs.items()))
+        if normalized not in seen_attempts:
+            seen_attempts.add(normalized)
+            attempts.append(kwargs)
+
+    playlist_ids = _playlist_id_variants(playlist_id)
+
+    for candidate in playlist_ids:
+        if video_id:
+            add_attempt(videoId=video_id, playlistId=candidate, limit=limit, radio=radio)
+        add_attempt(playlistId=candidate, limit=limit, radio=radio)
+
     if video_id:
-        attempts.append({"videoId": video_id, "limit": limit, "radio": radio})
+        add_attempt(videoId=video_id, limit=limit, radio=radio)
 
     last_error: Exception | None = None
     for kwargs in attempts:
@@ -1066,6 +1098,7 @@ def _playlist_tracks_from_watch(
         except Exception as error:
             last_error = error
             continue
+
         tracks = data.get("tracks") if isinstance(data, dict) else []
         items = _playlist_track_items(
             client,
@@ -1076,7 +1109,10 @@ def _playlist_tracks_from_watch(
             return items
 
     if last_error is not None:
-        print(f"Nocky YouTube watch playlist fallback failed for {playlist_id or video_id}: {last_error}", file=sys.stderr)
+        print(
+            f"Nocky YouTube watch playlist fallback failed for {playlist_id or video_id}: {last_error}",
+            file=sys.stderr,
+        )
     return []
 
 
@@ -2048,34 +2084,101 @@ def command_liked_v2(payload: dict[str, Any]) -> dict[str, Any]:
 
 def command_playlist(payload: dict[str, Any]) -> list[dict[str, Any]]:
     client = _create_client(authenticated=True)
-    browse_id = _normalized_playlist_id(payload.get("browse_id"))
+    raw_browse_id = str(payload.get("browse_id") or "").strip()
     video_id = str(payload.get("video_id") or "").strip()
+    title = str(payload.get("title") or "").strip()
     playlist_kind = str(payload.get("playlist_kind") or "").strip()
-    if not browse_id and not video_id:
+
+    if not raw_browse_id and not video_id and not title:
         return []
+
     limit = max(1, min(500, int(payload.get("limit") or 200)))
     tracks: list[dict[str, Any]] = []
-    playlist_error = None
-    if browse_id and playlist_kind != "mix":
-        try:
-            data = client.get_playlist(browse_id, limit=limit)
-            tracks = _playlist_track_items(
+    errors: list[str] = []
+
+    candidates: list[str] = []
+
+    def add_candidate(candidate: Any) -> None:
+        for variant in _playlist_id_variants(candidate):
+            if variant not in candidates:
+                candidates.append(variant)
+
+    add_candidate(raw_browse_id)
+
+    def try_browse_candidates() -> list[dict[str, Any]]:
+        if playlist_kind == "mix":
+            return []
+
+        for candidate in candidates:
+            try:
+                data = client.get_playlist(candidate, limit=limit)
+                items = _playlist_track_items(
+                    client,
+                    data.get("tracks") or [],
+                    official_artwork_limit=min(24, limit),
+                )
+            except Exception as error:
+                errors.append(f"get_playlist({candidate}): {error}")
+                continue
+
+            if items:
+                return items
+
+        return []
+
+    def try_watch_candidates() -> list[dict[str, Any]]:
+        for candidate in candidates:
+            items = _playlist_tracks_from_watch(
                 client,
-                data.get("tracks") or [],
-                official_artwork_limit=min(24, limit),
+                candidate,
+                video_id,
+                limit,
+                playlist_kind == "mix",
             )
+            if items:
+                return items
+
+        if video_id:
+            return _playlist_tracks_from_watch(
+                client,
+                "",
+                video_id,
+                limit,
+                playlist_kind == "mix",
+            )
+
+        return []
+
+    tracks = try_browse_candidates() or try_watch_candidates()
+
+    if not tracks and title:
+        try:
+            results = client.search(title, filter="playlists", limit=8)
+            for result in results or []:
+                if not isinstance(result, dict):
+                    continue
+
+                add_candidate(result.get("playlistId"))
+                add_candidate(result.get("playlist_id"))
+                add_candidate(result.get("browseId"))
+                add_candidate(result.get("browse_id"))
+                add_candidate(result.get("id"))
+
+                if item := _playlist_item(result, "Playlist"):
+                    add_candidate(item.get("browse_id"))
         except Exception as error:
-            playlist_error = error
+            errors.append(f"search({title!r}): {error}")
+
+        tracks = try_browse_candidates() or try_watch_candidates()
 
     if not tracks:
-        tracks = _playlist_tracks_from_watch(client, browse_id, video_id, limit, playlist_kind == "mix")
-    if not tracks and playlist_error is not None:
-        print(
-            f"Nocky playlist browse parser skipped for {browse_id}: {playlist_error}",
-            file=sys.stderr,
-        )
-    if not tracks:
+        if errors:
+            print(
+                "Nocky playlist loaders failed: " + " | ".join(errors[:6]),
+                file=sys.stderr,
+            )
         raise RuntimeError("No playable tracks were returned for this YouTube Music playlist")
+
     return _dedupe(tracks)
 
 
