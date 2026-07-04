@@ -1364,6 +1364,13 @@ def _stream_resolution_error(
             "Connect the account in Nocky and try again."
         )
 
+    if has_auth and any(_premium_authentication_error(detail) for detail in details):
+        return RuntimeError(
+            "__NOCKY_PREMIUM_STREAM_UNAVAILABLE__"
+            "This video is only available to Music Premium members or is not exposed "
+            "as a compatible downloadable audio stream by the configured YouTube clients."
+        )
+
     if has_auth and details and all(
         "requested format is not available" in detail.lower()
         or "no playable audio stream" in detail.lower()
