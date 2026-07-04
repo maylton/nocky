@@ -3180,7 +3180,7 @@ impl LibraryBrowser {
                 .and_then(|child| child.downcast::<gtk::Box>().ok())
                 .filter(|home| home.has_css_class("youtube-home-v3"));
 
-            let next_home = youtube_home_v3_legacy_feed_shell(
+            let next_home = youtube_home_v3_feed_shell(
                 &home_v3_page,
                 youtube_home_loading,
                 playback,

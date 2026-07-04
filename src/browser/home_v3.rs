@@ -206,14 +206,14 @@ pub(super) fn home_v3_existing_card_section_content(
     metrolist_home_section_content(cards, home_presentation, language, empty_detail)
 }
 
-// Transitional bridge: this is the Home V3 shell fed by a HomeV3Page contract.
+// Transitional bridge: this is the Home V3 feed shell fed by a HomeV3Page contract.
 // The caller may still create that contract from the legacy YouTubeHomePage
 // source until the native Home V3 helper/parser is wired.
 #[expect(
     clippy::too_many_arguments,
     reason = "Home V3 shell bridges feed data, playback state and renderer dependencies"
 )]
-pub(super) fn youtube_home_v3_legacy_feed_shell(
+pub(super) fn youtube_home_v3_feed_shell(
     page: &HomeV3Page,
     loading: bool,
     playback: &BrowserPlaybackState,
@@ -269,7 +269,7 @@ pub(super) fn youtube_home_v3_legacy_feed_shell(
     home.add_css_class("expressive-library-home");
     home.set_widget_name(&page_signature);
     home.add_css_class("youtube-home-v3");
-    home.add_css_class("youtube-home-v3-legacy-feed");
+    home.add_css_class("youtube-home-v3-feed");
 
     home.append(&page_header(eyebrow, subtitle));
 
