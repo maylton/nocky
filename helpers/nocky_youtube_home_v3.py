@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import argparse
+import json
+import sys
 from typing import Any
 
 
@@ -357,3 +360,32 @@ def _dedupe(values: list[str]) -> list[str]:
         result.append(normalized)
 
     return result
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Build a native Nocky Home V3 payload.")
+    parser.add_argument("--selected-chip-params", default="")
+    parser.add_argument("--section-limit", type=int, default=6)
+    args = parser.parse_args(argv)
+
+    try:
+        response = json.load(sys.stdin)
+        result = build(
+            response,
+            selected_chip_params=args.selected_chip_params,
+            section_limit=args.section_limit,
+        )
+        print(json.dumps({"ok": True, "result": result, "error": None}, ensure_ascii=False))
+        return 0
+    except Exception as error:
+        print(
+            json.dumps(
+                {"ok": False, "result": None, "error": str(error)},
+                ensure_ascii=False,
+            )
+        )
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

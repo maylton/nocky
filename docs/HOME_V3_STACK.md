@@ -91,4 +91,12 @@ contract from YouTube Music browse responses:
 - continuation tokens.
 
 The helper remains non-fallback: empty or unknown responses produce an empty
-Home V3 payload instead of reusing Home V2 data.
+Home V3 payload instead of reusing Home V2 data.\n\n## Native helper CLI contract
+
+`helpers/nocky_youtube_home_v3.py` can now run as a helper command. It reads a
+raw YouTube Music Home browse response from stdin and emits the app helper
+contract with `ok`, `result` and `error` fields.
+
+Rust can parse this wrapper through
+`home_v3_native::parse_native_home_v3_helper_response`. This prepares runtime
+wiring without changing the mounted Home UI yet.\n

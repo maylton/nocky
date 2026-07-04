@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+import json
+import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "helpers"))
@@ -93,6 +95,53 @@ def test_build_does_not_invent_fallback_content() -> None:
         "chips": [],
         "continuation": "",
     }
+
+
+def test_cli_emits_helper_response_contract() -> None:
+    response = {
+        "contents": [
+            {
+                "musicCarouselShelfRenderer": {
+                    "header": {
+                        "musicCarouselShelfBasicHeaderRenderer": {
+                            "title": {"runs": [{"text": "Quick picks"}]}
+                        }
+                    },
+                    "contents": [
+                        {
+                            "musicTwoRowItemRenderer": {
+                                "title": {"runs": [{"text": "Song"}]},
+                                "navigationEndpoint": {
+                                    "watchEndpoint": {"videoId": "video-id"}
+                                },
+                            }
+                        }
+                    ],
+                }
+            }
+        ]
+    }
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "helpers" / "nocky_youtube_home_v3.py"),
+            "--selected-chip-params",
+            "chip-params",
+        ],
+        input=json.dumps(response),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+    )
+
+    payload = json.loads(completed.stdout)
+    assert payload["ok"] is True
+    assert payload["error"] is None
+    assert payload["result"]["version"] == 3
+    assert payload["result"]["selected_chip_params"] == "chip-params"
+    assert payload["result"]["sections"][0]["items"][0]["video_id"] == "video-id"
 
 
 if __name__ == "__main__":

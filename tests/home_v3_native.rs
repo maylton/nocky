@@ -5,7 +5,9 @@ mod home_v3_adapter;
 #[path = "../src/youtube/home_v3_native.rs"]
 mod home_v3_native;
 
-use home_v3_native::{parse_native_home_v3_payload, HomeV3NativeParseError};
+use home_v3_native::{
+    parse_native_home_v3_helper_response, parse_native_home_v3_payload, HomeV3NativeParseError,
+};
 
 #[test]
 fn parses_native_home_v3_payload_into_source_contract() {
@@ -91,4 +93,54 @@ fn rejects_invalid_native_home_v3_json() {
     let error = parse_native_home_v3_payload("{not-json").expect_err("invalid JSON must fail");
 
     assert!(matches!(error, HomeV3NativeParseError::Json(_)));
+}
+
+#[test]
+fn parses_native_home_v3_helper_response_wrapper() {
+    let payload = br#"{
+        "ok": true,
+        "result": {
+            "chips": [
+                { "title": "All", "params": "" }
+            ],
+            "sections": [
+                {
+                    "title": "Quick picks",
+                    "layout": "carousel",
+                    "items": [
+                        { "title": "Song", "video_id": "video-id" }
+                    ]
+                }
+            ],
+            "continuation": "next-page",
+            "selected_chip_params": ""
+        },
+        "error": null
+    }"#;
+
+    let page = parse_native_home_v3_helper_response(payload).expect("valid helper response");
+
+    assert_eq!(page.chips[0].title, "All");
+    assert_eq!(page.sections[0].title, "Quick picks");
+    assert_eq!(page.sections[0].items[0].video_id, "video-id");
+    assert_eq!(page.continuation, "next-page");
+}
+
+#[test]
+fn rejects_failed_native_home_v3_helper_response() {
+    let error = parse_native_home_v3_helper_response(
+        br#"{ "ok": false, "result": null, "error": "boom" }"#,
+    )
+    .expect_err("failed helper response must fail");
+
+    assert_eq!(error, HomeV3NativeParseError::Helper("boom".to_string()));
+}
+
+#[test]
+fn rejects_native_home_v3_helper_response_without_result() {
+    let error =
+        parse_native_home_v3_helper_response(br#"{ "ok": true, "result": null, "error": null }"#)
+            .expect_err("missing helper result must fail");
+
+    assert_eq!(error, HomeV3NativeParseError::MissingResult);
 }

@@ -15,6 +15,14 @@ const SUPPORTED_HOME_V3_VERSION: u32 = 3;
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default)]
+struct HomeV3NativeHelperResponse {
+    ok: bool,
+    result: Option<HomeV3SourcePage>,
+    error: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default)]
 struct HomeV3NativePayload {
     version: u32,
     selected_chip_params: String,
@@ -26,6 +34,8 @@ struct HomeV3NativePayload {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum HomeV3NativeParseError {
     Json(String),
+    Helper(String),
+    MissingResult,
     UnsupportedVersion(u32),
 }
 
@@ -33,6 +43,8 @@ impl fmt::Display for HomeV3NativeParseError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Json(error) => write!(formatter, "invalid Home V3 payload: {error}"),
+            Self::Helper(error) => write!(formatter, "Home V3 helper failed: {error}"),
+            Self::MissingResult => write!(formatter, "Home V3 helper returned no result"),
             Self::UnsupportedVersion(version) => {
                 write!(formatter, "unsupported Home V3 payload version: {version}")
             }
@@ -58,4 +70,21 @@ pub(crate) fn parse_native_home_v3_payload(
         continuation: payload.continuation,
         selected_chip_params: payload.selected_chip_params,
     })
+}
+
+pub(crate) fn parse_native_home_v3_helper_response(
+    output: &[u8],
+) -> Result<HomeV3SourcePage, HomeV3NativeParseError> {
+    let response = serde_json::from_slice::<HomeV3NativeHelperResponse>(output)
+        .map_err(|error| HomeV3NativeParseError::Json(error.to_string()))?;
+
+    if !response.ok {
+        return Err(HomeV3NativeParseError::Helper(
+            response
+                .error
+                .unwrap_or_else(|| "unknown Home V3 helper error".to_string()),
+        ));
+    }
+
+    response.result.ok_or(HomeV3NativeParseError::MissingResult)
 }
