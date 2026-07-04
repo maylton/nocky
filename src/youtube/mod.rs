@@ -8,6 +8,7 @@ mod home_v3;
 mod home_v3_action;
 mod home_v3_adapter;
 mod home_v3_legacy_adapter;
+mod home_v3_native;
 mod home_v3_render_plan;
 mod home_v3_shell;
 mod home_v3_source;

@@ -5,9 +5,12 @@
 //! The first implementation uses a small neutral source shape so the contract
 //! can be tested before it is wired to the existing YouTube feed structs.
 
+use serde::{Deserialize, Serialize};
+
 use super::home_v3::{HomeV3Chip, HomeV3Item, HomeV3Page, HomeV3Section, HomeV3SectionLayout};
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub(crate) struct HomeV3SourcePage {
     pub chips: Vec<HomeV3SourceChip>,
     pub sections: Vec<HomeV3SourceSection>,
@@ -15,20 +18,23 @@ pub(crate) struct HomeV3SourcePage {
     pub selected_chip_params: String,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub(crate) struct HomeV3SourceChip {
     pub title: String,
     pub params: String,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub(crate) struct HomeV3SourceSection {
     pub title: String,
     pub layout: String,
     pub items: Vec<HomeV3SourceItem>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub(crate) struct HomeV3SourceItem {
     pub result_type: String,
     pub title: String,

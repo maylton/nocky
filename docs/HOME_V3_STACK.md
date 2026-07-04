@@ -66,4 +66,16 @@ Important contract:
   is wired.
 
 This prepares the next phase: connect the native helper/parser to this resolver
-and remove the legacy bridge from the normal runtime path.\n
+and remove the legacy bridge from the normal runtime path.\n\n\n## Native Home V3 payload parser
+
+`home_v3_native::parse_native_home_v3_payload` parses the JSON contract emitted
+by `helpers/nocky_youtube_home_v3.py` into `HomeV3SourcePage`.
+
+Current state:
+- parser exists and is covered by synthetic payload tests;
+- runtime still uses the legacy bridge through the source resolver;
+- helper output can now evolve independently toward real V3 content.
+
+The next stack step is to make the helper produce populated `chips`, `sections`,
+items and continuation using YouTube's native Home response shape, then pass that
+payload through this parser before the source resolver.\n
