@@ -9,9 +9,9 @@ use crate::{
     ui::widgets::MaterialLoadingIndicator,
     youtube::{
         adapt_source_page, artist_credit_contains, credited_artists,
-        legacy_youtube_home_page_source, youtube_cache_visual_state, youtube_collection_cache_key,
-        youtube_collection_key, youtube_home_section_key, HomeV3Item, HomeV3Page,
-        YouTubeCacheVisualState, YouTubeCollectionEntry, YouTubeHomeContinuationDelta,
+        legacy_youtube_home_page_source, resolve_home_v3_source, youtube_cache_visual_state,
+        youtube_collection_cache_key, youtube_collection_key, youtube_home_section_key, HomeV3Item,
+        HomeV3Page, YouTubeCacheVisualState, YouTubeCollectionEntry, YouTubeHomeContinuationDelta,
         YouTubeHomePage, YouTubeHomeSection, YouTubeItem, YouTubeLibraryCache,
     },
 };
@@ -3278,8 +3278,9 @@ impl LibraryBrowser {
         next_home.add_css_class("expressive-library-home");
 
         if youtube_home {
-            let home_v3_page =
-                adapt_source_page(legacy_youtube_home_page_source(youtube_home_page));
+            let home_v3_source =
+                resolve_home_v3_source(None, legacy_youtube_home_page_source(youtube_home_page));
+            let home_v3_page = adapt_source_page(home_v3_source.page);
             let next_home = youtube_home_v3_legacy_feed_shell(
                 &home_v3_page,
                 youtube_home_loading,

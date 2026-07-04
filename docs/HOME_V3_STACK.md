@@ -51,4 +51,19 @@ that payload is first converted by `legacy_youtube_home_page_source` and then
 adapted through `adapt_source_page`.
 
 This keeps the next cut clear: replace only the legacy source bridge with the
-native Home V3 helper/parser while preserving the renderer contract.\n
+native Home V3 helper/parser while preserving the renderer contract.\n\n\n## Home V3 source resolver
+
+`home_v3_source::resolve_home_v3_source` is the boundary for choosing the feed
+source that will be adapted into `HomeV3Page`.
+
+Current runtime state:
+- native Home V3 source: absent;
+- legacy YouTube Home bridge: active fallback.
+
+Important contract:
+- when a native source exists, it wins even if it is empty;
+- the old Home must not silently reappear as a fallback after the native source
+  is wired.
+
+This prepares the next phase: connect the native helper/parser to this resolver
+and remove the legacy bridge from the normal runtime path.\n

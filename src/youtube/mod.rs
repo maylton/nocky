@@ -10,6 +10,7 @@ mod home_v3_adapter;
 mod home_v3_legacy_adapter;
 mod home_v3_render_plan;
 mod home_v3_shell;
+mod home_v3_source;
 mod like_mutation;
 #[cfg(feature = "assisted-login")]
 mod login_policy;
@@ -50,6 +51,7 @@ pub(crate) use feed::{
 pub(crate) use home_v3::{HomeV3Item, HomeV3Page};
 pub(crate) use home_v3_adapter::adapt_source_page;
 pub(crate) use home_v3_legacy_adapter::legacy_youtube_home_page_source;
+pub(crate) use home_v3_source::resolve_home_v3_source;
 pub(crate) use like_mutation::{LikeMutationRegistry, LikeMutationStartError};
 pub(crate) use playlist_create::{playlist_creation_error_message, YouTubePlaylistCreation};
 pub(crate) use routing::{youtube_item_action, YouTubeItemAction};
