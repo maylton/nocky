@@ -919,6 +919,13 @@ impl AppController {
                             eprintln!("Could not save the YouTube collection cache: {error}");
                         }
                         self.sync_followed_offline_collections();
+                        match self.browser.route() {
+                            BrowserRoute::Albums
+                            | BrowserRoute::YouTubeAlbum(_)
+                            | BrowserRoute::YouTubeArtist(_)
+                            | BrowserRoute::All => self.refresh_browser(),
+                            _ => {}
+                        }
                     }
                     Err(error) => {
                         self.youtube_collection_prefetching.set(false);
@@ -940,6 +947,12 @@ impl AppController {
                             eprintln!("Could not save the YouTube playlist cache: {error}");
                         }
                         self.sync_followed_offline_collections();
+                        match self.browser.route() {
+                            BrowserRoute::Playlists
+                            | BrowserRoute::YouTubePlaylist { .. }
+                            | BrowserRoute::All => self.refresh_browser(),
+                            _ => {}
+                        }
                     }
                     Err(error) => {
                         self.youtube_playlist_prefetching.set(false);

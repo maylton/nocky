@@ -705,7 +705,11 @@ def _playlist_kind(title: str, source: str = "") -> str:
     return "recommended" if source else "library"
 
 
-def _song_item(result: dict[str, Any], result_type: str = "song") -> dict[str, Any] | None:
+def _song_item(
+    result: dict[str, Any],
+    result_type: str = "song",
+    preferred_thumbnail_url: str = "",
+) -> dict[str, Any] | None:
     video_id = _text(result.get("videoId") or result.get("video_id"))
     title = _text(result.get("title") or result.get("name"))
     if not video_id or not title:
@@ -714,7 +718,7 @@ def _song_item(result: dict[str, Any], result_type: str = "song") -> dict[str, A
     album_data = result.get("album") or {}
     album = _text(album_data) if isinstance(album_data, dict) else _text(album_data)
     duration = _duration_seconds(result)
-    thumbnail_url = _best_thumbnail(_thumbnails(result))
+    thumbnail_url = preferred_thumbnail_url or _best_thumbnail(_thumbnails(result))
     if not thumbnail_url and VIDEO_ID_PATTERN.fullmatch(video_id):
         thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
     subtitle = " • ".join(value for value in (artist, album, _format_duration(duration)) if value)
@@ -731,6 +735,67 @@ def _song_item(result: dict[str, Any], result_type: str = "song") -> dict[str, A
         "duration_seconds": duration,
         "thumbnail_url": thumbnail_url,
     }
+
+
+def _song_album_id(result: dict[str, Any]) -> str:
+    album_data = result.get("album") or {}
+    if not isinstance(album_data, dict):
+        return ""
+    return _text(
+        album_data.get("id")
+        or album_data.get("browseId")
+        or album_data.get("browse_id")
+    )
+
+
+def _official_album_artwork(
+    client,
+    album_id: str,
+    cache: dict[str, str],
+) -> str:
+    album_id = (album_id or "").strip()
+    if not album_id:
+        return ""
+    if album_id in cache:
+        return cache[album_id]
+
+    try:
+        data = client.get_album(album_id)
+        artwork = _best_thumbnail(_thumbnails(data)) if isinstance(data, dict) else ""
+    except Exception as error:
+        print(f"Nocky playlist album artwork skipped for {album_id}: {error}", file=sys.stderr)
+        artwork = ""
+
+    cache[album_id] = artwork
+    return artwork
+
+
+def _playlist_track_items(
+    client,
+    results: Any,
+    *,
+    official_artwork_limit: int,
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    album_artwork_cache: dict[str, str] = {}
+
+    for index, result in enumerate(results or []):
+        if not isinstance(result, dict):
+            continue
+
+        preferred_thumbnail_url = ""
+        if index < official_artwork_limit:
+            preferred_thumbnail_url = _official_album_artwork(
+                client,
+                _song_album_id(result),
+                album_artwork_cache,
+            )
+
+        item = _song_item(result, preferred_thumbnail_url=preferred_thumbnail_url)
+        if item is not None:
+            items.append(item)
+
+    return items
 
 
 def _playlist_item(result: dict[str, Any], source: str = "") -> dict[str, Any] | None:
@@ -996,12 +1061,11 @@ def _playlist_tracks_from_watch(
             last_error = error
             continue
         tracks = data.get("tracks") if isinstance(data, dict) else []
-        items = [
-            item
-            for result in tracks or []
-            if isinstance(result, dict)
-            if (item := _song_item(result))
-        ]
+        items = _playlist_track_items(
+            client,
+            tracks or [],
+            official_artwork_limit=min(24, limit),
+        )
         if items:
             return items
 
@@ -1989,12 +2053,11 @@ def command_playlist(payload: dict[str, Any]) -> list[dict[str, Any]]:
     if browse_id and playlist_kind != "mix":
         try:
             data = client.get_playlist(browse_id, limit=limit)
-            tracks = [
-                item
-                for result in (data.get("tracks") or [])
-                if isinstance(result, dict)
-                if (item := _song_item(result))
-            ]
+            tracks = _playlist_track_items(
+                client,
+                data.get("tracks") or [],
+                official_artwork_limit=min(24, limit),
+            )
         except Exception as error:
             playlist_error = error
 
@@ -2041,11 +2104,12 @@ def command_collection(payload: dict[str, Any]) -> list[dict[str, Any]]:
     tracks: list[dict[str, Any]] = []
     if result_type == "album":
         data = client.get_album(browse_id)
+        album_thumbnail_url = _best_thumbnail(_thumbnails(data))
         tracks = [
             item
             for result in (data.get("tracks") or [])
             if isinstance(result, dict)
-            if (item := _song_item(result))
+            if (item := _song_item(result, preferred_thumbnail_url=album_thumbnail_url))
         ]
     elif result_type == "artist":
         data = client.get_artist(browse_id)

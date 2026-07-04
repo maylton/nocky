@@ -230,6 +230,17 @@ enum PlaylistRef {
 }
 
 #[derive(Clone, Debug)]
+struct PlaylistRowActions {
+    play_event: BrowserEvent,
+    play_next_event: BrowserEvent,
+    append_event: BrowserEvent,
+    favorite_event: BrowserEvent,
+    favorite_selected: bool,
+    active: bool,
+    playing: bool,
+}
+
+#[derive(Clone, Debug)]
 enum HomeCard {
     LocalAlbum {
         title: String,
@@ -2682,7 +2693,7 @@ impl LibraryBrowser {
 
         match self.route() {
             BrowserRoute::Albums => {
-                self.rebuild_albums(tracks, youtube, query);
+                self.rebuild_albums(tracks, config, youtube, context.playback, query);
                 self.root.set_visible_child_name("albums");
             }
             BrowserRoute::Artists => {
@@ -2694,7 +2705,7 @@ impl LibraryBrowser {
                 self.root.set_visible_child_name("albums");
             }
             BrowserRoute::Playlists => {
-                self.rebuild_playlists(config, youtube, query);
+                self.rebuild_playlists(config, youtube, context.playback, query);
                 self.root.set_visible_child_name("playlists");
             }
             BrowserRoute::All if query.trim().is_empty() => {
@@ -3874,7 +3885,14 @@ impl LibraryBrowser {
         self.home_dirty.set(false);
     }
 
-    fn rebuild_albums(&self, tracks: &[Track], youtube: &YouTubeLibraryCache, query: &str) {
+    fn rebuild_albums(
+        &self,
+        tracks: &[Track],
+        config: &AppConfig,
+        youtube: &YouTubeLibraryCache,
+        playback: &BrowserPlaybackState,
+        query: &str,
+    ) {
         clear_box(&self.albums_context_header);
         self.albums_context_header.set_visible(false);
         self.albums_default_header.set_visible(true);
@@ -3914,10 +3932,11 @@ impl LibraryBrowser {
             let cover = album_tracks
                 .iter()
                 .find_map(|track| track.cover_path.as_deref());
+            let favorite_id = format!("local-album:{}", album.to_lowercase());
             append_collection_grid_card(
                 &self.albums_grid,
                 position,
-                collection_button(
+                album_grid_action_widget(
                     collection_card(
                         cover,
                         &album,
@@ -3925,8 +3944,29 @@ impl LibraryBrowser {
                         &format!("Local • {} faixas", album_tracks.len()),
                         false,
                     ),
-                    BrowserRoute::Album(album),
+                    AlbumGridCardActions {
+                        open_event: BrowserEvent::Navigate(BrowserRoute::Album(album.clone())),
+                        play_event: BrowserEvent::PlayLocalAlbum(album.clone()),
+                        play_next_event: BrowserEvent::QueueLocalCollection {
+                            kind: "album".to_string(),
+                            title: album.clone(),
+                            play_next: true,
+                        },
+                        append_event: BrowserEvent::QueueLocalCollection {
+                            kind: "album".to_string(),
+                            title: album.clone(),
+                            play_next: false,
+                        },
+                        favorite_event: BrowserEvent::ToggleCollectionFavorite(favorite_id.clone()),
+                        favorite_selected: config.is_collection_favorite(&favorite_id),
+                        collection_kind: "album",
+                        collection_id: album.to_lowercase(),
+                        collection_title: album.clone(),
+                        loading: false,
+                    },
+                    playback,
                     &self.event_tx,
+                    config.language,
                 ),
             );
             position += 1;
@@ -3941,10 +3981,17 @@ impl LibraryBrowser {
                 hidden += 1;
                 continue;
             }
+            let album_item = album_entry.source.clone();
+            let favorite_id = format!("youtube-album:{}", album_item.title.to_lowercase());
+            let collection_id = if album_item.browse_id.trim().is_empty() {
+                album_item.title.to_lowercase()
+            } else {
+                album_item.browse_id.clone()
+            };
             append_collection_grid_card(
                 &self.albums_grid,
                 position,
-                collection_event_button(
+                album_grid_action_widget(
                     collection_card(
                         album_entry.cached_cover(),
                         &album_entry.title,
@@ -3952,8 +3999,31 @@ impl LibraryBrowser {
                         &album_entry.detail,
                         true,
                     ),
-                    BrowserEvent::OpenYouTubeCollection(album_entry.source.clone()),
+                    AlbumGridCardActions {
+                        open_event: BrowserEvent::OpenYouTubeCollection(album_item.clone()),
+                        play_event: BrowserEvent::PlayYouTubeAlbum(album_item.clone()),
+                        play_next_event: BrowserEvent::QueueYouTubeCollection {
+                            item: album_item.clone(),
+                            playlist: false,
+                            play_next: true,
+                        },
+                        append_event: BrowserEvent::QueueYouTubeCollection {
+                            item: album_item.clone(),
+                            playlist: false,
+                            play_next: false,
+                        },
+                        favorite_event: BrowserEvent::ToggleCollectionFavorite(favorite_id.clone()),
+                        favorite_selected: config.is_collection_favorite(&favorite_id),
+                        collection_kind: "album",
+                        collection_id,
+                        collection_title: album_item.title.clone(),
+                        loading: youtube
+                            .collection_loading
+                            .contains(&youtube_collection_cache_key(&album_item)),
+                    },
+                    playback,
                     &self.event_tx,
+                    config.language,
                 ),
             );
             position += 1;
@@ -4239,7 +4309,13 @@ impl LibraryBrowser {
         }
     }
 
-    fn rebuild_playlists(&self, config: &AppConfig, youtube: &YouTubeLibraryCache, query: &str) {
+    fn rebuild_playlists(
+        &self,
+        config: &AppConfig,
+        youtube: &YouTubeLibraryCache,
+        playback: &BrowserPlaybackState,
+        query: &str,
+    ) {
         clear_list_box(&self.playlists_list);
         let query = query.trim().to_lowercase();
         let previous = self.playlist_dropdown.selected() as usize;
@@ -4271,6 +4347,9 @@ impl LibraryBrowser {
                 "Playlist local",
                 &format!("{} faixas", playlist.tracks.len()),
                 false,
+                Some(local_playlist_row_actions(&playlist.name, config, playback)),
+                &self.event_tx,
+                config.language,
             ));
             row_refs.push(Some(PlaylistRef::Local(playlist.name.clone())));
         }
@@ -4300,12 +4379,18 @@ impl LibraryBrowser {
         for mix in mixes {
             let tracks = youtube.playlist_tracks.get(&mix.browse_id);
             let track_count = tracks.map(Vec::len);
-            let preferred_cover = tracks
-                .and_then(|tracks| tracks.iter().find_map(YouTubeItem::cached_cover))
-                .or_else(|| mix.cached_cover());
+            let preferred_cover = mix.cached_cover().or_else(|| {
+                tracks.and_then(|tracks| tracks.iter().find_map(YouTubeItem::cached_cover))
+            });
 
-            self.playlists_list
-                .append(&youtube_mix_row(mix, track_count, preferred_cover));
+            self.playlists_list.append(&youtube_mix_row(
+                mix,
+                track_count,
+                preferred_cover,
+                Some(youtube_playlist_row_actions(mix, config, playback)),
+                &self.event_tx,
+                config.language,
+            ));
             row_refs.push(Some(PlaylistRef::YouTube(Box::new(mix.clone()))));
         }
 
@@ -4329,6 +4414,9 @@ impl LibraryBrowser {
                 youtube_playlist_subtitle(playlist),
                 &detail,
                 true,
+                Some(youtube_playlist_row_actions(playlist, config, playback)),
+                &self.event_tx,
+                config.language,
             ));
             row_refs.push(Some(PlaylistRef::YouTube(Box::new(playlist.clone()))));
         }
@@ -7659,23 +7747,29 @@ fn collection_page_header(title: &str, subtitle: &str, icon_name: &str) -> gtk::
     header
 }
 
-fn append_collection_grid_card(grid: &gtk::FlowBox, _position: i32, button: gtk::Button) {
+fn append_collection_grid_card<W: IsA<gtk::Widget>>(
+    grid: &gtk::FlowBox,
+    _position: i32,
+    widget: W,
+) {
+    let widget = widget.upcast::<gtk::Widget>();
+
     if grid.has_css_class("skip-card-entry-animation") {
-        button.set_opacity(1.0);
-        button.set_margin_top(0);
-        grid.insert(&button, -1);
+        widget.set_opacity(1.0);
+        widget.set_margin_top(0);
+        grid.insert(&widget, -1);
         return;
     }
 
-    button.set_opacity(0.0);
-    button.set_margin_top(14);
-    button.add_css_class("collection-card-entering");
-    grid.insert(&button, -1);
+    widget.set_opacity(0.0);
+    widget.set_margin_top(14);
+    widget.add_css_class("collection-card-entering");
+    grid.insert(&widget, -1);
 
-    let button_weak = button.downgrade();
+    let widget_weak = widget.downgrade();
     let started_at = Rc::new(Cell::new(None::<i64>));
-    button.add_tick_callback(move |_, frame_clock| {
-        let Some(button) = button_weak.upgrade() else {
+    widget.add_tick_callback(move |_, frame_clock| {
+        let Some(widget) = widget_weak.upgrade() else {
             return glib::ControlFlow::Break;
         };
 
@@ -7694,18 +7788,278 @@ fn append_collection_grid_card(grid: &gtk::FlowBox, _position: i32, button: gtk:
         let opacity = (progress / 0.42).clamp(0.0, 1.0);
         let displacement = (1.0 - spring) * 18.0;
 
-        button.set_opacity(opacity);
-        button.set_margin_top(displacement.round().clamp(-4.0, 18.0) as i32);
+        widget.set_opacity(opacity);
+        widget.set_margin_top(displacement.round().clamp(-4.0, 18.0) as i32);
 
         if progress >= 1.0 {
-            button.set_opacity(1.0);
-            button.set_margin_top(0);
-            button.remove_css_class("collection-card-entering");
+            widget.set_opacity(1.0);
+            widget.set_margin_top(0);
+            widget.remove_css_class("collection-card-entering");
             glib::ControlFlow::Break
         } else {
             glib::ControlFlow::Continue
         }
     });
+}
+
+fn album_grid_action_widget(
+    card: gtk::Box,
+    actions: AlbumGridCardActions,
+    playback: &BrowserPlaybackState,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> gtk::Widget {
+    let is_active = playback.matches_collection(
+        actions.collection_kind,
+        &actions.collection_id,
+        &actions.collection_title,
+    );
+    let is_loading = actions.loading
+        || playback.collection_is_loading(
+            actions.collection_kind,
+            &actions.collection_id,
+            &actions.collection_title,
+        );
+
+    if is_active {
+        card.add_css_class("collection-card-playing");
+    }
+    if is_loading {
+        card.add_css_class("collection-card-loading");
+        card.add_css_class("collection-card-skeleton");
+    }
+
+    let main_button = gtk::Button::new();
+    main_button.set_child(Some(&card));
+    main_button.set_size_request(
+        COLLECTION_CARD_MAX_WIDTH + 20,
+        COLLECTION_CARD_MIN_HEIGHT + 12,
+    );
+    main_button.set_hexpand(true);
+    main_button.set_halign(gtk::Align::Fill);
+    main_button.set_valign(gtk::Align::Start);
+    main_button.add_css_class("flat");
+    main_button.add_css_class("collection-card-button");
+    main_button.add_css_class("expressive-collection-button");
+
+    {
+        let sender = event_tx.clone();
+        let open_event = actions.open_event.clone();
+        main_button.connect_clicked(move |_| {
+            let _ = sender.send(open_event.clone());
+        });
+    }
+
+    let overlay = gtk::Overlay::new();
+    overlay.set_size_request(
+        COLLECTION_CARD_MAX_WIDTH + 20,
+        COLLECTION_CARD_MIN_HEIGHT + 12,
+    );
+    overlay.set_hexpand(true);
+    overlay.set_halign(gtk::Align::Fill);
+    overlay.set_child(Some(&main_button));
+    overlay.add_css_class("collection-grid-card-context-overlay");
+    overlay.add_css_class("home-card-context-overlay");
+
+    let play = gtk::Button::new();
+    play.set_halign(gtk::Align::End);
+    play.set_valign(gtk::Align::Start);
+    play.set_margin_top(10);
+    play.set_margin_end(12);
+    play.add_css_class("circular");
+    play.add_css_class("collection-card-context-action");
+    play.add_css_class("material-card-primary-action");
+
+    if is_loading {
+        let loading_label = match language {
+            AppLanguage::Portuguese => "Carregando coleção…",
+            AppLanguage::English => "Loading collection…",
+            AppLanguage::Spanish => "Cargando colección…",
+        };
+        let loading = MaterialLoadingIndicator::compact();
+        loading
+            .widget()
+            .update_property(&[gtk::accessible::Property::Label(loading_label)]);
+        play.set_child(Some(loading.widget()));
+        play.set_sensitive(false);
+        play.add_css_class("loading");
+        play.set_tooltip_text(Some(loading_label));
+    } else {
+        let icon_name = if is_active && playback.playing {
+            "media-playback-pause-symbolic"
+        } else {
+            "media-playback-start-symbolic"
+        };
+        let tooltip = match (language, is_active, playback.playing) {
+            (AppLanguage::Portuguese, true, true) => "Pausar coleção",
+            (AppLanguage::Portuguese, true, false) => "Continuar coleção",
+            (AppLanguage::Portuguese, false, _) => "Reproduzir coleção",
+            (AppLanguage::English, true, true) => "Pause collection",
+            (AppLanguage::English, true, false) => "Resume collection",
+            (AppLanguage::English, false, _) => "Play collection",
+            (AppLanguage::Spanish, true, true) => "Pausar colección",
+            (AppLanguage::Spanish, true, false) => "Continuar colección",
+            (AppLanguage::Spanish, false, _) => "Reproducir colección",
+        };
+
+        play.set_icon_name(icon_name);
+        play.set_tooltip_text(Some(tooltip));
+        play.set_accessible_role(gtk::AccessibleRole::Button);
+        play.update_property(&[gtk::accessible::Property::Label(tooltip)]);
+        if is_active {
+            play.add_css_class("active");
+        }
+
+        let sender = event_tx.clone();
+        let play_event = actions.play_event.clone();
+        play.connect_clicked(move |button| {
+            let event = if button.has_css_class("active") {
+                BrowserEvent::TogglePlayback
+            } else {
+                play_event.clone()
+            };
+            let _ = sender.send(event);
+        });
+    }
+    overlay.add_overlay(&play);
+
+    let menu_button = gtk::MenuButton::builder()
+        .icon_name("view-more-symbolic")
+        .tooltip_text(match language {
+            AppLanguage::Portuguese => "Mais opções",
+            AppLanguage::English => "More options",
+            AppLanguage::Spanish => "Más opciones",
+        })
+        .build();
+    menu_button.set_halign(gtk::Align::Start);
+    menu_button.set_valign(gtk::Align::Start);
+    menu_button.set_margin_top(10);
+    menu_button.set_margin_start(10);
+    menu_button.add_css_class("circular");
+    menu_button.add_css_class("collection-card-overflow-button");
+    menu_button.add_css_class("material-card-overflow-trigger");
+    menu_button.set_sensitive(!is_loading);
+
+    let popover = gtk::Popover::new();
+    popover.add_css_class("collection-card-overflow-popover");
+
+    let menu = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    menu.set_margin_top(8);
+    menu.set_margin_bottom(8);
+    menu.set_margin_start(8);
+    menu.set_margin_end(8);
+
+    let labels = match language {
+        AppLanguage::Portuguese => (
+            "Reproduzir em seguida",
+            "Adicionar ao fim da fila",
+            "Abrir coleção",
+            if actions.favorite_selected {
+                "Remover dos favoritos"
+            } else {
+                "Adicionar aos favoritos"
+            },
+        ),
+        AppLanguage::English => (
+            "Play next",
+            "Add to queue",
+            "Open collection",
+            if actions.favorite_selected {
+                "Remove from favorites"
+            } else {
+                "Add to favorites"
+            },
+        ),
+        AppLanguage::Spanish => (
+            "Reproducir a continuación",
+            "Añadir al final de la cola",
+            "Abrir colección",
+            if actions.favorite_selected {
+                "Quitar de favoritos"
+            } else {
+                "Añadir a favoritos"
+            },
+        ),
+    };
+
+    for (label, event, icon_name, selected) in [
+        (
+            labels.0,
+            actions.play_next_event.clone(),
+            "media-skip-forward-symbolic",
+            false,
+        ),
+        (
+            labels.1,
+            actions.append_event.clone(),
+            "list-add-symbolic",
+            false,
+        ),
+        (
+            labels.2,
+            actions.open_event.clone(),
+            "go-next-symbolic",
+            false,
+        ),
+        (
+            labels.3,
+            actions.favorite_event.clone(),
+            if actions.favorite_selected {
+                "emblem-favorite-symbolic"
+            } else {
+                "non-starred-symbolic"
+            },
+            actions.favorite_selected,
+        ),
+    ] {
+        let icon = gtk::Image::from_icon_name(icon_name);
+        icon.set_pixel_size(if icon_name == "go-next-symbolic" {
+            20
+        } else {
+            18
+        });
+        icon.set_size_request(20, 20);
+        icon.set_halign(gtk::Align::Center);
+        icon.set_valign(gtk::Align::Center);
+        icon.add_css_class("collection-card-overflow-action-icon");
+
+        let text = gtk::Label::new(Some(label));
+        text.set_xalign(0.0);
+        text.set_hexpand(true);
+        text.add_css_class("collection-card-overflow-action-label");
+
+        let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+        content.set_hexpand(true);
+        content.set_halign(gtk::Align::Fill);
+        content.append(&icon);
+        content.append(&text);
+
+        let button = gtk::Button::new();
+        button.set_child(Some(&content));
+        button.set_halign(gtk::Align::Fill);
+        button.set_hexpand(true);
+        button.add_css_class("flat");
+        button.add_css_class("collection-card-overflow-action");
+        button.add_css_class("material-card-menu-action");
+        if selected {
+            button.add_css_class("material-card-menu-action-selected");
+        }
+
+        let sender = event_tx.clone();
+        let popover = popover.clone();
+        button.connect_clicked(move |_| {
+            popover.popdown();
+            let _ = sender.send(event.clone());
+        });
+
+        menu.append(&button);
+    }
+
+    popover.set_child(Some(&menu));
+    menu_button.set_popover(Some(&popover));
+    overlay.add_overlay(&menu_button);
+
+    overlay.upcast()
 }
 
 fn collection_button(
@@ -8716,6 +9070,20 @@ struct OfflineCollectionAction {
 }
 
 #[derive(Clone, Debug)]
+struct AlbumGridCardActions {
+    open_event: BrowserEvent,
+    play_event: BrowserEvent,
+    play_next_event: BrowserEvent,
+    append_event: BrowserEvent,
+    favorite_event: BrowserEvent,
+    favorite_selected: bool,
+    collection_kind: &'static str,
+    collection_id: String,
+    collection_title: String,
+    loading: bool,
+}
+
+#[derive(Clone, Debug)]
 struct CollectionPageHeaderData {
     cover_path: Option<PathBuf>,
     eyebrow: String,
@@ -9107,6 +9475,279 @@ fn youtube_collection_page_header(
     }
 }
 
+fn playlist_row_active_state(
+    playback: &BrowserPlaybackState,
+    id: &str,
+    title: &str,
+) -> (bool, bool) {
+    let active = playback.matches_collection("playlist", id, title);
+    (active, active && playback.playing)
+}
+
+fn local_playlist_row_actions(
+    title: &str,
+    config: &AppConfig,
+    playback: &BrowserPlaybackState,
+) -> PlaylistRowActions {
+    let id = title.to_lowercase();
+    let favorite_id = format!("local-playlist:{id}");
+    let (active, playing) = playlist_row_active_state(playback, &id, title);
+
+    PlaylistRowActions {
+        play_event: BrowserEvent::PlayLocalPlaylist(title.to_string()),
+        play_next_event: BrowserEvent::QueueLocalCollection {
+            kind: "playlist".to_string(),
+            title: title.to_string(),
+            play_next: true,
+        },
+        append_event: BrowserEvent::QueueLocalCollection {
+            kind: "playlist".to_string(),
+            title: title.to_string(),
+            play_next: false,
+        },
+        favorite_event: BrowserEvent::ToggleCollectionFavorite(favorite_id.clone()),
+        favorite_selected: config.is_collection_favorite(&favorite_id),
+        active,
+        playing,
+    }
+}
+
+fn youtube_playlist_row_actions(
+    item: &YouTubeItem,
+    config: &AppConfig,
+    playback: &BrowserPlaybackState,
+) -> PlaylistRowActions {
+    let id = if item.browse_id.trim().is_empty() {
+        item.title.to_lowercase()
+    } else {
+        item.browse_id.clone()
+    };
+    let favorite_id = format!("youtube-playlist:{}", item.title.to_lowercase());
+    let (active, playing) = playlist_row_active_state(playback, &id, &item.title);
+
+    PlaylistRowActions {
+        play_event: BrowserEvent::PlayYouTubePlaylist(item.clone()),
+        play_next_event: BrowserEvent::QueueYouTubeCollection {
+            item: item.clone(),
+            playlist: true,
+            play_next: true,
+        },
+        append_event: BrowserEvent::QueueYouTubeCollection {
+            item: item.clone(),
+            playlist: true,
+            play_next: false,
+        },
+        favorite_event: BrowserEvent::ToggleCollectionFavorite(favorite_id.clone()),
+        favorite_selected: config.is_collection_favorite(&favorite_id),
+        active,
+        playing,
+    }
+}
+
+fn playlist_row_play_button(
+    actions: &PlaylistRowActions,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> gtk::Button {
+    let icon_name = if actions.active && actions.playing {
+        "media-playback-pause-symbolic"
+    } else {
+        "media-playback-start-symbolic"
+    };
+    let tooltip = match (language, actions.active, actions.playing) {
+        (AppLanguage::Portuguese, true, true) => "Pausar playlist",
+        (AppLanguage::Portuguese, true, false) => "Continuar playlist",
+        (AppLanguage::Portuguese, false, _) => "Reproduzir playlist",
+        (AppLanguage::English, true, true) => "Pause playlist",
+        (AppLanguage::English, true, false) => "Resume playlist",
+        (AppLanguage::English, false, _) => "Play playlist",
+        (AppLanguage::Spanish, true, true) => "Pausar playlist",
+        (AppLanguage::Spanish, true, false) => "Continuar playlist",
+        (AppLanguage::Spanish, false, _) => "Reproducir playlist",
+    };
+
+    let button = gtk::Button::new();
+    button.set_icon_name(icon_name);
+    button.set_tooltip_text(Some(tooltip));
+    button.set_accessible_role(gtk::AccessibleRole::Button);
+    button.update_property(&[gtk::accessible::Property::Label(tooltip)]);
+    button.set_halign(gtk::Align::End);
+    button.set_valign(gtk::Align::Center);
+    button.set_hexpand(false);
+    button.set_vexpand(false);
+    button.add_css_class("circular");
+    button.add_css_class("collection-card-context-action");
+    button.add_css_class("playlist-row-action-button");
+    button.add_css_class("playlist-row-play-button");
+    button.add_css_class("material-card-primary-action");
+    if actions.active {
+        button.add_css_class("active");
+    }
+
+    let sender = event_tx.clone();
+    let event = if actions.active {
+        BrowserEvent::TogglePlayback
+    } else {
+        actions.play_event.clone()
+    };
+    button.connect_clicked(move |_| {
+        let _ = sender.send(event.clone());
+    });
+
+    button
+}
+
+fn playlist_row_overflow_button(
+    actions: &PlaylistRowActions,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> gtk::MenuButton {
+    let more_options_label = match language {
+        AppLanguage::Portuguese => "Mais opções",
+        AppLanguage::English => "More options",
+        AppLanguage::Spanish => "Más opciones",
+    };
+
+    let menu_button = gtk::MenuButton::builder()
+        .icon_name("view-more-symbolic")
+        .tooltip_text(more_options_label)
+        .build();
+    menu_button.set_accessible_role(gtk::AccessibleRole::Button);
+    menu_button.update_property(&[gtk::accessible::Property::Label(more_options_label)]);
+    menu_button.set_halign(gtk::Align::End);
+    menu_button.set_valign(gtk::Align::Center);
+    menu_button.set_hexpand(false);
+    menu_button.set_vexpand(false);
+    menu_button.add_css_class("circular");
+    menu_button.add_css_class("playlist-row-action-button");
+    menu_button.add_css_class("playlist-row-overflow-button");
+    menu_button.add_css_class("collection-card-overflow-button");
+    menu_button.add_css_class("material-card-overflow-trigger");
+
+    let popover = gtk::Popover::new();
+    popover.add_css_class("collection-card-overflow-popover");
+
+    let menu = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    menu.set_margin_top(8);
+    menu.set_margin_bottom(8);
+    menu.set_margin_start(8);
+    menu.set_margin_end(8);
+
+    let labels = match language {
+        AppLanguage::Portuguese => (
+            "Reproduzir em seguida",
+            "Adicionar ao fim da fila",
+            if actions.favorite_selected {
+                "Remover dos favoritos"
+            } else {
+                "Adicionar aos favoritos"
+            },
+        ),
+        AppLanguage::English => (
+            "Play next",
+            "Add to queue",
+            if actions.favorite_selected {
+                "Remove from favorites"
+            } else {
+                "Add to favorites"
+            },
+        ),
+        AppLanguage::Spanish => (
+            "Reproducir a continuación",
+            "Añadir al final de la cola",
+            if actions.favorite_selected {
+                "Quitar de favoritos"
+            } else {
+                "Añadir a favoritos"
+            },
+        ),
+    };
+
+    append_playlist_row_menu_action(
+        &menu,
+        &popover,
+        labels.0,
+        actions.play_next_event.clone(),
+        "media-skip-forward-symbolic",
+        false,
+        event_tx,
+    );
+    append_playlist_row_menu_action(
+        &menu,
+        &popover,
+        labels.1,
+        actions.append_event.clone(),
+        "list-add-symbolic",
+        false,
+        event_tx,
+    );
+    append_playlist_row_menu_action(
+        &menu,
+        &popover,
+        labels.2,
+        actions.favorite_event.clone(),
+        if actions.favorite_selected {
+            "emblem-favorite-symbolic"
+        } else {
+            "non-starred-symbolic"
+        },
+        actions.favorite_selected,
+        event_tx,
+    );
+
+    popover.set_child(Some(&menu));
+    menu_button.set_popover(Some(&popover));
+    menu_button
+}
+
+fn append_playlist_row_menu_action(
+    menu: &gtk::Box,
+    popover: &gtk::Popover,
+    label: &str,
+    event: BrowserEvent,
+    icon_name: &str,
+    selected: bool,
+    event_tx: &Sender<BrowserEvent>,
+) {
+    let icon = gtk::Image::from_icon_name(icon_name);
+    icon.set_pixel_size(18);
+    icon.set_size_request(20, 20);
+    icon.set_halign(gtk::Align::Center);
+    icon.set_valign(gtk::Align::Center);
+    icon.add_css_class("collection-card-overflow-action-icon");
+
+    let text = gtk::Label::new(Some(label));
+    text.set_xalign(0.0);
+    text.set_hexpand(true);
+    text.add_css_class("collection-card-overflow-action-label");
+
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    content.set_hexpand(true);
+    content.set_halign(gtk::Align::Fill);
+    content.append(&icon);
+    content.append(&text);
+
+    let button = gtk::Button::new();
+    button.set_child(Some(&content));
+    button.set_halign(gtk::Align::Fill);
+    button.set_hexpand(true);
+    button.add_css_class("flat");
+    button.add_css_class("collection-card-overflow-action");
+    button.add_css_class("material-card-menu-action");
+    if selected {
+        button.add_css_class("material-card-menu-action-selected");
+    }
+
+    let sender = event_tx.clone();
+    let popover = popover.clone();
+    button.connect_clicked(move |_| {
+        popover.popdown();
+        let _ = sender.send(event.clone());
+    });
+
+    menu.append(&button);
+}
+
 fn playlist_row_content(
     cover_path: Option<&Path>,
     title_text: &str,
@@ -9114,6 +9755,9 @@ fn playlist_row_content(
     detail_text: &str,
     badge_text: Option<&str>,
     online: bool,
+    actions: Option<PlaylistRowActions>,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
 ) -> gtk::Box {
     let cover = artwork(cover_path, 56);
     cover.set_size_request(56, 56);
@@ -9174,6 +9818,11 @@ fn playlist_row_content(
     content.set_margin_end(12);
     content.append(&cover);
     content.append(&text);
+
+    if let Some(actions) = actions {
+        content.append(&playlist_row_play_button(&actions, event_tx, language));
+        content.append(&playlist_row_overflow_button(&actions, event_tx, language));
+    }
 
     if let Some(badge_text) = badge_text {
         let badge = source_badge(badge_text, online);
@@ -9355,6 +10004,9 @@ fn youtube_mix_row(
     item: &YouTubeItem,
     track_count: Option<usize>,
     cover_path: Option<&Path>,
+    actions: Option<PlaylistRowActions>,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
 ) -> gtk::ListBoxRow {
     let detail = track_count
         .map(|count| format!("{count} {}", if count == 1 { "faixa" } else { "faixas" }))
@@ -9372,6 +10024,9 @@ fn youtube_mix_row(
         &detail,
         Some("MIX"),
         true,
+        actions,
+        event_tx,
+        language,
     );
 
     let row = gtk::ListBoxRow::new();
@@ -9390,6 +10045,9 @@ fn playlist_row(
     subtitle: &str,
     detail: &str,
     online: bool,
+    actions: Option<PlaylistRowActions>,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
 ) -> gtk::ListBoxRow {
     let content = playlist_row_content(
         cover_path,
@@ -9402,6 +10060,9 @@ fn playlist_row(
             Some("Local")
         },
         online,
+        actions,
+        event_tx,
+        language,
     );
 
     let row = gtk::ListBoxRow::new();

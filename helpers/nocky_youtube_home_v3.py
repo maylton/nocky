@@ -183,8 +183,10 @@ def _item_from_renderer(renderer: dict[str, Any]) -> dict[str, Any]:
     subtitle = _item_subtitle(renderer)
     album, artist = _album_artist_from_subtitle(subtitle)
 
+    result_type = _result_type(video_id, browse_id, renderer)
+
     return {
-        "result_type": _result_type(video_id, browse_id, renderer),
+        "result_type": result_type,
         "title": title,
         "subtitle": subtitle,
         "video_id": video_id,
@@ -194,7 +196,7 @@ def _item_from_renderer(renderer: dict[str, Any]) -> dict[str, Any]:
         "playlist_kind": "",
         "params": params,
         "duration_seconds": 0,
-        "thumbnail_url": _thumbnail_url(renderer),
+        "thumbnail_url": _thumbnail_url(renderer, prefer_square=result_type == "song"),
         "cover_path": "",
     }
 
@@ -350,21 +352,54 @@ def _result_type(video_id: str, browse_id: str, renderer: dict[str, Any]) -> str
     return ""
 
 
-def _thumbnail_url(renderer: dict[str, Any]) -> str:
+def _thumbnail_url(renderer: dict[str, Any], *, prefer_square: bool = False) -> str:
+    # Prefer the explicit YouTube Music artwork node. A blind walk can pick
+    # nested watch/video thumbnails before the album/song artwork.
+    candidates = (
+        _dig(renderer, "thumbnailRenderer", "musicThumbnailRenderer", "thumbnail"),
+        _dig(renderer, "thumbnail", "musicThumbnailRenderer", "thumbnail"),
+        _dig(renderer, "thumbnail"),
+    )
+
+    for candidate in candidates:
+        url = _thumbnail_from_node(candidate, prefer_square=prefer_square)
+        if url:
+            return url
+
     for node in _walk(renderer):
-        if not isinstance(node, dict):
-            continue
-
-        thumbnails = node.get("thumbnails")
-        if not isinstance(thumbnails, list) or not thumbnails:
-            continue
-
-        urls = [_str(thumbnail.get("url")) for thumbnail in thumbnails if isinstance(thumbnail, dict)]
-        urls = [url for url in urls if url]
-        if urls:
-            return urls[-1]
+        url = _thumbnail_from_node(node, prefer_square=prefer_square)
+        if url:
+            return url
 
     return ""
+
+
+def _thumbnail_from_node(value: Any, *, prefer_square: bool = False) -> str:
+    if not isinstance(value, dict):
+        return ""
+
+    thumbnails = value.get("thumbnails")
+    if not isinstance(thumbnails, list) or not thumbnails:
+        return ""
+
+    valid = [thumbnail for thumbnail in thumbnails if isinstance(thumbnail, dict) and _str(thumbnail.get("url"))]
+    if not valid:
+        return ""
+
+    if prefer_square:
+        squareish = []
+        for thumbnail in valid:
+            width = thumbnail.get("width")
+            height = thumbnail.get("height")
+            if isinstance(width, int) and isinstance(height, int) and width > 0 and height > 0:
+                ratio = width / height
+                if 0.85 <= ratio <= 1.18:
+                    squareish.append(thumbnail)
+
+        if squareish:
+            return _str(squareish[-1].get("url"))
+
+    return _str(valid[-1].get("url"))
 
 
 def _first_endpoint(value: Any) -> dict[str, Any]:
