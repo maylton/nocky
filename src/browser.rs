@@ -1444,7 +1444,10 @@ mod home_render_reuse_tests {
     }
 }
 
-fn youtube_home_v3_shell(
+// Transitional bridge: this is the Home V3 shell, but it still receives the
+// legacy YouTubeHomePage payload. Keep this explicit until the native Home V3
+// helper/parser produces a HomeV3Page directly.
+fn youtube_home_v3_legacy_feed_shell(
     page: &YouTubeHomePage,
     loading: bool,
     event_tx: &Sender<BrowserEvent>,
@@ -1490,6 +1493,7 @@ fn youtube_home_v3_shell(
     home.add_css_class("library-home");
     home.add_css_class("expressive-library-home");
     home.add_css_class("youtube-home-v3");
+    home.add_css_class("youtube-home-v3-legacy-feed");
 
     home.append(&page_header(eyebrow, subtitle));
 
@@ -3252,7 +3256,7 @@ impl LibraryBrowser {
         next_home.add_css_class("expressive-library-home");
 
         if youtube_home {
-            let next_home = youtube_home_v3_shell(
+            let next_home = youtube_home_v3_legacy_feed_shell(
                 youtube_home_page,
                 youtube_home_loading,
                 &self.event_tx,

@@ -30,3 +30,17 @@ The goal is to replicate the MetroList Home behavior, not merely the visual styl
 ## Validation checkpoints
 
 Manual validation is needed when the first Home V3 data path reaches the UI, when chips and continuation are wired, and when the visual layout is ready to judge spacing, density and artwork behavior.
+
+## Current integration bridge
+
+The GTK renderer currently mounted in `src/browser.rs` is intentionally named
+`youtube_home_v3_legacy_feed_shell`. It is the new Home V3 shell, but it still
+receives the legacy `YouTubeHomePage` payload while the native Home V3
+helper/parser is being introduced.
+
+This bridge must remain visible in code review so we do not confuse:
+- Home V3 renderer/shell readiness;
+- native Home V3 source/parser readiness.
+
+The next functional step is to replace this legacy bridge with a native Home V3
+feed source that produces the `HomeV3Page` contract directly.
