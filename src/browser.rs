@@ -3281,11 +3281,13 @@ impl LibraryBrowser {
             .set_text(&route_title(route, None, language));
         self.visible_tracks.borrow_mut().clear();
 
-        if let Some(playlist) = youtube
+        let playlist = youtube
             .playlists
             .iter()
             .find(|playlist| playlist.browse_id == browse_id.as_str())
-        {
+            .or_else(|| youtube.playlist_profiles.get(browse_id));
+
+        if let Some(playlist) = playlist {
             let track_count = youtube.playlist_tracks.get(browse_id).map(Vec::len);
             let header = youtube_playlist_page_header(playlist, track_count, language);
             let items = youtube

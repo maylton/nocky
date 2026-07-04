@@ -330,6 +330,7 @@ pub struct YouTubeLibraryCache {
     pub liked: Vec<YouTubeItem>,
     pub recently_played: Vec<YouTubeItem>,
     pub playlists: Vec<YouTubeItem>,
+    pub playlist_profiles: HashMap<String, YouTubeItem>,
     pub suggested_albums: Vec<YouTubeItem>,
     pub suggested_artists: Vec<YouTubeItem>,
     pub playlist_tracks: HashMap<String, Vec<YouTubeItem>>,
@@ -455,6 +456,7 @@ impl YouTubeLibraryCache {
         self.liked.clear();
         self.recently_played.clear();
         self.playlists.clear();
+        self.playlist_profiles.clear();
         self.suggested_albums.clear();
         self.suggested_artists.clear();
         self.playlist_tracks.clear();
@@ -553,6 +555,36 @@ impl YouTubeLibraryCache {
         self.artists = build_artist_cache(&catalog);
         merge_suggested_collections(&mut self.albums, &self.suggested_albums, "album");
         merge_suggested_collections(&mut self.artists, &self.suggested_artists, "artist");
+    }
+
+    pub fn remember_playlist_reference(&mut self, mut item: YouTubeItem) -> bool {
+        let browse_id = item.browse_id.trim().to_string();
+        if browse_id.is_empty() || item.title.trim().is_empty() {
+            return false;
+        }
+
+        if item.result_type.trim().is_empty() {
+            item.result_type = "playlist".to_string();
+        }
+
+        if item.cover_path.is_empty() {
+            if let Some(path) = cached_cover_for_item(&item) {
+                item.cover_path = path.to_string_lossy().into_owned();
+            }
+        }
+
+        if let Some(existing) = self.playlist_profiles.get_mut(&browse_id) {
+            let mut next = item;
+            preserve_cached_item_fields(&mut next, existing);
+            if *existing != next {
+                *existing = next;
+                return true;
+            }
+            return false;
+        }
+
+        self.playlist_profiles.insert(browse_id, item);
+        true
     }
 
     pub fn remember_collection_reference(&mut self, item: YouTubeItem) -> bool {
@@ -2652,6 +2684,7 @@ fn library_cache_from_persisted(
         liked: cache.liked,
         recently_played: cache.recently_played,
         playlists: cache.playlists,
+        playlist_profiles: HashMap::new(),
         suggested_albums: cache.suggested_albums,
         suggested_artists: cache.suggested_artists,
         playlist_tracks,

@@ -238,6 +238,11 @@ impl AppController {
             return;
         }
 
+        {
+            let mut library = self.youtube_library.borrow_mut();
+            library.remember_playlist_reference(playlist.clone());
+        }
+
         let route = BrowserRoute::YouTubePlaylist {
             title: playlist.title.clone(),
             browse_id: browse_id.clone(),
