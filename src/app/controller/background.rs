@@ -1132,7 +1132,19 @@ impl AppController {
                                     self.refresh_browser();
                                 }
                             } else {
-                                self.refresh_browser();
+                                let playback = self.browser_playback_state();
+                                let config = self.config.borrow();
+                                let updated = self.browser.refresh_youtube_home_v3_cover_sections(
+                                    &current_page,
+                                    &delta,
+                                    &playback,
+                                    &config,
+                                );
+                                drop(config);
+
+                                if !updated {
+                                    self.refresh_browser();
+                                }
                             }
                         }
                     }

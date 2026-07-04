@@ -2057,6 +2057,125 @@ impl LibraryBrowser {
         true
     }
 
+    pub fn refresh_youtube_home_v3_cover_sections(
+        &self,
+        page: &YouTubeHomePage,
+        delta: &YouTubeHomeContinuationDelta,
+        playback: &BrowserPlaybackState,
+        config: &AppConfig,
+    ) -> bool {
+        if delta.sections.is_empty() || !matches!(self.route(), BrowserRoute::All) {
+            return false;
+        }
+
+        let Some(content) = self.home_stack.visible_child() else {
+            return false;
+        };
+        let Ok(home) = content.downcast::<gtk::Box>() else {
+            return false;
+        };
+        if !home.has_css_class("youtube-home-v3") {
+            return false;
+        }
+
+        let home_v3_source = resolve_home_v3_source(
+            page.native_v3_source.clone(),
+            legacy_youtube_home_page_source(page),
+        );
+        let home_v3_page = adapt_source_page(home_v3_source.page);
+        if home_v3_page.sections.is_empty() {
+            return false;
+        }
+
+        let language = config.language;
+        let copy = home_copy(language);
+        let card_effects =
+            config.visual_theme.is_expressive() && config.expressive_home_card_effects;
+
+        let untitled_section = match language {
+            AppLanguage::Portuguese => "Recomendações",
+            AppLanguage::English => "Recommendations",
+            AppLanguage::Spanish => "Recomendaciones",
+        };
+
+        let mut updated = 0usize;
+
+        for (section_index, section) in home_v3_page.sections.iter().enumerate() {
+            let presentation =
+                home_v3_section_presentation(section_index, &section.title, &section.items);
+
+            let section_widget_name = format!(
+                "youtube-home-v3-section:{}",
+                home_v3_section_signature(&section.title, &section.items)
+            );
+
+            let Some(existing) = find_direct_child_by_name(&home, section_widget_name.as_str())
+            else {
+                continue;
+            };
+
+            let section_box = gtk::Box::new(gtk::Orientation::Vertical, 10);
+            section_box.set_hexpand(true);
+            section_box.set_widget_name(&section_widget_name);
+            section_box.add_css_class("home-section");
+            section_box.add_css_class("youtube-home-v3-section");
+
+            match presentation {
+                HomeV3CardPresentation::Featured => {
+                    section_box.add_css_class("home-section-featured")
+                }
+                HomeV3CardPresentation::Compact => {
+                    section_box.add_css_class("home-section-compact")
+                }
+                HomeV3CardPresentation::TrackRows => {
+                    section_box.add_css_class("home-section-trackrows")
+                }
+            }
+
+            let section_title = if !section.title.trim().is_empty() {
+                section.title.trim()
+            } else {
+                untitled_section
+            };
+
+            let title = gtk::Label::new(Some(section_title));
+            title.set_xalign(0.0);
+            title.add_css_class("section-title");
+            section_box.append(&title);
+
+            if section.items.is_empty() {
+                section_box.append(&empty_row(copy.waiting_content));
+            } else {
+                let content = home_v3_existing_card_section_content(
+                    &section.items,
+                    presentation,
+                    copy.waiting_content,
+                    playback,
+                    config,
+                    &self.event_tx,
+                    language,
+                    card_effects,
+                );
+                content.set_vexpand(false);
+                content.set_valign(gtk::Align::Start);
+                section_box.append(&content);
+            }
+
+            let previous = existing.prev_sibling();
+            home.remove(&existing);
+
+            if let Some(previous) = previous {
+                home.insert_child_after(&section_box, Some(&previous));
+            } else {
+                home.prepend(&section_box);
+            }
+
+            updated += 1;
+        }
+
+        updated > 0
+    }
+
     pub fn reset_youtube_home_load_more(&self, language: AppLanguage) {
         let Some(content) = self.home_stack.visible_child() else {
             return;
