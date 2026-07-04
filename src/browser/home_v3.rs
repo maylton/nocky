@@ -4,7 +4,20 @@
 //! browser surface before deeper cleanup. Keep behavior changes out of this
 //! file move.
 
-use super::*;
+use super::{
+    empty_row, home_card_button, metrolist_home_section_content, page_header, BrowserEvent,
+    BrowserPlaybackState, HomeCard, HomeSectionPresentation,
+};
+use crate::{
+    config::{AppConfig, AppLanguage},
+    ui::widgets::MaterialLoadingIndicator,
+    youtube::{cached_cover_for_item, HomeV3Item, HomeV3Page, YouTubeItem},
+};
+use gtk::prelude::*;
+use std::{
+    path::{Path, PathBuf},
+    sync::mpsc::Sender,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum HomeV3CardPresentation {
