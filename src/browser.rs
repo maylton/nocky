@@ -1549,7 +1549,12 @@ fn home_v3_item_to_home_card(
     queue: &[YouTubeItem],
     playback_index: usize,
 ) -> HomeCard {
-    let youtube_item = home_v3_item_to_youtube_item(item);
+    let mut youtube_item = home_v3_item_to_youtube_item(item);
+    if youtube_item.cover_path.trim().is_empty() {
+        if let Some(path) = home_v3_item_cover_path(item) {
+            youtube_item.cover_path = path.to_string_lossy().to_string();
+        }
+    }
 
     if !item.video_id.trim().is_empty() {
         return HomeCard::YouTubeTrack {
@@ -1643,6 +1648,10 @@ fn home_v3_existing_card_section_content(
 // Transitional bridge: this is the Home V3 shell fed by a HomeV3Page contract.
 // The caller may still create that contract from the legacy YouTubeHomePage
 // source until the native Home V3 helper/parser is wired.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Home V3 shell bridges feed data, playback state and renderer dependencies"
+)]
 fn youtube_home_v3_legacy_feed_shell(
     page: &HomeV3Page,
     loading: bool,
@@ -1710,9 +1719,17 @@ fn youtube_home_v3_legacy_feed_shell(
     home.append(&page_header(eyebrow, subtitle));
 
     if !page.chips.is_empty() {
+        let chip_section = gtk::Box::new(gtk::Orientation::Vertical, 8);
+        chip_section.add_css_class("home-section");
+        chip_section.add_css_class("youtube-home-chip-section");
+        chip_section.add_css_class("youtube-home-v3-chips");
+
         let chips = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        chips.set_hexpand(true);
-        chips.add_css_class("youtube-home-v3-chips");
+        chips.add_css_class("youtube-chip-row");
+        chips.set_margin_top(4);
+        chips.set_margin_start(2);
+        chips.set_margin_end(28);
+        chips.set_margin_bottom(28);
 
         for chip in &page.chips {
             let label = if chip.title.trim().is_empty() {
@@ -1726,8 +1743,9 @@ fn youtube_home_v3_legacy_feed_shell(
             };
 
             let button = gtk::Button::with_label(label);
+            button.add_css_class("pill");
             button.add_css_class("youtube-home-v3-chip");
-            if !chip.params.trim().is_empty() && chip.params == page.selected_chip_params {
+            if chip.params == page.selected_chip_params {
                 button.add_css_class("suggested-action");
             }
 
@@ -1743,7 +1761,19 @@ fn youtube_home_v3_legacy_feed_shell(
             chips.append(&button);
         }
 
-        home.append(&chips);
+        let scroll = gtk::ScrolledWindow::new();
+        scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Never);
+        scroll.set_overlay_scrolling(false);
+        scroll.set_hexpand(true);
+        scroll.set_min_content_height(88);
+        scroll.set_propagate_natural_height(true);
+        scroll.set_child(Some(&chips));
+        scroll.add_css_class("home-carousel-scroll");
+        scroll.add_css_class("youtube-chip-scroll");
+        scroll.add_css_class("youtube-home-v3-chip-scroll");
+
+        chip_section.append(&scroll);
+        home.append(&chip_section);
     }
 
     if loading {
@@ -1822,14 +1852,25 @@ fn youtube_home_v3_legacy_feed_shell(
     }
 
     if !page.continuation.trim().is_empty() {
+        let loading_label = match language {
+            AppLanguage::Portuguese => "Carregando…",
+            AppLanguage::English => "Loading…",
+            AppLanguage::Spanish => "Cargando…",
+        };
+
         let button = gtk::Button::with_label(continuation_text);
-        button.set_hexpand(true);
+        button.set_halign(gtk::Align::Center);
+        button.add_css_class("pill");
+        button.add_css_class("suggested-action");
+        button.add_css_class("youtube-home-load-more");
         button.add_css_class("youtube-home-v3-continuation");
 
         let tx = event_tx.clone();
         let continuation = page.continuation.clone();
         let params = page.selected_chip_params.clone();
-        button.connect_clicked(move |_| {
+        button.connect_clicked(move |button| {
+            button.set_label(loading_label);
+            button.set_sensitive(false);
             let _ = tx.send(BrowserEvent::LoadYouTubeHome {
                 continuation: continuation.clone(),
                 params: params.clone(),
@@ -3463,6 +3504,12 @@ impl LibraryBrowser {
                 existing_home_v3.as_ref(),
             );
 
+            if next_home.parent().as_ref() == Some(self.home_stack.upcast_ref()) {
+                self.home_stack.set_visible_child(&next_home);
+                self.home_dirty.set(false);
+                return;
+            }
+
             let generation = self.home_generation.get().wrapping_add(1);
             self.home_generation.set(generation);
             let child_name = format!("home-{generation}");
@@ -3475,8 +3522,10 @@ impl LibraryBrowser {
 
             if let Some(previous) = previous {
                 let stack = self.home_stack.clone();
+                let current = next_home.clone().upcast::<gtk::Widget>();
                 glib::timeout_add_local_once(Duration::from_millis(220), move || {
-                    if previous.parent().as_ref() == Some(stack.upcast_ref()) {
+                    if previous != current && previous.parent().as_ref() == Some(stack.upcast_ref())
+                    {
                         stack.remove(&previous);
                     }
                 });
