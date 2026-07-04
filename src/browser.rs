@@ -1999,7 +1999,9 @@ impl LibraryBrowser {
         let Ok(home) = content.downcast::<gtk::Box>() else {
             return false;
         };
-        if !home.has_css_class("youtube-home-v2") {
+        let youtube_home_v2 = home.has_css_class("youtube-home-v2");
+        let youtube_home_v3 = home.has_css_class("youtube-home-v3");
+        if !youtube_home_v2 && !youtube_home_v3 {
             return false;
         }
 
@@ -2089,7 +2091,7 @@ impl LibraryBrowser {
         home_stack.set_vexpand(false);
         home_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
         home_stack.set_transition_duration(180);
-        home_stack.set_interpolate_size(true);
+        home_stack.set_interpolate_size(false);
 
         let home_content = gtk::Box::new(gtk::Orientation::Vertical, 22);
         home_content.set_hexpand(true);
@@ -3486,7 +3488,11 @@ impl LibraryBrowser {
                 youtube_home_page.native_v3_source.clone(),
                 legacy_youtube_home_page_source(youtube_home_page),
             );
-            let home_v3_page = adapt_source_page(home_v3_source.page);
+            let mut home_v3_page = adapt_source_page(home_v3_source.page);
+            // The current Home backend still expects continuation as the legacy
+            // numeric offset. Native InnerTube continuation tokens must not be
+            // sent through BrowserEvent::LoadYouTubeHome yet.
+            home_v3_page.continuation = youtube_home_page.continuation.clone();
             let existing_home_v3 = self
                 .home_stack
                 .first_child()
