@@ -12,6 +12,20 @@ pub(crate) struct HomeV3Page {
     pub selected_chip_params: String,
 }
 
+impl HomeV3Page {
+    pub(crate) fn has_feed(&self) -> bool {
+        !self.sections.is_empty()
+    }
+
+    pub(crate) fn has_chips(&self) -> bool {
+        !self.chips.is_empty()
+    }
+
+    pub(crate) fn has_continuation(&self) -> bool {
+        !self.continuation.is_empty()
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct HomeV3Chip {
     pub title: String,
