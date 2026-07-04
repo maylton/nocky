@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import os
+from pathlib import Path
+import urllib.request
+
 import argparse
 import json
 import sys
@@ -26,13 +31,96 @@ def build(
         if len(sections) >= section_limit:
             break
 
-    return {
+    page = {
         "version": 3,
         "selected_chip_params": selected_chip_params,
         "sections": sections,
-        "chips": _chips_from_response(response),
+        "chips": _home_v3_chips(response),
         "continuation": _continuation_from_response(response),
     }
+    return _attach_home_v3_cover_paths(page)
+
+
+
+def _home_v3_cache_dir() -> Path:
+    root = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    path = root / "nocky" / "youtube" / "home-v3-covers"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _home_v3_cover_cacheable(url: str) -> bool:
+    lowered = url.lower()
+    return (
+        lowered.startswith("https://")
+        and (
+            "ytimg.com" in lowered
+            or "googleusercontent.com" in lowered
+            or "ggpht.com" in lowered
+        )
+    )
+
+
+def _home_v3_cached_cover_path(url: str) -> str:
+    url = (url or "").strip()
+    if not _home_v3_cover_cacheable(url):
+        return ""
+
+    digest = hashlib.sha1(url.encode("utf-8")).hexdigest()[:24]
+    path = _home_v3_cache_dir() / f"{digest}.cover"
+
+    if path.is_file() and path.stat().st_size > 0:
+        return str(path)
+
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            data = response.read(4 * 1024 * 1024)
+    except Exception:
+        return ""
+
+    if not data:
+        return ""
+
+    temporary = path.with_suffix(".tmp")
+    temporary.write_bytes(data)
+    temporary.replace(path)
+    return str(path)
+
+
+def _attach_home_v3_cover_paths(page: dict[str, Any], *, limit: int = 48) -> dict[str, Any]:
+    remaining = max(0, limit)
+
+    for section in page.get("sections") or []:
+        if not isinstance(section, dict):
+            continue
+
+        for item in section.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+
+            if item.get("cover_path"):
+                continue
+
+            thumbnail_url = _str(item.get("thumbnail_url"))
+            if not thumbnail_url:
+                continue
+
+            if remaining <= 0:
+                return page
+
+            remaining -= 1
+            item["cover_path"] = _home_v3_cached_cover_path(thumbnail_url)
+
+    return page
+
 
 
 def _section_renderers(value: Any):
@@ -174,6 +262,25 @@ def _section_title(renderer: dict[str, Any]) -> str:
             return text
 
     return ""
+
+
+
+def _home_v3_chips(response: dict[str, Any]) -> list[dict[str, str]]:
+    chips = [{"title": "Início", "params": ""}]
+    seen = {("", "")}
+
+    for chip in _chips_from_response(response):
+        title = _str(chip.get("title")).strip()
+        params = _str(chip.get("params"))
+        key = (title, params)
+
+        if not title or key in seen:
+            continue
+
+        seen.add(key)
+        chips.append({"title": title, "params": params})
+
+    return chips
 
 
 def _chips_from_response(response: dict[str, Any]) -> list[dict[str, str]]:

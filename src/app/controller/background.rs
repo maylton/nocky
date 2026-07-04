@@ -1007,6 +1007,8 @@ impl AppController {
                                 if append && self.browser.route() != BrowserRoute::All {
                                     continue;
                                 }
+
+                                let mut needs_full_refresh = false;
                                 {
                                     let mut current = self.youtube_home_page.borrow_mut();
                                     if append
@@ -1030,9 +1032,7 @@ impl AppController {
                                                 &playback,
                                                 &self.config.borrow(),
                                             );
-                                            if !appended {
-                                                self.refresh_browser();
-                                            }
+                                            needs_full_refresh = !appended;
                                         }
                                     } else {
                                         let mut next = page.clone();
@@ -1045,8 +1045,9 @@ impl AppController {
                                         *current = next;
                                     }
                                 }
+
                                 self.youtube_home_previous_params.borrow_mut().clear();
-                                if youtube_active && !append {
+                                if youtube_active && (!append || needs_full_refresh) {
                                     self.refresh_browser();
                                 }
                             }

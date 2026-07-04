@@ -69,7 +69,8 @@ def test_build_extracts_native_home_v3_contract() -> None:
 
     assert page["version"] == 3
     assert page["selected_chip_params"] == "chip-params"
-    assert page["chips"] == [{"title": "Energize", "params": "chip-params"}]
+    assert page["chips"][0] == {"title": "Início", "params": ""}
+    assert {"title": "Energize", "params": "chip-params"} in page["chips"]
     assert page["continuation"] == "next-token"
 
     assert len(page["sections"]) == 1
@@ -92,7 +93,7 @@ def test_build_does_not_invent_fallback_content() -> None:
         "version": 3,
         "selected_chip_params": "",
         "sections": [],
-        "chips": [],
+        "chips": [{"title": "Início", "params": ""}],
         "continuation": "",
     }
 
