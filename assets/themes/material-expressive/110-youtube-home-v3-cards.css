@@ -283,3 +283,83 @@ button.youtube-home-v3-card:hover .youtube-home-v3-overflow-button,
 .youtube-home-v3-track-action-hint {
   opacity: 0.72;
 }
+/* Fase 6: fixed card geometry.
+ * Window growth expands the carousel viewport only; cards keep stable slots.
+ */
+.youtube-home-v3-row {
+  min-width: 0;
+}
+
+.home-section-featured button.youtube-home-v3-card,
+.home-section-featured .youtube-home-v3-card-overlay,
+.home-section-featured .youtube-home-v3-card-content {
+  min-width: 196px;
+  min-height: 252px;
+}
+
+.home-section-featured button.youtube-home-v3-card,
+.home-section-featured .home-card-context-overlay {
+  min-width: 220px;
+  min-height: 268px;
+}
+
+.home-section-featured .youtube-home-v3-artwork-overlay,
+.home-section-featured .youtube-home-v3-artwork,
+.home-section-featured .youtube-home-v3-media-artwork,
+.home-section-featured .youtube-home-v3-media-picture {
+  min-width: 176px;
+  min-height: 176px;
+}
+
+.home-section-compact button.youtube-home-v3-card,
+.home-section-compact .youtube-home-v3-card-overlay,
+.home-section-compact .youtube-home-v3-card-content {
+  min-width: 152px;
+  min-height: 188px;
+}
+
+.home-section-compact button.youtube-home-v3-card,
+.home-section-compact .home-card-context-overlay {
+  min-width: 168px;
+  min-height: 196px;
+}
+
+.home-section-compact .youtube-home-v3-artwork-overlay,
+.home-section-compact .youtube-home-v3-artwork,
+.home-section-compact .youtube-home-v3-media-artwork,
+.home-section-compact .youtube-home-v3-media-picture {
+  min-width: 128px;
+  min-height: 128px;
+}
+/* Fix: overflow menu is outside the main clickable card button. */
+.youtube-home-v3-card-slot {
+  background: transparent;
+  border-radius: 20px;
+}
+/* Fix: artwork images must never dictate card size. */
+.youtube-home-v3-picture,
+.youtube-home-v3-media-picture,
+.youtube-home-v3-artist-picture {
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  max-height: none;
+}
+
+.home-section-featured .youtube-home-v3-picture,
+.home-section-featured .youtube-home-v3-media-picture {
+  min-width: 176px;
+  min-height: 176px;
+}
+
+.home-section-compact .youtube-home-v3-picture,
+.home-section-compact .youtube-home-v3-media-picture {
+  min-width: 128px;
+  min-height: 128px;
+}
+
+.home-section-trackrows .youtube-home-v3-picture,
+.home-section-trackrows .youtube-home-v3-media-picture {
+  min-width: 48px;
+  min-height: 48px;
+}
