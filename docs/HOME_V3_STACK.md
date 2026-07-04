@@ -99,4 +99,12 @@ contract with `ok`, `result` and `error` fields.
 
 Rust can parse this wrapper through
 `home_v3_native::parse_native_home_v3_helper_response`. This prepares runtime
-wiring without changing the mounted Home UI yet.\n
+wiring without changing the mounted Home UI yet.\n\n\n## Backend Home V3 helper boundary
+
+`YouTubeBridge::native_home_v3_source_from_raw_response` can execute the native
+Home V3 helper with a raw YouTube Music Home browse response through stdin and
+parse the helper stdout into `HomeV3SourcePage`.
+
+This still does not change the mounted Home UI. The next runtime cut is to make
+the existing Home request path preserve the raw browse response long enough to
+feed this method, then pass the resulting native source into the source resolver.\n

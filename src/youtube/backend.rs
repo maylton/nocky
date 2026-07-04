@@ -1,11 +1,15 @@
 #![allow(dead_code)]
 
 use super::{
+    home_v3_adapter::HomeV3SourcePage, home_v3_native::parse_native_home_v3_helper_response,
     HelperResponse, YouTubeBridge, YouTubeHomePage, YouTubeItem, YouTubeLibrarySnapshot,
     YouTubePlaylistCreation, YouTubeStatus,
 };
 use serde::{Deserialize, Serialize};
-use std::process::{Command, Stdio};
+use std::{
+    io::Write,
+    process::{Command, Stdio},
+};
 
 /// Stable boundary between the GTK application and the current YouTube Music
 /// transport. The first implementation remains ytmusicapi-backed, while this
@@ -83,6 +87,53 @@ impl YouTubeProfileDiscoverySummary {
 }
 
 impl YouTubeBridge {
+    pub fn native_home_v3_source_from_raw_response(
+        &self,
+        response: &[u8],
+        selected_chip_params: Option<&str>,
+    ) -> Result<HomeV3SourcePage, String> {
+        let helper = self
+            .helper
+            .parent()
+            .map(|directory| directory.join("nocky_youtube_home_v3.py"))
+            .filter(|path| path.is_file())
+            .ok_or_else(|| {
+                "The Nocky YouTube Home V3 helper was not found. Reinstall Nocky.".to_string()
+            })?;
+
+        let mut child = Command::new(&self.python)
+            .arg(helper)
+            .arg("--selected-chip-params")
+            .arg(selected_chip_params.unwrap_or_default())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|error| format!("Could not start the YouTube Home V3 helper: {error}"))?;
+
+        let Some(mut stdin) = child.stdin.take() else {
+            return Err("Could not open stdin for the YouTube Home V3 helper.".to_string());
+        };
+
+        stdin.write_all(response).map_err(|error| {
+            format!("Could not send Home response to the Home V3 helper: {error}")
+        })?;
+        drop(stdin);
+
+        let output = child.wait_with_output().map_err(|error| {
+            format!("Could not read the YouTube Home V3 helper output: {error}")
+        })?;
+
+        parse_native_home_v3_helper_response(&output.stdout).map_err(|error| {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if stderr.trim().is_empty() {
+                error.to_string()
+            } else {
+                format!("{error}. {stderr}")
+            }
+        })
+    }
+
     pub fn account_profile(&self) -> Result<YouTubeAccountProfile, String> {
         let helper = self
             .helper
