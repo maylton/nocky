@@ -1662,39 +1662,33 @@ fn youtube_home_v3_legacy_feed_shell(
     card_effects: bool,
     existing_home: Option<&gtk::Box>,
 ) -> gtk::Box {
-    let (
-        eyebrow,
-        subtitle,
-        loading_text,
-        empty_text,
-        untitled_section,
-        continuation_text,
-    ) = match language {
-        AppLanguage::Portuguese => (
-            "YOUTUBE MUSIC",
-            "Home V3 em construção: feed, chips, seções e continuação no estilo MetroList",
-            "Carregando feed do YouTube Music…",
-            "Preparando a nova Home do YouTube Music. Nenhum fallback da Home antiga será usado.",
-            "Recomendações",
-            "Carregar mais recomendações",
-        ),
-        AppLanguage::English => (
-            "YOUTUBE MUSIC",
-            "Home V3 in progress: MetroList-style feed, chips, sections and continuation",
-            "Loading YouTube Music feed…",
-            "Preparing the new YouTube Music Home. The old Home fallback will not be used.",
-            "Recommendations",
-            "Load more recommendations",
-        ),
-        AppLanguage::Spanish => (
-            "YOUTUBE MUSIC",
-            "Home V3 en construcción: feed, chips, secciones y continuación al estilo MetroList",
-            "Cargando feed de YouTube Music…",
-            "Preparando la nueva Home de YouTube Music. No se usará el fallback anterior.",
-            "Recomendaciones",
-            "Cargar más recomendaciones",
-        ),
-    };
+    let (eyebrow, subtitle, loading_text, empty_text, untitled_section, continuation_text) =
+        match language {
+            AppLanguage::Portuguese => (
+                "YOUTUBE MUSIC",
+                "Recomendações, playlists e músicas do YouTube Music",
+                "Carregando feed do YouTube Music…",
+                "Nenhuma recomendação encontrada no momento.",
+                "Recomendações",
+                "Carregar mais recomendações",
+            ),
+            AppLanguage::English => (
+                "YOUTUBE MUSIC",
+                "Recommendations, playlists and music from YouTube Music",
+                "Loading YouTube Music feed…",
+                "No recommendations found right now.",
+                "Recommendations",
+                "Load more recommendations",
+            ),
+            AppLanguage::Spanish => (
+                "YOUTUBE MUSIC",
+                "Recomendaciones, playlists y música de YouTube Music",
+                "Cargando feed de YouTube Music…",
+                "No se encontraron recomendaciones por ahora.",
+                "Recomendaciones",
+                "Cargar más recomendaciones",
+            ),
+        };
 
     let page_signature = home_v3_page_signature(page);
     if !loading {
