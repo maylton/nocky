@@ -672,6 +672,17 @@ impl AppController {
         };
         let append = !continuation.is_empty();
         let filtered = !params.is_empty();
+        youtube_domain::trace_youtube_home_note(
+            "request_start",
+            0,
+            append,
+            &format!(
+                "continuation='{}' params_empty={} filtered={}",
+                continuation,
+                params.is_empty(),
+                filtered
+            ),
+        );
         if append {
             let current = self.youtube_home_page.borrow();
             if !current.can_request_continuation(
@@ -682,13 +693,13 @@ impl AppController {
                 return;
             }
         } else {
-            let current = self.youtube_home_page.borrow();
-            if !current.sections.is_empty()
-                && current.selected_chip_params == params
-                && !self.youtube_home_loading.get()
-            {
-                return;
-            }
+            // Always revalidate the root/filter Home request.
+            //
+            // A restored Home snapshot is only an initial paint optimization; it
+            // must not prevent the app from asking YouTube Music for a fresh
+            // Home feed. Returning early here made the startup Home sticky across
+            // launches and kept stale artwork attached to otherwise correct
+            // cards.
         }
 
         let request_id = self.youtube_home_request_id.get().wrapping_add(1);
@@ -724,7 +735,21 @@ impl AppController {
                 (!params.is_empty()).then_some(params.as_str()),
             ) {
                 Ok(mut page) => {
+                    youtube_domain::trace_youtube_home_page(
+                        "helper_result",
+                        request_id,
+                        append,
+                        &page,
+                        "before repair/cache",
+                    );
                     repair_home_page_cover_paths(&mut page);
+                    youtube_domain::trace_youtube_home_page(
+                        "after_repair",
+                        request_id,
+                        append,
+                        &page,
+                        "before initial structured page send",
+                    );
                     let title = "Para você".to_string();
                     let initial_page = page.clone();
                     let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
@@ -752,6 +777,13 @@ impl AppController {
                     }
 
                     cache_home_page_covers(&mut page);
+                    youtube_domain::trace_youtube_home_page(
+                        "after_cover_cache",
+                        request_id,
+                        append,
+                        &page,
+                        "before covers cached send",
+                    );
                     let _ = sender.send(BackgroundMessage::YouTubeStructuredPageCoversCached {
                         request_id,
                         title,

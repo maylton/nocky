@@ -8,9 +8,9 @@ use crate::{
     browser::BrowserRoute,
     config::{AppLanguage, StartupSource},
     youtube::{
-        cacheable_youtube_playlist, clear_library_cache, playlist_creation_error_message,
-        queue_library_cache_save, youtube_collection_cache_key, youtube_collection_key,
-        YouTubeItem,
+        self as youtube_domain, cacheable_youtube_playlist, clear_library_cache,
+        playlist_creation_error_message, queue_library_cache_save, youtube_collection_cache_key,
+        youtube_collection_key, YouTubeItem,
     },
 };
 
@@ -1000,6 +1000,13 @@ impl AppController {
                     }
                     match result {
                         Ok(page) => {
+                            youtube_domain::trace_youtube_home_page(
+                                "background_structured_ok",
+                                request_id,
+                                append,
+                                &page,
+                                "accepted structured page",
+                            );
                             let mut unchanged_filtered_feed = false;
                             if home {
                                 let youtube_active = self.config.borrow().startup_source
@@ -1110,6 +1117,13 @@ impl AppController {
                     self.youtube_home_request_id.get(),
                 ) =>
                 {
+                    youtube_domain::trace_youtube_home_page(
+                        "background_covers_cached",
+                        request_id,
+                        append,
+                        &page,
+                        "accepted covers cached page",
+                    );
                     if home {
                         let youtube_active =
                             self.config.borrow().startup_source == Some(StartupSource::YouTube);
@@ -1118,18 +1132,14 @@ impl AppController {
                         let current_page = current.clone();
                         drop(current);
                         if !delta.sections.is_empty() && youtube_active {
-                            if append {
-                                let playback = self.browser_playback_state();
-                                let appended = self.browser.append_youtube_home_page(
-                                    &current_page,
-                                    &delta,
-                                    &playback,
-                                    &self.config.borrow(),
-                                );
-                                if !appended {
-                                    self.refresh_browser();
-                                }
-                            } else {
+                            let playback = self.browser_playback_state();
+                            let appended = self.browser.append_youtube_home_page(
+                                &current_page,
+                                &delta,
+                                &playback,
+                                &self.config.borrow(),
+                            );
+                            if !appended {
                                 self.refresh_browser();
                             }
                         }

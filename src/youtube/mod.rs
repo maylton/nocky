@@ -4,6 +4,7 @@ mod collections;
 pub(crate) mod diagnostics;
 pub(crate) mod error;
 mod feed;
+mod home_page_trace;
 mod like_mutation;
 #[cfg(feature = "assisted-login")]
 mod login_policy;
@@ -41,6 +42,7 @@ pub(crate) use feed::{
     youtube_home_section_key, YouTubeHomeChip, YouTubeHomeContinuationDelta, YouTubeHomePage,
     YouTubeHomeSection,
 };
+pub(crate) use home_page_trace::{trace_youtube_home_note, trace_youtube_home_page};
 pub(crate) use like_mutation::{LikeMutationRegistry, LikeMutationStartError};
 pub(crate) use playlist_create::{playlist_creation_error_message, YouTubePlaylistCreation};
 pub(crate) use routing::{youtube_item_action, YouTubeItemAction};
@@ -69,7 +71,29 @@ impl YouTubeItem {
 
     pub fn cached_cover(&self) -> Option<&Path> {
         let path = Path::new(&self.cover_path);
-        (!self.cover_path.is_empty() && path.is_file()).then_some(path)
+        if self.cover_path.is_empty() || !path.is_file() {
+            return None;
+        }
+
+        let thumbnail_url = self.thumbnail_url.trim();
+        if thumbnail_url.is_empty() {
+            return Some(path);
+        }
+
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            return None;
+        };
+
+        for size in [PLAYER_COVER_SIZE, BROWSER_COVER_SIZE] {
+            let upgraded = upgrade_thumbnail_url(thumbnail_url, size);
+            let digest = stable_hash(&upgraded);
+            let expected = format!("{digest:016x}-{size}.cover");
+            if file_name == expected {
+                return Some(path);
+            }
+        }
+
+        None
     }
 }
 
@@ -354,7 +378,13 @@ fn youtube_item_identity(item: &YouTubeItem) -> String {
 }
 
 fn preserve_cached_item_fields(new_item: &mut YouTubeItem, previous: &YouTubeItem) {
-    if new_item.cover_path.is_empty() {
+    let incoming_thumbnail_url = new_item.thumbnail_url.trim();
+    let previous_thumbnail_url = previous.thumbnail_url.trim();
+
+    let can_preserve_previous_cover = incoming_thumbnail_url.is_empty()
+        || (!previous_thumbnail_url.is_empty() && incoming_thumbnail_url == previous_thumbnail_url);
+
+    if new_item.cover_path.is_empty() && can_preserve_previous_cover {
         new_item.cover_path = previous.cover_path.clone();
     }
     if new_item.thumbnail_url.is_empty() {
@@ -418,6 +448,47 @@ fn merge_youtube_items(
     }
 
     (merged, changes)
+}
+
+#[cfg(test)]
+mod youtube_item_artwork_tests {
+    use super::{merge_youtube_items, YouTubeItem};
+
+    fn artist_item(thumbnail_url: &str, cover_path: &str) -> YouTubeItem {
+        YouTubeItem {
+            result_type: "artist".to_string(),
+            title: "RBD".to_string(),
+            browse_id: "UC73WWXaMbgVzWEb78r1o3FA".to_string(),
+            artist: "RBD".to_string(),
+            thumbnail_url: thumbnail_url.to_string(),
+            cover_path: cover_path.to_string(),
+            ..YouTubeItem::default()
+        }
+    }
+
+    #[test]
+    fn merge_does_not_reuse_cover_when_thumbnail_changed() {
+        let previous = vec![artist_item("old-thumb", "/tmp/wrong-band.cover")];
+        let incoming = vec![artist_item("new-thumb", "")];
+
+        let (merged, _changes) = merge_youtube_items(&previous, incoming);
+
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].thumbnail_url, "new-thumb");
+        assert!(merged[0].cover_path.is_empty());
+    }
+
+    #[test]
+    fn merge_reuses_cover_when_thumbnail_is_unchanged() {
+        let previous = vec![artist_item("same-thumb", "/tmp/rbd.cover")];
+        let incoming = vec![artist_item("same-thumb", "")];
+
+        let (merged, _changes) = merge_youtube_items(&previous, incoming);
+
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].thumbnail_url, "same-thumb");
+        assert_eq!(merged[0].cover_path, "/tmp/rbd.cover");
+    }
 }
 
 fn merge_sync_change_counts(
@@ -995,7 +1066,7 @@ impl YouTubeBridge {
         params: Option<&str>,
     ) -> Result<YouTubeHomePage, String> {
         self.run(
-            "home_v2",
+            "home_v3",
             json!({
                 "continuation": continuation.unwrap_or_default(),
                 "params": params.unwrap_or_default(),

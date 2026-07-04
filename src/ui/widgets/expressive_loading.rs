@@ -83,6 +83,7 @@ impl MaterialLoadingIndicator {
         )
     }
 
+    #[allow(dead_code)]
     pub(crate) fn with_size(size: i32) -> Self {
         let size = if size <= COMPACT_SIZE {
             LoadingIndicatorSize::Compact

@@ -132,6 +132,10 @@ impl AppController {
                     self.show_toast("Conecte sua conta do YouTube Music primeiro");
                     return;
                 }
+
+                let params = self.youtube_home_page.borrow().selected_chip_params.clone();
+                self.load_youtube_home_page(String::new(), params);
+
                 if syncing {
                     self.show_toast("A biblioteca já está sendo sincronizada");
                     return;

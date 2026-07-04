@@ -92,11 +92,15 @@ impl YouTubeHomePage {
             {
                 let mut changed = false;
                 for item in section.items.drain(..) {
-                    let duplicate = existing
+                    if let Some(existing_item) = existing
                         .items
-                        .iter()
-                        .any(|candidate| youtube_home_items_match(candidate, &item));
-                    if !duplicate {
+                        .iter_mut()
+                        .find(|candidate| youtube_home_items_match(candidate, &item))
+                    {
+                        if reconcile_home_item_artwork(existing_item, &item) {
+                            changed = true;
+                        }
+                    } else {
                         existing.items.push(item);
                         changed = true;
                     }
@@ -149,15 +153,7 @@ impl YouTubeHomePage {
                     continue;
                 };
 
-                if !item.thumbnail_url.trim().is_empty()
-                    && existing_item.thumbnail_url != item.thumbnail_url
-                {
-                    existing_item.thumbnail_url = item.thumbnail_url.clone();
-                    section_changed = true;
-                }
-                if !item.cover_path.trim().is_empty() && existing_item.cover_path != item.cover_path
-                {
-                    existing_item.cover_path = item.cover_path.clone();
+                if reconcile_home_item_artwork(existing_item, item) {
                     section_changed = true;
                 }
             }
@@ -219,6 +215,77 @@ fn youtube_home_item_key(item: &YouTubeItem) -> Option<String> {
         ));
     }
     None
+}
+
+fn reconcile_home_item_artwork(
+    existing_item: &mut YouTubeItem,
+    incoming_item: &YouTubeItem,
+) -> bool {
+    let previous_thumbnail_url = existing_item.thumbnail_url.clone();
+    let previous_cover_path = existing_item.cover_path.clone();
+    let incoming_thumbnail_url = incoming_item.thumbnail_url.trim();
+    let incoming_cover_path = incoming_item.cover_path.trim();
+    let mut changed = false;
+    let mut thumbnail_changed = false;
+
+    if !incoming_thumbnail_url.is_empty()
+        && existing_item.thumbnail_url != incoming_item.thumbnail_url
+    {
+        existing_item.thumbnail_url = incoming_item.thumbnail_url.clone();
+        thumbnail_changed = true;
+        changed = true;
+    }
+
+    if !incoming_cover_path.is_empty()
+        && cover_path_can_be_promoted(
+            &previous_thumbnail_url,
+            &previous_cover_path,
+            existing_item,
+            incoming_item,
+            thumbnail_changed,
+        )
+        && existing_item.cover_path != incoming_item.cover_path
+    {
+        existing_item.cover_path = incoming_item.cover_path.clone();
+        changed = true;
+    } else if thumbnail_changed && !existing_item.cover_path.is_empty() {
+        existing_item.cover_path.clear();
+        changed = true;
+    }
+
+    changed
+}
+
+fn cover_path_can_be_promoted(
+    previous_thumbnail_url: &str,
+    previous_cover_path: &str,
+    existing_item: &YouTubeItem,
+    incoming_item: &YouTubeItem,
+    thumbnail_changed: bool,
+) -> bool {
+    let incoming_cover_path = incoming_item.cover_path.trim();
+    if incoming_cover_path.is_empty() {
+        return false;
+    }
+
+    let incoming_thumbnail_url = incoming_item.thumbnail_url.trim();
+    if incoming_thumbnail_url.is_empty() {
+        return existing_item.thumbnail_url.trim().is_empty();
+    }
+
+    if incoming_thumbnail_url != existing_item.thumbnail_url.trim() {
+        return false;
+    }
+
+    if thumbnail_changed && incoming_cover_path == previous_cover_path.trim() {
+        return false;
+    }
+
+    if thumbnail_changed && incoming_thumbnail_url != previous_thumbnail_url.trim() {
+        return true;
+    }
+
+    true
 }
 
 fn youtube_home_sections_match(left: &YouTubeHomeSection, right: &YouTubeHomeSection) -> bool {
@@ -476,6 +543,114 @@ mod tests {
         assert_eq!(page.sections[0].items[0].cover_path, "/tmp/one.jpg");
         assert_eq!(delta.sections.len(), 1);
         assert_eq!(delta.sections[0].items[0].cover_path, "/tmp/one.jpg");
+    }
+
+    #[test]
+    fn thumbnail_change_clears_stale_cover_path_from_previous_thumbnail() {
+        let mut page = YouTubeHomePage {
+            sections: vec![YouTubeHomeSection {
+                id: "quick".to_string(),
+                title: "Quick picks".to_string(),
+                items: vec![YouTubeItem {
+                    thumbnail_url: "https://i.ytimg.com/vi/one/old.jpg".to_string(),
+                    cover_path: "/tmp/old.cover".to_string(),
+                    ..item("one", "One")
+                }],
+                ..YouTubeHomeSection::default()
+            }],
+            ..YouTubeHomePage::default()
+        };
+        let incoming = YouTubeHomePage {
+            sections: vec![YouTubeHomeSection {
+                id: "quick".to_string(),
+                items: vec![YouTubeItem {
+                    thumbnail_url: "https://i.ytimg.com/vi/one/new.jpg".to_string(),
+                    cover_path: "/tmp/old.cover".to_string(),
+                    ..item("one", "One")
+                }],
+                ..YouTubeHomeSection::default()
+            }],
+            ..YouTubeHomePage::default()
+        };
+
+        let delta = page.update_cover_paths_delta(&incoming);
+
+        assert_eq!(
+            page.sections[0].items[0].thumbnail_url,
+            "https://i.ytimg.com/vi/one/new.jpg"
+        );
+        assert!(page.sections[0].items[0].cover_path.is_empty());
+        assert_eq!(delta.sections.len(), 1);
+        assert!(delta.sections[0].items[0].cover_path.is_empty());
+    }
+
+    #[test]
+    fn thumbnail_change_can_promote_new_cover_path() {
+        let mut page = YouTubeHomePage {
+            sections: vec![YouTubeHomeSection {
+                id: "quick".to_string(),
+                title: "Quick picks".to_string(),
+                items: vec![YouTubeItem {
+                    thumbnail_url: "https://i.ytimg.com/vi/one/old.jpg".to_string(),
+                    cover_path: "/tmp/old.cover".to_string(),
+                    ..item("one", "One")
+                }],
+                ..YouTubeHomeSection::default()
+            }],
+            ..YouTubeHomePage::default()
+        };
+        let incoming = YouTubeHomePage {
+            sections: vec![YouTubeHomeSection {
+                id: "quick".to_string(),
+                items: vec![YouTubeItem {
+                    thumbnail_url: "https://i.ytimg.com/vi/one/new.jpg".to_string(),
+                    cover_path: "/tmp/new.cover".to_string(),
+                    ..item("one", "One")
+                }],
+                ..YouTubeHomeSection::default()
+            }],
+            ..YouTubeHomePage::default()
+        };
+
+        page.update_cover_paths_delta(&incoming);
+
+        assert_eq!(
+            page.sections[0].items[0].thumbnail_url,
+            "https://i.ytimg.com/vi/one/new.jpg"
+        );
+        assert_eq!(page.sections[0].items[0].cover_path, "/tmp/new.cover");
+    }
+
+    #[test]
+    fn cover_only_update_does_not_override_item_with_known_thumbnail() {
+        let mut page = YouTubeHomePage {
+            sections: vec![YouTubeHomeSection {
+                id: "quick".to_string(),
+                title: "Quick picks".to_string(),
+                items: vec![YouTubeItem {
+                    thumbnail_url: "https://i.ytimg.com/vi/one/current.jpg".to_string(),
+                    cover_path: "/tmp/current.cover".to_string(),
+                    ..item("one", "One")
+                }],
+                ..YouTubeHomeSection::default()
+            }],
+            ..YouTubeHomePage::default()
+        };
+        let incoming = YouTubeHomePage {
+            sections: vec![YouTubeHomeSection {
+                id: "quick".to_string(),
+                items: vec![YouTubeItem {
+                    cover_path: "/tmp/unknown-source.cover".to_string(),
+                    ..item("one", "One")
+                }],
+                ..YouTubeHomeSection::default()
+            }],
+            ..YouTubeHomePage::default()
+        };
+
+        page.update_cover_paths_delta(&incoming);
+
+        assert_eq!(page.sections[0].items[0].cover_path, "/tmp/current.cover");
     }
 
     #[test]

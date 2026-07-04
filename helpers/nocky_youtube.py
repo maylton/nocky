@@ -24,11 +24,12 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse, urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlencode, urlparse, urlsplit, urlunsplit
 
 from nocky_youtube_feed import (
     build_library_overview,
     build_structured_home,
+    enrich_inner_tube_home_rows,
     extract_inner_tube_home_chips,
     find_inner_tube_home_section_list,
     load_cached_page,
@@ -1571,6 +1572,71 @@ def _inner_tube_home_response(client: Any, params: str = "") -> tuple[dict[str, 
     return body, response
 
 
+def _continuation_params_from_renderer(renderer: Any) -> str:
+    if not isinstance(renderer, dict):
+        return ""
+    if ytmusic_get_continuation_params is not None:
+        try:
+            params = ytmusic_get_continuation_params(renderer)
+            if params:
+                return str(params)
+        except Exception:
+            pass
+
+    continuations = renderer.get("continuations")
+    if not isinstance(continuations, list):
+        return ""
+    for continuation in continuations:
+        if not isinstance(continuation, dict):
+            continue
+        next_data = continuation.get("nextContinuationData")
+        if not isinstance(next_data, dict):
+            continue
+        token = _text(next_data.get("continuation"))
+        if not token:
+            continue
+        query = {
+            "ctoken": token,
+            "continuation": token,
+            "type": "next",
+        }
+        click_tracking = _text(next_data.get("clickTrackingParams"))
+        if click_tracking:
+            query["itct"] = click_tracking
+        return urlencode(query)
+    return ""
+
+
+def _inner_tube_home_continuation_response(
+    client: Any,
+    continuation: str,
+    params: str = "",
+) -> dict[str, Any]:
+    sender = getattr(client, "_send_request", None)
+    if not callable(sender):
+        raise RuntimeError("The installed ytmusicapi version does not expose the Web Home request")
+    body: dict[str, Any] = {"browseId": "FEmusic_home"}
+    if params:
+        body["params"] = params
+    response = sender("browse", body, continuation)
+    if not isinstance(response, dict):
+        raise RuntimeError("YouTube Music returned an invalid Home continuation")
+    return response
+
+
+def _inner_tube_home_continuation_params(source: Any) -> str:
+    if not isinstance(source, dict):
+        return ""
+    continuation_contents = source.get("continuationContents")
+    if isinstance(continuation_contents, dict):
+        section_list_continuation = continuation_contents.get("sectionListContinuation")
+        params = _continuation_params_from_renderer(section_list_continuation)
+        if params:
+            return params
+    section_list = find_inner_tube_home_section_list(source)
+    return _continuation_params_from_renderer(section_list)
+
+
 def _inner_tube_home_rows(
     client: Any,
     params: str,
@@ -1663,6 +1729,45 @@ def _cached_root_home_chips(section_limit: int) -> list[dict[str, str]]:
     return list((root or {}).get("chips") or [])
 
 
+def _prioritize_root_home_rows(rows: Any) -> list[dict[str, Any]]:
+    """Keep YouTube's rows, but stop the stable recap rows from pinning Home."""
+
+    normalized: list[dict[str, Any]] = [row for row in rows or [] if isinstance(row, dict)]
+    stable_titles = {
+        "listen again",
+        "mixed for you",
+        "quick picks",
+        "forgotten favorites",
+        "cleaning day",
+        "bons sonhos",
+    }
+    dynamic_tokens = (
+        "for you",
+        "community",
+        "from your library",
+        "music videos",
+        "new releases",
+        "recommended",
+        "made for",
+    )
+
+    def priority(index_and_row: tuple[int, dict[str, Any]]) -> tuple[int, int]:
+        index, row = index_and_row
+        title = _text(row.get("title")).lower()
+        score = 0
+        if any(token in title for token in dynamic_tokens):
+            score += 80
+        if title not in stable_titles:
+            score += 30
+        if title in stable_titles:
+            score -= 60
+        if title == "listen again":
+            score -= 30
+        return (-score, index)
+
+    return [row for _, row in sorted(enumerate(normalized), key=priority)]
+
+
 def command_home_v2(payload: dict[str, Any]) -> dict[str, Any]:
     if not _load_session().get("headers"):
         raise RuntimeError("Connect a YouTube Music browser session first")
@@ -1679,18 +1784,29 @@ def command_home_v2(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         fetch_limit = max(12, min(36, offset + section_limit + 1))
         chips = _cached_root_home_chips(section_limit)
-        rows, raw_response = _inner_tube_home_rows(client, params, fetch_limit)
-        if offset == 0 or not chips:
-            chips = extract_inner_tube_home_chips(raw_response) or chips
-        if params and not chips:
+        if params:
+            rows, raw_response = _inner_tube_home_rows(client, params, fetch_limit)
+            if not chips:
+                chips = extract_inner_tube_home_chips(raw_response) or chips
             try:
-                _body, root_response = _inner_tube_home_response(client)
-                chips = extract_inner_tube_home_chips(root_response)
+                if not chips:
+                    _body, root_response = _inner_tube_home_response(client)
+                    chips = extract_inner_tube_home_chips(root_response)
             except Exception as chip_error:
-                print(
-                    f"Nocky YouTube root chips unavailable: {chip_error}",
-                    file=sys.stderr,
-                )
+                print(f"Nocky YouTube root chips unavailable: {chip_error}", file=sys.stderr)
+        else:
+            try:
+                rows = client.get_home(limit=fetch_limit)
+            except TypeError:
+                rows = client.get_home()
+            if offset == 0 or not chips:
+                try:
+                    _body, raw_response = _inner_tube_home_response(client)
+                    chips = extract_inner_tube_home_chips(raw_response) or chips
+                    rows = enrich_inner_tube_home_rows(rows, raw_response)
+                except Exception as chip_error:
+                    print(f"Nocky YouTube Home chips unavailable: {chip_error}", file=sys.stderr)
+            rows = _prioritize_root_home_rows(rows)
         page = build_structured_home(
             rows,
             offset=offset,
@@ -1709,6 +1825,85 @@ def command_home_v2(payload: dict[str, Any]) -> dict[str, Any]:
         )
         if cached is not None:
             print(f"Nocky YouTube home v2 using cached data: {error}", file=sys.stderr)
+            return cached
+        raise
+
+
+def command_home_v3(payload: dict[str, Any]) -> dict[str, Any]:
+    """Metrolist-style Home: raw WEB_REMIX browse, chips and continuation."""
+
+    if not _load_session().get("headers"):
+        raise RuntimeError("Connect a YouTube Music browser session first")
+    continuation = str(payload.get("continuation") or "").strip()
+    params = _text(payload.get("params"))
+    section_limit = max(1, min(12, int(payload.get("section_limit") or 6)))
+    cache_key = _feed_cache_key("home_v3", continuation, section_limit, params)
+    client = _create_client(authenticated=True)
+
+    try:
+        if continuation:
+            raw_response = _inner_tube_home_continuation_response(client, continuation, params)
+            chips = _cached_root_home_chips(section_limit)
+        else:
+            _body, raw_response = _inner_tube_home_response(client, params)
+            chips = extract_inner_tube_home_chips(raw_response)
+            if params and not chips:
+                try:
+                    _root_body, root_response = _inner_tube_home_response(client)
+                    chips = extract_inner_tube_home_chips(root_response)
+                except Exception as chip_error:
+                    print(f"Nocky YouTube root chips unavailable: {chip_error}", file=sys.stderr)
+
+        rows = parse_inner_tube_home_sections(raw_response)
+        if not rows:
+            raise RuntimeError("YouTube Music did not return Home sections")
+
+        missing = missing_artwork_by_section(rows)
+        if missing:
+            summary = ", ".join(
+                f"{title}: {count}/{total}"
+                for title, count, total in missing[:12]
+            )
+            print(
+                f"Nocky YouTube raw Home V3 items still missing artwork: {summary}",
+                file=sys.stderr,
+            )
+
+        page = build_structured_home(
+            rows,
+            offset=0,
+            section_limit=section_limit,
+            selected_chip_params=params,
+        )
+        page["chips"] = chips
+        page["continuation"] = _inner_tube_home_continuation_params(raw_response)
+
+        debug_destination = str(os.environ.get("NOCKY_HOME_DEBUG_DUMP") or "").strip()
+        if debug_destination:
+            try:
+                debug_path = write_home_debug_dump(
+                    debug_destination,
+                    pages=[{"kind": "continuation" if continuation else "root", "response": raw_response}],
+                    rows=rows,
+                    selected_params=params,
+                )
+                print(f"Nocky YouTube Home V3 renderer diagnostics: {debug_path}", file=sys.stderr)
+            except Exception as debug_error:
+                print(
+                    f"Nocky YouTube Home V3 renderer diagnostics failed: {debug_error}",
+                    file=sys.stderr,
+                )
+
+        save_cached_page(_home_feed_cache_path(), cache_key, page)
+        return page
+    except Exception as error:
+        cached = load_cached_page(
+            _home_feed_cache_path(),
+            cache_key,
+            allow_stale=True,
+        )
+        if cached is not None:
+            print(f"Nocky YouTube home v3 using cached data: {error}", file=sys.stderr)
             return cached
         raise
 
@@ -2130,6 +2325,7 @@ COMMANDS = {
     "rate": command_rate,
     "home": command_home,
     "home_v2": command_home_v2,
+    "home_v3": command_home_v3,
     "library_v2": command_library_v2,
     "library_page_v2": command_library_page_v2,
     "liked_v2": command_liked_v2,
@@ -2144,7 +2340,7 @@ COMMANDS = {
 def main() -> int:
     try:
         if len(sys.argv) != 2 or sys.argv[1] not in COMMANDS:
-            raise RuntimeError("Usage: nocky_youtube.py <status|stream_clients|connect|disconnect|search|library|library_v2|library_page_v2|liked|liked_v2|rate|home|home_v2|playlists|playlist|collection|artist|resolve>")
+            raise RuntimeError("Usage: nocky_youtube.py <status|stream_clients|connect|disconnect|search|library|library_v2|library_page_v2|liked|liked_v2|rate|home|home_v2|home_v3|playlists|playlist|collection|artist|resolve>")
         payload = _read_input()
         result = COMMANDS[sys.argv[1]](payload)
         _emit({"ok": True, "result": result})
