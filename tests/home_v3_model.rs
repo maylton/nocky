@@ -31,6 +31,9 @@ fn home_v3_page_preserves_metrolist_feed_shape() {
     assert_eq!(page.sections[0].layout, HomeV3SectionLayout::Carousel);
     assert_eq!(page.sections[0].items[0].video_id, "video123");
     assert_eq!(page.continuation, "next-token");
+    assert!(page.has_chips());
+    assert!(page.has_feed());
+    assert!(page.has_continuation());
 }
 
 #[test]
@@ -41,4 +44,7 @@ fn home_v3_page_starts_empty_without_falling_back_to_v2() {
     assert!(page.sections.is_empty());
     assert!(page.continuation.is_empty());
     assert!(page.selected_chip_params.is_empty());
+    assert!(!page.has_chips());
+    assert!(!page.has_feed());
+    assert!(!page.has_continuation());
 }
