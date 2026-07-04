@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Render-plan contract for the MetroList-style Home V3 UI.
 //!
 //! The GTK renderer should consume this plan instead of making fallback

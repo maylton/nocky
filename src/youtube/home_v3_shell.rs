@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! UI-state contract for the MetroList-style Home V3 shell.
 //!
 //! This keeps the decision about loading, empty and feed states separate from

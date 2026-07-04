@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Adapter contract for converting a feed-shaped source into Home V3.
 //!
 //! The first implementation uses a small neutral source shape so the contract

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Action contract for Home V3 feed items.
 //!
 //! MetroList-style Home items should preserve their endpoint behavior: playable

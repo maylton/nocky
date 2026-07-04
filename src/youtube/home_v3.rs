@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Clean Home V3 foundation inspired by MetroList.
 //!
 //! This module intentionally starts isolated from the previous Home renderer.
