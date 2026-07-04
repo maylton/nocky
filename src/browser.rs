@@ -1444,6 +1444,232 @@ mod home_render_reuse_tests {
     }
 }
 
+fn youtube_home_v3_shell(
+    page: &YouTubeHomePage,
+    loading: bool,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> gtk::Box {
+    let (
+        eyebrow,
+        subtitle,
+        loading_text,
+        empty_text,
+        untitled_section,
+        continuation_text,
+    ) = match language {
+        AppLanguage::Portuguese => (
+            "YOUTUBE MUSIC",
+            "Home V3 em construção: feed, chips, seções e continuação no estilo MetroList",
+            "Carregando feed do YouTube Music…",
+            "Preparando a nova Home do YouTube Music. Nenhum fallback da Home antiga será usado.",
+            "Recomendações",
+            "Carregar mais recomendações",
+        ),
+        AppLanguage::English => (
+            "YOUTUBE MUSIC",
+            "Home V3 in progress: MetroList-style feed, chips, sections and continuation",
+            "Loading YouTube Music feed…",
+            "Preparing the new YouTube Music Home. The old Home fallback will not be used.",
+            "Recommendations",
+            "Load more recommendations",
+        ),
+        AppLanguage::Spanish => (
+            "YOUTUBE MUSIC",
+            "Home V3 en construcción: feed, chips, secciones y continuación al estilo MetroList",
+            "Cargando feed de YouTube Music…",
+            "Preparando la nueva Home de YouTube Music. No se usará el fallback anterior.",
+            "Recomendaciones",
+            "Cargar más recomendaciones",
+        ),
+    };
+
+    let home = gtk::Box::new(gtk::Orientation::Vertical, 22);
+    home.set_hexpand(true);
+    home.set_vexpand(false);
+    home.add_css_class("library-home");
+    home.add_css_class("expressive-library-home");
+    home.add_css_class("youtube-home-v3");
+
+    home.append(&page_header(eyebrow, subtitle));
+
+    if !page.chips.is_empty() {
+        let chips = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        chips.set_hexpand(true);
+        chips.add_css_class("youtube-home-v3-chips");
+
+        for chip in &page.chips {
+            let label = if chip.title.trim().is_empty() {
+                match language {
+                    AppLanguage::Portuguese => "Filtro",
+                    AppLanguage::English => "Filter",
+                    AppLanguage::Spanish => "Filtro",
+                }
+            } else {
+                chip.title.trim()
+            };
+
+            let button = gtk::Button::with_label(label);
+            button.add_css_class("youtube-home-v3-chip");
+            if !chip.params.trim().is_empty() && chip.params == page.selected_chip_params {
+                button.add_css_class("suggested-action");
+            }
+
+            let tx = event_tx.clone();
+            let params = chip.params.clone();
+            button.connect_clicked(move |_| {
+                let _ = tx.send(BrowserEvent::LoadYouTubeHome {
+                    continuation: String::new(),
+                    params: params.clone(),
+                });
+            });
+
+            chips.append(&button);
+        }
+
+        home.append(&chips);
+    }
+
+    if loading {
+        let loading_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        loading_row.set_hexpand(true);
+        loading_row.add_css_class("youtube-home-v3-loading");
+
+        let indicator = MaterialLoadingIndicator::with_size(20);
+
+        let label = gtk::Label::new(Some(loading_text));
+        label.set_xalign(0.0);
+        label.set_hexpand(true);
+
+        loading_row.append(indicator.widget());
+        loading_row.append(&label);
+        home.append(&loading_row);
+    }
+
+    if page.sections.is_empty() {
+        home.append(&empty_row(empty_text));
+        return home;
+    }
+
+    for section in &page.sections {
+        let section_box = gtk::Box::new(gtk::Orientation::Vertical, 10);
+        section_box.set_hexpand(true);
+        section_box.add_css_class("home-section");
+        section_box.add_css_class("youtube-home-v3-section");
+
+        let section_title = if !section.title.trim().is_empty() {
+            section.title.trim()
+        } else if !section.label.trim().is_empty() {
+            section.label.trim()
+        } else {
+            untitled_section
+        };
+
+        let title = gtk::Label::new(Some(section_title));
+        title.set_xalign(0.0);
+        title.add_css_class("section-title");
+        section_box.append(&title);
+
+        if section.items.is_empty() {
+            section_box.append(&empty_row(empty_text));
+            home.append(&section_box);
+            continue;
+        }
+
+        let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        row.set_hexpand(true);
+        row.add_css_class("youtube-home-v3-row");
+
+        let queue = section.playable_queue();
+
+        for (index, item) in section.items.iter().take(12).enumerate() {
+            let button = gtk::Button::new();
+            button.set_hexpand(false);
+            button.add_css_class("youtube-home-v3-card");
+
+            let card = gtk::Box::new(gtk::Orientation::Vertical, 4);
+            card.set_size_request(156, -1);
+
+            let title = gtk::Label::new(Some(if item.title.trim().is_empty() {
+                untitled_section
+            } else {
+                item.title.trim()
+            }));
+            title.set_xalign(0.0);
+            title.set_wrap(true);
+            title.add_css_class("collection-card-title");
+
+            let subtitle_text = if !item.subtitle.trim().is_empty() {
+                item.subtitle.trim()
+            } else if !item.artist.trim().is_empty() {
+                item.artist.trim()
+            } else if !item.album.trim().is_empty() {
+                item.album.trim()
+            } else {
+                "YouTube Music"
+            };
+
+            let subtitle = gtk::Label::new(Some(subtitle_text));
+            subtitle.set_xalign(0.0);
+            subtitle.set_wrap(true);
+            subtitle.add_css_class("collection-card-subtitle");
+
+            card.append(&title);
+            card.append(&subtitle);
+            button.set_child(Some(&card));
+
+            let actionable = item.playable() || !item.browse_id.trim().is_empty();
+            button.set_sensitive(actionable);
+
+            let tx = event_tx.clone();
+            let item = item.clone();
+            let queue = queue.clone();
+            button.connect_clicked(move |_| {
+                if item.playable() {
+                    let playback_index = queue
+                        .iter()
+                        .position(|candidate| candidate.video_id == item.video_id)
+                        .unwrap_or(index);
+                    let _ = tx.send(BrowserEvent::YouTubeTrackActivated {
+                        item: item.clone(),
+                        queue: queue.clone(),
+                        index: playback_index,
+                    });
+                } else if item.result_type.eq_ignore_ascii_case("playlist") {
+                    let _ = tx.send(BrowserEvent::OpenYouTubePlaylist(item.clone()));
+                } else if !item.browse_id.trim().is_empty() {
+                    let _ = tx.send(BrowserEvent::OpenYouTubeCollection(item.clone()));
+                }
+            });
+
+            row.append(&button);
+        }
+
+        section_box.append(&row);
+        home.append(&section_box);
+    }
+
+    if !page.continuation.trim().is_empty() {
+        let button = gtk::Button::with_label(continuation_text);
+        button.set_hexpand(true);
+        button.add_css_class("youtube-home-v3-continuation");
+
+        let tx = event_tx.clone();
+        let continuation = page.continuation.clone();
+        let params = page.selected_chip_params.clone();
+        button.connect_clicked(move |_| {
+            let _ = tx.send(BrowserEvent::LoadYouTubeHome {
+                continuation: continuation.clone(),
+                params: params.clone(),
+            });
+        });
+
+        home.append(&button);
+    }
+
+    home
+}
+
 impl LibraryBrowser {
     pub fn home_scroll_positions(&self) -> Vec<f64> {
         let Some(content) = self.home_stack.visible_child() else {
@@ -1524,7 +1750,7 @@ impl LibraryBrowser {
     fn has_mounted_youtube_home(&self) -> bool {
         self.home_stack
             .visible_child()
-            .is_some_and(|content| content.has_css_class("youtube-home-v2"))
+            .is_some_and(|content| content.has_css_class("youtube-home-v3"))
     }
 
     pub fn append_youtube_home_page(
@@ -3024,6 +3250,37 @@ impl LibraryBrowser {
         next_home.set_vexpand(false);
         next_home.add_css_class("library-home");
         next_home.add_css_class("expressive-library-home");
+
+        if youtube_home {
+            let next_home = youtube_home_v3_shell(
+                youtube_home_page,
+                youtube_home_loading,
+                &self.event_tx,
+                language,
+            );
+
+            let generation = self.home_generation.get().wrapping_add(1);
+            self.home_generation.set(generation);
+            let child_name = format!("home-{generation}");
+            let previous = self.home_stack.visible_child();
+
+            self.home_stack
+                .set_transition_type(gtk::StackTransitionType::Crossfade);
+            self.home_stack.add_named(&next_home, Some(&child_name));
+            self.home_stack.set_visible_child_name(&child_name);
+
+            if let Some(previous) = previous {
+                let stack = self.home_stack.clone();
+                glib::timeout_add_local_once(Duration::from_millis(220), move || {
+                    if previous.parent().as_ref() == Some(stack.upcast_ref()) {
+                        stack.remove(&previous);
+                    }
+                });
+            }
+
+            self.home_dirty.set(false);
+            return;
+        }
 
         if youtube_home && !youtube_home_page.sections.is_empty() {
             next_home.add_css_class("youtube-home-v2");
