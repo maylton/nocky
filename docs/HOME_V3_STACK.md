@@ -4,7 +4,19 @@ This branch restarts the YouTube Music Home work from a clean main baseline.
 
 ## Direction
 
-Home V3 is a new Home surface inspired by MetroList. It is separate from the previous Home implementation and should be built in small reviewable steps.
+Home V3 is a new YouTube Music Home surface inspired by MetroList. It is separate from the previous Home implementation and should be built in small reviewable steps.
+
+The goal is to replicate the MetroList Home behavior, not merely the visual style. The Home should be driven by YouTube Music feed data: chips, feed sections, section endpoints, item endpoints, continuation and refresh state.
+
+## MetroList behavior contract
+
+- The top of the Home exposes YouTube Music chips/filters.
+- The main body is a vertical feed of sections.
+- Each section has a title/header and usually renders as a horizontal carousel.
+- Items preserve their YouTube endpoint behavior: songs play, albums/artists/ playlists open their destination, and unsupported items stay non-destructive.
+- A selected chip changes the feed instead of applying local categories over stale data.
+- Continuation is requested as the user approaches the end of the vertical feed.
+- Loading states should preserve the feed structure with shimmer/empty states instead of falling back to the old Home.
 
 ## Plan
 
