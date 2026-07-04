@@ -35,6 +35,7 @@ from nocky_youtube_feed import (
     save_cached_page,
 )
 from nocky_youtube_home_debug import write_home_debug_dump
+from nocky_youtube_home_v3 import build as build_home_v3_source
 from nocky_youtube_innertube_home import (
     missing_artwork_by_section,
     parse_inner_tube_home_sections,
@@ -448,6 +449,10 @@ def _session(timeout: float = 20.0):
 
     def request(method, url, **kwargs):
         kwargs.setdefault("timeout", timeout)
+        headers = dict(kwargs.get("headers") or {})
+        headers.setdefault("cache-control", "no-cache, no-store, max-age=0")
+        headers.setdefault("pragma", "no-cache")
+        kwargs["headers"] = headers
         return original(method, url, **kwargs)
 
     session.request = request
@@ -1558,6 +1563,30 @@ def _library_method(client: Any, name: str, limit: int, **kwargs: Any) -> Any:
         return []
 
 
+
+def _home_response_signature(response: dict[str, Any]) -> str:
+    encoded = json.dumps(response, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    return hashlib.sha1(encoded).hexdigest()[:16]
+
+
+def _home_response_section_titles(response: dict[str, Any]) -> list[str]:
+    try:
+        section_list = find_inner_tube_home_section_list(response)
+        contents = section_list.get("contents") if isinstance(section_list.get("contents"), list) else []
+        rows = parse_inner_tube_home_sections(contents)
+    except Exception:
+        rows = []
+
+    titles: list[str] = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        title = _text(row.get("title") or row.get("section") or row.get("label"))
+        if title:
+            titles.append(title)
+    return titles[:8]
+
+
 def _inner_tube_home_response(client: Any, params: str = "") -> tuple[dict[str, Any], dict[str, Any]]:
     sender = getattr(client, "_send_request", None)
     if not callable(sender):
@@ -1568,6 +1597,13 @@ def _inner_tube_home_response(client: Any, params: str = "") -> tuple[dict[str, 
     response = sender("browse", body)
     if not isinstance(response, dict):
         raise RuntimeError("YouTube Music returned an invalid Home response")
+    if os.environ.get("NOCKY_HOME_SOURCE_TRACE"):
+        titles = ", ".join(_home_response_section_titles(response))
+        print(
+            f"Nocky Home source trace: params={params or '<root>'} "
+            f"hash={_home_response_signature(response)} sections=[{titles}]",
+            file=sys.stderr,
+        )
     return body, response
 
 
@@ -1654,6 +1690,39 @@ def _inner_tube_home_rows(
     return rows, response
 
 
+
+def _home_root_chip() -> dict[str, str]:
+    return {"title": "Início", "browse_id": "FEmusic_home", "params": ""}
+
+
+def _with_home_root_chip(chips: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    output = [_home_root_chip()]
+    seen = {("", "")}
+
+    for chip in chips or []:
+        if not isinstance(chip, dict):
+            continue
+
+        title = _text(chip.get("title"))
+        params = _text(chip.get("params"))
+        browse_id = _text(chip.get("browse_id") or chip.get("browseId"))
+
+        key = (title, params)
+        if not title or key in seen:
+            continue
+
+        seen.add(key)
+        output.append(
+            {
+                "title": title,
+                "browse_id": browse_id,
+                "params": params,
+            }
+        )
+
+    return output
+
+
 def _cached_root_home_chips(section_limit: int) -> list[dict[str, str]]:
     root = load_cached_page(
         _home_feed_cache_path(),
@@ -1664,6 +1733,12 @@ def _cached_root_home_chips(section_limit: int) -> list[dict[str, str]]:
 
 
 def command_home_v2(payload: dict[str, Any]) -> dict[str, Any]:
+    if os.environ.get("NOCKY_HOME_SOURCE_TRACE"):
+        print(
+            "Nocky Home source trace: command_home_v2 entered "
+            f"payload={json.dumps(payload, sort_keys=True, ensure_ascii=False)}",
+            file=sys.stderr,
+        )
     if not _load_session().get("headers"):
         raise RuntimeError("Connect a YouTube Music browser session first")
     continuation = str(payload.get("continuation") or "").strip()
@@ -1673,7 +1748,21 @@ def command_home_v2(payload: dict[str, Any]) -> dict[str, Any]:
     except ValueError as error:
         raise RuntimeError("Invalid YouTube Music feed continuation") from error
     section_limit = max(1, min(12, int(payload.get("section_limit") or 6)))
+    include_native_v3_source = bool(payload.get("include_native_v3_source"))
+    force_live = bool(payload.get("force_live"))
+    cache_only = bool(payload.get("cache_only"))
     cache_key = _feed_cache_key("home", continuation, section_limit, params)
+
+    if cache_only:
+        cached = load_cached_page(
+            _home_feed_cache_path(),
+            cache_key,
+            allow_stale=True,
+        )
+        if cached is None:
+            raise RuntimeError("No cached YouTube Music Home page is available for this request")
+        return cached
+
     client = _create_client(authenticated=True)
 
     try:
@@ -1697,11 +1786,29 @@ def command_home_v2(payload: dict[str, Any]) -> dict[str, Any]:
             section_limit=section_limit,
             selected_chip_params=params,
         )
-        if chips:
-            page["chips"] = chips
+        page["chips"] = _with_home_root_chip(chips)
+        if include_native_v3_source:
+            try:
+                native_v3_source = build_home_v3_source(
+                    raw_response,
+                    selected_chip_params=params,
+                    section_limit=section_limit,
+                )
+                # The current Rust/backend Home request still treats continuation
+                # as the legacy numeric offset. Keep the V3 shell on that same
+                # contract until native continuation requests are wired end-to-end.
+                native_v3_source["continuation"] = str(page.get("continuation") or "")
+                page["native_v3_source"] = native_v3_source
+            except Exception as native_v3_error:
+                print(
+                    f"Nocky YouTube native Home V3 source unavailable: {native_v3_error}",
+                    file=sys.stderr,
+                )
         save_cached_page(_home_feed_cache_path(), cache_key, page)
         return page
     except Exception as error:
+        if force_live:
+            raise
         cached = load_cached_page(
             _home_feed_cache_path(),
             cache_key,
@@ -2145,8 +2252,11 @@ def main() -> int:
     try:
         if len(sys.argv) != 2 or sys.argv[1] not in COMMANDS:
             raise RuntimeError("Usage: nocky_youtube.py <status|stream_clients|connect|disconnect|search|library|library_v2|library_page_v2|liked|liked_v2|rate|home|home_v2|playlists|playlist|collection|artist|resolve>")
+        command = sys.argv[1]
+        if os.environ.get("NOCKY_HOME_SOURCE_TRACE"):
+            print(f"Nocky helper command trace: {command}", file=sys.stderr)
         payload = _read_input()
-        result = COMMANDS[sys.argv[1]](payload)
+        result = COMMANDS[command](payload)
         _emit({"ok": True, "result": result})
         return 0
     except (YTMusicServerError, YTMusicUserError) as error:

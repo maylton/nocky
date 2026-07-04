@@ -25,6 +25,7 @@ use std::{
 };
 
 const YOUTUBE_HOME_STREAM_PRELOAD_LIMIT: usize = 6;
+const YOUTUBE_HOME_PLAYLIST_PREFETCH_LIMIT: usize = 4;
 
 fn youtube_home_stream_preload_items(
     page: &youtube_domain::YouTubeHomePage,
@@ -42,6 +43,61 @@ fn youtube_home_stream_preload_items(
             }
         }
     }
+    items
+}
+
+fn youtube_home_playlist_prefetch_items(
+    page: &youtube_domain::YouTubeHomePage,
+    limit: usize,
+) -> Vec<YouTubeItem> {
+    let mut items = Vec::new();
+    let mut seen = HashSet::new();
+
+    if let Some(native) = page.native_v3_source.as_ref() {
+        for section in &native.sections {
+            for item in &section.items {
+                if items.len() == limit {
+                    return items;
+                }
+                if !item.result_type.eq_ignore_ascii_case("playlist")
+                    || item.browse_id.trim().is_empty()
+                    || !seen.insert(item.browse_id.clone())
+                {
+                    continue;
+                }
+
+                items.push(YouTubeItem {
+                    result_type: item.result_type.clone(),
+                    title: item.title.clone(),
+                    subtitle: item.subtitle.clone(),
+                    video_id: item.video_id.clone(),
+                    browse_id: item.browse_id.clone(),
+                    album: item.album.clone(),
+                    artist: item.artist.clone(),
+                    playlist_kind: item.playlist_kind.clone(),
+                    params: item.params.clone(),
+                    duration_seconds: item.duration_seconds,
+                    thumbnail_url: item.thumbnail_url.clone(),
+                    cover_path: item.cover_path.clone(),
+                });
+            }
+        }
+    }
+
+    for section in &page.sections {
+        for item in &section.items {
+            if items.len() == limit {
+                return items;
+            }
+            if item.result_type == "playlist"
+                && !item.browse_id.trim().is_empty()
+                && seen.insert(item.browse_id.clone())
+            {
+                items.push(item.clone());
+            }
+        }
+    }
+
     items
 }
 
@@ -180,6 +236,11 @@ impl AppController {
         let browse_id = playlist.browse_id.clone();
         if browse_id.is_empty() {
             return;
+        }
+
+        {
+            let mut library = self.youtube_library.borrow_mut();
+            library.remember_playlist_reference(playlist.clone());
         }
 
         let route = BrowserRoute::YouTubePlaylist {
@@ -673,26 +734,55 @@ impl AppController {
         let append = !continuation.is_empty();
         let filtered = !params.is_empty();
         if append {
-            let current = self.youtube_home_page.borrow();
-            if !current.can_request_continuation(
-                &continuation,
-                &params,
-                self.youtube_home_continuation_loading.get(),
-            ) {
+            let request_allowed = {
+                let current = self.youtube_home_page.borrow();
+                current.can_request_continuation(
+                    &continuation,
+                    &params,
+                    self.youtube_home_continuation_loading.get(),
+                )
+            };
+
+            if !request_allowed {
+                self.youtube_home_continuation_loading.set(false);
+                if self.config.borrow().startup_source == Some(StartupSource::YouTube) {
+                    let language = self.config.borrow().language;
+                    self.browser.reset_youtube_home_load_more(language);
+                }
                 return;
             }
         } else {
             let current = self.youtube_home_page.borrow();
-            if !current.sections.is_empty()
-                && current.selected_chip_params == params
-                && !self.youtube_home_loading.get()
-            {
+            let same_params = current.selected_chip_params == params;
+            let has_visible_home = !current.sections.is_empty()
+                || current
+                    .native_v3_source
+                    .as_ref()
+                    .map(|source| !source.sections.is_empty())
+                    .unwrap_or(false);
+
+            if same_params && self.youtube_home_loading.get() {
+                return;
+            }
+
+            if has_visible_home && same_params && !self.youtube_home_loading.get() {
                 return;
             }
         }
 
         let request_id = self.youtube_home_request_id.get().wrapping_add(1);
         self.youtube_home_request_id.set(request_id);
+        let has_visible_home = if !append {
+            let current = self.youtube_home_page.borrow();
+            !current.sections.is_empty()
+                || current
+                    .native_v3_source
+                    .as_ref()
+                    .map(|source| !source.sections.is_empty())
+                    .unwrap_or(false)
+        } else {
+            false
+        };
         if !append {
             self.youtube_home_continuation_loading.set(false);
             let previous = self.youtube_home_page.borrow().selected_chip_params.clone();
@@ -703,7 +793,7 @@ impl AppController {
             self.youtube_home_continuation_loading.set(true);
         }
         let youtube_active = self.config.borrow().startup_source == Some(StartupSource::YouTube);
-        if youtube_active && !append {
+        if youtube_active && !append && !has_visible_home {
             self.refresh_browser();
         }
 
@@ -719,10 +809,24 @@ impl AppController {
         }
         let sender = self.background.sender();
         thread::spawn(move || {
-            match bridge.home_page(
-                (!continuation.is_empty()).then_some(continuation.as_str()),
-                (!params.is_empty()).then_some(params.as_str()),
-            ) {
+            let requested_continuation =
+                (!continuation.is_empty()).then_some(continuation.as_str());
+            let requested_params = (!params.is_empty()).then_some(params.as_str());
+
+            if !append {
+                if let Ok(mut cached_page) = bridge.cached_home_page(None, requested_params) {
+                    repair_home_page_cover_paths(&mut cached_page);
+                    let _ = sender.send(BackgroundMessage::YouTubeStructuredPage {
+                        request_id,
+                        title: "Para você".to_string(),
+                        home: true,
+                        append: false,
+                        result: Ok(cached_page),
+                    });
+                }
+            }
+
+            match bridge.home_page(requested_continuation, requested_params) {
                 Ok(mut page) => {
                     repair_home_page_cover_paths(&mut page);
                     let title = "Para você".to_string();
@@ -749,6 +853,73 @@ impl AppController {
                                 );
                             });
                         }
+                    }
+
+                    let home_playlists = youtube_home_playlist_prefetch_items(
+                        &page,
+                        YOUTUBE_HOME_PLAYLIST_PREFETCH_LIMIT,
+                    );
+                    if !home_playlists.is_empty() {
+                        let prefetch_bridge = bridge.clone();
+                        let prefetch_sender = sender.clone();
+                        thread::spawn(move || {
+                            let worker_count = home_playlists.len().min(2);
+                            let work = Arc::new(Mutex::new(
+                                home_playlists.into_iter().collect::<VecDeque<_>>(),
+                            ));
+                            let (result_tx, result_rx) = mpsc::channel();
+                            let mut workers = Vec::with_capacity(worker_count);
+
+                            for _ in 0..worker_count {
+                                let bridge = prefetch_bridge.clone();
+                                let work = work.clone();
+                                let result_tx = result_tx.clone();
+                                workers.push(thread::spawn(move || loop {
+                                    let playlist = match work.lock() {
+                                        Ok(mut queue) => queue.pop_front(),
+                                        Err(_) => None,
+                                    };
+                                    let Some(playlist) = playlist else {
+                                        break;
+                                    };
+
+                                    let browse_id = playlist.browse_id.clone();
+                                    let result = bridge.playlist(&playlist).map(|mut items| {
+                                        cache_first_items_for_browser(&mut items, 12);
+                                        items
+                                    });
+                                    let _ = result_tx.send((playlist, browse_id, result));
+                                }));
+                            }
+                            drop(result_tx);
+
+                            let mut cached = HashMap::new();
+                            for (playlist, browse_id, result) in result_rx {
+                                match result {
+                                    Ok(items) if !items.is_empty() => {
+                                        cached.insert(browse_id, items);
+                                    }
+                                    Ok(_) => {}
+                                    Err(error)
+                                        if error.contains(
+                                            "No playable tracks were returned for this YouTube Music playlist",
+                                        ) => {}
+                                    Err(error) => {
+                                        eprintln!(
+                                            "Could not pre-cache Home playlist '{}': {error}",
+                                            playlist.title
+                                        );
+                                    }
+                                }
+                            }
+
+                            for worker in workers {
+                                let _ = worker.join();
+                            }
+
+                            let _ = prefetch_sender
+                                .send(BackgroundMessage::YouTubePlaylistsCached(Ok(cached)));
+                        });
                     }
 
                     cache_home_page_covers(&mut page);

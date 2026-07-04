@@ -62,9 +62,16 @@ impl AppController {
 
         let home_scroll_positions = self.browser.home_scroll_positions();
         let queue_scroll_position = self.browser.queue_scroll_position();
+        let config = match self.config.try_borrow() {
+            Ok(config) => config.clone(),
+            Err(_) => {
+                eprintln!("Nocky browser refresh deferred: config is currently borrowed");
+                self.browser.mark_home_dirty();
+                return;
+            }
+        };
         let playback = self.browser_playback_state();
         let state = self.state.borrow();
-        let config = self.config.borrow();
         let youtube = self.youtube_library.borrow();
         let youtube_home = self.youtube_home_page.borrow();
         let query = self.search_query.borrow();
@@ -114,9 +121,15 @@ impl AppController {
         if matches!(&route, BrowserRoute::Artists) {
             self.prefetch_home_artist_profiles(true);
         }
+        let config = match self.config.try_borrow() {
+            Ok(config) => config.clone(),
+            Err(_) => {
+                eprintln!("Nocky browser navigation skipped: config is currently borrowed");
+                return;
+            }
+        };
         let playback = self.browser_playback_state();
         let state = self.state.borrow();
-        let config = self.config.borrow();
         let youtube = self.youtube_library.borrow();
         let youtube_home = self.youtube_home_page.borrow();
         let query = self.search_query.borrow();

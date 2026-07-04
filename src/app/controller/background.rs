@@ -1007,6 +1007,8 @@ impl AppController {
                                 if append && self.browser.route() != BrowserRoute::All {
                                     continue;
                                 }
+
+                                let mut needs_full_refresh = false;
                                 {
                                     let mut current = self.youtube_home_page.borrow_mut();
                                     if append
@@ -1018,6 +1020,7 @@ impl AppController {
                                         continue;
                                     }
                                     unchanged_filtered_feed = !append
+                                        && !page.stale
                                         && !page.selected_chip_params.is_empty()
                                         && !youtube_home_sections_changed(&current, &page);
                                     if append {
@@ -1030,9 +1033,7 @@ impl AppController {
                                                 &playback,
                                                 &self.config.borrow(),
                                             );
-                                            if !appended {
-                                                self.refresh_browser();
-                                            }
+                                            needs_full_refresh = !appended;
                                         }
                                     } else {
                                         let mut next = page.clone();
@@ -1045,8 +1046,9 @@ impl AppController {
                                         *current = next;
                                     }
                                 }
+
                                 self.youtube_home_previous_params.borrow_mut().clear();
-                                if youtube_active && !append {
+                                if youtube_active && (!append || needs_full_refresh) {
                                     self.refresh_browser();
                                 }
                             }
@@ -1130,7 +1132,19 @@ impl AppController {
                                     self.refresh_browser();
                                 }
                             } else {
-                                self.refresh_browser();
+                                let playback = self.browser_playback_state();
+                                let config = self.config.borrow();
+                                let updated = self.browser.refresh_youtube_home_v3_cover_sections(
+                                    &current_page,
+                                    &delta,
+                                    &playback,
+                                    &config,
+                                );
+                                drop(config);
+
+                                if !updated {
+                                    self.refresh_browser();
+                                }
                             }
                         }
                     }

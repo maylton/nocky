@@ -1,0 +1,380 @@
+.youtube-home-v3 {
+  padding: 18px 22px 28px 22px;
+}
+
+.youtube-home-v3-chips {
+  margin-bottom: 4px;
+}
+
+.youtube-home-v3-section {
+  margin-top: 8px;
+}
+
+.youtube-home-v3-row-scroll,
+.youtube-home-v3-row-scroll undershoot,
+.youtube-home-v3-row-scroll overshoot {
+  background: none;
+}
+
+.youtube-home-v3-row {
+  padding: 2px 2px 10px 2px;
+}
+
+button.youtube-home-v3-card {
+  padding: 0;
+  border-radius: 20px;
+  background: transparent;
+  box-shadow: none;
+}
+
+button.youtube-home-v3-card:hover {
+  background: alpha(currentColor, 0.05);
+}
+
+.youtube-home-v3-card-content {
+  padding: 10px;
+  border-radius: 20px;
+}
+
+.youtube-home-v3-card-content.material-card-elevated {
+  background-color: alpha(currentColor, 0.08);
+  box-shadow: 0 5px 16px alpha(black, 0.13);
+}
+
+button.youtube-home-v3-card:hover .youtube-home-v3-card-content.material-card-elevated {
+  background-color: alpha(currentColor, 0.11);
+  box-shadow: 0 9px 24px alpha(black, 0.22);
+}
+
+.home-section-featured button.youtube-home-v3-card,
+.home-section-featured .home-card-context-overlay {
+  min-width: 220px;
+  min-height: 268px;
+}
+
+.home-section-featured .youtube-home-v3-card-content {
+  min-width: 196px;
+  min-height: 252px;
+}
+
+.home-section-featured .youtube-home-v3-artwork-overlay,
+.home-section-featured .youtube-home-v3-artwork {
+  min-width: 176px;
+  min-height: 176px;
+}
+
+.home-section-compact button.youtube-home-v3-card,
+.home-section-compact .home-card-context-overlay {
+  min-width: 168px;
+  min-height: 196px;
+}
+
+.home-section-compact .youtube-home-v3-card-content {
+  min-width: 152px;
+  min-height: 188px;
+}
+
+.home-section-compact .youtube-home-v3-artwork-overlay,
+.home-section-compact .youtube-home-v3-artwork {
+  min-width: 128px;
+  min-height: 128px;
+}
+
+.youtube-home-v3-artwork-overlay,
+.youtube-home-v3-artwork,
+.youtube-home-v3-picture {
+  border-radius: 18px;
+}
+
+.youtube-home-v3-artwork {
+  background: alpha(currentColor, 0.08);
+  overflow: hidden;
+}
+
+.youtube-home-v3-artist-artwork,
+.youtube-home-v3-artist-picture {
+  border-radius: 999px;
+}
+
+.youtube-home-v3-artwork-placeholder {
+  margin: 28px;
+  opacity: 0.65;
+}
+
+.youtube-home-v3-play-badge,
+.youtube-home-v3 .material-card-primary-action {
+  padding: 12px;
+  border-radius: 999px;
+  background: alpha(black, 0.48);
+  color: white;
+  opacity: 0.92;
+}
+
+.youtube-home-v3-card-title {
+  font-weight: 700;
+}
+
+.youtube-home-v3-card-subtitle {
+  opacity: 0.72;
+}
+
+.home-section-trackrows button.youtube-home-v3-card {
+  min-width: 312px;
+  min-height: 64px;
+}
+
+.home-section-trackrows .youtube-home-v3-card-content {
+  min-width: 300px;
+  min-height: 64px;
+}
+/* Fase 1: media artwork fills the card frame. */
+.youtube-home-v3-media-artwork,
+.youtube-home-v3-media-picture {
+  min-width: 100%;
+  min-height: 100%;
+  border-radius: 18px;
+}
+
+.home-section-featured .youtube-home-v3-media-artwork,
+.home-section-featured .youtube-home-v3-media-picture {
+  min-width: 176px;
+  min-height: 176px;
+}
+
+.home-section-compact .youtube-home-v3-media-artwork,
+.home-section-compact .youtube-home-v3-media-picture {
+  min-width: 128px;
+  min-height: 128px;
+}
+
+.youtube-home-v3-artist-artwork,
+.youtube-home-v3-artist-picture {
+  border-radius: 999px;
+}
+/* Fase 2: stable density and clipping. */
+.youtube-home-v3-row-scroll {
+  min-height: 0;
+}
+
+.youtube-home-v3-card-content {
+  overflow: hidden;
+}
+
+.youtube-home-v3-card-title,
+.youtube-home-v3-card-subtitle {
+  margin: 0;
+  padding: 0;
+}
+
+.home-section-featured .youtube-home-v3-card-title {
+  min-height: 40px;
+}
+
+.home-section-featured .youtube-home-v3-card-subtitle {
+  min-height: 38px;
+}
+
+.home-section-compact .youtube-home-v3-card-title {
+  min-height: 36px;
+}
+
+.home-section-compact .youtube-home-v3-card-subtitle {
+  min-height: 34px;
+}
+
+.home-section-trackrows .youtube-home-v3-card-title,
+.home-section-trackrows .youtube-home-v3-card-subtitle {
+  min-height: 0;
+}
+
+.home-section-trackrows .youtube-home-v3-card-content {
+  padding: 8px;
+}
+/* Fase 3: primary card action. */
+.youtube-home-v3-card-overlay {
+  border-radius: 20px;
+}
+
+.youtube-home-v3-play-button {
+  min-width: 42px;
+  min-height: 42px;
+  padding: 9px;
+  border-radius: 999px;
+  background-color: alpha(black, 0.58);
+  color: white;
+  box-shadow: 0 5px 18px alpha(black, 0.35);
+  opacity: 0.92;
+}
+
+button.youtube-home-v3-card:hover .youtube-home-v3-play-button {
+  background-color: alpha(black, 0.75);
+  opacity: 1;
+}
+
+button.youtube-home-v3-card:active .youtube-home-v3-play-button {
+  background-color: alpha(currentColor, 0.22);
+}
+
+/* Fase 4: overflow menu. */
+.youtube-home-v3-overflow-button,
+.collection-card-overflow-button,
+.material-card-overflow-trigger {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  background-color: alpha(black, 0.48);
+  color: white;
+  box-shadow: 0 3px 12px alpha(black, 0.28);
+  opacity: 0.78;
+}
+
+button.youtube-home-v3-card:hover .youtube-home-v3-overflow-button,
+.youtube-home-v3-overflow-button:hover {
+  background-color: alpha(black, 0.72);
+  opacity: 1;
+}
+
+.youtube-home-v3-overflow-menu {
+  min-width: 160px;
+}
+
+.youtube-home-v3-overflow-menu .material-card-menu-action {
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+
+/* Fase 5: real horizontal TrackRows. */
+.home-section-trackrows .youtube-home-v3-row {
+  padding-bottom: 8px;
+}
+
+.home-section-trackrows button.youtube-home-v3-card,
+.home-section-trackrows .home-card-context-overlay {
+  min-width: 312px;
+  min-height: 64px;
+}
+
+.home-section-trackrows .youtube-home-v3-card-overlay {
+  min-width: 300px;
+  min-height: 64px;
+}
+
+.youtube-home-v3-track-card-content {
+  padding: 8px 38px 8px 8px;
+  border-radius: 18px;
+  min-width: 300px;
+  min-height: 64px;
+}
+
+.youtube-home-v3-track-text {
+  min-width: 0;
+}
+
+.youtube-home-v3-track-title {
+  font-weight: 700;
+}
+
+.youtube-home-v3-track-subtitle {
+  opacity: 0.68;
+}
+
+.youtube-home-v3-track-action-hint {
+  opacity: 0.72;
+}
+/* Fase 6: fixed card geometry.
+ * Window growth expands the carousel viewport only; cards keep stable slots.
+ */
+.youtube-home-v3-row {
+  min-width: 0;
+}
+
+.home-section-featured button.youtube-home-v3-card,
+.home-section-featured .youtube-home-v3-card-overlay,
+.home-section-featured .youtube-home-v3-card-content {
+  min-width: 196px;
+  min-height: 252px;
+}
+
+.home-section-featured button.youtube-home-v3-card,
+.home-section-featured .home-card-context-overlay {
+  min-width: 220px;
+  min-height: 268px;
+}
+
+.home-section-featured .youtube-home-v3-artwork-overlay,
+.home-section-featured .youtube-home-v3-artwork,
+.home-section-featured .youtube-home-v3-media-artwork,
+.home-section-featured .youtube-home-v3-media-picture {
+  min-width: 176px;
+  min-height: 176px;
+}
+
+.home-section-compact button.youtube-home-v3-card,
+.home-section-compact .youtube-home-v3-card-overlay,
+.home-section-compact .youtube-home-v3-card-content {
+  min-width: 152px;
+  min-height: 188px;
+}
+
+.home-section-compact button.youtube-home-v3-card,
+.home-section-compact .home-card-context-overlay {
+  min-width: 168px;
+  min-height: 196px;
+}
+
+.home-section-compact .youtube-home-v3-artwork-overlay,
+.home-section-compact .youtube-home-v3-artwork,
+.home-section-compact .youtube-home-v3-media-artwork,
+.home-section-compact .youtube-home-v3-media-picture {
+  min-width: 128px;
+  min-height: 128px;
+}
+/* Fix: overflow menu is outside the main clickable card button. */
+.youtube-home-v3-card-slot {
+  background: transparent;
+  border-radius: 20px;
+}
+/* Fix: artwork images must never dictate card size. */
+.youtube-home-v3-picture,
+.youtube-home-v3-media-picture,
+.youtube-home-v3-artist-picture {
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  max-height: none;
+}
+
+.home-section-featured .youtube-home-v3-picture,
+.home-section-featured .youtube-home-v3-media-picture {
+  min-width: 176px;
+  min-height: 176px;
+}
+
+.home-section-compact .youtube-home-v3-picture,
+.home-section-compact .youtube-home-v3-media-picture {
+  min-width: 128px;
+  min-height: 128px;
+}
+
+.home-section-trackrows .youtube-home-v3-picture,
+.home-section-trackrows .youtube-home-v3-media-picture {
+  min-width: 48px;
+  min-height: 48px;
+}
+/* Reconciliation: V3 sections now use the shared Home card renderer.
+ * V3-specific card internals should not override shared collection-card rules.
+ */
+.youtube-home-v3 .home-card-context-overlay {
+  background: transparent;
+}
+
+.youtube-home-v3 .collection-card {
+  background-image: none;
+}
+
+.youtube-home-v3 .home-carousel-scroll,
+.youtube-home-v3 .home-card-grid-scroll {
+  background: transparent;
+}
