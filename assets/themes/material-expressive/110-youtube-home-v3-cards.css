@@ -363,3 +363,18 @@ button.youtube-home-v3-card:hover .youtube-home-v3-overflow-button,
   min-width: 48px;
   min-height: 48px;
 }
+/* Reconciliation: V3 sections now use the shared Home card renderer.
+ * V3-specific card internals should not override shared collection-card rules.
+ */
+.youtube-home-v3 .home-card-context-overlay {
+  background: transparent;
+}
+
+.youtube-home-v3 .collection-card {
+  background-image: none;
+}
+
+.youtube-home-v3 .home-carousel-scroll,
+.youtube-home-v3 .home-card-grid-scroll {
+  background: transparent;
+}

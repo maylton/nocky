@@ -178,4 +178,13 @@ Home V3 restores the card action layer from the previous Home work:
 - media cards expose a primary play affordance;
 - cards expose an overflow menu with primary action and copy-title action;
 - song-like TrackRows use a compact horizontal layout with small artwork,
-  single-line metadata and aligned contextual controls.\n
+  single-line metadata and aligned contextual controls.\n\n\n## Home V3 fixed geometry
+
+Home V3 carousel rows now treat card dimensions as fixed slots. Resizing the
+application expands the carousel viewport so more fixed-size cards become
+visible; individual cards do not stretch with the window.\n\n\n## Home V3 mounted repaint boundary
+
+Home V3 assigns a stable signature to the mounted root based on the selected
+chip, section titles and item identities. When the signature is unchanged, the
+existing GTK root is reused instead of rebuilding all cards, artwork overlays,
+menus and carousels. Feed/chip changes still remount the affected Home V3 tree.\n
