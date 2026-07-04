@@ -8,10 +8,10 @@ use crate::{
     search_text::{normalize_search_text, search_matches, search_score},
     ui::widgets::MaterialLoadingIndicator,
     youtube::{
-        adapt_source_page, artist_credit_contains, cached_cover_for_item, credited_artists,
+        adapt_source_page, artist_credit_contains, credited_artists,
         legacy_youtube_home_page_source, resolve_home_v3_source, youtube_cache_visual_state,
-        youtube_collection_cache_key, youtube_collection_key, youtube_home_section_key, HomeV3Item,
-        HomeV3Page, YouTubeCacheVisualState, YouTubeCollectionEntry, YouTubeHomeContinuationDelta,
+        youtube_collection_cache_key, youtube_collection_key, youtube_home_section_key,
+        YouTubeCacheVisualState, YouTubeCollectionEntry, YouTubeHomeContinuationDelta,
         YouTubeHomePage, YouTubeHomeSection, YouTubeItem, YouTubeLibraryCache,
     },
 };
