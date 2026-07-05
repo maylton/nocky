@@ -9,8 +9,12 @@
 
 window.theme-noctalia .now-playing-card,
 window.theme-noctalia .player-bar,
-window.theme-noctalia .library-panel {
-  transition: background-color 180ms ease, border-color 180ms ease;
+window.theme-noctalia .library-panel,
+window.theme-noctalia .home-section,
+window.theme-noctalia .home-card,
+window.theme-noctalia .collection-card,
+window.theme-noctalia .pill {
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease;
 }
 
 /* material_visualizer_palette_v1
@@ -25,6 +29,11 @@ window.theme-noctalia .audio-visualizer {
  * Noctalia Shell v5 is a cohesive shell layer, not a Material Expressive app
  * skin. Keep Nocky's Noctalia mode anchored to shell surfaces and template
  * palette roles exported from ~/.config/nocky/theme.css.
+ *
+ * Album Aura usually makes the shell feel alive through the active accent.
+ * Surface colors can remain intentionally stable, so Nocky uses low-opacity
+ * accent borders and tints to visibly follow those live shell palette changes
+ * without reintroducing Material Expressive glow/gradient language.
  */
 window.theme-noctalia .library-home,
 window.theme-noctalia .expressive-library-home,
@@ -41,15 +50,15 @@ window.theme-noctalia .expressive-library-home,
 window.theme-noctalia .library-panel,
 window.theme-noctalia .content-card {
   background-color: alpha(@nm_surface, 0.74);
-  border-color: alpha(@nm_outline, 0.34);
+  border-color: alpha(@nm_accent, 0.18);
   box-shadow: none;
 }
 
 window.theme-noctalia .home-section,
 window.theme-noctalia .youtube-home-v3-section,
 window.theme-noctalia .settings-group {
-  background-color: alpha(@nm_surface_alt, 0.48);
-  border: 1px solid alpha(@nm_outline, 0.26);
+  background-color: alpha(@nm_accent, 0.055);
+  border: 1px solid alpha(@nm_accent, 0.20);
   box-shadow: none;
 }
 
@@ -61,8 +70,8 @@ window.theme-noctalia .artist-card,
 window.theme-noctalia .track-card,
 window.theme-noctalia .youtube-home-card,
 window.theme-noctalia .youtube-home-v3-card {
-  background-color: alpha(@nm_surface_alt, 0.56);
-  border-color: alpha(@nm_outline, 0.24);
+  background-color: alpha(@nm_surface_alt, 0.50);
+  border-color: alpha(@nm_accent, 0.16);
   box-shadow: none;
 }
 
@@ -74,8 +83,8 @@ window.theme-noctalia .artist-card:hover,
 window.theme-noctalia .track-card:hover,
 window.theme-noctalia .youtube-home-card:hover,
 window.theme-noctalia .youtube-home-v3-card:hover {
-  background-color: alpha(@nm_accent, 0.12);
-  border-color: alpha(@nm_accent, 0.38);
+  background-color: alpha(@nm_accent, 0.14);
+  border-color: alpha(@nm_accent, 0.42);
   box-shadow: none;
 }
 
@@ -86,7 +95,7 @@ window.theme-noctalia .youtube-home-v3-chip.suggested-action {
   color: @nm_accent_fg;
   background-color: @nm_accent;
   background-image: none;
-  border-color: alpha(@nm_accent, 0.70);
+  border-color: alpha(@nm_accent, 0.72);
   box-shadow: none;
 }
 
@@ -94,8 +103,8 @@ window.theme-noctalia .pill,
 window.theme-noctalia .youtube-home-v3-chip,
 window.theme-noctalia .youtube-chip {
   background-image: none;
-  background-color: alpha(@nm_surface_alt, 0.62);
-  border-color: alpha(@nm_outline, 0.32);
+  background-color: alpha(@nm_accent, 0.08);
+  border-color: alpha(@nm_accent, 0.28);
   color: @nm_text;
   box-shadow: none;
 }
@@ -103,8 +112,8 @@ window.theme-noctalia .youtube-chip {
 window.theme-noctalia .pill:hover,
 window.theme-noctalia .youtube-home-v3-chip:hover,
 window.theme-noctalia .youtube-chip:hover {
-  background-color: alpha(@nm_accent, 0.14);
-  border-color: alpha(@nm_accent, 0.42);
+  background-color: alpha(@nm_accent, 0.15);
+  border-color: alpha(@nm_accent, 0.46);
   color: @nm_text;
   box-shadow: none;
 }
@@ -130,8 +139,8 @@ window.theme-noctalia .dim-label {
   min-height: 92px;
   padding: 16px 18px;
   border-radius: 22px;
-  background-color: alpha(@nm_surface_alt, 0.56);
-  border: 1px solid alpha(@nm_outline, 0.30);
+  background-color: alpha(@nm_accent, 0.10);
+  border: 1px solid alpha(@nm_accent, 0.28);
   box-shadow: none;
 }
 
@@ -160,8 +169,8 @@ window.theme-noctalia .dim-label {
 .theme-noctalia .settings-group {
   padding: 11px;
   border-radius: 22px;
-  background-color: alpha(@nm_surface_alt, 0.48);
-  border: 1px solid alpha(@nm_outline, 0.26);
+  background-color: alpha(@nm_accent, 0.055);
+  border: 1px solid alpha(@nm_accent, 0.20);
 }
 
 .theme-noctalia .settings-group-header {
@@ -174,7 +183,7 @@ window.theme-noctalia .dim-label {
   min-height: 42px;
   border-radius: 14px;
   color: @nm_accent;
-  background-color: alpha(@nm_accent, 0.12);
+  background-color: alpha(@nm_accent, 0.14);
   background-image: none;
   box-shadow: none;
 }
@@ -242,8 +251,8 @@ window.theme-noctalia
   margin-bottom: 12px;
   padding: 8px 12px;
   border-radius: 999px;
-  background-color: alpha(@nm_surface_alt, 0.52);
-  border: 1px solid alpha(@nm_outline, 0.26);
+  background-color: alpha(@nm_accent, 0.075);
+  border: 1px solid alpha(@nm_accent, 0.24);
 }
 
 .theme-noctalia .lyrics-offset-button,
