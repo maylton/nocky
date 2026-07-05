@@ -413,6 +413,49 @@ fn home_v3_section_box(
     section_box
 }
 
+fn home_v3_continuation_loading_label(language: AppLanguage) -> &'static str {
+    match language {
+        AppLanguage::Portuguese => "Carregando…",
+        AppLanguage::English => "Loading…",
+        AppLanguage::Spanish => "Cargando…",
+    }
+}
+
+fn home_v3_continuation_button(
+    continuation: &str,
+    selected_chip_params: &str,
+    copy: HomeV3Copy,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> Option<gtk::Button> {
+    if continuation.trim().is_empty() {
+        return None;
+    }
+
+    let button = gtk::Button::with_label(copy.continuation_text);
+    button.set_halign(gtk::Align::Center);
+    button.add_css_class("pill");
+    button.add_css_class("suggested-action");
+    button.add_css_class("youtube-home-load-more");
+    button.add_css_class("youtube-home-v3-continuation");
+
+    let tx = event_tx.clone();
+    let continuation = continuation.to_string();
+    let params = selected_chip_params.to_string();
+    let loading_label = home_v3_continuation_loading_label(language);
+
+    button.connect_clicked(move |button| {
+        button.set_label(loading_label);
+        button.set_sensitive(false);
+        let _ = tx.send(BrowserEvent::LoadYouTubeHome {
+            continuation: continuation.clone(),
+            params: params.clone(),
+        });
+    });
+
+    Some(button)
+}
+
 pub(super) fn youtube_home_v3_feed_shell(
     page: &HomeV3Page,
     loading: bool,
@@ -474,32 +517,13 @@ pub(super) fn youtube_home_v3_feed_shell(
         ));
     }
 
-    if !page.continuation.trim().is_empty() {
-        let loading_label = match language {
-            AppLanguage::Portuguese => "Carregando…",
-            AppLanguage::English => "Loading…",
-            AppLanguage::Spanish => "Cargando…",
-        };
-
-        let button = gtk::Button::with_label(copy.continuation_text);
-        button.set_halign(gtk::Align::Center);
-        button.add_css_class("pill");
-        button.add_css_class("suggested-action");
-        button.add_css_class("youtube-home-load-more");
-        button.add_css_class("youtube-home-v3-continuation");
-
-        let tx = event_tx.clone();
-        let continuation = page.continuation.clone();
-        let params = page.selected_chip_params.clone();
-        button.connect_clicked(move |button| {
-            button.set_label(loading_label);
-            button.set_sensitive(false);
-            let _ = tx.send(BrowserEvent::LoadYouTubeHome {
-                continuation: continuation.clone(),
-                params: params.clone(),
-            });
-        });
-
+    if let Some(button) = home_v3_continuation_button(
+        &page.continuation,
+        &page.selected_chip_params,
+        copy,
+        event_tx,
+        language,
+    ) {
         home.append(&button);
     }
 
