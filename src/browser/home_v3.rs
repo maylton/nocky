@@ -349,6 +349,70 @@ fn home_v3_loading_row(loading_text: &str) -> gtk::Box {
     loading_row
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Home V3 section rendering needs feed data, playback state and renderer dependencies"
+)]
+fn home_v3_section_box(
+    section_index: usize,
+    section_title: &str,
+    section_items: &[HomeV3Item],
+    copy: HomeV3Copy,
+    playback: &BrowserPlaybackState,
+    config: &AppConfig,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+    card_effects: bool,
+) -> gtk::Box {
+    let presentation = home_v3_section_presentation(section_index, section_title, section_items);
+
+    let section_box = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    section_box.set_hexpand(true);
+    section_box.set_widget_name(&format!(
+        "youtube-home-v3-section:{}",
+        home_v3_section_signature(section_title, section_items)
+    ));
+    section_box.add_css_class("home-section");
+    section_box.add_css_class("youtube-home-v3-section");
+    match presentation {
+        HomeV3CardPresentation::Featured => section_box.add_css_class("home-section-featured"),
+        HomeV3CardPresentation::Compact => section_box.add_css_class("home-section-compact"),
+        HomeV3CardPresentation::TrackRows => section_box.add_css_class("home-section-trackrows"),
+    }
+
+    let section_title = if !section_title.trim().is_empty() {
+        section_title.trim()
+    } else {
+        copy.untitled_section
+    };
+
+    let title = gtk::Label::new(Some(section_title));
+    title.set_xalign(0.0);
+    title.add_css_class("section-title");
+    section_box.append(&title);
+
+    if section_items.is_empty() {
+        section_box.append(&empty_row(copy.empty_text));
+        return section_box;
+    }
+
+    let content = home_v3_existing_card_section_content(
+        section_items,
+        presentation,
+        copy.empty_text,
+        playback,
+        config,
+        event_tx,
+        language,
+        card_effects,
+    );
+    content.set_vexpand(false);
+    content.set_valign(gtk::Align::Start);
+
+    section_box.append(&content);
+    section_box
+}
+
 pub(super) fn youtube_home_v3_feed_shell(
     page: &HomeV3Page,
     loading: bool,
@@ -397,57 +461,17 @@ pub(super) fn youtube_home_v3_feed_shell(
     }
 
     for (section_index, section) in page.sections.iter().enumerate() {
-        let presentation =
-            home_v3_section_presentation(section_index, &section.title, &section.items);
-
-        let section_box = gtk::Box::new(gtk::Orientation::Vertical, 10);
-        section_box.set_hexpand(true);
-        section_box.set_widget_name(&format!(
-            "youtube-home-v3-section:{}",
-            home_v3_section_signature(&section.title, &section.items)
-        ));
-        section_box.add_css_class("home-section");
-        section_box.add_css_class("youtube-home-v3-section");
-        match presentation {
-            HomeV3CardPresentation::Featured => section_box.add_css_class("home-section-featured"),
-            HomeV3CardPresentation::Compact => section_box.add_css_class("home-section-compact"),
-            HomeV3CardPresentation::TrackRows => {
-                section_box.add_css_class("home-section-trackrows")
-            }
-        }
-
-        let section_title = if !section.title.trim().is_empty() {
-            section.title.trim()
-        } else {
-            copy.untitled_section
-        };
-
-        let title = gtk::Label::new(Some(section_title));
-        title.set_xalign(0.0);
-        title.add_css_class("section-title");
-        section_box.append(&title);
-
-        if section.items.is_empty() {
-            section_box.append(&empty_row(copy.empty_text));
-            home.append(&section_box);
-            continue;
-        }
-
-        let content = home_v3_existing_card_section_content(
+        home.append(&home_v3_section_box(
+            section_index,
+            &section.title,
             &section.items,
-            presentation,
-            copy.empty_text,
+            copy,
             playback,
             config,
             event_tx,
             language,
             card_effects,
-        );
-        content.set_vexpand(false);
-        content.set_valign(gtk::Align::Start);
-
-        section_box.append(&content);
-        home.append(&section_box);
+        ));
     }
 
     if !page.continuation.trim().is_empty() {
