@@ -19,6 +19,45 @@ use std::{
     sync::mpsc::Sender,
 };
 
+#[derive(Clone, Copy)]
+struct HomeV3Copy {
+    eyebrow: &'static str,
+    subtitle: &'static str,
+    loading_text: &'static str,
+    empty_text: &'static str,
+    untitled_section: &'static str,
+    continuation_text: &'static str,
+}
+
+fn home_v3_copy(language: AppLanguage) -> HomeV3Copy {
+    match language {
+        AppLanguage::Portuguese => HomeV3Copy {
+            eyebrow: "YOUTUBE MUSIC",
+            subtitle: "Recomendações, playlists e músicas do YouTube Music",
+            loading_text: "Carregando feed do YouTube Music…",
+            empty_text: "Nenhuma recomendação encontrada no momento.",
+            untitled_section: "Recomendações",
+            continuation_text: "Carregar mais recomendações",
+        },
+        AppLanguage::English => HomeV3Copy {
+            eyebrow: "YOUTUBE MUSIC",
+            subtitle: "Recommendations, playlists and music from YouTube Music",
+            loading_text: "Loading YouTube Music feed…",
+            empty_text: "No recommendations found right now.",
+            untitled_section: "Recommendations",
+            continuation_text: "Load more recommendations",
+        },
+        AppLanguage::Spanish => HomeV3Copy {
+            eyebrow: "YOUTUBE MUSIC",
+            subtitle: "Recomendaciones, playlists y música de YouTube Music",
+            loading_text: "Cargando feed de YouTube Music…",
+            empty_text: "No se encontraron recomendaciones por ahora.",
+            untitled_section: "Recomendaciones",
+            continuation_text: "Cargar más recomendaciones",
+        },
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum HomeV3CardPresentation {
     Featured,
@@ -236,33 +275,7 @@ pub(super) fn youtube_home_v3_feed_shell(
     card_effects: bool,
     existing_home: Option<&gtk::Box>,
 ) -> gtk::Box {
-    let (eyebrow, subtitle, loading_text, empty_text, untitled_section, continuation_text) =
-        match language {
-            AppLanguage::Portuguese => (
-                "YOUTUBE MUSIC",
-                "Recomendações, playlists e músicas do YouTube Music",
-                "Carregando feed do YouTube Music…",
-                "Nenhuma recomendação encontrada no momento.",
-                "Recomendações",
-                "Carregar mais recomendações",
-            ),
-            AppLanguage::English => (
-                "YOUTUBE MUSIC",
-                "Recommendations, playlists and music from YouTube Music",
-                "Loading YouTube Music feed…",
-                "No recommendations found right now.",
-                "Recommendations",
-                "Load more recommendations",
-            ),
-            AppLanguage::Spanish => (
-                "YOUTUBE MUSIC",
-                "Recomendaciones, playlists y música de YouTube Music",
-                "Cargando feed de YouTube Music…",
-                "No se encontraron recomendaciones por ahora.",
-                "Recomendaciones",
-                "Cargar más recomendaciones",
-            ),
-        };
+    let copy = home_v3_copy(language);
 
     let page_signature = home_v3_page_signature(page);
     if !loading {
@@ -284,7 +297,7 @@ pub(super) fn youtube_home_v3_feed_shell(
     home.add_css_class("youtube-home-v3");
     home.add_css_class("youtube-home-v3-feed");
 
-    home.append(&page_header(eyebrow, subtitle));
+    home.append(&page_header(copy.eyebrow, copy.subtitle));
 
     if !page.chips.is_empty() {
         let chip_section = gtk::Box::new(gtk::Orientation::Vertical, 8);
@@ -351,7 +364,7 @@ pub(super) fn youtube_home_v3_feed_shell(
 
         let indicator = MaterialLoadingIndicator::with_size(20);
 
-        let label = gtk::Label::new(Some(loading_text));
+        let label = gtk::Label::new(Some(copy.loading_text));
         label.set_xalign(0.0);
         label.set_hexpand(true);
 
@@ -361,7 +374,7 @@ pub(super) fn youtube_home_v3_feed_shell(
     }
 
     if page.sections.is_empty() {
-        home.append(&empty_row(empty_text));
+        home.append(&empty_row(copy.empty_text));
         return home;
     }
 
@@ -388,7 +401,7 @@ pub(super) fn youtube_home_v3_feed_shell(
         let section_title = if !section.title.trim().is_empty() {
             section.title.trim()
         } else {
-            untitled_section
+            copy.untitled_section
         };
 
         let title = gtk::Label::new(Some(section_title));
@@ -397,7 +410,7 @@ pub(super) fn youtube_home_v3_feed_shell(
         section_box.append(&title);
 
         if section.items.is_empty() {
-            section_box.append(&empty_row(empty_text));
+            section_box.append(&empty_row(copy.empty_text));
             home.append(&section_box);
             continue;
         }
@@ -405,7 +418,7 @@ pub(super) fn youtube_home_v3_feed_shell(
         let content = home_v3_existing_card_section_content(
             &section.items,
             presentation,
-            empty_text,
+            copy.empty_text,
             playback,
             config,
             event_tx,
@@ -426,7 +439,7 @@ pub(super) fn youtube_home_v3_feed_shell(
             AppLanguage::Spanish => "Cargando…",
         };
 
-        let button = gtk::Button::with_label(continuation_text);
+        let button = gtk::Button::with_label(copy.continuation_text);
         button.set_halign(gtk::Align::Center);
         button.add_css_class("pill");
         button.add_css_class("suggested-action");
