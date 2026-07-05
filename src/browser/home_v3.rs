@@ -333,6 +333,22 @@ fn home_v3_chip_section(
     Some(chip_section)
 }
 
+fn home_v3_loading_row(loading_text: &str) -> gtk::Box {
+    let loading_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    loading_row.set_hexpand(true);
+    loading_row.add_css_class("youtube-home-v3-loading");
+
+    let indicator = MaterialLoadingIndicator::with_size(20);
+
+    let label = gtk::Label::new(Some(loading_text));
+    label.set_xalign(0.0);
+    label.set_hexpand(true);
+
+    loading_row.append(indicator.widget());
+    loading_row.append(&label);
+    loading_row
+}
+
 pub(super) fn youtube_home_v3_feed_shell(
     page: &HomeV3Page,
     loading: bool,
@@ -372,19 +388,7 @@ pub(super) fn youtube_home_v3_feed_shell(
     }
 
     if loading {
-        let loading_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        loading_row.set_hexpand(true);
-        loading_row.add_css_class("youtube-home-v3-loading");
-
-        let indicator = MaterialLoadingIndicator::with_size(20);
-
-        let label = gtk::Label::new(Some(copy.loading_text));
-        label.set_xalign(0.0);
-        label.set_hexpand(true);
-
-        loading_row.append(indicator.widget());
-        loading_row.append(&label);
-        home.append(&loading_row);
+        home.append(&home_v3_loading_row(copy.loading_text));
     }
 
     if page.sections.is_empty() {
