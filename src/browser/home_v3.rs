@@ -51,7 +51,7 @@ pub(super) fn home_v3_section_presentation(
     }
 }
 
-pub(super) fn home_v3_item_cover_path(item: &HomeV3Item) -> Option<PathBuf> {
+fn home_v3_item_cover_path(item: &HomeV3Item) -> Option<PathBuf> {
     let path = Path::new(item.cover_path.trim());
     if !item.cover_path.trim().is_empty() && path.is_file() {
         return Some(path.to_path_buf());
@@ -60,13 +60,13 @@ pub(super) fn home_v3_item_cover_path(item: &HomeV3Item) -> Option<PathBuf> {
     cached_cover_for_item(&home_v3_item_to_youtube_item(item))
 }
 
-pub(super) fn home_v3_stable_hash(value: &str) -> u64 {
+fn home_v3_stable_hash(value: &str) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     std::hash::Hash::hash(value, &mut hasher);
     std::hash::Hasher::finish(&hasher)
 }
 
-pub(super) fn home_v3_item_identity(item: &HomeV3Item) -> String {
+fn home_v3_item_identity(item: &HomeV3Item) -> String {
     if !item.video_id.trim().is_empty() {
         return format!("video:{}", item.video_id.trim());
     }
@@ -95,7 +95,7 @@ pub(super) fn home_v3_section_signature(title: &str, items: &[HomeV3Item]) -> St
     format!("{:016x}", home_v3_stable_hash(&raw))
 }
 
-pub(super) fn home_v3_page_signature(page: &HomeV3Page) -> String {
+fn home_v3_page_signature(page: &HomeV3Page) -> String {
     let mut raw = String::new();
     raw.push_str("home-v3|selected=");
     raw.push_str(page.selected_chip_params.trim());
@@ -108,7 +108,7 @@ pub(super) fn home_v3_page_signature(page: &HomeV3Page) -> String {
     format!("youtube-home-v3:{:016x}", home_v3_stable_hash(&raw))
 }
 
-pub(super) fn home_v3_presentation_to_home_section(
+fn home_v3_presentation_to_home_section(
     presentation: HomeV3CardPresentation,
 ) -> HomeSectionPresentation {
     match presentation {
@@ -118,7 +118,7 @@ pub(super) fn home_v3_presentation_to_home_section(
     }
 }
 
-pub(super) fn home_v3_item_to_home_card(
+fn home_v3_item_to_home_card(
     item: &HomeV3Item,
     queue: &[YouTubeItem],
     playback_index: usize,
@@ -163,7 +163,7 @@ pub(super) fn home_v3_item_to_home_card(
     HomeCard::YouTubePlaylist(youtube_item)
 }
 
-pub(super) fn home_v3_section_cards(items: &[HomeV3Item]) -> Vec<HomeCard> {
+fn home_v3_section_cards(items: &[HomeV3Item]) -> Vec<HomeCard> {
     let queue = items
         .iter()
         .filter(|item| !item.video_id.trim().is_empty())
@@ -451,7 +451,7 @@ pub(super) fn youtube_home_v3_feed_shell(
     home
 }
 
-pub(super) fn home_v3_item_to_youtube_item(item: &HomeV3Item) -> YouTubeItem {
+fn home_v3_item_to_youtube_item(item: &HomeV3Item) -> YouTubeItem {
     YouTubeItem {
         result_type: item.result_type.clone(),
         title: item.title.clone(),

@@ -17,7 +17,10 @@ use crate::{
 };
 
 mod home_v3;
-use home_v3::*;
+use home_v3::{
+    home_v3_existing_card_section_content, home_v3_section_presentation, home_v3_section_signature,
+    youtube_home_v3_feed_shell, HomeV3CardPresentation,
+};
 
 use gtk::{gdk, gio::prelude::ListModelExt, glib, prelude::*};
 use std::{
