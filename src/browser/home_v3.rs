@@ -265,6 +265,74 @@ pub(super) fn home_v3_existing_card_section_content(
     clippy::too_many_arguments,
     reason = "Home V3 shell bridges feed data, playback state and renderer dependencies"
 )]
+fn home_v3_chip_label<'a>(chip_title: &'a str, language: AppLanguage) -> &'a str {
+    if !chip_title.trim().is_empty() {
+        return chip_title.trim();
+    }
+
+    match language {
+        AppLanguage::Portuguese => "Filtro",
+        AppLanguage::English => "Filter",
+        AppLanguage::Spanish => "Filtro",
+    }
+}
+
+fn home_v3_chip_section(
+    page: &HomeV3Page,
+    event_tx: &Sender<BrowserEvent>,
+    language: AppLanguage,
+) -> Option<gtk::Box> {
+    if page.chips.is_empty() {
+        return None;
+    }
+
+    let chip_section = gtk::Box::new(gtk::Orientation::Vertical, 8);
+    chip_section.add_css_class("home-section");
+    chip_section.add_css_class("youtube-home-chip-section");
+    chip_section.add_css_class("youtube-home-v3-chips");
+
+    let chips = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    chips.add_css_class("youtube-chip-row");
+    chips.set_margin_top(4);
+    chips.set_margin_start(2);
+    chips.set_margin_end(28);
+    chips.set_margin_bottom(28);
+
+    for chip in &page.chips {
+        let button = gtk::Button::with_label(home_v3_chip_label(&chip.title, language));
+        button.add_css_class("pill");
+        button.add_css_class("youtube-home-v3-chip");
+        if chip.params == page.selected_chip_params {
+            button.add_css_class("suggested-action");
+        }
+
+        let tx = event_tx.clone();
+        let params = chip.params.clone();
+        button.connect_clicked(move |_| {
+            let _ = tx.send(BrowserEvent::LoadYouTubeHome {
+                continuation: String::new(),
+                params: params.clone(),
+            });
+        });
+
+        chips.append(&button);
+    }
+
+    let scroll = gtk::ScrolledWindow::new();
+    scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Never);
+    scroll.set_overlay_scrolling(false);
+    scroll.set_hexpand(true);
+    scroll.set_min_content_height(88);
+    scroll.set_propagate_natural_height(true);
+    scroll.set_child(Some(&chips));
+    scroll.add_css_class("home-carousel-scroll");
+    scroll.add_css_class("youtube-chip-scroll");
+    scroll.add_css_class("youtube-home-v3-chip-scroll");
+
+    chip_section.append(&scroll);
+    Some(chip_section)
+}
+
 pub(super) fn youtube_home_v3_feed_shell(
     page: &HomeV3Page,
     loading: bool,
@@ -299,61 +367,7 @@ pub(super) fn youtube_home_v3_feed_shell(
 
     home.append(&page_header(copy.eyebrow, copy.subtitle));
 
-    if !page.chips.is_empty() {
-        let chip_section = gtk::Box::new(gtk::Orientation::Vertical, 8);
-        chip_section.add_css_class("home-section");
-        chip_section.add_css_class("youtube-home-chip-section");
-        chip_section.add_css_class("youtube-home-v3-chips");
-
-        let chips = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        chips.add_css_class("youtube-chip-row");
-        chips.set_margin_top(4);
-        chips.set_margin_start(2);
-        chips.set_margin_end(28);
-        chips.set_margin_bottom(28);
-
-        for chip in &page.chips {
-            let label = if chip.title.trim().is_empty() {
-                match language {
-                    AppLanguage::Portuguese => "Filtro",
-                    AppLanguage::English => "Filter",
-                    AppLanguage::Spanish => "Filtro",
-                }
-            } else {
-                chip.title.trim()
-            };
-
-            let button = gtk::Button::with_label(label);
-            button.add_css_class("pill");
-            button.add_css_class("youtube-home-v3-chip");
-            if chip.params == page.selected_chip_params {
-                button.add_css_class("suggested-action");
-            }
-
-            let tx = event_tx.clone();
-            let params = chip.params.clone();
-            button.connect_clicked(move |_| {
-                let _ = tx.send(BrowserEvent::LoadYouTubeHome {
-                    continuation: String::new(),
-                    params: params.clone(),
-                });
-            });
-
-            chips.append(&button);
-        }
-
-        let scroll = gtk::ScrolledWindow::new();
-        scroll.set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Never);
-        scroll.set_overlay_scrolling(false);
-        scroll.set_hexpand(true);
-        scroll.set_min_content_height(88);
-        scroll.set_propagate_natural_height(true);
-        scroll.set_child(Some(&chips));
-        scroll.add_css_class("home-carousel-scroll");
-        scroll.add_css_class("youtube-chip-scroll");
-        scroll.add_css_class("youtube-home-v3-chip-scroll");
-
-        chip_section.append(&scroll);
+    if let Some(chip_section) = home_v3_chip_section(page, event_tx, language) {
         home.append(&chip_section);
     }
 
