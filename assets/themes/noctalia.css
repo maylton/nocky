@@ -1,6 +1,10 @@
 /*
  * Noctalia visual theme.
  * The generated ~/.config/nocky/theme.css remains the primary source.
+ *
+ * Keep this theme close to Noctalia Shell: cohesive shell surfaces, crisp
+ * outline-driven depth, restrained accent use and no Material Expressive
+ * container/tint language bleeding into the Noctalia identity.
  */
 
 window.theme-noctalia .now-playing-card,
@@ -8,6 +12,7 @@ window.theme-noctalia .player-bar,
 window.theme-noctalia .library-panel {
   transition: background-color 180ms ease, border-color 180ms ease;
 }
+
 /* material_visualizer_palette_v1
  * Preserve the visualizer original Noctalia accent while its Cairo
  * renderer reads the computed semantic color from CSS.
@@ -15,39 +20,148 @@ window.theme-noctalia .library-panel {
 window.theme-noctalia .audio-visualizer {
   color: @accent_color;
 }
+
+/* noctalia_identity_v5_alignment_v1
+ * Noctalia Shell v5 is a cohesive shell layer, not a Material Expressive app
+ * skin. Keep Nocky's Noctalia mode anchored to shell surfaces and template
+ * palette roles exported from ~/.config/nocky/theme.css.
+ */
+window.theme-noctalia .library-home,
+window.theme-noctalia .expressive-library-home,
+window.theme-noctalia .library-panel,
+window.theme-noctalia .content-card,
+window.theme-noctalia .settings-page,
+window.theme-noctalia .settings-group,
+window.theme-noctalia .now-playing-card,
+window.theme-noctalia .player-bar {
+  background-image: none;
+}
+
+window.theme-noctalia .expressive-library-home,
+window.theme-noctalia .library-panel,
+window.theme-noctalia .content-card {
+  background-color: alpha(@nm_surface, 0.74);
+  border-color: alpha(@nm_outline, 0.34);
+  box-shadow: none;
+}
+
+window.theme-noctalia .home-section,
+window.theme-noctalia .youtube-home-v3-section,
+window.theme-noctalia .settings-group {
+  background-color: alpha(@nm_surface_alt, 0.48);
+  border: 1px solid alpha(@nm_outline, 0.26);
+  box-shadow: none;
+}
+
+window.theme-noctalia .home-card,
+window.theme-noctalia .collection-card,
+window.theme-noctalia .playlist-card,
+window.theme-noctalia .album-card,
+window.theme-noctalia .artist-card,
+window.theme-noctalia .track-card,
+window.theme-noctalia .youtube-home-card,
+window.theme-noctalia .youtube-home-v3-card {
+  background-color: alpha(@nm_surface_alt, 0.56);
+  border-color: alpha(@nm_outline, 0.24);
+  box-shadow: none;
+}
+
+window.theme-noctalia .home-card:hover,
+window.theme-noctalia .collection-card:hover,
+window.theme-noctalia .playlist-card:hover,
+window.theme-noctalia .album-card:hover,
+window.theme-noctalia .artist-card:hover,
+window.theme-noctalia .track-card:hover,
+window.theme-noctalia .youtube-home-card:hover,
+window.theme-noctalia .youtube-home-v3-card:hover {
+  background-color: alpha(@nm_accent, 0.12);
+  border-color: alpha(@nm_accent, 0.38);
+  box-shadow: none;
+}
+
+window.theme-noctalia .suggested-action,
+window.theme-noctalia button.suggested-action,
+window.theme-noctalia .pill.suggested-action,
+window.theme-noctalia .youtube-home-v3-chip.suggested-action {
+  color: @nm_accent_fg;
+  background-color: @nm_accent;
+  background-image: none;
+  border-color: alpha(@nm_accent, 0.70);
+  box-shadow: none;
+}
+
+window.theme-noctalia .pill,
+window.theme-noctalia .youtube-home-v3-chip,
+window.theme-noctalia .youtube-chip {
+  background-image: none;
+  background-color: alpha(@nm_surface_alt, 0.62);
+  border-color: alpha(@nm_outline, 0.32);
+  color: @nm_text;
+  box-shadow: none;
+}
+
+window.theme-noctalia .pill:hover,
+window.theme-noctalia .youtube-home-v3-chip:hover,
+window.theme-noctalia .youtube-chip:hover {
+  background-color: alpha(@nm_accent, 0.14);
+  border-color: alpha(@nm_accent, 0.42);
+  color: @nm_text;
+  box-shadow: none;
+}
+
+window.theme-noctalia .section-title,
+window.theme-noctalia .settings-group-title,
+window.theme-noctalia .footer-title,
+window.theme-noctalia .track-title {
+  color: @nm_text;
+}
+
+window.theme-noctalia .section-subtitle,
+window.theme-noctalia .settings-group-description,
+window.theme-noctalia .footer-artist,
+window.theme-noctalia .track-subtitle,
+window.theme-noctalia .dim-label {
+  color: @nm_text_variant;
+}
+
 /* organized_settings_milestone_v1 */
 
 .theme-noctalia .settings-hero {
   min-height: 92px;
   padding: 16px 18px;
-  border-radius: 26px;
-  background-color: alpha(@accent_color, 0.10);
-  border: 1px solid alpha(@accent_color, 0.22);
+  border-radius: 22px;
+  background-color: alpha(@nm_surface_alt, 0.56);
+  border: 1px solid alpha(@nm_outline, 0.30);
+  box-shadow: none;
 }
 
 .theme-noctalia .settings-hero-icon-container {
   min-width: 56px;
   min-height: 56px;
-  border-radius: 20px;
-  color: @accent_fg_color;
-  background-color: @accent_color;
+  border-radius: 18px;
+  color: @nm_accent_fg;
+  background-color: @nm_accent;
+  background-image: none;
+  box-shadow: none;
 }
 
 .theme-noctalia .settings-version-badge {
   min-height: 28px;
   padding: 0 10px;
   border-radius: 14px;
-  color: @accent_fg_color;
-  background-color: @accent_color;
+  color: @nm_accent_fg;
+  background-color: @nm_accent;
+  background-image: none;
   font-size: 0.72rem;
   font-weight: 760;
+  box-shadow: none;
 }
 
 .theme-noctalia .settings-group {
   padding: 11px;
-  border-radius: 24px;
-  background-color: alpha(@window_fg_color, 0.035);
-  border: 1px solid alpha(@window_fg_color, 0.09);
+  border-radius: 22px;
+  background-color: alpha(@nm_surface_alt, 0.48);
+  border: 1px solid alpha(@nm_outline, 0.26);
 }
 
 .theme-noctalia .settings-group-header {
@@ -58,9 +172,11 @@ window.theme-noctalia .audio-visualizer {
 .theme-noctalia .settings-group-icon-container {
   min-width: 42px;
   min-height: 42px;
-  border-radius: 16px;
-  color: @accent_color;
-  background-color: alpha(@accent_color, 0.12);
+  border-radius: 14px;
+  color: @nm_accent;
+  background-color: alpha(@nm_accent, 0.12);
+  background-image: none;
+  box-shadow: none;
 }
 
 .theme-noctalia .settings-group-title {
@@ -69,7 +185,7 @@ window.theme-noctalia .audio-visualizer {
 }
 
 .theme-noctalia .settings-group-description {
-  opacity: 0.72;
+  opacity: 0.78;
   font-size: 0.78rem;
 }
 
@@ -80,7 +196,7 @@ window.theme-noctalia .audio-visualizer {
 .theme-noctalia .settings-group .settings-surface-row {
   min-height: 66px;
   margin: 2px 0;
-  border-radius: 18px;
+  border-radius: 16px;
 }
 
 /* nocky_footer_full_metadata_visual_density_v7 */
@@ -112,32 +228,32 @@ window.theme-noctalia
 }
 
 /* restore_circular_artist_covers_v2 */
-.collection-card.artist-collection-card .collection-artwork {
+.theme-noctalia .collection-card.artist-collection-card .collection-artwork {
   border-radius: 999px;
 }
 
-.collection-card.artist-collection-card .collection-artwork picture,
-.collection-card.artist-collection-card .collection-artwork image {
+.theme-noctalia .collection-card.artist-collection-card .collection-artwork picture,
+.theme-noctalia .collection-card.artist-collection-card .collection-artwork image {
   border-radius: 999px;
 }
 
 /* lyrics_2_v2 */
-.lyrics-offset-controls {
+.theme-noctalia .lyrics-offset-controls {
   margin-bottom: 12px;
   padding: 8px 12px;
   border-radius: 999px;
-  background-color: alpha(@window_fg_color, 0.05);
-  border: 1px solid alpha(@window_fg_color, 0.10);
+  background-color: alpha(@nm_surface_alt, 0.52);
+  border: 1px solid alpha(@nm_outline, 0.26);
 }
 
-.lyrics-offset-button,
-.lyrics-offset-reset {
+.theme-noctalia .lyrics-offset-button,
+.theme-noctalia .lyrics-offset-reset {
   min-height: 32px;
   padding: 0 12px;
   border-radius: 999px;
 }
 
-.lyrics-offset-label {
+.theme-noctalia .lyrics-offset-label {
   min-width: 54px;
   font-weight: 760;
   font-variant-numeric: tabular-nums;
@@ -145,21 +261,15 @@ window.theme-noctalia
 
 window.theme-noctalia .lyrics-offset-button:hover,
 window.theme-noctalia .lyrics-offset-reset:hover {
-  color: @accent_fg_color;
-  background-color: @accent_color;
+  color: @nm_accent_fg;
+  background-color: @nm_accent;
   background-image: none;
-}
-
-window.theme-material-expressive .lyrics-offset-button:hover,
-window.theme-material-expressive .lyrics-offset-reset:hover {
-  color: @m3_on_primary_container;
-  background-color: @m3_primary_container;
-  background-image: none;
+  box-shadow: none;
 }
 
 /* clickable_lyrics_seek_v3 */
-.lyric-seek-target {
-  border-radius: 18px;
+.theme-noctalia .lyric-seek-target {
+  border-radius: 16px;
   padding: 8px 14px;
   transition:
     background-color 140ms ease,
@@ -167,18 +277,10 @@ window.theme-material-expressive .lyrics-offset-reset:hover {
     transform 140ms ease;
 }
 
-.lyric-seek-target:hover {
-  background-color: alpha(@window_fg_color, 0.07);
+.theme-noctalia .lyric-seek-target:hover {
+  background-color: alpha(@nm_accent, 0.16);
 }
 
-.lyric-seek-target:active {
+.theme-noctalia .lyric-seek-target:active {
   transform: scale(0.985);
-}
-
-window.theme-noctalia .lyric-seek-target:hover {
-  background-color: alpha(@accent_color, 0.16);
-}
-
-window.theme-material-expressive .lyric-seek-target:hover {
-  background-color: alpha(@m3_primary, 0.14);
 }
