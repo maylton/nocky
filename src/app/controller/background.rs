@@ -1213,7 +1213,20 @@ impl AppController {
                         );
                     }
                     Err(error) => {
-                        eprintln!("Could not download offline track '{}': {error}", item.title);
+                        let detail = error
+                            .strip_prefix("__NOCKY_PREMIUM_STREAM_UNAVAILABLE__")
+                            .unwrap_or(&error);
+                        if error.starts_with("__NOCKY_PREMIUM_STREAM_UNAVAILABLE__") {
+                            eprintln!(
+                                "Skipping offline-unavailable YouTube track '{}': {detail}",
+                                item.title
+                            );
+                        } else {
+                            eprintln!(
+                                "Could not download offline track '{}': {detail}",
+                                item.title
+                            );
+                        }
                     }
                 },
                 BackgroundMessage::OfflineCollectionFinished {

@@ -127,7 +127,7 @@ button.youtube-home-v3-card:hover .youtube-home-v3-card-content.material-card-el
   min-width: 300px;
   min-height: 64px;
 }
-/* Fase 1: media artwork fills the card frame. */
+/* Media artwork fills the card frame. */
 .youtube-home-v3-media-artwork,
 .youtube-home-v3-media-picture {
   min-width: 100%;
@@ -151,7 +151,7 @@ button.youtube-home-v3-card:hover .youtube-home-v3-card-content.material-card-el
 .youtube-home-v3-artist-picture {
   border-radius: 999px;
 }
-/* Fase 2: stable density and clipping. */
+/* Stable density and clipping. */
 .youtube-home-v3-row-scroll {
   min-height: 0;
 }
@@ -190,7 +190,7 @@ button.youtube-home-v3-card:hover .youtube-home-v3-card-content.material-card-el
 .home-section-trackrows .youtube-home-v3-card-content {
   padding: 8px;
 }
-/* Fase 3: primary card action. */
+/* Primary card action. */
 .youtube-home-v3-card-overlay {
   border-radius: 20px;
 }
@@ -215,7 +215,7 @@ button.youtube-home-v3-card:active .youtube-home-v3-play-button {
   background-color: alpha(currentColor, 0.22);
 }
 
-/* Fase 4: overflow menu. */
+/* Overflow menu. */
 .youtube-home-v3-overflow-button,
 .collection-card-overflow-button,
 .material-card-overflow-trigger {
@@ -245,7 +245,7 @@ button.youtube-home-v3-card:hover .youtube-home-v3-overflow-button,
   border-radius: 12px;
 }
 
-/* Fase 5: real horizontal TrackRows. */
+/* Horizontal TrackRows layout. */
 .home-section-trackrows .youtube-home-v3-row {
   padding-bottom: 8px;
 }
@@ -283,7 +283,7 @@ button.youtube-home-v3-card:hover .youtube-home-v3-overflow-button,
 .youtube-home-v3-track-action-hint {
   opacity: 0.72;
 }
-/* Fase 6: fixed card geometry.
+/* Fixed card geometry.
  * Window growth expands the carousel viewport only; cards keep stable slots.
  */
 .youtube-home-v3-row {
