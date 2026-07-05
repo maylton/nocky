@@ -261,11 +261,7 @@ pub(super) fn home_v3_existing_card_section_content(
 // Transitional bridge: this is the Home V3 feed shell fed by a HomeV3Page contract.
 // The caller may still create that contract from the legacy YouTubeHomePage
 // source until the native Home V3 helper/parser is wired.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "Home V3 shell bridges feed data, playback state and renderer dependencies"
-)]
-fn home_v3_chip_label<'a>(chip_title: &'a str, language: AppLanguage) -> &'a str {
+fn home_v3_chip_label(chip_title: &str, language: AppLanguage) -> &str {
     if !chip_title.trim().is_empty() {
         return chip_title.trim();
     }
@@ -456,6 +452,10 @@ fn home_v3_continuation_button(
     Some(button)
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Home V3 shell bridges feed data, playback state and renderer dependencies"
+)]
 pub(super) fn youtube_home_v3_feed_shell(
     page: &HomeV3Page,
     loading: bool,

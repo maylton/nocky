@@ -9306,6 +9306,10 @@ fn append_playlist_row_menu_action(
     menu.append(&button);
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Playlist row content needs cover, labels, playback state and localized actions"
+)]
 fn playlist_row_content(
     cover_path: Option<&Path>,
     title_text: &str,
@@ -9597,6 +9601,10 @@ fn youtube_mix_row(
     row
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Playlist row assembly bridges metadata, route identity, state and localization"
+)]
 fn playlist_row(
     cover_path: Option<&Path>,
     name: &str,
