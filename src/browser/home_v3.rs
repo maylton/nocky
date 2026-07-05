@@ -72,10 +72,7 @@ pub(super) fn home_v3_section_presentation(
 ) -> HomeV3CardPresentation {
     let title = section_title.trim().to_lowercase();
 
-    if items.iter().all(|item| {
-        !item.video_id.trim().is_empty() && item.result_type.eq_ignore_ascii_case("song")
-    }) && items.len() >= 6
-    {
+    if home_v3_should_use_track_rows(&title, items) {
         return HomeV3CardPresentation::TrackRows;
     }
 
@@ -88,6 +85,55 @@ pub(super) fn home_v3_section_presentation(
     } else {
         HomeV3CardPresentation::Compact
     }
+}
+
+const HOME_V3_TRACK_ROWS_MIN_ITEMS: usize = 6;
+const HOME_V3_TRACK_ROWS_RATIO_NUMERATOR: usize = 4;
+const HOME_V3_TRACK_ROWS_RATIO_DENOMINATOR: usize = 5;
+
+fn home_v3_is_track_like_item(item: &HomeV3Item) -> bool {
+    if item.video_id.trim().is_empty() {
+        return false;
+    }
+
+    let result_type = item.result_type.trim();
+    result_type.is_empty()
+        || result_type.eq_ignore_ascii_case("song")
+        || result_type.eq_ignore_ascii_case("video")
+}
+
+fn home_v3_is_collection_shelf_title(title: &str) -> bool {
+    let title = title.trim().to_lowercase();
+
+    title.contains("playlist")
+        || title.contains("playlists")
+        || title.contains("mixtape")
+        || title.contains("mixtapes")
+        || title.contains("album")
+        || title.contains("álbum")
+        || title.contains("albums")
+        || title.contains("álbuns")
+        || title.contains("artist")
+        || title.contains("artists")
+        || title.contains("artista")
+        || title.contains("artistas")
+}
+
+fn home_v3_should_use_track_rows(section_title: &str, items: &[HomeV3Item]) -> bool {
+    if items.len() < HOME_V3_TRACK_ROWS_MIN_ITEMS
+        || home_v3_is_collection_shelf_title(section_title)
+    {
+        return false;
+    }
+
+    let track_like_count = items
+        .iter()
+        .filter(|item| home_v3_is_track_like_item(item))
+        .count();
+
+    track_like_count >= HOME_V3_TRACK_ROWS_MIN_ITEMS
+        && track_like_count * HOME_V3_TRACK_ROWS_RATIO_DENOMINATOR
+            >= items.len() * HOME_V3_TRACK_ROWS_RATIO_NUMERATOR
 }
 
 fn home_v3_item_cover_path(item: &HomeV3Item) -> Option<PathBuf> {
@@ -544,5 +590,74 @@ fn home_v3_item_to_youtube_item(item: &HomeV3Item) -> YouTubeItem {
         duration_seconds: item.duration_seconds,
         thumbnail_url: item.thumbnail_url.clone(),
         cover_path: item.cover_path.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn home_v3_test_item(result_type: &str, video_id: &str) -> HomeV3Item {
+        HomeV3Item {
+            result_type: result_type.to_string(),
+            video_id: video_id.to_string(),
+            ..HomeV3Item::default()
+        }
+    }
+
+    #[test]
+    fn song_sections_use_track_rows() {
+        let items = (0..6)
+            .map(|index| home_v3_test_item("song", &format!("song-{index}")))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            home_v3_section_presentation(1, "Escolha a dedo", &items),
+            HomeV3CardPresentation::TrackRows
+        );
+    }
+
+    #[test]
+    fn mostly_track_like_sections_use_track_rows() {
+        let mut items = (0..6)
+            .map(|index| home_v3_test_item("song", &format!("song-{index}")))
+            .collect::<Vec<_>>();
+
+        items.push(home_v3_test_item("video", "video-1"));
+        items.push(home_v3_test_item("playlist", ""));
+
+        assert_eq!(
+            home_v3_section_presentation(1, "Escolha a dedo", &items),
+            HomeV3CardPresentation::TrackRows
+        );
+    }
+
+    #[test]
+    fn collection_shelves_stay_compact() {
+        let items = (0..6)
+            .map(|index| home_v3_test_item("song", &format!("song-{index}")))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            home_v3_section_presentation(1, "Playlists da comunidade em alta", &items),
+            HomeV3CardPresentation::Compact
+        );
+    }
+
+    #[test]
+    fn sparse_track_sections_stay_compact() {
+        let items = vec![
+            home_v3_test_item("song", "song-1"),
+            home_v3_test_item("song", "song-2"),
+            home_v3_test_item("playlist", ""),
+            home_v3_test_item("album", ""),
+            home_v3_test_item("artist", ""),
+            home_v3_test_item("playlist", ""),
+        ];
+
+        assert_eq!(
+            home_v3_section_presentation(1, "Escolha a dedo", &items),
+            HomeV3CardPresentation::Compact
+        );
     }
 }
