@@ -23,39 +23,78 @@ pub fn scan_once(
     local_descriptor: &NockyConnectDeviceDescriptor,
     timeout: Duration,
 ) -> io::Result<Vec<NockyConnectDiscoveredDevice>> {
-    // Use the fixed discovery port while scanning too. Some platforms reply to
-    // the sender port from the incoming broadcast; listening on the same known
-    // port makes desktop scan behavior match receive mode and Android receive.
-    let socket = bind_discovery_socket()?;
+    debug_discovery(
+        "scan",
+        format!(
+            "starting; timeout={timeout:?}; local_device_id={}; local_name={}",
+            local_descriptor.device_id, local_descriptor.device_name
+        ),
+    );
+
+    let socket = bind_discovery_socket("scan")?;
     socket.set_broadcast(true)?;
     socket.set_read_timeout(Some(Duration::from_millis(120)))?;
+    debug_discovery("scan", "broadcast=true; read_timeout=120ms");
 
     let message_id = next_discovery_message_id("desktop-hello");
-    let hello = NockyConnectDiscoveryEnvelope::hello(message_id, local_descriptor.clone());
+    let hello = NockyConnectDiscoveryEnvelope::hello(message_id.clone(), local_descriptor.clone());
     let payload = encode_discovery_envelope(&hello)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     let broadcast = SocketAddrV4::new(Ipv4Addr::BROADCAST, NOCKY_CONNECT_DISCOVERY_PORT);
-    socket.send_to(payload.as_bytes(), broadcast)?;
+    debug_discovery(
+        "scan",
+        format!(
+            "sending hello; message_id={message_id}; bytes={}; target={broadcast}",
+            payload.len()
+        ),
+    );
+    let sent = socket.send_to(payload.as_bytes(), broadcast)?;
+    debug_discovery("scan", format!("sent {sent} bytes"));
 
-    collect_discovery_replies(&socket, local_descriptor, timeout)
+    collect_discovery_replies("scan", &socket, local_descriptor, timeout)
 }
 
 pub fn receive_once(
     local_descriptor: &NockyConnectDeviceDescriptor,
     timeout: Duration,
 ) -> io::Result<Vec<NockyConnectDiscoveredDevice>> {
-    let socket = bind_discovery_socket()?;
+    debug_discovery(
+        "receive",
+        format!(
+            "starting; timeout={timeout:?}; local_device_id={}; local_name={}",
+            local_descriptor.device_id, local_descriptor.device_name
+        ),
+    );
+
+    let socket = bind_discovery_socket("receive")?;
     socket.set_broadcast(true)?;
     socket.set_read_timeout(Some(Duration::from_millis(120)))?;
+    debug_discovery("receive", "broadcast=true; read_timeout=120ms");
 
-    collect_discovery_replies(&socket, local_descriptor, timeout)
+    collect_discovery_replies("receive", &socket, local_descriptor, timeout)
 }
 
-fn bind_discovery_socket() -> io::Result<UdpSocket> {
-    UdpSocket::bind((Ipv4Addr::UNSPECIFIED, NOCKY_CONNECT_DISCOVERY_PORT))
+fn bind_discovery_socket(mode: &str) -> io::Result<UdpSocket> {
+    let address = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, NOCKY_CONNECT_DISCOVERY_PORT);
+    debug_discovery(mode, format!("binding UDP socket on {address}"));
+    match UdpSocket::bind(address) {
+        Ok(socket) => {
+            let local_addr = socket
+                .local_addr()
+                .map(|addr| addr.to_string())
+                .unwrap_or_else(|_| "unknown".to_string());
+            debug_discovery(mode, format!("bound UDP socket on {local_addr}"));
+            Ok(socket)
+        }
+        Err(error) => {
+            debug_discovery(mode, format!("bind failed: {error}"));
+            Err(error)
+        }
+    }
 }
 
 fn collect_discovery_replies(
+    mode: &str,
     socket: &UdpSocket,
     local_descriptor: &NockyConnectDeviceDescriptor,
     timeout: Duration,
@@ -63,42 +102,80 @@ fn collect_discovery_replies(
     let deadline = Instant::now() + timeout;
     let mut devices = HashMap::<String, NockyConnectDiscoveredDevice>::new();
     let mut buffer = vec![0_u8; DISCOVERY_BUFFER_BYTES];
+    debug_discovery(mode, "collect loop started");
 
     while Instant::now() < deadline {
         match socket.recv_from(&mut buffer) {
             Ok((size, address)) => {
+                debug_discovery(mode, format!("packet received; bytes={size}; from={address}"));
                 let payload = match std::str::from_utf8(&buffer[..size]) {
                     Ok(payload) => payload,
-                    Err(_) => continue,
+                    Err(error) => {
+                        debug_discovery(mode, format!("packet ignored: invalid utf-8: {error}"));
+                        continue;
+                    }
                 };
 
-                if let Ok(Some(response)) = discovery_response_for_payload(
+                match discovery_response_for_payload(
                     payload,
                     local_descriptor,
                     next_discovery_message_id("desktop-announce"),
                 ) {
-                    let _ = socket.send_to(response.as_bytes(), address);
+                    Ok(Some(response)) => match socket.send_to(response.as_bytes(), address) {
+                        Ok(sent) => debug_discovery(
+                            mode,
+                            format!("sent announce response; bytes={sent}; target={address}"),
+                        ),
+                        Err(error) => debug_discovery(
+                            mode,
+                            format!("failed to send announce response to {address}: {error}"),
+                        ),
+                    },
+                    Ok(None) => debug_discovery(mode, "no announce response needed for packet"),
+                    Err(error) => debug_discovery(mode, format!("response helper rejected packet: {error}")),
                 }
 
-                let Ok(envelope) = decode_discovery_envelope(payload) else {
-                    continue;
+                let envelope = match decode_discovery_envelope(payload) {
+                    Ok(envelope) => envelope,
+                    Err(error) => {
+                        debug_discovery(mode, format!("packet ignored: decode failed: {error}"));
+                        continue;
+                    }
                 };
+                debug_discovery(
+                    mode,
+                    format!(
+                        "decoded packet; kind={:?}; remote_device_id={}; remote_name={}; remote_platform={:?}",
+                        envelope.kind,
+                        envelope.descriptor.device_id,
+                        envelope.descriptor.device_name,
+                        envelope.descriptor.platform
+                    ),
+                );
+
                 if envelope.descriptor.device_id == local_descriptor.device_id {
+                    debug_discovery(mode, "packet ignored: same local device_id");
                     continue;
                 }
                 if !matches!(
                     envelope.kind,
                     NockyConnectDiscoveryKind::Hello | NockyConnectDiscoveryKind::Announce
                 ) {
+                    debug_discovery(mode, "packet ignored: unsupported discovery kind");
                     continue;
                 }
 
+                let device_id = envelope.descriptor.device_id.clone();
                 devices.insert(
-                    envelope.descriptor.device_id.clone(),
+                    device_id.clone(),
                     NockyConnectDiscoveredDevice {
                         descriptor: envelope.descriptor,
                         address,
                     },
+                );
+                debug_discovery(
+                    mode,
+                    format!("device recorded; device_id={device_id}; total={}", devices.len()),
                 );
             }
             Err(error)
@@ -106,10 +183,14 @@ fn collect_discovery_replies(
                     error.kind(),
                     io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
                 ) => {}
-            Err(error) => return Err(error),
+            Err(error) => {
+                debug_discovery(mode, format!("recv failed: {error}"));
+                return Err(error);
+            }
         }
     }
 
+    debug_discovery(mode, format!("collect loop finished; found={}", devices.len()));
     Ok(devices.into_values().collect())
 }
 
@@ -119,6 +200,10 @@ fn next_discovery_message_id(prefix: &str) -> String {
         .map(|duration| duration.as_millis())
         .unwrap_or_default();
     format!("{prefix}-{millis}")
+}
+
+fn debug_discovery(mode: &str, message: impl AsRef<str>) {
+    eprintln!("[Nocky Connect][desktop][{mode}] {}", message.as_ref());
 }
 
 #[cfg(test)]
