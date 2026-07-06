@@ -55,7 +55,7 @@ pub(crate) fn build_nocky_connect_popover(
     title.add_css_class("title-1");
     title.add_css_class("queue2-page-title");
 
-    let subtitle = gtk::Label::new(Some("Move playback between devices on your network."));
+    let subtitle = gtk::Label::new(Some("Move playback between devices on your local network."));
     subtitle.set_xalign(0.0);
     subtitle.set_wrap(true);
     subtitle.add_css_class("dim-label");
@@ -81,7 +81,7 @@ pub(crate) fn build_nocky_connect_popover(
 
     root.append(&build_section_header("Available devices", "view-list-symbolic"));
 
-    let status = gtk::Label::new(Some("Scanning for up to 6 seconds…"));
+    let status = gtk::Label::new(Some("Scanning for nearby Nocky devices…"));
     status.set_xalign(0.0);
     status.set_wrap(true);
     status.add_css_class("dim-label");
@@ -107,14 +107,7 @@ pub(crate) fn build_nocky_connect_popover(
     refresh_button.set_margin_top(4);
     root.append(&refresh_button);
 
-    let troubleshooting = gtk::Label::new(Some(
-        "No devices? Use the same Wi-Fi and allow UDP 34987 + TCP 35187.",
-    ));
-    troubleshooting.set_xalign(0.0);
-    troubleshooting.set_wrap(true);
-    troubleshooting.add_css_class("dim-label");
-    troubleshooting.add_css_class("queue2-page-source");
-    root.append(&troubleshooting);
+    root.append(&build_troubleshooting_note());
 
     popover.set_child(Some(&root));
 
@@ -227,7 +220,9 @@ fn build_empty_device_state() -> gtk::Box {
     let title = gtk::Label::new(Some("No devices found yet"));
     title.add_css_class("queue2-state-title");
 
-    let detail = gtk::Label::new(Some("Open Nocky Connect on Android and scan again."));
+    let detail = gtk::Label::new(Some(
+        "Open Nocky Connect on Android, keep both devices on the same Wi-Fi, then scan again.",
+    ));
     detail.set_wrap(true);
     detail.add_css_class("dim-label");
 
@@ -235,6 +230,29 @@ fn build_empty_device_state() -> gtk::Box {
     empty.append(&title);
     empty.append(&detail);
     empty
+}
+
+fn build_troubleshooting_note() -> gtk::Box {
+    let note = gtk::Box::new(gtk::Orientation::Vertical, 3);
+    note.set_margin_top(2);
+    note.set_margin_start(8);
+    note.set_margin_end(8);
+
+    let title = gtk::Label::new(Some("Troubleshooting"));
+    title.set_xalign(0.0);
+    title.add_css_class("queue2-section-title");
+
+    let detail = gtk::Label::new(Some(
+        "No devices? Check same Wi-Fi, then allow UDP 34987 for discovery and TCP 35187 for handoff.",
+    ));
+    detail.set_xalign(0.0);
+    detail.set_wrap(true);
+    detail.add_css_class("dim-label");
+    detail.add_css_class("queue2-page-source");
+
+    note.append(&title);
+    note.append(&detail);
+    note
 }
 
 fn build_device_button(
