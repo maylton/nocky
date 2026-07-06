@@ -7,9 +7,9 @@ use super::AppController;
 use crate::{
     app::state::PlaybackSource,
     connect::{
-        default_connect_config_dir, mark_desktop_handoff_receiver_stopped, resolve_handoff_target,
-        scan_once, send_handoff_offer_http, send_handoff_snapshot_http,
-        try_start_desktop_handoff_receiver, DesktopPlaybackState, NockyConnectDeviceDescriptor,
+        default_connect_config_dir, resolve_handoff_target, scan_once, send_handoff_offer_http,
+        send_handoff_snapshot_http, try_start_desktop_handoff_receiver_loop,
+        DesktopHandoffReceiverEvent, DesktopPlaybackState, NockyConnectDeviceDescriptor,
         NockyConnectDeviceIdentity, NockyConnectDeviceList, NockyConnectDiscoveredDevice,
         NockyConnectGateway, NockyConnectHandoffEndpoint, NockyConnectHandoffEnvelope,
         NockyConnectHandoffKind, NockyConnectHandoffOffer, NockyConnectHandoffPayload,
@@ -55,9 +55,13 @@ impl AppController {
         app.add_action(&connect);
     }
 
+    pub(crate) fn start_nocky_connect_services(self: &Rc<Self>) {
+        start_desktop_handoff_receive_loop(Rc::downgrade(self));
+    }
+
     pub(crate) fn open_nocky_connect_surface(self: &Rc<Self>) {
         self.persist_playback_session_now();
-        start_desktop_handoff_receive(Rc::downgrade(self));
+        self.start_nocky_connect_services();
 
         let local_descriptor = build_local_desktop_descriptor().ok();
         let device_list = Rc::new(RefCell::new(load_desktop_device_cache()));
@@ -423,7 +427,7 @@ fn start_desktop_handoff_send(
     });
 }
 
-fn start_desktop_handoff_receive(weak: std::rc::Weak<AppController>) {
+fn start_desktop_handoff_receive_loop(weak: std::rc::Weak<AppController>) {
     let local_device_id = match build_local_desktop_descriptor() {
         Ok(descriptor) => descriptor.device_id,
         Err(error) => {
@@ -433,7 +437,7 @@ fn start_desktop_handoff_receive(weak: std::rc::Weak<AppController>) {
             return;
         }
     };
-    let Some(service) = try_start_desktop_handoff_receiver(
+    let Some(service) = try_start_desktop_handoff_receiver_loop(
         local_device_id,
         NOCKY_CONNECT_HANDOFF_RECEIVE_TIMEOUT,
     ) else {
@@ -442,19 +446,18 @@ fn start_desktop_handoff_receive(weak: std::rc::Weak<AppController>) {
     let receiver = service.receiver;
 
     glib::timeout_add_local(Duration::from_millis(150), move || match receiver.try_recv() {
-        Ok(Ok(snapshot_json)) => {
-            mark_desktop_handoff_receiver_stopped();
-            if let Some(controller) = weak.upgrade() {
-                match controller.apply_received_handoff_snapshot(&snapshot_json) {
-                    Ok(detail) => controller.show_toast(&format!("Nocky Connect: {detail}")),
-                    Err(error) => controller
-                        .show_toast(&format!("Nocky Connect: could not restore snapshot: {error}")),
-                }
+        Ok(DesktopHandoffReceiverEvent::SnapshotReceived(snapshot_json)) => {
+            let Some(controller) = weak.upgrade() else {
+                return glib::ControlFlow::Break;
+            };
+            match controller.apply_received_handoff_snapshot(&snapshot_json) {
+                Ok(detail) => controller.show_toast(&format!("Nocky Connect: {detail}")),
+                Err(error) => controller
+                    .show_toast(&format!("Nocky Connect: could not restore snapshot: {error}")),
             }
-            glib::ControlFlow::Break
+            glib::ControlFlow::Continue
         }
-        Ok(Err(error)) => {
-            mark_desktop_handoff_receiver_stopped();
+        Ok(DesktopHandoffReceiverEvent::Stopped(error)) => {
             if let Some(controller) = weak.upgrade() {
                 controller.show_toast(&format!("Nocky Connect: receiver stopped: {error}"));
             }
@@ -462,7 +465,6 @@ fn start_desktop_handoff_receive(weak: std::rc::Weak<AppController>) {
         }
         Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
         Err(mpsc::TryRecvError::Disconnected) => {
-            mark_desktop_handoff_receiver_stopped();
             if let Some(controller) = weak.upgrade() {
                 controller.show_toast("Nocky Connect: receiver stopped unexpectedly");
             }
