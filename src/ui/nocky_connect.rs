@@ -4,10 +4,13 @@
 //! handoff orchestration remain in the application controller.
 
 use crate::connect::{
-    NockyConnectDeviceDescriptor, NockyConnectDeviceList, NockyConnectDevicePlatform,
+    NockyConnectDeviceDescriptor, NockyConnectDeviceList, NockyConnectDeviceListEntry,
+    NockyConnectDevicePlatform,
 };
 use gtk::prelude::*;
-use std::{net::SocketAddr, rc::Rc};
+use std::{net::SocketAddr, rc::Rc, time::{Duration, Instant}};
+
+const DEVICE_AVAILABLE_NOW_WINDOW: Duration = Duration::from_secs(30);
 
 pub(crate) type NockyConnectDeviceSelected =
     Rc<dyn Fn(NockyConnectDeviceDescriptor, SocketAddr) + 'static>;
@@ -135,12 +138,9 @@ pub(crate) fn render_nocky_connect_devices(
         return;
     }
 
+    let now = Instant::now();
     for entry in entries {
-        list.append(&build_device_button(
-            &entry.descriptor,
-            entry.address,
-            on_selected.clone(),
-        ));
+        list.append(&build_device_button(entry, now, on_selected.clone()));
     }
 }
 
@@ -234,10 +234,11 @@ fn build_empty_device_state() -> gtk::Box {
 }
 
 fn build_device_button(
-    descriptor: &NockyConnectDeviceDescriptor,
-    address: SocketAddr,
+    entry: &NockyConnectDeviceListEntry,
+    now: Instant,
     on_selected: Option<NockyConnectDeviceSelected>,
 ) -> gtk::Button {
+    let descriptor = &entry.descriptor;
     let button = gtk::Button::new();
     button.add_css_class("flat");
     button.add_css_class("queue2-row");
@@ -261,10 +262,7 @@ fn build_device_button(
     title.set_xalign(0.0);
     title.add_css_class("heading");
 
-    let subtitle = gtk::Label::new(Some(&format!(
-        "{} · click to move playback",
-        platform_label(descriptor.platform),
-    )));
+    let subtitle = gtk::Label::new(Some(&device_subtitle(entry, now)));
     subtitle.set_xalign(0.0);
     subtitle.set_wrap(true);
     subtitle.add_css_class("dim-label");
@@ -282,12 +280,44 @@ fn build_device_button(
 
     if let Some(on_selected) = on_selected {
         let descriptor = descriptor.clone();
+        let address = entry.address;
         button.connect_clicked(move |_| {
             on_selected(descriptor.clone(), address);
         });
     }
 
     button
+}
+
+fn device_subtitle(entry: &NockyConnectDeviceListEntry, now: Instant) -> String {
+    let platform = platform_label(entry.descriptor.platform);
+    let age = now
+        .checked_duration_since(entry.last_seen)
+        .unwrap_or_default();
+
+    if age <= DEVICE_AVAILABLE_NOW_WINDOW {
+        format!("{platform} · available now · click to move playback")
+    } else {
+        format!(
+            "{platform} · recently seen · last seen {} ago · click to try moving playback",
+            relative_age(age)
+        )
+    }
+}
+
+fn relative_age(age: Duration) -> String {
+    let seconds = age.as_secs();
+    if seconds < 60 {
+        return format!("{seconds}s");
+    }
+
+    let minutes = seconds / 60;
+    if minutes < 60 {
+        return format!("{minutes}m");
+    }
+
+    let hours = minutes / 60;
+    format!("{hours}h")
 }
 
 fn platform_label(platform: NockyConnectDevicePlatform) -> &'static str {
