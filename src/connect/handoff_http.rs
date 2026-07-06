@@ -258,8 +258,8 @@ fn normalized_path(path: &str) -> String {
 mod tests {
     use super::*;
     use crate::connect::{
-        NockyConnectHandoffAccept, NockyConnectHandoffOffer, NockyConnectHandoffPayload,
-        NockyConnectRestorePolicy, NockyConnectSnapshotSummary, NockyConnectSource,
+        NockyConnectHandoffAccept, NockyConnectHandoffOffer, NockyConnectRestorePolicy,
+        NockyConnectSnapshotSummary, NockyConnectSource,
     };
 
     #[test]
