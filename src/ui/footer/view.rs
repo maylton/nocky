@@ -46,6 +46,7 @@ pub(crate) struct FooterViewParts {
     pub(crate) shuffle: gtk::ToggleButton,
 
     pub(crate) right_controls: gtk::Box,
+    pub(crate) connect_button: gtk::Button,
     pub(crate) lyrics_button: gtk::ToggleButton,
     pub(crate) mute_icon: gtk::Image,
     pub(crate) mute_button: gtk::Button,
@@ -90,6 +91,7 @@ pub(crate) fn build_footer_view(
 
     let FooterUtilityParts {
         root: right_controls,
+        connect_button,
         lyrics_button,
         mute_icon,
         mute_button,
@@ -128,6 +130,7 @@ pub(crate) fn build_footer_view(
         repeat,
         shuffle,
         right_controls,
+        connect_button,
         lyrics_button,
         mute_icon,
         mute_button,
