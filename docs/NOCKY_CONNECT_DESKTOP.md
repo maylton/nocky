@@ -13,6 +13,7 @@ This PR adds a desktop-side foundation only:
 - export mapping from the existing `PlaybackQueue` model to `PlaybackSessionSnapshot`;
 - restore mapping from a received `PlaybackSessionSnapshot` back to a paused `PlaybackQueue` plan;
 - development CLI inspection for manually exchanged snapshot JSON files;
+- development CLI export from the persisted desktop queue/session store;
 - development CLI staged restore for importing a snapshot into the desktop queue/session store;
 - device descriptor model for future LAN discovery and capability negotiation;
 - local private snapshot file store;
@@ -68,6 +69,18 @@ The restore command validates the snapshot, rebuilds the desktop `PlaybackQueue`
 
 The command intentionally stages `was_playing = false`, so opening Nocky after import must not unexpectedly start playback.
 
+## Manual desktop snapshot export
+
+The desktop app binary can also export the current persisted desktop queue/session as a portable Nocky Connect snapshot:
+
+```bash
+cargo run -- --nocky-connect-export ./nocky-desktop-snapshot.json
+```
+
+The export command reads the configured startup source, loads the source-specific Queue 2.0 state, loads the source-specific playback session when present, maps the state into a `PlaybackSessionSnapshot`, writes the JSON to the requested path and exits.
+
+For the most accurate manual test, close Nocky normally or let it checkpoint playback before exporting, because this command reads the persisted queue/session store rather than a live running controller instance.
+
 ## Device identity and descriptor
 
 `NockyConnectDeviceIdentity` creates and reuses a random app-local device ID stored under `nocky-connect/device-id` in the provided base directory. `default_connect_config_dir()` resolves to `$XDG_CONFIG_HOME/nocky`, `~/.config/nocky`, or a temporary fallback. The ID is intentionally not based on hardware identifiers.
@@ -110,6 +123,6 @@ Restoring a snapshot is conservative:
 
 1. Validate an Android-exported JSON snapshot with `--nocky-connect-inspect`.
 2. Stage an Android-exported JSON snapshot with `--nocky-connect-restore`, then start Nocky normally and confirm the paused restore.
-3. Replace the staged CLI import with an in-app development action.
-4. Verify Android ⇄ Desktop JSON compatibility with manually exchanged snapshots.
+3. Export a desktop snapshot with `--nocky-connect-export` and import it through the Android debug import activity.
+4. Replace staged CLI/debug imports with in-app development actions.
 5. Add same-network discovery and explicit accept/deny confirmation after manual JSON round trips work both ways.
