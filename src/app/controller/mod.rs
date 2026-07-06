@@ -4,6 +4,7 @@ mod actions;
 mod appearance;
 mod background;
 mod callbacks;
+mod connect;
 mod construction;
 mod favorites;
 mod feedback;
