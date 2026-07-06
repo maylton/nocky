@@ -35,7 +35,7 @@ use std::{
 };
 
 const NOCKY_CONNECT_SCAN_TIMEOUT: Duration = Duration::from_secs(6);
-const NOCKY_CONNECT_DEVICE_STALE_AFTER: Duration = Duration::from_secs(30);
+const NOCKY_CONNECT_DEVICE_STALE_AFTER: Duration = Duration::from_secs(300);
 const NOCKY_CONNECT_HANDOFF_HTTP_TIMEOUT: Duration = Duration::from_secs(5);
 const NOCKY_CONNECT_HANDOFF_RECEIVE_TIMEOUT: Duration = Duration::from_secs(45);
 
@@ -74,8 +74,8 @@ impl AppController {
         let cached_count = device_list.borrow().len();
         if cached_count > 0 {
             surface.status.set_text(match cached_count {
-                1 => "LAN discovery • 1 cached device • refreshing…",
-                _ => "LAN discovery • cached devices • refreshing…",
+                1 => "Loaded 1 cached device • refreshing…",
+                _ => "Loaded cached devices • refreshing…",
             });
         }
         let anchor = self.nocky_connect_popover_anchor();
@@ -461,7 +461,12 @@ fn start_desktop_device_scan(
     on_selected: NockyConnectDeviceSelected,
 ) {
     refresh_button.set_sensitive(false);
-    status_label.set_text("Scanning for up to 6 seconds…");
+    let cached_count = device_list.borrow().len();
+    status_label.set_text(match cached_count {
+        0 => "Scanning for up to 6 seconds…",
+        1 => "Refreshing 1 cached device…",
+        _ => "Refreshing cached devices…",
+    });
 
     let (sender, receiver) = mpsc::channel::<Result<Vec<NockyConnectDiscoveredDevice>, String>>();
     thread::spawn(move || {
@@ -471,6 +476,7 @@ fn start_desktop_device_scan(
     glib::timeout_add_local(Duration::from_millis(150), move || match receiver.try_recv() {
         Ok(Ok(devices)) => {
             let now = Instant::now();
+            let discovered_count = devices.len();
             {
                 let mut list = device_list.borrow_mut();
                 list.update_with_discovered(devices, now);
@@ -483,9 +489,11 @@ fn start_desktop_device_scan(
                 Some(on_selected.clone()),
             );
             let count = device_list.borrow().len();
-            status_label.set_text(match count {
-                0 => "No devices found yet. Try again while the Android app is open.",
-                1 => "LAN discovery • 1 device available",
+            status_label.set_text(match (count, discovered_count) {
+                (0, _) => "No devices found yet. Try again while the Android app is open.",
+                (1, 0) => "LAN discovery • 1 cached device available",
+                (1, _) => "LAN discovery • 1 device available",
+                (_, 0) => "LAN discovery • cached devices available",
                 _ => "LAN discovery • multiple devices available",
             });
             refresh_button.set_sensitive(true);
@@ -514,6 +522,8 @@ fn load_desktop_device_cache() -> NockyConnectDeviceList {
     match desktop_device_cache().lock() {
         Ok(mut cache) => {
             cache.remove_stale(now, NOCKY_CONNECT_DEVICE_STALE_AFTER);
+            let count = cache.len();
+            eprintln!("Nocky Connect: loaded {count} cached desktop device(s)");
             cache.clone()
         }
         Err(_) => NockyConnectDeviceList::new(),
@@ -523,6 +533,10 @@ fn load_desktop_device_cache() -> NockyConnectDeviceList {
 fn save_desktop_device_cache(list: &NockyConnectDeviceList) {
     if let Ok(mut cache) = desktop_device_cache().lock() {
         *cache = list.clone();
+        eprintln!(
+            "Nocky Connect: saved {} cached desktop device(s)",
+            cache.len()
+        );
     }
 }
 
