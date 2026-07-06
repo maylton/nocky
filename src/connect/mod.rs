@@ -6,6 +6,7 @@
 
 pub mod device_descriptor;
 pub mod device_identity;
+pub mod device_list;
 pub mod discovery;
 pub mod discovery_udp;
 pub mod file_store;
@@ -15,6 +16,7 @@ pub mod protocol;
 
 pub use device_descriptor::*;
 pub use device_identity::*;
+pub use device_list::*;
 pub use discovery::*;
 pub use discovery_udp::*;
 pub use file_store::*;
