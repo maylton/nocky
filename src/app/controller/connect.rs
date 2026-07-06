@@ -6,7 +6,7 @@
 use super::AppController;
 use crate::{
     connect::{
-        default_connect_config_dir, scan_once, NockyConnectDeviceDescriptor,
+        default_connect_config_dir, resolve_handoff_target, scan_once, NockyConnectDeviceDescriptor,
         NockyConnectDeviceIdentity, NockyConnectDeviceList, NockyConnectDiscoveredDevice,
         NockyConnectHandoffEnvelope, NockyConnectHandoffOffer, NockyConnectHandoffPayload,
         NockyConnectRestorePolicy, NockyConnectSnapshotSummary, NockyConnectSource,
@@ -110,7 +110,7 @@ impl AppController {
     ) -> NockyConnectDeviceSelected {
         let weak = Rc::downgrade(self);
         let popover = popover.clone();
-        Rc::new(move |descriptor, _address| {
+        Rc::new(move |descriptor, address| {
             let Some(controller) = weak.upgrade() else {
                 return;
             };
@@ -121,8 +121,12 @@ impl AppController {
                     let encoded_bytes = serde_json::to_string(&envelope)
                         .map(|payload| payload.len())
                         .unwrap_or_default();
+                    let target = resolve_handoff_target(&descriptor, address)
+                        .ok()
+                        .and_then(|target| target.local_http_url())
+                        .unwrap_or_else(|| "receiver endpoint pending".to_string());
                     controller.show_toast(&format!(
-                        "Handoff offer ready for {} · {summary} · {encoded_bytes} bytes",
+                        "Handoff offer ready for {} · {summary} · {encoded_bytes} bytes · {target}",
                         descriptor.device_name
                     ));
                     popover.popdown();
