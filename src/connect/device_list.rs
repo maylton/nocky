@@ -79,17 +79,23 @@ impl NockyConnectDeviceList {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::connect::NockyConnectDevicePlatform;
+    use crate::connect::{
+        NockyConnectDevicePlatform, NockyConnectFeature, DEVICE_DESCRIPTOR_SCHEMA,
+        NOCKY_CONNECT_PROTOCOL_VERSION,
+    };
 
     fn descriptor(device_id: &str, device_name: &str) -> NockyConnectDeviceDescriptor {
-        NockyConnectDeviceDescriptor::new(
-            device_id.to_string(),
-            device_name.to_string(),
-            NockyConnectDevicePlatform::Android,
-            "Nocky Android".to_string(),
-            None,
-            vec!["snapshot_export".to_string()],
-        )
+        NockyConnectDeviceDescriptor {
+            schema: DEVICE_DESCRIPTOR_SCHEMA.to_string(),
+            schema_version: NOCKY_CONNECT_PROTOCOL_VERSION,
+            device_id: device_id.to_string(),
+            device_name: device_name.to_string(),
+            platform: NockyConnectDevicePlatform::Android,
+            app_name: "Nocky Android".to_string(),
+            app_version: None,
+            protocol_version: NOCKY_CONNECT_PROTOCOL_VERSION,
+            features: vec![NockyConnectFeature::SnapshotExport],
+        }
     }
 
     fn discovered(device_id: &str, device_name: &str, port: u16) -> NockyConnectDiscoveredDevice {
@@ -105,7 +111,10 @@ mod tests {
         let mut list = NockyConnectDeviceList::new();
 
         list.upsert(discovered("android-1", "Samsung", 34987), now);
-        list.upsert(discovered("android-1", "Samsung Renamed", 40000), now + Duration::from_secs(2));
+        list.upsert(
+            discovered("android-1", "Samsung Renamed", 40000),
+            now + Duration::from_secs(2),
+        );
 
         assert_eq!(list.len(), 1);
         let entry = list.get("android-1").expect("device should exist");
