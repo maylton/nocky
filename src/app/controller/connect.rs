@@ -6,10 +6,11 @@
 use super::AppController;
 use crate::{
     connect::{
-        default_connect_config_dir, resolve_handoff_target, scan_once, NockyConnectDeviceDescriptor,
-        NockyConnectDeviceIdentity, NockyConnectDeviceList, NockyConnectDiscoveredDevice,
-        NockyConnectHandoffEnvelope, NockyConnectHandoffOffer, NockyConnectHandoffPayload,
-        NockyConnectRestorePolicy, NockyConnectSnapshotSummary, NockyConnectSource,
+        default_connect_config_dir, resolve_handoff_target, scan_once, send_handoff_offer_http,
+        NockyConnectDeviceDescriptor, NockyConnectDeviceIdentity, NockyConnectDeviceList,
+        NockyConnectDiscoveredDevice, NockyConnectHandoffEnvelope, NockyConnectHandoffKind,
+        NockyConnectHandoffOffer, NockyConnectHandoffPayload, NockyConnectRestorePolicy,
+        NockyConnectSnapshotSummary, NockyConnectSource,
     },
     playback::queue::QueueSourceKind,
     ui::nocky_connect::{
@@ -28,6 +29,7 @@ use std::{
 
 const NOCKY_CONNECT_SCAN_TIMEOUT: Duration = Duration::from_secs(6);
 const NOCKY_CONNECT_DEVICE_STALE_AFTER: Duration = Duration::from_secs(30);
+const NOCKY_CONNECT_HANDOFF_HTTP_TIMEOUT: Duration = Duration::from_secs(5);
 
 impl AppController {
     pub(crate) fn install_nocky_connect_action(self: &Rc<Self>, app: &adw::Application) {
@@ -115,26 +117,44 @@ impl AppController {
                 return;
             };
 
-            match controller.build_handoff_offer(&descriptor) {
-                Ok(envelope) => {
-                    let summary = handoff_offer_summary(&envelope);
-                    let encoded_bytes = serde_json::to_string(&envelope)
-                        .map(|payload| payload.len())
-                        .unwrap_or_default();
-                    let target = resolve_handoff_target(&descriptor, address)
-                        .ok()
-                        .and_then(|target| target.local_http_url())
-                        .unwrap_or_else(|| "receiver endpoint pending".to_string());
+            let envelope = match controller.build_handoff_offer(&descriptor) {
+                Ok(envelope) => envelope,
+                Err(error) => {
+                    controller.show_toast(&format!("Could not prepare handoff offer: {error}"));
+                    return;
+                }
+            };
+            let summary = handoff_offer_summary(&envelope);
+            let encoded_bytes = serde_json::to_string(&envelope)
+                .map(|payload| payload.len())
+                .unwrap_or_default();
+            let target = match resolve_handoff_target(&descriptor, address) {
+                Ok(target) => target,
+                Err(_) => {
                     controller.show_toast(&format!(
-                        "Handoff offer ready for {} · {summary} · {encoded_bytes} bytes · {target}",
+                        "Handoff offer ready for {} · {summary} · {encoded_bytes} bytes · receiver endpoint pending",
                         descriptor.device_name
                     ));
                     popover.popdown();
+                    return;
                 }
-                Err(error) => {
-                    controller.show_toast(&format!("Could not prepare handoff offer: {error}"));
-                }
-            }
+            };
+            let target_url = target
+                .local_http_url()
+                .unwrap_or_else(|| "local_http endpoint".to_string());
+
+            controller.show_toast(&format!(
+                "Sending handoff offer to {} · {summary} · {encoded_bytes} bytes",
+                descriptor.device_name
+            ));
+            popover.popdown();
+            start_desktop_handoff_send(
+                weak.clone(),
+                descriptor.device_name.clone(),
+                target_url,
+                target,
+                envelope,
+            );
         })
     }
 
@@ -159,8 +179,8 @@ impl AppController {
             let player_duration = self.player.duration_us();
             (player_duration > 0).then_some(player_duration as u64 / 1_000)
         });
-        let current_artist = (!current.media.artist.trim().is_empty())
-            .then(|| current.media.artist.clone());
+        let current_artist =
+            (!current.media.artist.trim().is_empty()).then(|| current.media.artist.clone());
         let created_at_epoch_ms = unix_millis();
         let offer_id = format!("desktop-offer-{created_at_epoch_ms}");
 
@@ -185,6 +205,52 @@ impl AppController {
             },
         ))
     }
+}
+
+fn start_desktop_handoff_send(
+    weak: std::rc::Weak<AppController>,
+    device_name: String,
+    target_url: String,
+    target: crate::connect::NockyConnectHandoffTarget,
+    envelope: NockyConnectHandoffEnvelope,
+) {
+    let (sender, receiver) = mpsc::channel::<Result<NockyConnectHandoffEnvelope, String>>();
+    thread::spawn(move || {
+        let result = send_handoff_offer_http(&target, &envelope, NOCKY_CONNECT_HANDOFF_HTTP_TIMEOUT)
+            .map_err(|error| error.to_string());
+        let _ = sender.send(result);
+    });
+
+    glib::timeout_add_local(Duration::from_millis(120), move || match receiver.try_recv() {
+        Ok(Ok(response)) => {
+            if let Some(controller) = weak.upgrade() {
+                let detail = match response.kind {
+                    NockyConnectHandoffKind::Accept => "accepted",
+                    NockyConnectHandoffKind::Decline => "declined",
+                    _ => "responded",
+                };
+                controller.show_toast(&format!(
+                    "Nocky Connect: {device_name} {detail} handoff · {target_url}"
+                ));
+            }
+            glib::ControlFlow::Break
+        }
+        Ok(Err(error)) => {
+            if let Some(controller) = weak.upgrade() {
+                controller.show_toast(&format!(
+                    "Nocky Connect: could not send offer to {device_name}: {error}"
+                ));
+            }
+            glib::ControlFlow::Break
+        }
+        Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+        Err(mpsc::TryRecvError::Disconnected) => {
+            if let Some(controller) = weak.upgrade() {
+                controller.show_toast("Nocky Connect: handoff sender stopped unexpectedly");
+            }
+            glib::ControlFlow::Break
+        }
+    });
 }
 
 fn start_desktop_device_scan(
