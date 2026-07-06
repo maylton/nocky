@@ -95,6 +95,7 @@ mod tests {
             app_version: None,
             protocol_version: NOCKY_CONNECT_PROTOCOL_VERSION,
             features: vec![NockyConnectFeature::SnapshotExport],
+            handoff_endpoint: None,
         }
     }
 
