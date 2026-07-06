@@ -47,7 +47,8 @@ impl AppController {
         let surface = build_nocky_connect_popover(local_descriptor.as_ref());
 
         render_nocky_connect_devices(&surface.device_list, &device_list.borrow());
-        surface.popover.set_parent(&self.footer_right_controls);
+        let anchor = self.nocky_connect_popover_anchor();
+        surface.popover.set_parent(&anchor);
         {
             let popover = surface.popover.clone();
             surface.popover.connect_closed(move |_| {
@@ -76,6 +77,11 @@ impl AppController {
             surface.device_list,
             device_list,
         );
+    }
+
+    fn nocky_connect_popover_anchor(&self) -> gtk::Widget {
+        let root: gtk::Widget = self.footer_right_controls.clone().upcast();
+        find_descendant_with_css_class(&root, "footer-connect-button").unwrap_or(root)
     }
 }
 
@@ -138,6 +144,23 @@ fn build_local_desktop_descriptor() -> Result<NockyConnectDeviceDescriptor, Stri
         desktop_device_name(),
         Some(env!("CARGO_PKG_VERSION").to_string()),
     ))
+}
+
+fn find_descendant_with_css_class(root: &gtk::Widget, class_name: &str) -> Option<gtk::Widget> {
+    if root.has_css_class(class_name) {
+        return Some(root.clone());
+    }
+
+    let mut child = root.first_child();
+    while let Some(widget) = child {
+        let next = widget.next_sibling();
+        if let Some(found) = find_descendant_with_css_class(&widget, class_name) {
+            return Some(found);
+        }
+        child = next;
+    }
+
+    None
 }
 
 fn desktop_device_name() -> String {
