@@ -118,17 +118,38 @@ pub fn decode_discovery_envelope(
     Ok(envelope)
 }
 
+pub fn discovery_response_for_payload(
+    payload: &str,
+    local_descriptor: &NockyConnectDeviceDescriptor,
+    response_message_id: impl Into<String>,
+) -> Result<Option<String>, NockyConnectDiscoveryError> {
+    let envelope = decode_discovery_envelope(payload)?;
+    if envelope.kind != NockyConnectDiscoveryKind::Hello {
+        return Ok(None);
+    }
+    if envelope.descriptor.device_id == local_descriptor.device_id {
+        return Ok(None);
+    }
+
+    let response = NockyConnectDiscoveryEnvelope::announce(response_message_id, local_descriptor.clone());
+    encode_discovery_envelope(&response).map(Some)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn discovery_hello_round_trips() {
-        let descriptor = NockyConnectDeviceDescriptor::linux_desktop(
-            "desktop-device",
+    fn desktop_descriptor(device_id: &str) -> NockyConnectDeviceDescriptor {
+        NockyConnectDeviceDescriptor::linux_desktop(
+            device_id,
             "Linux desktop",
             Some("dev".to_string()),
-        );
+        )
+    }
+
+    #[test]
+    fn discovery_hello_round_trips() {
+        let descriptor = desktop_descriptor("desktop-device");
         let envelope = NockyConnectDiscoveryEnvelope::hello("message-1", descriptor);
 
         let payload = encode_discovery_envelope(&envelope).expect("encode discovery envelope");
@@ -140,6 +161,52 @@ mod tests {
         assert_eq!(decoded.message_id, "message-1");
         assert_eq!(decoded.kind, NockyConnectDiscoveryKind::Hello);
         assert_eq!(decoded.descriptor.device_id, "desktop-device");
+    }
+
+    #[test]
+    fn replies_to_remote_hello_with_announce() {
+        let remote_descriptor = desktop_descriptor("remote-device");
+        let local_descriptor = desktop_descriptor("local-device");
+        let hello = NockyConnectDiscoveryEnvelope::hello("hello-1", remote_descriptor);
+        let payload = encode_discovery_envelope(&hello).expect("encode hello");
+
+        let response_payload = discovery_response_for_payload(
+            &payload,
+            &local_descriptor,
+            "announce-1",
+        )
+        .expect("response helper should parse hello")
+        .expect("remote hello should receive response");
+        let response = decode_discovery_envelope(&response_payload).expect("decode response");
+
+        assert_eq!(response.kind, NockyConnectDiscoveryKind::Announce);
+        assert_eq!(response.message_id, "announce-1");
+        assert_eq!(response.descriptor.device_id, "local-device");
+    }
+
+    #[test]
+    fn ignores_own_hello() {
+        let local_descriptor = desktop_descriptor("local-device");
+        let hello = NockyConnectDiscoveryEnvelope::hello("hello-1", local_descriptor.clone());
+        let payload = encode_discovery_envelope(&hello).expect("encode hello");
+
+        let response = discovery_response_for_payload(&payload, &local_descriptor, "announce-1")
+            .expect("response helper should parse hello");
+
+        assert!(response.is_none());
+    }
+
+    #[test]
+    fn ignores_announce_packets() {
+        let local_descriptor = desktop_descriptor("local-device");
+        let remote_descriptor = desktop_descriptor("remote-device");
+        let announce = NockyConnectDiscoveryEnvelope::announce("announce-remote", remote_descriptor);
+        let payload = encode_discovery_envelope(&announce).expect("encode announce");
+
+        let response = discovery_response_for_payload(&payload, &local_descriptor, "announce-1")
+            .expect("response helper should parse announce");
+
+        assert!(response.is_none());
     }
 
     #[test]
