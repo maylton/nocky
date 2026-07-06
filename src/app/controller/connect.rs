@@ -10,8 +10,13 @@ use crate::connect::{
     NockyConnectDeviceIdentity,
 };
 use adw::prelude::*;
-use gtk::gio;
-use std::{rc::Rc, time::Duration};
+use gtk::{gio, glib};
+use std::{
+    rc::Rc,
+    sync::mpsc,
+    thread,
+    time::Duration,
+};
 
 const NOCKY_CONNECT_SEND_TIMEOUT: Duration = Duration::from_secs(6);
 const NOCKY_CONNECT_RECEIVE_TIMEOUT: Duration = Duration::from_secs(15);
@@ -87,22 +92,17 @@ impl AppController {
         let toast_overlay = self.toast_overlay.clone();
         let send_surface = surface.clone();
         send_button.connect_clicked(move |_| {
-            toast_overlay.add_toast(adw::Toast::new(
-                "Nocky Connect: scanning for up to 6 seconds…",
-            ));
-            let message = run_desktop_nocky_connect_discovery(NockyConnectDiscoveryMode::Send);
-            toast_overlay.add_toast(adw::Toast::new(&message));
+            start_desktop_nocky_connect_discovery(NockyConnectDiscoveryMode::Send, toast_overlay.clone());
             send_surface.close();
         });
 
         let toast_overlay = self.toast_overlay.clone();
         let receive_surface = surface.clone();
         receive_button.connect_clicked(move |_| {
-            toast_overlay.add_toast(adw::Toast::new(
-                "Nocky Connect: waiting up to 15 seconds…",
-            ));
-            let message = run_desktop_nocky_connect_discovery(NockyConnectDiscoveryMode::Receive);
-            toast_overlay.add_toast(adw::Toast::new(&message));
+            start_desktop_nocky_connect_discovery(
+                NockyConnectDiscoveryMode::Receive,
+                toast_overlay.clone(),
+            );
             receive_surface.close();
         });
 
@@ -158,6 +158,31 @@ fn build_connect_surface_action(
     button
 }
 
+fn start_desktop_nocky_connect_discovery(
+    mode: NockyConnectDiscoveryMode,
+    toast_overlay: adw::ToastOverlay,
+) {
+    toast_overlay.add_toast(adw::Toast::new(match mode {
+        NockyConnectDiscoveryMode::Send => "Nocky Connect: scanning for up to 6 seconds…",
+        NockyConnectDiscoveryMode::Receive => "Nocky Connect: waiting up to 15 seconds…",
+    }));
+
+    let (sender, receiver) = mpsc::channel::<String>();
+    thread::spawn(move || {
+        let message = run_desktop_nocky_connect_discovery(mode);
+        let _ = sender.send(message);
+    });
+
+    glib::timeout_add_local(Duration::from_millis(150), move || match receiver.try_recv() {
+        Ok(message) => {
+            toast_overlay.add_toast(adw::Toast::new(&message));
+            glib::ControlFlow::Break
+        }
+        Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+        Err(mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
+    });
+}
+
 fn run_desktop_nocky_connect_discovery(mode: NockyConnectDiscoveryMode) -> String {
     let identity = NockyConnectDeviceIdentity::new(default_connect_config_dir());
     let device_id = match identity.get_or_create() {
@@ -172,7 +197,9 @@ fn run_desktop_nocky_connect_discovery(mode: NockyConnectDiscoveryMode) -> Strin
 
     let result = match mode {
         NockyConnectDiscoveryMode::Send => scan_once(&descriptor, NOCKY_CONNECT_SEND_TIMEOUT),
-        NockyConnectDiscoveryMode::Receive => receive_once(&descriptor, NOCKY_CONNECT_RECEIVE_TIMEOUT),
+        NockyConnectDiscoveryMode::Receive => {
+            receive_once(&descriptor, NOCKY_CONNECT_RECEIVE_TIMEOUT)
+        }
     };
 
     match result {
