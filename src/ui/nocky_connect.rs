@@ -22,15 +22,15 @@ pub(crate) fn build_nocky_connect_popover(
     popover.set_position(gtk::PositionType::Top);
     popover.set_has_arrow(false);
     popover.set_autohide(true);
-    popover.set_size_request(440, 460);
+    popover.set_size_request(404, 420);
     popover.add_css_class("queue2-popover");
     popover.add_css_class("nocky-connect-popover");
 
-    let root = gtk::Box::new(gtk::Orientation::Vertical, 12);
-    root.set_margin_top(18);
-    root.set_margin_bottom(18);
-    root.set_margin_start(18);
-    root.set_margin_end(18);
+    let root = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    root.set_margin_top(16);
+    root.set_margin_bottom(16);
+    root.set_margin_start(16);
+    root.set_margin_end(16);
     root.add_css_class("queue2-page");
     root.add_css_class("nocky-connect-panel");
 
@@ -55,9 +55,7 @@ pub(crate) fn build_nocky_connect_popover(
     title_row.append(&icon);
     title_row.append(&title);
 
-    let subtitle = gtk::Label::new(Some(
-        "Choose an available Nocky device on this local network.",
-    ));
+    let subtitle = gtk::Label::new(Some("Choose where this session should be available."));
     subtitle.set_xalign(0.0);
     subtitle.set_wrap(true);
     subtitle.add_css_class("dim-label");
@@ -71,16 +69,15 @@ pub(crate) fn build_nocky_connect_popover(
     root.append(&build_section_header(
         "This device",
         "computer-symbolic",
-        "Ready to send or receive a paused session.",
+        "Available for Nocky Connect.",
     ));
     root.append(&build_this_device_row(local_descriptor));
 
-    let available_header = build_section_header(
-        "Available on your network",
+    root.append(&build_section_header(
+        "Available devices",
         "view-list-symbolic",
-        "Devices found through LAN discovery.",
-    );
-    root.append(&available_header);
+        "Nearby devices found on your local network.",
+    ));
 
     let status = gtk::Label::new(Some("Scanning for nearby Nocky devices…"));
     status.set_xalign(0.0);
@@ -95,8 +92,8 @@ pub(crate) fn build_nocky_connect_popover(
 
     let scroll = gtk::ScrolledWindow::new();
     scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-    scroll.set_min_content_height(120);
-    scroll.set_max_content_height(190);
+    scroll.set_min_content_height(108);
+    scroll.set_max_content_height(170);
     scroll.set_hexpand(true);
     scroll.set_child(Some(&device_list));
     scroll.add_css_class("queue2-page-scroll");
@@ -217,8 +214,8 @@ fn build_this_device_row(descriptor: Option<&NockyConnectDeviceDescriptor>) -> g
 
 fn build_empty_device_state() -> gtk::Box {
     let empty = gtk::Box::new(gtk::Orientation::Vertical, 7);
-    empty.set_margin_top(14);
-    empty.set_margin_bottom(14);
+    empty.set_margin_top(12);
+    empty.set_margin_bottom(12);
     empty.set_margin_start(12);
     empty.set_margin_end(12);
     empty.set_halign(gtk::Align::Fill);
