@@ -3,6 +3,7 @@ mod artist_index;
 mod background;
 mod browser;
 mod config;
+pub mod connect;
 mod dialogs;
 mod i18n;
 mod integrations;
