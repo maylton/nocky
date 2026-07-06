@@ -24,7 +24,7 @@ use crate::{
 use adw::prelude::*;
 use gtk::{gio, glib};
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     rc::Rc,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -36,6 +36,7 @@ use std::{
 
 const NOCKY_CONNECT_SCAN_TIMEOUT: Duration = Duration::from_secs(6);
 const NOCKY_CONNECT_DEVICE_STALE_AFTER: Duration = Duration::from_secs(300);
+const NOCKY_CONNECT_PERIODIC_SCAN_INTERVAL: Duration = Duration::from_secs(15);
 const NOCKY_CONNECT_HANDOFF_HTTP_TIMEOUT: Duration = Duration::from_secs(5);
 const NOCKY_CONNECT_HANDOFF_RECEIVE_TIMEOUT: Duration = Duration::from_secs(45);
 
@@ -63,6 +64,7 @@ impl AppController {
 
         let local_descriptor = build_local_desktop_descriptor().ok();
         let device_list = Rc::new(RefCell::new(load_desktop_device_cache()));
+        let scan_in_progress = Rc::new(Cell::new(false));
         let surface = build_nocky_connect_popover(local_descriptor.as_ref());
         let on_selected = self.build_device_selected_handler(&surface.popover);
 
@@ -99,6 +101,7 @@ impl AppController {
             let status_label = surface.status.clone();
             let device_list = device_list.clone();
             let on_selected = on_selected.clone();
+            let scan_in_progress = scan_in_progress.clone();
             surface.refresh_button.connect_clicked(move |button| {
                 start_desktop_device_scan(
                     button.clone(),
@@ -106,17 +109,43 @@ impl AppController {
                     device_list_box.clone(),
                     device_list.clone(),
                     on_selected.clone(),
+                    scan_in_progress.clone(),
                 );
+            });
+        }
+
+        {
+            let popover = surface.popover.clone();
+            let refresh_button = surface.refresh_button.clone();
+            let status_label = surface.status.clone();
+            let device_list_box = surface.device_list.clone();
+            let device_list = device_list.clone();
+            let on_selected = on_selected.clone();
+            let scan_in_progress = scan_in_progress.clone();
+            glib::timeout_add_local(NOCKY_CONNECT_PERIODIC_SCAN_INTERVAL, move || {
+                if !popover.is_visible() {
+                    return glib::ControlFlow::Break;
+                }
+                start_desktop_device_scan(
+                    refresh_button.clone(),
+                    status_label.clone(),
+                    device_list_box.clone(),
+                    device_list.clone(),
+                    on_selected.clone(),
+                    scan_in_progress.clone(),
+                );
+                glib::ControlFlow::Continue
             });
         }
 
         surface.popover.popup();
         start_desktop_device_scan(
-            surface.refresh_button,
-            surface.status,
-            surface.device_list,
+            surface.refresh_button.clone(),
+            surface.status.clone(),
+            surface.device_list.clone(),
             device_list,
             on_selected,
+            scan_in_progress,
         );
     }
 
@@ -459,7 +488,12 @@ fn start_desktop_device_scan(
     device_list_box: gtk::Box,
     device_list: Rc<RefCell<NockyConnectDeviceList>>,
     on_selected: NockyConnectDeviceSelected,
+    scan_in_progress: Rc<Cell<bool>>,
 ) {
+    if scan_in_progress.replace(true) {
+        return;
+    }
+
     refresh_button.set_sensitive(false);
     let cached_count = device_list.borrow().len();
     status_label.set_text(match cached_count {
@@ -496,17 +530,20 @@ fn start_desktop_device_scan(
                 (_, 0) => "LAN discovery • cached devices available",
                 _ => "LAN discovery • multiple devices available",
             });
+            scan_in_progress.set(false);
             refresh_button.set_sensitive(true);
             glib::ControlFlow::Break
         }
         Ok(Err(error)) => {
             status_label.set_text(&format!("Discovery failed: {error}"));
+            scan_in_progress.set(false);
             refresh_button.set_sensitive(true);
             glib::ControlFlow::Break
         }
         Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
         Err(mpsc::TryRecvError::Disconnected) => {
             status_label.set_text("Discovery failed: worker stopped unexpectedly.");
+            scan_in_progress.set(false);
             refresh_button.set_sensitive(true);
             glib::ControlFlow::Break
         }
