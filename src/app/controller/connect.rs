@@ -57,6 +57,13 @@ impl AppController {
         }
 
         {
+            let popover = surface.popover.clone();
+            surface.close_button.connect_clicked(move |_| {
+                popover.popdown();
+            });
+        }
+
+        {
             let device_list_box = surface.device_list.clone();
             let status_label = surface.status.clone();
             let device_list = device_list.clone();
@@ -111,8 +118,8 @@ fn start_desktop_device_scan(
             let count = device_list.borrow().len();
             status_label.set_text(match count {
                 0 => "No devices found yet. Try again while the Android app is open.",
-                1 => "1 device available.",
-                _ => "Multiple devices available.",
+                1 => "LAN discovery • 1 device available",
+                _ => "LAN discovery • multiple devices available",
             });
             refresh_button.set_sensitive(true);
             glib::ControlFlow::Break
