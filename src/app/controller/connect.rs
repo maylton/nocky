@@ -8,13 +8,13 @@ use crate::{
     app::state::PlaybackSource,
     connect::{
         default_connect_config_dir, resolve_handoff_target, scan_once, send_handoff_offer_http,
-        send_handoff_snapshot_http, try_start_desktop_handoff_receiver_loop,
-        DesktopHandoffReceiverEvent, DesktopPlaybackState, NockyConnectDeviceDescriptor,
-        NockyConnectDeviceIdentity, NockyConnectDeviceList, NockyConnectDiscoveredDevice,
-        NockyConnectGateway, NockyConnectHandoffEndpoint, NockyConnectHandoffEnvelope,
-        NockyConnectHandoffKind, NockyConnectHandoffOffer, NockyConnectHandoffPayload,
-        NockyConnectRestorePolicy, NockyConnectSnapshotSummary, NockyConnectSource,
-        NockyPlaybackState, NockyRepeatMode, RestoredDesktopSnapshot,
+        send_handoff_snapshot_http, try_start_desktop_discovery_responder_loop,
+        try_start_desktop_handoff_receiver_loop, DesktopHandoffReceiverEvent, DesktopPlaybackState,
+        NockyConnectDeviceDescriptor, NockyConnectDeviceIdentity, NockyConnectDeviceList,
+        NockyConnectDiscoveredDevice, NockyConnectGateway, NockyConnectHandoffEndpoint,
+        NockyConnectHandoffEnvelope, NockyConnectHandoffKind, NockyConnectHandoffOffer,
+        NockyConnectHandoffPayload, NockyConnectRestorePolicy, NockyConnectSnapshotSummary,
+        NockyConnectSource, NockyPlaybackState, NockyRepeatMode, RestoredDesktopSnapshot,
         NOCKY_CONNECT_DESKTOP_HANDOFF_PORT,
     },
     playback::queue::QueueSourceKind,
@@ -37,6 +37,7 @@ const NOCKY_CONNECT_DEVICE_STALE_AFTER: Duration = Duration::from_secs(300);
 const NOCKY_CONNECT_PERIODIC_SCAN_INTERVAL: Duration = Duration::from_secs(15);
 const NOCKY_CONNECT_HANDOFF_HTTP_TIMEOUT: Duration = Duration::from_secs(5);
 const NOCKY_CONNECT_HANDOFF_RECEIVE_TIMEOUT: Duration = Duration::from_secs(45);
+const NOCKY_CONNECT_DISCOVERY_RESPONDER_TIMEOUT: Duration = Duration::from_secs(60);
 
 static DESKTOP_CONNECT_DEVICE_LIST: OnceLock<Mutex<NockyConnectDeviceList>> = OnceLock::new();
 
@@ -58,6 +59,12 @@ impl AppController {
     }
 
     pub(crate) fn start_nocky_connect_services(self: &Rc<Self>) {
+        if let Ok(descriptor) = build_local_desktop_descriptor() {
+            try_start_desktop_discovery_responder_loop(
+                descriptor,
+                NOCKY_CONNECT_DISCOVERY_RESPONDER_TIMEOUT,
+            );
+        }
         start_desktop_handoff_receive_loop(Rc::downgrade(self));
     }
 
