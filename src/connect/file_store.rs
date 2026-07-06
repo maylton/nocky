@@ -1,4 +1,7 @@
-use std::{fs, io, path::{Path, PathBuf}};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 use super::PlaybackSessionSnapshot;
 
@@ -38,8 +41,8 @@ impl NockyConnectFileStore {
     }
 
     pub fn latest_snapshot_file(&self) -> io::Result<Option<PathBuf>> {
-        let mut files = self.list_snapshot_files()?;
-        Ok(files.drain(..).next())
+        let files = self.list_snapshot_files()?;
+        Ok(files.into_iter().next())
     }
 
     pub fn list_snapshot_files(&self) -> io::Result<Vec<PathBuf>> {
@@ -148,10 +151,10 @@ mod tests {
     }
 
     fn temp_root() -> PathBuf {
-        let stamp = SystemTime::now()
+        let suffix = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        std::env::temp_dir().join(format!("nocky-connect-test-{stamp}"))
+        std::env::temp_dir().join(format!("nocky-connect-store-test-{suffix}"))
     }
 }
