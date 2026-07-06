@@ -8,7 +8,11 @@ use crate::connect::{
     NockyConnectDevicePlatform,
 };
 use gtk::prelude::*;
-use std::{net::SocketAddr, rc::Rc, time::{Duration, Instant}};
+use std::{
+    net::SocketAddr,
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 const DEVICE_AVAILABLE_NOW_WINDOW: Duration = Duration::from_secs(30);
 
