@@ -38,7 +38,13 @@ fn main() -> glib::ExitCode {
     let mut args = env::args_os();
     let _program = args.next();
 
-    if args.as_slice().first().map(OsStr::new) == Some(OsStr::new("--nocky-connect-inspect")) {
+    let is_connect_inspect = args
+        .as_slice()
+        .first()
+        .map(|argument| argument.as_os_str())
+        == Some(OsStr::new("--nocky-connect-inspect"));
+
+    if is_connect_inspect {
         let _command = args.next();
         return match args.next() {
             Some(path) => match inspect_nocky_connect_snapshot(Path::new(&path)) {
@@ -58,9 +64,7 @@ fn main() -> glib::ExitCode {
     app::run()
 }
 
-fn inspect_nocky_connect_snapshot(
-    path: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn inspect_nocky_connect_snapshot(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let payload = fs::read_to_string(path)?;
     let gateway = connect::NockyConnectGateway::new("desktop-dev-inspector");
     let snapshot = gateway.decode_snapshot(&payload)?;
@@ -99,7 +103,14 @@ fn inspect_nocky_connect_snapshot(
 
         println!("  current_item:");
         println!("    title: {}", item.title);
-        println!("    artists: {}", if artists.is_empty() { "Unknown artist" } else { &artists });
+        println!(
+            "    artists: {}",
+            if artists.is_empty() {
+                "Unknown artist"
+            } else {
+                &artists
+            }
+        );
         println!("    provider: {}", item.provider);
         println!("    playable_id: {}", item.playable_id);
         println!("    queue_item_id: {}", item.queue_item_id);
