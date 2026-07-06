@@ -5,13 +5,16 @@
 
 use super::AppController;
 use crate::{
+    app::state::PlaybackSource,
     connect::{
-        default_connect_config_dir, resolve_handoff_target, scan_once, send_handoff_offer_http,
-        send_handoff_snapshot_http, DesktopPlaybackState, NockyConnectDeviceDescriptor,
-        NockyConnectDeviceIdentity, NockyConnectDeviceList, NockyConnectDiscoveredDevice,
-        NockyConnectGateway, NockyConnectHandoffEnvelope, NockyConnectHandoffKind,
-        NockyConnectHandoffOffer, NockyConnectHandoffPayload, NockyConnectRestorePolicy,
-        NockyConnectSnapshotSummary, NockyConnectSource, NockyPlaybackState, NockyRepeatMode,
+        default_connect_config_dir, receive_handoff_offer_and_snapshot, resolve_handoff_target,
+        scan_once, send_handoff_offer_http, send_handoff_snapshot_http, DesktopPlaybackState,
+        NockyConnectDeviceDescriptor, NockyConnectDeviceIdentity, NockyConnectDeviceList,
+        NockyConnectDiscoveredDevice, NockyConnectGateway, NockyConnectHandoffEndpoint,
+        NockyConnectHandoffEnvelope, NockyConnectHandoffKind, NockyConnectHandoffOffer,
+        NockyConnectHandoffPayload, NockyConnectRestorePolicy, NockyConnectSnapshotSummary,
+        NockyConnectSource, NockyPlaybackState, NockyRepeatMode, RestoredDesktopSnapshot,
+        NOCKY_CONNECT_DESKTOP_HANDOFF_PORT,
     },
     playback::queue::QueueSourceKind,
     ui::nocky_connect::{
@@ -31,6 +34,7 @@ use std::{
 const NOCKY_CONNECT_SCAN_TIMEOUT: Duration = Duration::from_secs(6);
 const NOCKY_CONNECT_DEVICE_STALE_AFTER: Duration = Duration::from_secs(30);
 const NOCKY_CONNECT_HANDOFF_HTTP_TIMEOUT: Duration = Duration::from_secs(5);
+const NOCKY_CONNECT_HANDOFF_RECEIVE_TIMEOUT: Duration = Duration::from_secs(45);
 
 impl AppController {
     pub(crate) fn install_nocky_connect_action(self: &Rc<Self>, app: &adw::Application) {
@@ -49,6 +53,7 @@ impl AppController {
 
     pub(crate) fn open_nocky_connect_surface(self: &Rc<Self>) {
         self.persist_playback_session_now();
+        start_desktop_handoff_receive(Rc::downgrade(self));
 
         let local_descriptor = build_local_desktop_descriptor().ok();
         let device_list = Rc::new(RefCell::new(NockyConnectDeviceList::new()));
@@ -256,6 +261,81 @@ impl AppController {
             )
             .map_err(|error| error.to_string())
     }
+
+    fn apply_received_handoff_snapshot(&self, payload: &str) -> Result<String, String> {
+        let receiver = build_local_desktop_descriptor()?;
+        let restored = NockyConnectGateway::new(receiver.device_id)
+            .prepare_restore(payload)
+            .map_err(|error| error.to_string())?;
+        self.apply_restored_desktop_snapshot(restored)
+    }
+
+    fn apply_restored_desktop_snapshot(
+        &self,
+        restored: RestoredDesktopSnapshot,
+    ) -> Result<String, String> {
+        if restored.queue.is_empty() {
+            return Err("received queue is empty".to_string());
+        }
+        let source = restored
+            .queue
+            .source_kind()
+            .map_err(|error| error.to_string())?
+            .unwrap_or(QueueSourceKind::YouTube);
+        let current_id = restored
+            .queue
+            .current_id()
+            .or_else(|| restored.queue.entries().first().map(|entry| entry.id))
+            .ok_or_else(|| "received queue has no current item".to_string())?;
+        let position_us = restored
+            .state
+            .position_ms
+            .saturating_mul(1_000)
+            .min(i64::MAX as u64) as i64;
+        let item_count = restored.queue.len();
+        let current_title = restored
+            .queue
+            .current()
+            .map(|entry| entry.media.title.clone())
+            .or_else(|| restored.title.clone())
+            .unwrap_or_else(|| "queue".to_string());
+        let snapshot = restored.queue.snapshot();
+
+        self.maybe_record_listening();
+        let _ = self.player.pause();
+        self.update_play_icons(false);
+        self.playback_source.set(PlaybackSource::None);
+        self.state.borrow_mut().current = None;
+        self.youtube_state.borrow_mut().take();
+        self.queue_v2_pending_entry.set(None);
+        self.queue_dragged_entry.set(None);
+        self.active_queue_source.set(source);
+        self.playback_queue_v2.replace(restored.queue);
+        self.queue_last_saved_snapshot.replace(snapshot);
+
+        let shuffle_enabled = restored.state.shuffle_enabled;
+        self.shuffle_enabled.set(shuffle_enabled);
+        self.shuffle_button.set_active(shuffle_enabled);
+        self.footer_shuffle_button.set_active(shuffle_enabled);
+        let repeat_enabled = restored.state.repeat_mode != NockyRepeatMode::Off;
+        self.repeat_button.set_active(repeat_enabled);
+        self.footer_repeat_button.set_active(repeat_enabled);
+        self.shuffle_navigation.borrow_mut().clear();
+        self.reset_shuffle_navigation(shuffle_enabled);
+        self.pending_resume_position_us.set(Some(position_us));
+        self.startup_restore_autoplay.set(Some(false));
+        self.playback_session_restore_attempts.set(0);
+
+        self.play_queue_entry(current_id, false);
+        let _ = self.player.pause();
+        self.update_play_icons(false);
+        self.persist_queue_now();
+        self.persist_playback_session_now();
+        self.publish_mpris_capabilities();
+        self.update_footer_source();
+
+        Ok(format!("restored paused · {current_title} · {item_count} items"))
+    }
 }
 
 fn start_desktop_handoff_send(
@@ -305,6 +385,54 @@ fn start_desktop_handoff_send(
         Err(mpsc::TryRecvError::Disconnected) => {
             if let Some(controller) = weak.upgrade() {
                 controller.show_toast("Nocky Connect: handoff sender stopped unexpectedly");
+            }
+            glib::ControlFlow::Break
+        }
+    });
+}
+
+fn start_desktop_handoff_receive(weak: std::rc::Weak<AppController>) {
+    let local_device_id = match build_local_desktop_descriptor() {
+        Ok(descriptor) => descriptor.device_id,
+        Err(error) => {
+            if let Some(controller) = weak.upgrade() {
+                controller.show_toast(&format!("Nocky Connect: receiver unavailable: {error}"));
+            }
+            return;
+        }
+    };
+    let (sender, receiver) = mpsc::channel::<Result<String, String>>();
+    thread::spawn(move || {
+        let result = receive_handoff_offer_and_snapshot(
+            &local_device_id,
+            NOCKY_CONNECT_HANDOFF_RECEIVE_TIMEOUT,
+        )
+        .map(|received| received.snapshot_json)
+        .map_err(|error| error.to_string());
+        let _ = sender.send(result);
+    });
+
+    glib::timeout_add_local(Duration::from_millis(150), move || match receiver.try_recv() {
+        Ok(Ok(snapshot_json)) => {
+            if let Some(controller) = weak.upgrade() {
+                match controller.apply_received_handoff_snapshot(&snapshot_json) {
+                    Ok(detail) => controller.show_toast(&format!("Nocky Connect: {detail}")),
+                    Err(error) => controller
+                        .show_toast(&format!("Nocky Connect: could not restore snapshot: {error}")),
+                }
+            }
+            glib::ControlFlow::Break
+        }
+        Ok(Err(error)) => {
+            if let Some(controller) = weak.upgrade() {
+                controller.show_toast(&format!("Nocky Connect: receiver stopped: {error}"));
+            }
+            glib::ControlFlow::Break
+        }
+        Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+        Err(mpsc::TryRecvError::Disconnected) => {
+            if let Some(controller) = weak.upgrade() {
+                controller.show_toast("Nocky Connect: receiver stopped unexpectedly");
             }
             glib::ControlFlow::Break
         }
@@ -374,7 +502,10 @@ fn build_local_desktop_descriptor() -> Result<NockyConnectDeviceDescriptor, Stri
         device_id,
         desktop_device_name(),
         Some(env!("CARGO_PKG_VERSION").to_string()),
-    ))
+    )
+    .with_handoff_endpoint(NockyConnectHandoffEndpoint::local_http(
+        NOCKY_CONNECT_DESKTOP_HANDOFF_PORT,
+    )))
 }
 
 fn handoff_offer_summary(envelope: &NockyConnectHandoffEnvelope) -> String {
