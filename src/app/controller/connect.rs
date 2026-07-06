@@ -7,13 +7,14 @@ use super::AppController;
 use crate::{
     app::state::PlaybackSource,
     connect::{
-        default_connect_config_dir, receive_handoff_offer_and_snapshot, resolve_handoff_target,
-        scan_once, send_handoff_offer_http, send_handoff_snapshot_http, DesktopPlaybackState,
-        NockyConnectDeviceDescriptor, NockyConnectDeviceIdentity, NockyConnectDeviceList,
-        NockyConnectDiscoveredDevice, NockyConnectGateway, NockyConnectHandoffEndpoint,
-        NockyConnectHandoffEnvelope, NockyConnectHandoffKind, NockyConnectHandoffOffer,
-        NockyConnectHandoffPayload, NockyConnectRestorePolicy, NockyConnectSnapshotSummary,
-        NockyConnectSource, NockyPlaybackState, NockyRepeatMode, RestoredDesktopSnapshot,
+        default_connect_config_dir, mark_desktop_handoff_receiver_stopped, resolve_handoff_target,
+        scan_once, send_handoff_offer_http, send_handoff_snapshot_http,
+        try_start_desktop_handoff_receiver, DesktopPlaybackState, NockyConnectDeviceDescriptor,
+        NockyConnectDeviceIdentity, NockyConnectDeviceList, NockyConnectDiscoveredDevice,
+        NockyConnectGateway, NockyConnectHandoffEndpoint, NockyConnectHandoffEnvelope,
+        NockyConnectHandoffKind, NockyConnectHandoffOffer, NockyConnectHandoffPayload,
+        NockyConnectRestorePolicy, NockyConnectSnapshotSummary, NockyConnectSource,
+        NockyPlaybackState, NockyRepeatMode, RestoredDesktopSnapshot,
         NOCKY_CONNECT_DESKTOP_HANDOFF_PORT,
     },
     playback::queue::QueueSourceKind,
@@ -26,10 +27,7 @@ use gtk::{gio, glib};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        mpsc, Mutex, OnceLock,
-    },
+    sync::{mpsc, Mutex, OnceLock},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -40,7 +38,6 @@ const NOCKY_CONNECT_PERIODIC_SCAN_INTERVAL: Duration = Duration::from_secs(15);
 const NOCKY_CONNECT_HANDOFF_HTTP_TIMEOUT: Duration = Duration::from_secs(5);
 const NOCKY_CONNECT_HANDOFF_RECEIVE_TIMEOUT: Duration = Duration::from_secs(45);
 
-static DESKTOP_HANDOFF_RECEIVER_ACTIVE: AtomicBool = AtomicBool::new(false);
 static DESKTOP_CONNECT_DEVICE_LIST: OnceLock<Mutex<NockyConnectDeviceList>> = OnceLock::new();
 
 impl AppController {
@@ -427,34 +424,26 @@ fn start_desktop_handoff_send(
 }
 
 fn start_desktop_handoff_receive(weak: std::rc::Weak<AppController>) {
-    if DESKTOP_HANDOFF_RECEIVER_ACTIVE.swap(true, Ordering::SeqCst) {
-        return;
-    }
-
     let local_device_id = match build_local_desktop_descriptor() {
         Ok(descriptor) => descriptor.device_id,
         Err(error) => {
-            DESKTOP_HANDOFF_RECEIVER_ACTIVE.store(false, Ordering::SeqCst);
             if let Some(controller) = weak.upgrade() {
                 controller.show_toast(&format!("Nocky Connect: receiver unavailable: {error}"));
             }
             return;
         }
     };
-    let (sender, receiver) = mpsc::channel::<Result<String, String>>();
-    thread::spawn(move || {
-        let result = receive_handoff_offer_and_snapshot(
-            &local_device_id,
-            NOCKY_CONNECT_HANDOFF_RECEIVE_TIMEOUT,
-        )
-        .map(|received| received.snapshot_json)
-        .map_err(|error| error.to_string());
-        let _ = sender.send(result);
-    });
+    let Some(service) = try_start_desktop_handoff_receiver(
+        local_device_id,
+        NOCKY_CONNECT_HANDOFF_RECEIVE_TIMEOUT,
+    ) else {
+        return;
+    };
+    let receiver = service.receiver;
 
     glib::timeout_add_local(Duration::from_millis(150), move || match receiver.try_recv() {
         Ok(Ok(snapshot_json)) => {
-            DESKTOP_HANDOFF_RECEIVER_ACTIVE.store(false, Ordering::SeqCst);
+            mark_desktop_handoff_receiver_stopped();
             if let Some(controller) = weak.upgrade() {
                 match controller.apply_received_handoff_snapshot(&snapshot_json) {
                     Ok(detail) => controller.show_toast(&format!("Nocky Connect: {detail}")),
@@ -465,7 +454,7 @@ fn start_desktop_handoff_receive(weak: std::rc::Weak<AppController>) {
             glib::ControlFlow::Break
         }
         Ok(Err(error)) => {
-            DESKTOP_HANDOFF_RECEIVER_ACTIVE.store(false, Ordering::SeqCst);
+            mark_desktop_handoff_receiver_stopped();
             if let Some(controller) = weak.upgrade() {
                 controller.show_toast(&format!("Nocky Connect: receiver stopped: {error}"));
             }
@@ -473,7 +462,7 @@ fn start_desktop_handoff_receive(weak: std::rc::Weak<AppController>) {
         }
         Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
         Err(mpsc::TryRecvError::Disconnected) => {
-            DESKTOP_HANDOFF_RECEIVER_ACTIVE.store(false, Ordering::SeqCst);
+            mark_desktop_handoff_receiver_stopped();
             if let Some(controller) = weak.upgrade() {
                 controller.show_toast("Nocky Connect: receiver stopped unexpectedly");
             }
