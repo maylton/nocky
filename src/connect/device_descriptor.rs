@@ -21,6 +21,8 @@ pub struct NockyConnectDeviceDescriptor {
     #[serde(rename = "protocol_version")]
     pub protocol_version: u32,
     pub features: Vec<NockyConnectFeature>,
+    #[serde(rename = "handoff_endpoint")]
+    pub handoff_endpoint: Option<NockyConnectHandoffEndpoint>,
 }
 
 impl NockyConnectDeviceDescriptor {
@@ -42,8 +44,17 @@ impl NockyConnectDeviceDescriptor {
                 NockyConnectFeature::SnapshotExport,
                 NockyConnectFeature::SnapshotImportPaused,
                 NockyConnectFeature::FileRoundTrip,
+                NockyConnectFeature::LanPairing,
+                NockyConnectFeature::HandoffAck,
+                NockyConnectFeature::HandoffOffer,
             ],
+            handoff_endpoint: None,
         }
+    }
+
+    pub fn with_handoff_endpoint(mut self, endpoint: NockyConnectHandoffEndpoint) -> Self {
+        self.handoff_endpoint = Some(endpoint);
+        self
     }
 
     pub fn require_supported(&self) -> Result<(), NockyConnectDeviceDescriptorError> {
@@ -88,6 +99,31 @@ pub enum NockyConnectFeature {
     LanPairing,
     #[serde(rename = "handoff_ack")]
     HandoffAck,
+    #[serde(rename = "handoff_offer")]
+    HandoffOffer,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NockyConnectHandoffEndpoint {
+    pub transport: NockyConnectHandoffTransport,
+    pub port: u16,
+    pub path: String,
+}
+
+impl NockyConnectHandoffEndpoint {
+    pub fn local_http(port: u16) -> Self {
+        Self {
+            transport: NockyConnectHandoffTransport::LocalHttp,
+            port,
+            path: "/nocky-connect/handoff".to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NockyConnectHandoffTransport {
+    #[serde(rename = "local_http")]
+    LocalHttp,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -143,7 +179,8 @@ mod tests {
             "desktop-device",
             "Linux desktop",
             Some("dev".to_string()),
-        );
+        )
+        .with_handoff_endpoint(NockyConnectHandoffEndpoint::local_http(35187));
 
         let payload = encode_device_descriptor(&descriptor).expect("encode descriptor");
         let decoded = decode_device_descriptor(&payload).expect("decode descriptor");
@@ -158,6 +195,13 @@ mod tests {
         assert!(decoded
             .features
             .contains(&NockyConnectFeature::SnapshotImportPaused));
+        assert!(decoded
+            .features
+            .contains(&NockyConnectFeature::HandoffOffer));
+        assert_eq!(
+            decoded.handoff_endpoint,
+            Some(NockyConnectHandoffEndpoint::local_http(35187))
+        );
     }
 
     #[test]
@@ -181,6 +225,7 @@ mod tests {
         assert!(descriptor
             .features
             .contains(&NockyConnectFeature::FileRoundTrip));
+        assert_eq!(descriptor.handoff_endpoint, None);
     }
 
     #[test]
