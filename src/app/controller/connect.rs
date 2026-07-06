@@ -13,7 +13,8 @@ use adw::prelude::*;
 use gtk::gio;
 use std::{rc::Rc, time::Duration};
 
-const NOCKY_CONNECT_DISCOVERY_TIMEOUT: Duration = Duration::from_millis(1_800);
+const NOCKY_CONNECT_SEND_TIMEOUT: Duration = Duration::from_secs(6);
+const NOCKY_CONNECT_RECEIVE_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Clone, Copy)]
 enum NockyConnectDiscoveryMode {
@@ -74,19 +75,21 @@ impl AppController {
 
         let send_button = build_connect_surface_action(
             "Send to Android",
-            "Find an Android device and prepare to send the current queue.",
+            "Search for Android devices for up to 6 seconds.",
             "network-workgroup-symbolic",
         );
         let receive_button = build_connect_surface_action(
             "Receive from Android",
-            "Wait for an Android device to start discovery.",
+            "Wait 15 seconds for an Android device to start discovery.",
             "document-save-symbolic",
         );
 
         let toast_overlay = self.toast_overlay.clone();
         let send_surface = surface.clone();
         send_button.connect_clicked(move |_| {
-            toast_overlay.add_toast(adw::Toast::new("Nocky Connect: scanning…"));
+            toast_overlay.add_toast(adw::Toast::new(
+                "Nocky Connect: scanning for up to 6 seconds…",
+            ));
             let message = run_desktop_nocky_connect_discovery(NockyConnectDiscoveryMode::Send);
             toast_overlay.add_toast(adw::Toast::new(&message));
             send_surface.close();
@@ -95,7 +98,9 @@ impl AppController {
         let toast_overlay = self.toast_overlay.clone();
         let receive_surface = surface.clone();
         receive_button.connect_clicked(move |_| {
-            toast_overlay.add_toast(adw::Toast::new("Nocky Connect: waiting…"));
+            toast_overlay.add_toast(adw::Toast::new(
+                "Nocky Connect: waiting up to 15 seconds…",
+            ));
             let message = run_desktop_nocky_connect_discovery(NockyConnectDiscoveryMode::Receive);
             toast_overlay.add_toast(adw::Toast::new(&message));
             receive_surface.close();
@@ -166,8 +171,8 @@ fn run_desktop_nocky_connect_discovery(mode: NockyConnectDiscoveryMode) -> Strin
     );
 
     let result = match mode {
-        NockyConnectDiscoveryMode::Send => scan_once(&descriptor, NOCKY_CONNECT_DISCOVERY_TIMEOUT),
-        NockyConnectDiscoveryMode::Receive => receive_once(&descriptor, NOCKY_CONNECT_DISCOVERY_TIMEOUT),
+        NockyConnectDiscoveryMode::Send => scan_once(&descriptor, NOCKY_CONNECT_SEND_TIMEOUT),
+        NockyConnectDiscoveryMode::Receive => receive_once(&descriptor, NOCKY_CONNECT_RECEIVE_TIMEOUT),
     };
 
     match result {
