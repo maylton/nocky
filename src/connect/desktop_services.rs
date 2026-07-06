@@ -4,7 +4,7 @@
 //! controller. UI code should only request that services are started and then
 //! observe their results through small channels/callbacks.
 
-use super::receive_handoff_offer_and_snapshot;
+use super::handoff_http_receiver::receive_handoff_offer_and_snapshot;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
