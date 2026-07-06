@@ -27,7 +27,7 @@ pub(crate) fn build_nocky_connect_popover(
     popover.set_position(gtk::PositionType::Top);
     popover.set_has_arrow(false);
     popover.set_autohide(true);
-    popover.set_size_request(404, 376);
+    popover.set_size_request(404, 392);
     popover.add_css_class("queue2-popover");
 
     let root = gtk::Box::new(gtk::Orientation::Vertical, 10);
@@ -48,7 +48,7 @@ pub(crate) fn build_nocky_connect_popover(
     title.add_css_class("title-1");
     title.add_css_class("queue2-page-title");
 
-    let subtitle = gtk::Label::new(Some("LAN discovery • scanning"));
+    let subtitle = gtk::Label::new(Some("Move playback between devices on your network."));
     subtitle.set_xalign(0.0);
     subtitle.set_wrap(true);
     subtitle.add_css_class("dim-label");
@@ -93,14 +93,16 @@ pub(crate) fn build_nocky_connect_popover(
     scroll.add_css_class("queue2-page-scroll");
     root.append(&scroll);
 
-    let refresh_button = gtk::Button::with_label("Refresh devices");
+    let refresh_button = gtk::Button::with_label("Scan again");
     refresh_button.add_css_class("pill");
     refresh_button.add_css_class("queue2-page-action");
     refresh_button.set_halign(gtk::Align::Fill);
     refresh_button.set_margin_top(4);
     root.append(&refresh_button);
 
-    let troubleshooting = gtk::Label::new(Some("No devices? Same network • UDP 34987"));
+    let troubleshooting = gtk::Label::new(Some(
+        "No devices? Use the same Wi-Fi and allow UDP 34987 + TCP 35187.",
+    ));
     troubleshooting.set_xalign(0.0);
     troubleshooting.set_wrap(true);
     troubleshooting.add_css_class("dim-label");
@@ -188,7 +190,7 @@ fn build_this_device_row(descriptor: Option<&NockyConnectDeviceDescriptor>) -> g
     name_label.set_xalign(0.0);
     name_label.add_css_class("heading");
 
-    let detail = gtk::Label::new(Some("This desktop"));
+    let detail = gtk::Label::new(Some("Linux desktop · playing on this device"));
     detail.set_xalign(0.0);
     detail.add_css_class("dim-label");
 
@@ -218,11 +220,16 @@ fn build_empty_device_state() -> gtk::Box {
     icon.set_pixel_size(22);
     icon.add_css_class("queue2-state-icon");
 
-    let title = gtk::Label::new(Some("No devices found"));
+    let title = gtk::Label::new(Some("No devices found yet"));
     title.add_css_class("queue2-state-title");
+
+    let detail = gtk::Label::new(Some("Open Nocky Connect on Android and scan again."));
+    detail.set_wrap(true);
+    detail.add_css_class("dim-label");
 
     empty.append(&icon);
     empty.append(&title);
+    empty.append(&detail);
     empty
 }
 
@@ -255,7 +262,7 @@ fn build_device_button(
     title.add_css_class("heading");
 
     let subtitle = gtk::Label::new(Some(&format!(
-        "{} · {address} · last seen now",
+        "{} · click to move playback",
         platform_label(descriptor.platform),
     )));
     subtitle.set_xalign(0.0);
