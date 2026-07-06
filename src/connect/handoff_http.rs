@@ -1,8 +1,8 @@
-//! Minimal local HTTP client for Nocky Connect handoff offers.
+//! Minimal local HTTP client for Nocky Connect handoff transfers.
 //!
 //! This module intentionally uses `std::net::TcpStream` instead of adding a new
-//! HTTP dependency. It sends one JSON handoff envelope and expects one JSON
-//! handoff response from a LAN peer.
+//! HTTP dependency. It sends JSON payloads to a LAN peer and reads one JSON
+//! handoff response.
 
 use std::{
     fmt,
@@ -15,6 +15,8 @@ use super::{
     NockyConnectHandoffEnvelope, NockyConnectHandoffKind, NockyConnectHandoffTarget,
     NockyConnectHandoffTransport, HANDOFF_MESSAGE_SCHEMA, NOCKY_CONNECT_PROTOCOL_VERSION,
 };
+
+pub const NOCKY_CONNECT_SNAPSHOT_PATH: &str = "/nocky-connect/snapshot";
 
 const HANDOFF_HTTP_RESPONSE_LIMIT_BYTES: usize = 512 * 1024;
 
@@ -36,13 +38,17 @@ impl fmt::Display for NockyConnectHandoffHttpError {
             Self::UnsupportedTransport => write!(formatter, "unsupported handoff HTTP transport"),
             Self::Json(error) => write!(formatter, "invalid handoff JSON: {error}"),
             Self::Io(error) => write!(formatter, "handoff HTTP I/O failed: {error}"),
-            Self::InvalidResponse(error) => write!(formatter, "invalid handoff HTTP response: {error}"),
+            Self::InvalidResponse(error) => {
+                write!(formatter, "invalid handoff HTTP response: {error}")
+            }
             Self::HttpStatus(status) => write!(formatter, "handoff HTTP request failed: {status}"),
             Self::UnsupportedSchema(schema) => write!(formatter, "unsupported handoff schema {schema}"),
             Self::UnsupportedSchemaVersion(version) => {
                 write!(formatter, "unsupported handoff schema version {version}")
             }
-            Self::UnsupportedKind(kind) => write!(formatter, "unsupported handoff response kind {kind:?}"),
+            Self::UnsupportedKind(kind) => {
+                write!(formatter, "unsupported handoff response kind {kind:?}")
+            }
         }
     }
 }
@@ -54,6 +60,30 @@ pub fn send_handoff_offer_http(
     envelope: &NockyConnectHandoffEnvelope,
     timeout: Duration,
 ) -> Result<NockyConnectHandoffEnvelope, NockyConnectHandoffHttpError> {
+    let body = serde_json::to_string(envelope)
+        .map_err(|error| NockyConnectHandoffHttpError::Json(error.to_string()))?;
+    let response = send_json_http(target, &target.path, &body, timeout)?;
+    decode_handoff_response(
+        &response,
+        &[NockyConnectHandoffKind::Accept, NockyConnectHandoffKind::Decline],
+    )
+}
+
+pub fn send_handoff_snapshot_http(
+    target: &NockyConnectHandoffTarget,
+    snapshot_json: &str,
+    timeout: Duration,
+) -> Result<NockyConnectHandoffEnvelope, NockyConnectHandoffHttpError> {
+    let response = send_json_http(target, NOCKY_CONNECT_SNAPSHOT_PATH, snapshot_json, timeout)?;
+    decode_handoff_response(&response, &[NockyConnectHandoffKind::Result])
+}
+
+fn send_json_http(
+    target: &NockyConnectHandoffTarget,
+    path: &str,
+    body: &str,
+    timeout: Duration,
+) -> Result<Vec<u8>, NockyConnectHandoffHttpError> {
     if target.transport != NockyConnectHandoffTransport::LocalHttp {
         return Err(NockyConnectHandoffHttpError::UnsupportedTransport);
     }
@@ -67,7 +97,7 @@ pub fn send_handoff_offer_http(
         .set_write_timeout(Some(timeout))
         .map_err(|error| NockyConnectHandoffHttpError::Io(error.to_string()))?;
 
-    let request = build_handoff_offer_request(target, envelope)?;
+    let request = build_json_post_request(target, path, body);
     stream
         .write_all(&request)
         .map_err(|error| NockyConnectHandoffHttpError::Io(error.to_string()))?;
@@ -91,8 +121,7 @@ pub fn send_handoff_offer_http(
             ));
         }
     }
-
-    decode_handoff_offer_response(&response)
+    Ok(response)
 }
 
 pub(crate) fn build_handoff_offer_request(
@@ -101,8 +130,19 @@ pub(crate) fn build_handoff_offer_request(
 ) -> Result<Vec<u8>, NockyConnectHandoffHttpError> {
     let body = serde_json::to_string(envelope)
         .map_err(|error| NockyConnectHandoffHttpError::Json(error.to_string()))?;
+    Ok(build_json_post_request(target, &target.path, &body))
+}
+
+pub(crate) fn build_handoff_snapshot_request(
+    target: &NockyConnectHandoffTarget,
+    snapshot_json: &str,
+) -> Vec<u8> {
+    build_json_post_request(target, NOCKY_CONNECT_SNAPSHOT_PATH, snapshot_json)
+}
+
+fn build_json_post_request(target: &NockyConnectHandoffTarget, path: &str, body: &str) -> Vec<u8> {
     let body_bytes = body.as_bytes();
-    let path = normalized_path(&target.path);
+    let path = normalized_path(path);
     let headers = format!(
         "POST {path} HTTP/1.1\r\nHost: {}:{}\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         target.host,
@@ -112,11 +152,27 @@ pub(crate) fn build_handoff_offer_request(
 
     let mut request = headers.into_bytes();
     request.extend_from_slice(body_bytes);
-    Ok(request)
+    request
 }
 
 pub(crate) fn decode_handoff_offer_response(
     response: &[u8],
+) -> Result<NockyConnectHandoffEnvelope, NockyConnectHandoffHttpError> {
+    decode_handoff_response(
+        response,
+        &[NockyConnectHandoffKind::Accept, NockyConnectHandoffKind::Decline],
+    )
+}
+
+pub(crate) fn decode_handoff_snapshot_response(
+    response: &[u8],
+) -> Result<NockyConnectHandoffEnvelope, NockyConnectHandoffHttpError> {
+    decode_handoff_response(response, &[NockyConnectHandoffKind::Result])
+}
+
+fn decode_handoff_response(
+    response: &[u8],
+    accepted_kinds: &[NockyConnectHandoffKind],
 ) -> Result<NockyConnectHandoffEnvelope, NockyConnectHandoffHttpError> {
     let response_text = std::str::from_utf8(response)
         .map_err(|error| NockyConnectHandoffHttpError::InvalidResponse(error.to_string()))?;
@@ -132,12 +188,13 @@ pub(crate) fn decode_handoff_offer_response(
 
     let envelope = serde_json::from_str::<NockyConnectHandoffEnvelope>(body)
         .map_err(|error| NockyConnectHandoffHttpError::Json(error.to_string()))?;
-    require_supported_handoff_response(&envelope)?;
+    require_supported_handoff_response(&envelope, accepted_kinds)?;
     Ok(envelope)
 }
 
 fn require_supported_handoff_response(
     envelope: &NockyConnectHandoffEnvelope,
+    accepted_kinds: &[NockyConnectHandoffKind],
 ) -> Result<(), NockyConnectHandoffHttpError> {
     if envelope.schema != HANDOFF_MESSAGE_SCHEMA {
         return Err(NockyConnectHandoffHttpError::UnsupportedSchema(
@@ -149,9 +206,10 @@ fn require_supported_handoff_response(
             envelope.schema_version,
         ));
     }
-    match envelope.kind {
-        NockyConnectHandoffKind::Accept | NockyConnectHandoffKind::Decline => Ok(()),
-        kind => Err(NockyConnectHandoffHttpError::UnsupportedKind(kind)),
+    if accepted_kinds.contains(&envelope.kind) {
+        Ok(())
+    } else {
+        Err(NockyConnectHandoffHttpError::UnsupportedKind(envelope.kind))
     }
 }
 
@@ -173,12 +231,7 @@ mod tests {
 
     #[test]
     fn builds_post_request_for_handoff_offer() {
-        let target = NockyConnectHandoffTarget {
-            host: "192.168.0.8".to_string(),
-            port: 35187,
-            path: "/nocky-connect/handoff".to_string(),
-            transport: NockyConnectHandoffTransport::LocalHttp,
-        };
+        let target = test_target();
         let envelope = sample_offer();
 
         let request = build_handoff_offer_request(&target, &envelope).expect("request");
@@ -191,6 +244,17 @@ mod tests {
         assert!(text.contains("handoff_offer"));
         assert!(!text.contains("cookies"));
         assert!(!text.contains("stream_url"));
+    }
+
+    #[test]
+    fn builds_post_request_for_snapshot_transfer() {
+        let target = test_target();
+        let request = build_handoff_snapshot_request(&target, r#"{"schema":"snapshot"}"#);
+        let text = String::from_utf8(request).expect("utf-8 request");
+
+        assert!(text.starts_with("POST /nocky-connect/snapshot HTTP/1.1\r\n"));
+        assert!(text.contains("Host: 192.168.0.8:35187\r\n"));
+        assert!(text.contains("Content-Length: 21\r\n"));
     }
 
     #[test]
@@ -216,6 +280,25 @@ mod tests {
     }
 
     #[test]
+    fn decodes_result_response_for_snapshot_transfer() {
+        let result = NockyConnectHandoffEnvelope::result(
+            "result-message-1",
+            1_789_002,
+            crate::connect::NockyConnectHandoffResult {
+                offer_id: "offer-1".to_string(),
+                status: crate::connect::NockyConnectHandoffResultStatus::RestoredPaused,
+                error_message: None,
+            },
+        );
+        let body = serde_json::to_string(&result).expect("result json");
+        let response = format!("HTTP/1.1 202 Accepted\r\n\r\n{}", body);
+
+        let decoded = decode_handoff_snapshot_response(response.as_bytes()).expect("decode result");
+
+        assert_eq!(decoded, result);
+    }
+
+    #[test]
     fn rejects_result_response_for_offer_send() {
         let result = NockyConnectHandoffEnvelope::result(
             "result-message-1",
@@ -235,6 +318,15 @@ mod tests {
             error,
             NockyConnectHandoffHttpError::UnsupportedKind(NockyConnectHandoffKind::Result),
         );
+    }
+
+    fn test_target() -> NockyConnectHandoffTarget {
+        NockyConnectHandoffTarget {
+            host: "192.168.0.8".to_string(),
+            port: 35187,
+            path: "/nocky-connect/handoff".to_string(),
+            transport: NockyConnectHandoffTransport::LocalHttp,
+        }
     }
 
     fn sample_offer() -> NockyConnectHandoffEnvelope {
