@@ -4,7 +4,11 @@
 //! controller. UI code should only request that services are started and then
 //! observe their results through small channels/callbacks.
 
-use super::handoff_http_receiver::receive_handoff_offer_and_snapshot;
+use super::{
+    discovery_udp::receive_once as receive_discovery_once,
+    handoff_http_receiver::receive_handoff_offer_and_snapshot,
+    NockyConnectDeviceDescriptor,
+};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -15,6 +19,7 @@ use std::{
 };
 
 static DESKTOP_HANDOFF_RECEIVER_ACTIVE: AtomicBool = AtomicBool::new(false);
+static DESKTOP_DISCOVERY_RESPONDER_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 /// Event emitted by the long-running Desktop handoff receiver service.
 pub enum DesktopHandoffReceiverEvent {
@@ -92,6 +97,32 @@ pub fn try_start_desktop_handoff_receiver_loop(
     });
 
     Some(DesktopHandoffReceiverLoop { receiver })
+}
+
+/// Start the Desktop LAN discovery responder as a long-running singleton.
+///
+/// This keeps the desktop discoverable by Android even when the Nocky Connect
+/// popover is closed. The responder owns UDP `34987`; foreground scans use an
+/// ephemeral UDP port so both paths can coexist.
+pub fn try_start_desktop_discovery_responder_loop(
+    local_descriptor: NockyConnectDeviceDescriptor,
+    timeout: Duration,
+) -> bool {
+    if DESKTOP_DISCOVERY_RESPONDER_ACTIVE.swap(true, Ordering::SeqCst) {
+        return false;
+    }
+
+    thread::spawn(move || {
+        loop {
+            if let Err(error) = receive_discovery_once(&local_descriptor, timeout) {
+                eprintln!("Nocky Connect: desktop discovery responder stopped: {error}");
+                break;
+            }
+        }
+        DESKTOP_DISCOVERY_RESPONDER_ACTIVE.store(false, Ordering::SeqCst);
+    });
+
+    true
 }
 
 /// Release the singleton receiver guard after a one-shot receiver has finished.
