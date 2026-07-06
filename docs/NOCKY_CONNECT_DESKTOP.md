@@ -13,9 +13,10 @@ This PR adds a desktop-side foundation only:
 - export mapping from the existing `PlaybackQueue` model to `PlaybackSessionSnapshot`;
 - restore mapping from a received `PlaybackSessionSnapshot` back to a paused `PlaybackQueue` plan;
 - local private snapshot file store;
+- local desktop device identity helper;
 - gateway for schema/version validation, export and restore planning;
 - shared v1 JSON fixture compatibility test;
-- unit tests for export, restore, schema validation and file storage.
+- unit tests for export, restore, schema validation, device identity and file storage.
 
 The implementation is isolated under `src/connect/` and does not change UI, player controls, GStreamer playback, MPRIS, YouTube stream resolution, local library scanning or queue behavior.
 
@@ -38,6 +39,10 @@ The shape is intentionally aligned with the Android fork's `PlaybackSessionSnaps
 ## Compatibility fixture
 
 `docs/fixtures/nocky-connect-snapshot-v1.json` is a shared protocol fixture. The desktop gateway test decodes it and prepares a paused restore plan to verify that the Rust implementation remains compatible with the Android-side v1 snapshot contract.
+
+## Device identity
+
+`NockyConnectDeviceIdentity` creates and reuses a random app-local device ID stored under `nocky-connect/device-id` in the provided base directory. `default_connect_config_dir()` resolves to `$XDG_CONFIG_HOME/nocky`, `~/.config/nocky`, or a temporary fallback. The ID is intentionally not based on hardware identifiers.
 
 ## Export behavior
 
