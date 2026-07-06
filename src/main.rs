@@ -27,7 +27,7 @@ mod visual_theme;
 mod visualizer;
 mod youtube;
 
-use std::{env, ffi::OsStr, fs, path::Path};
+use std::{env, ffi::OsStr, fs, path::Path, time::{SystemTime, UNIX_EPOCH}};
 
 use gtk::glib;
 
@@ -81,6 +81,32 @@ fn main() -> glib::ExitCode {
         };
     }
 
+    if command.as_deref() == Some(OsStr::new("--nocky-connect-export")) {
+        return match args.next() {
+            Some(path) => match export_nocky_connect_snapshot(Path::new(&path)) {
+                Ok(summary) => {
+                    println!("Nocky Connect snapshot exported");
+                    println!("  file: {}", summary.file.display());
+                    println!("  source: {:?}", summary.source);
+                    println!("  queue_items: {}", summary.queue_items);
+                    println!("  current_index: {}", summary.current_index);
+                    println!("  current_title: {}", summary.current_title);
+                    println!("  position_ms: {}", summary.position_ms);
+                    println!("  state: {:?}", summary.state);
+                    glib::ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    eprintln!("Nocky Connect export failed: {error}");
+                    glib::ExitCode::FAILURE
+                }
+            },
+            None => {
+                eprintln!("Usage: nocky --nocky-connect-export <output.json>");
+                glib::ExitCode::FAILURE
+            }
+        };
+    }
+
     app::run()
 }
 
@@ -91,6 +117,17 @@ struct RestoreSummary {
     current_index: usize,
     current_title: String,
     position_ms: u64,
+}
+
+#[derive(Clone, Debug)]
+struct ExportSummary {
+    file: std::path::PathBuf,
+    source: playback::queue::QueueSourceKind,
+    queue_items: usize,
+    current_index: usize,
+    current_title: String,
+    position_ms: u64,
+    state: connect::NockyPlaybackState,
 }
 
 fn inspect_nocky_connect_snapshot(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
@@ -190,10 +227,7 @@ fn restore_nocky_connect_snapshot(
         .title
         .clone()
         .unwrap_or_else(|| "Nocky Connect handoff".to_string());
-    session.saved_at_unix = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_secs())
-        .unwrap_or_default();
+    session.saved_at_unix = unix_seconds();
 
     playback::queue::save_for(source, &restored.queue.snapshot())?;
     playback::session::save_for(source, &session)?;
@@ -213,4 +247,95 @@ fn restore_nocky_connect_snapshot(
         current_title: current.media.title.clone(),
         position_ms: restored.state.position_ms,
     })
+}
+
+fn export_nocky_connect_snapshot(path: &Path) -> Result<ExportSummary, Box<dyn std::error::Error>> {
+    let config = config::AppConfig::load();
+    let source = match config.startup_source {
+        Some(config::StartupSource::Local) => playback::queue::QueueSourceKind::Local,
+        Some(config::StartupSource::YouTube) => playback::queue::QueueSourceKind::YouTube,
+        None => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "startup source is not configured",
+            )
+            .into())
+        }
+    };
+    let queue = playback::queue::load_for(source).queue;
+    let current = queue.current().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "active desktop queue has no current item",
+        )
+    })?;
+    let session = playback::session::load_for(source);
+    let state = session
+        .as_ref()
+        .map(|session| {
+            if session.was_playing {
+                connect::NockyPlaybackState::Playing
+            } else {
+                connect::NockyPlaybackState::Paused
+            }
+        })
+        .unwrap_or(connect::NockyPlaybackState::Paused);
+    let position_ms = session
+        .as_ref()
+        .map(|session| session.position_us.max(0) as u64 / 1_000)
+        .unwrap_or_default();
+    let repeat_mode = session
+        .as_ref()
+        .filter(|session| session.repeat_enabled)
+        .map(|_| connect::NockyRepeatMode::One)
+        .unwrap_or(connect::NockyRepeatMode::Off);
+    let shuffle_enabled = session
+        .as_ref()
+        .is_some_and(|session| session.shuffle_enabled);
+    let title = session
+        .as_ref()
+        .and_then(|session| (!session.context_title.trim().is_empty()).then(|| session.context_title.clone()))
+        .or_else(|| Some("Nocky Desktop handoff".to_string()));
+    let device_id = connect::NockyConnectDeviceIdentity::new(connect::default_connect_config_dir())
+        .get_or_create()?;
+    let gateway = connect::NockyConnectGateway::new(device_id);
+    let session_id = format!("desktop-{}", unix_millis());
+    let playback_state = connect::DesktopPlaybackState {
+        state,
+        position_ms,
+        volume: Some(config.volume.clamp(0.0, 1.0) as f32),
+        repeat_mode,
+        shuffle_enabled,
+        ..Default::default()
+    };
+    let payload = gateway.export_snapshot_json(&queue, title, playback_state, session_id, 1)?;
+
+    if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, payload)?;
+
+    Ok(ExportSummary {
+        file: path.to_path_buf(),
+        source,
+        queue_items: queue.len(),
+        current_index: queue.current_index().unwrap_or(0),
+        current_title: current.media.title.clone(),
+        position_ms,
+        state,
+    })
+}
+
+fn unix_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis().min(u128::from(u64::MAX)) as u64)
+        .unwrap_or_default()
+}
+
+fn unix_seconds() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or_default()
 }
