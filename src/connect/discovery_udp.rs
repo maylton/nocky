@@ -31,7 +31,7 @@ pub fn scan_once(
         ),
     );
 
-    let socket = bind_discovery_socket("scan")?;
+    let socket = bind_scan_socket()?;
     socket.set_broadcast(true)?;
     socket.set_read_timeout(Some(Duration::from_millis(120)))?;
     debug_discovery("scan", "broadcast=true; read_timeout=120ms");
@@ -66,7 +66,7 @@ pub fn receive_once(
         ),
     );
 
-    let socket = bind_discovery_socket("receive")?;
+    let socket = bind_discovery_socket("receive", NOCKY_CONNECT_DISCOVERY_PORT)?;
     socket.set_broadcast(true)?;
     socket.set_read_timeout(Some(Duration::from_millis(120)))?;
     debug_discovery("receive", "broadcast=true; read_timeout=120ms");
@@ -74,8 +74,12 @@ pub fn receive_once(
     collect_discovery_replies("receive", &socket, local_descriptor, timeout)
 }
 
-fn bind_discovery_socket(mode: &str) -> io::Result<UdpSocket> {
-    let address = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, NOCKY_CONNECT_DISCOVERY_PORT);
+fn bind_scan_socket() -> io::Result<UdpSocket> {
+    bind_discovery_socket("scan", 0)
+}
+
+fn bind_discovery_socket(mode: &str, port: u16) -> io::Result<UdpSocket> {
+    let address = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
     debug_discovery(mode, format!("binding UDP socket on {address}"));
     match UdpSocket::bind(address) {
         Ok(socket) => {
