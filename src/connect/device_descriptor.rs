@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{NOCKY_CONNECT_PROTOCOL_VERSION};
+use super::NOCKY_CONNECT_PROTOCOL_VERSION;
 
 pub const DEVICE_DESCRIPTOR_SCHEMA: &str = "io.github.maylton.nocky.connect.DeviceDescriptor";
 
@@ -101,7 +101,9 @@ pub enum NockyConnectDeviceDescriptorError {
 impl std::fmt::Display for NockyConnectDeviceDescriptorError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::UnsupportedSchema(schema) => write!(formatter, "unsupported descriptor schema {schema}"),
+            Self::UnsupportedSchema(schema) => {
+                write!(formatter, "unsupported descriptor schema {schema}")
+            }
             Self::UnsupportedSchemaVersion(version) => {
                 write!(formatter, "unsupported descriptor schema version {version}")
             }
@@ -150,8 +152,12 @@ mod tests {
         assert_eq!(decoded.schema_version, NOCKY_CONNECT_PROTOCOL_VERSION);
         assert_eq!(decoded.device_id, "desktop-device");
         assert_eq!(decoded.platform, NockyConnectDevicePlatform::LinuxDesktop);
-        assert!(decoded.features.contains(&NockyConnectFeature::SnapshotExport));
-        assert!(decoded.features.contains(&NockyConnectFeature::SnapshotImportPaused));
+        assert!(decoded
+            .features
+            .contains(&NockyConnectFeature::SnapshotExport));
+        assert!(decoded
+            .features
+            .contains(&NockyConnectFeature::SnapshotImportPaused));
     }
 
     #[test]
