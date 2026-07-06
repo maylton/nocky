@@ -105,6 +105,10 @@ fn send_json_http(
         .flush()
         .map_err(|error| NockyConnectHandoffHttpError::Io(error.to_string()))?;
 
+    read_http_response(&mut stream)
+}
+
+fn read_http_response(stream: &mut TcpStream) -> Result<Vec<u8>, NockyConnectHandoffHttpError> {
     let mut response = Vec::new();
     let mut buffer = [0_u8; 4096];
     loop {
@@ -120,8 +124,37 @@ fn send_json_http(
                 "response too large".to_string(),
             ));
         }
+        if response_has_complete_body(&response)? {
+            break;
+        }
     }
     Ok(response)
+}
+
+fn response_has_complete_body(response: &[u8]) -> Result<bool, NockyConnectHandoffHttpError> {
+    let Some(header_end) = find_header_end(response) else {
+        return Ok(false);
+    };
+    let header_text = std::str::from_utf8(&response[..header_end])
+        .map_err(|error| NockyConnectHandoffHttpError::InvalidResponse(error.to_string()))?;
+    let Some(content_length) = content_length(header_text) else {
+        return Ok(false);
+    };
+    Ok(response.len().saturating_sub(header_end + 4) >= content_length)
+}
+
+fn find_header_end(response: &[u8]) -> Option<usize> {
+    response
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+}
+
+fn content_length(header_text: &str) -> Option<usize> {
+    header_text
+        .lines()
+        .find(|line| line.to_ascii_lowercase().starts_with("content-length:"))
+        .and_then(|line| line.split_once(':'))
+        .and_then(|(_, value)| value.trim().parse::<usize>().ok())
 }
 
 pub(crate) fn build_handoff_offer_request(
@@ -186,7 +219,7 @@ fn decode_handoff_response(
         ));
     }
 
-    let envelope = serde_json::from_str::<NockyConnectHandoffEnvelope>(body)
+    let envelope = serde_json::from_str::<NockyConnectHandoffEnvelope>(body.trim_end_matches('\0'))
         .map_err(|error| NockyConnectHandoffHttpError::Json(error.to_string()))?;
     require_supported_handoff_response(&envelope, accepted_kinds)?;
     Ok(envelope)
@@ -255,6 +288,12 @@ mod tests {
         assert!(text.starts_with("POST /nocky-connect/snapshot HTTP/1.1\r\n"));
         assert!(text.contains("Host: 192.168.0.8:35187\r\n"));
         assert!(text.contains("Content-Length: 21\r\n"));
+    }
+
+    #[test]
+    fn detects_complete_response_body_from_content_length() {
+        let response = b"HTTP/1.1 202 Accepted\r\nContent-Length: 2\r\n\r\n{}";
+        assert!(response_has_complete_body(response).expect("complete check"));
     }
 
     #[test]
