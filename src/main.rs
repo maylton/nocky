@@ -37,15 +37,9 @@ const HOME_PLAYER_WIDTH: i32 = 454;
 fn main() -> glib::ExitCode {
     let mut args = env::args_os();
     let _program = args.next();
+    let command = args.next();
 
-    let is_connect_inspect = args
-        .as_slice()
-        .first()
-        .map(|argument| argument.as_os_str())
-        == Some(OsStr::new("--nocky-connect-inspect"));
-
-    if is_connect_inspect {
-        let _command = args.next();
+    if command.as_deref() == Some(OsStr::new("--nocky-connect-inspect")) {
         return match args.next() {
             Some(path) => match inspect_nocky_connect_snapshot(Path::new(&path)) {
                 Ok(()) => glib::ExitCode::SUCCESS,
