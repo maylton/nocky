@@ -27,38 +27,9 @@ pub enum DesktopHandoffReceiverEvent {
     Stopped(String),
 }
 
-/// Handle returned when the Desktop handoff receiver starts successfully.
-pub struct DesktopHandoffReceiver {
-    pub receiver: mpsc::Receiver<Result<String, String>>,
-}
-
 /// Handle returned when the long-running Desktop receiver service starts.
 pub struct DesktopHandoffReceiverLoop {
     pub receiver: mpsc::Receiver<DesktopHandoffReceiverEvent>,
-}
-
-/// Start the Desktop handoff receiver once.
-///
-/// Returns `None` if a receiver is already active. The caller remains
-/// responsible for consuming the receiver channel on the UI/main thread and
-/// calling `mark_desktop_handoff_receiver_stopped` when the service finishes.
-pub fn try_start_desktop_handoff_receiver(
-    local_device_id: String,
-    timeout: Duration,
-) -> Option<DesktopHandoffReceiver> {
-    if DESKTOP_HANDOFF_RECEIVER_ACTIVE.swap(true, Ordering::SeqCst) {
-        return None;
-    }
-
-    let (sender, receiver) = mpsc::channel::<Result<String, String>>();
-    thread::spawn(move || {
-        let result = receive_handoff_offer_and_snapshot(&local_device_id, timeout)
-            .map(|received| received.snapshot_json)
-            .map_err(|error| error.to_string());
-        let _ = sender.send(result);
-    });
-
-    Some(DesktopHandoffReceiver { receiver })
 }
 
 /// Start the Desktop handoff receiver as a long-running singleton service.
@@ -123,9 +94,4 @@ pub fn try_start_desktop_discovery_responder_loop(
     });
 
     true
-}
-
-/// Release the singleton receiver guard after a one-shot receiver has finished.
-pub fn mark_desktop_handoff_receiver_stopped() {
-    DESKTOP_HANDOFF_RECEIVER_ACTIVE.store(false, Ordering::SeqCst);
 }
