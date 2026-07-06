@@ -13,7 +13,7 @@ pub struct NockyConnectDeviceListEntry {
     pub last_seen: Instant,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct NockyConnectDeviceList {
     devices: BTreeMap<String, NockyConnectDeviceListEntry>,
 }
