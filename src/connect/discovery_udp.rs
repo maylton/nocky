@@ -37,6 +37,17 @@ pub fn scan_once(
     collect_discovery_replies(&socket, local_descriptor, timeout)
 }
 
+pub fn receive_once(
+    local_descriptor: &NockyConnectDeviceDescriptor,
+    timeout: Duration,
+) -> io::Result<Vec<NockyConnectDiscoveredDevice>> {
+    let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, NOCKY_CONNECT_DISCOVERY_PORT))?;
+    socket.set_broadcast(true)?;
+    socket.set_read_timeout(Some(Duration::from_millis(120)))?;
+
+    collect_discovery_replies(&socket, local_descriptor, timeout)
+}
+
 fn collect_discovery_replies(
     socket: &UdpSocket,
     local_descriptor: &NockyConnectDeviceDescriptor,
