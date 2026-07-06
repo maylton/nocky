@@ -227,6 +227,7 @@ impl AppController {
             (player_duration > 0).then_some(player_duration as u64 / 1_000)
         });
         let title = self.listening_history_context.borrow().title.clone();
+        let title = (!title.trim().is_empty()).then_some(title);
         let now = unix_millis();
         let playback_state = DesktopPlaybackState {
             state: if self.player.is_playing() {
