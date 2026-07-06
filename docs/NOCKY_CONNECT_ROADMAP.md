@@ -6,7 +6,7 @@ Nocky Connect is not an implementation of Spotify Connect and must not depend on
 
 ## Product direction
 
-The main Nocky Connect surface should become a live `Available devices` surface instead of two separate `Send` and `Receive` actions.
+The main Nocky Connect surface should be a live `Available devices` surface instead of two separate `Send` and `Receive` actions.
 
 Target experience:
 
@@ -77,8 +77,57 @@ Known implementation notes:
 
 - Desktop receiver is currently started from the Nocky Connect surface and guarded as a singleton to avoid duplicate binds on TCP `35187`.
 - Android snapshot export must read ExoPlayer state on the main thread.
-- The Android manual `Apply pending restore` debug action should not be part of the normal user-facing flow; pending restore remains as an internal fallback.
+- Android pending restore remains an internal fallback for received desktop snapshots.
 - Restored queues can still have incomplete artwork/metadata. Metadata hydration is a later polish phase.
+
+### Current Desktop product surface
+
+The Desktop entry point currently opens a Nocky Connect device-picker popover.
+
+Implemented on Desktop:
+
+- popover shows `This device` and `Available devices`;
+- local Desktop descriptor advertises a local HTTP handoff endpoint;
+- discovered devices are cached for 5 minutes;
+- opening the popover renders cached devices immediately;
+- opening the popover starts the Desktop handoff receiver;
+- opening the popover starts a LAN scan immediately;
+- while the popover remains open, Desktop refreshes LAN discovery every 15 seconds;
+- scan overlap is guarded to avoid concurrent discovery workers;
+- selecting an Android row sends the current Desktop playback snapshot to Android;
+- Android -> Desktop handoff applies the received queue paused.
+
+Still temporary on Desktop:
+
+- presence/listener is not started at app startup yet;
+- receiver lifecycle is still tied to opening the Nocky Connect surface;
+- surface is still a popover, not a full internal page;
+- row states do not yet distinguish `available now` from `recently seen`;
+- verbose diagnostic logs should be removed or gated before release.
+
+### Current Android product surface
+
+Android now uses a device-picker bottom-sheet instead of the old manual Send/Receive actions.
+
+Implemented on Android:
+
+- player main action opens Nocky Connect directly;
+- duplicate three-dot menu entry has been removed;
+- surface shows `This device` and `Available devices`;
+- opening the surface starts a short Android presence window automatically;
+- `Scan again` refreshes the list and starts a new short presence window;
+- discovered devices are cached in memory for 5 minutes;
+- failed scans keep recently seen devices visible;
+- selecting a Desktop row sends the current Android playback snapshot to Desktop;
+- old manual receive action and diagnostic branching were removed from the player surface;
+- Android still receives Desktop -> Android through the HTTP receiver behind the presence flow.
+
+Still temporary on Android:
+
+- presence is currently a foreground short window, not lifecycle-aware app/player presence;
+- strings are still hardcoded in the Kotlin surface and should move to resources;
+- receiver confirmation UI is still future trust/polish work;
+- cache is in-memory only and resets when the app process dies.
 
 ## Important environment findings
 
@@ -124,40 +173,44 @@ Keep and build on:
 - firewall troubleshooting note;
 - paused-by-default restore semantics;
 - strict no-secrets rule;
-- pending restore store as an internal Android fallback.
+- pending restore store as an internal Android fallback;
+- Desktop device cache;
+- Desktop periodic refresh while the popover is open;
+- Android short presence window;
+- Android device-picker surface.
 
-Use the current `Send` and `Receive` actions only as temporary diagnostics. They should not remain the main UX.
+Do not reintroduce the old manual `Send / Receive` Android UI as the primary flow. It has been replaced by the device picker.
 
-## What should change
+## What should change next
 
 ### UX
 
-Replace the main `Send / Receive` UX with:
+Continue evolving the device picker with:
 
-- a live list of devices;
+- live device list semantics;
 - device row states:
   - scanning;
-  - available;
+  - available now;
+  - recently seen;
   - connecting;
   - waiting for confirmation;
   - failed / firewall hint;
 - current device section;
-- troubleshooting footer.
+- troubleshooting footer;
+- localized strings.
 
 Desktop should eventually move from a popover to an internal Nocky Connect page/surface similar to the Queue surface.
 
-Android should keep the player-menu entry point, but the bottom-sheet page should become a device list instead of two static actions.
-
 ### Always-on discovery / presence
 
-Future product behavior should not require opening a temporary receiver action to make a device visible.
+Future product behavior should not require opening the Nocky Connect surface to make a device visible.
 
 Target behavior:
 
 - Desktop starts local presence/listener when the app is running, not only when the Nocky Connect popover opens.
-- Android starts local presence/listener when the app/player is active.
+- Android starts local presence/listener when the app/player lifecycle allows it.
 - Each side maintains a small live cache of recently seen devices.
-- Opening the Nocky Connect surface only renders the already-known device list and can trigger a manual refresh.
+- Opening the Nocky Connect surface renders the already-known device list and can trigger a manual refresh.
 - Discovery should be rate-limited and lifecycle-aware, especially on Android, to avoid unnecessary battery/network usage.
 - Receiver HTTP should become a background singleton with clear lifecycle ownership.
 
@@ -176,10 +229,11 @@ Discovery only finds devices. Actual handoff uses a reliable local transport:
 
 Initial version:
 
-- receiver always shows accept/decline.
+- receiver may auto-accept only while the experimental local surface/presence flow is active.
 
 Later version:
 
+- show receiver accept/decline confirmation;
 - remember trusted device ids;
 - allow auto-accept only for trusted devices;
 - provide a way to revoke trust.
@@ -188,16 +242,15 @@ Later version:
 
 ### Phase 0 - Stabilize bidirectional diagnostic handoff
 
-- Keep temporary desktop UDP logs while transport work continues.
-- Confirm clean desktop validation:
+Status: complete for the validated local prototype.
+
+Validation commands:
 
 ```bash
 cargo fmt --all
 cargo test connect
 cargo check --all-targets
 ```
-
-- Confirm clean Android validation:
 
 ```bash
 ./gradlew --no-configuration-cache :app:testFossDebugUnitTest --tests 'com.metrolist.music.connect.*'
@@ -206,46 +259,69 @@ cargo check --all-targets
 
 ### Phase 1 - UX cleanup for current handoff
 
-- Hide/remove user-facing debug-only restore actions.
-- Improve toast/copy for send, receive, restore, timeout, and firewall failures.
-- Keep pending restore as internal fallback.
-- Keep manual `Send`/`Receive` only until the live device list exists.
+Status: mostly complete for Android; partially complete for Desktop.
+
+Done:
+
+- hide/remove user-facing Android debug-only restore actions;
+- remove Android manual `Send / Receive` surface actions;
+- keep pending restore as internal fallback;
+- hide endpoint details from user-facing toasts;
+- keep direct player entry point for Android Nocky Connect.
+
+Remaining:
+
+- improve failure copy and firewall hints;
+- localize strings;
+- gate verbose diagnostics.
 
 ### Phase 2 - Device list model
 
-Create shared concepts on both platforms:
+Status: in progress, usable prototype.
 
-- discovered device model;
-- last-seen timestamp;
-- source address;
-- device status;
-- current local device row;
-- helper to merge/dedupe discovery results.
+Done:
 
-The list model should support automatic scan/listen loops without needing separate send/receive buttons.
+- Desktop discovered-device model with last-seen cache;
+- Android discovered-device cache with last-seen timestamps;
+- device list rendering on both platforms;
+- dedupe by device id;
+- cache expiry after 5 minutes.
+
+Remaining:
+
+- expose `recently seen` vs `available now` row states;
+- share more naming/status semantics between Android and Desktop;
+- persist friendly trusted device names later.
 
 ### Phase 3 - Spotify-style surfaces
 
+Status: in progress.
+
 Desktop:
 
-- show `This device` and `Available devices`;
-- show devices as clickable rows;
-- keep troubleshooting text for UFW/UDP `34987` and TCP `35187`;
+- shows `This device` and `Available devices`;
+- shows clickable device rows;
+- keeps troubleshooting text for UFW/UDP `34987` and TCP `35187`;
+- renders cached devices immediately;
+- refreshes periodically while the popover is open;
 - later migrate from popover to internal ViewStack page.
 
 Android:
 
-- keep player bottom-sheet entry;
-- replace two menu actions with a live device list;
-- show empty/scanning/error states;
-- show device rows matching the desktop semantics.
+- keeps player bottom-sheet entry;
+- uses a live device list instead of two static actions;
+- shows empty/scanning/error states;
+- shows device rows matching the desktop semantics;
+- starts short presence automatically when the surface opens.
 
 ### Phase 4 - Always-on discovery and background receiver
 
-- Desktop starts presence/receiver at app startup.
-- Android starts presence/receiver when app/player lifecycle allows it.
-- Device picker reads from live cache instead of starting discovery from scratch.
-- Rate-limit discovery and avoid battery-heavy loops.
+Status: next major milestone.
+
+- Desktop should start presence/receiver at app startup.
+- Android should start presence/receiver when app/player lifecycle allows it.
+- Device picker should read from live cache instead of starting discovery from scratch.
+- Discovery must be rate-limited and avoid battery-heavy loops.
 
 ### Phase 5 - Trust, confirmation, and polish
 
