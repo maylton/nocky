@@ -11,6 +11,7 @@ pub mod discovery;
 pub mod discovery_udp;
 pub mod file_store;
 pub mod gateway;
+pub mod handoff_target;
 pub mod mapper;
 pub mod protocol;
 
@@ -21,5 +22,6 @@ pub use discovery::*;
 pub use discovery_udp::*;
 pub use file_store::*;
 pub use gateway::*;
+pub use handoff_target::*;
 pub use mapper::*;
 pub use protocol::*;
