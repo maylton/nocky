@@ -12,6 +12,7 @@ This PR adds a desktop-side foundation only:
 - JSON encode/decode through `serde` and `serde_json`;
 - export mapping from the existing `PlaybackQueue` model to `PlaybackSessionSnapshot`;
 - restore mapping from a received `PlaybackSessionSnapshot` back to a paused `PlaybackQueue` plan;
+- development CLI inspection for manually exchanged snapshot JSON files;
 - device descriptor model for future LAN discovery and capability negotiation;
 - local private snapshot file store;
 - local desktop device identity helper;
@@ -19,7 +20,7 @@ This PR adds a desktop-side foundation only:
 - shared v1 JSON fixture compatibility tests for snapshots and device descriptors;
 - unit tests for export, restore, schema validation, descriptor validation, device identity and file storage.
 
-The implementation is isolated under `src/connect/` and does not change UI, player controls, GStreamer playback, MPRIS, YouTube stream resolution, local library scanning or queue behavior.
+The implementation is isolated under `src/connect/` plus one temporary command-line inspection hook in `src/main.rs`. It does not change UI, player controls, GStreamer playback, MPRIS, YouTube stream resolution, local library scanning or queue behavior.
 
 ## Protocol compatibility
 
@@ -42,6 +43,18 @@ The shape is intentionally aligned with the Android fork's `PlaybackSessionSnaps
 `docs/fixtures/nocky-connect-snapshot-v1.json` is a shared protocol fixture. The desktop gateway test decodes it and prepares a paused restore plan to verify that the Rust implementation remains compatible with the Android-side v1 snapshot contract.
 
 `docs/fixtures/nocky-connect-device-descriptor-v1.json` is a shared descriptor fixture. The desktop descriptor test decodes it to verify that the Rust implementation remains compatible with the future Android-side LAN discovery descriptor contract.
+
+## Manual Android snapshot inspection
+
+The desktop app binary accepts a temporary development command for validating a JSON snapshot exported by Android:
+
+```bash
+cargo run -- --nocky-connect-inspect /path/to/nocky-android-snapshot.json
+```
+
+This command does not open the GTK UI. It validates the schema/version, decodes the snapshot, prepares a conservative paused restore plan and prints a summary including session id, source, playback position, queue size, current item and rebuilt desktop queue state.
+
+This is the first manual Android → Desktop compatibility checkpoint before wiring the restore plan into real playback.
 
 ## Device identity and descriptor
 
@@ -82,7 +95,8 @@ Restoring a snapshot is conservative:
 
 ## Next steps
 
-1. Wire the gateway to the real desktop playback/session state with explicit export and restore methods.
-2. Add a development menu/action for export/import JSON round trips.
-3. Verify Android ⇄ Desktop JSON compatibility with manually exchanged snapshots.
-4. Add same-network discovery and explicit accept/deny confirmation after manual JSON round trips work both ways.
+1. Validate an Android-exported JSON snapshot with `--nocky-connect-inspect`.
+2. Wire the gateway to the real desktop playback/session state with explicit export and restore methods.
+3. Add a development menu/action for export/import JSON round trips.
+4. Verify Android ⇄ Desktop JSON compatibility with manually exchanged snapshots.
+5. Add same-network discovery and explicit accept/deny confirmation after manual JSON round trips work both ways.
