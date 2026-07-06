@@ -4,6 +4,7 @@
 //! It defines the portable snapshot format shared with Android and provides
 //! export/restore helpers for the existing desktop queue model.
 
+pub mod desktop_services;
 pub mod device_descriptor;
 pub mod device_identity;
 pub mod device_list;
@@ -17,6 +18,7 @@ pub mod handoff_target;
 pub mod mapper;
 pub mod protocol;
 
+pub use desktop_services::*;
 pub use device_descriptor::*;
 pub use device_identity::*;
 pub use device_list::*;
