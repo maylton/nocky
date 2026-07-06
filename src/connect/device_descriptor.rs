@@ -161,6 +161,29 @@ mod tests {
     }
 
     #[test]
+    fn decodes_shared_v1_descriptor_fixture() {
+        let payload = include_str!("../../docs/fixtures/nocky-connect-device-descriptor-v1.json");
+
+        let descriptor = decode_device_descriptor(payload).expect("fixture should decode");
+
+        assert_eq!(descriptor.schema, DEVICE_DESCRIPTOR_SCHEMA);
+        assert_eq!(descriptor.schema_version, NOCKY_CONNECT_PROTOCOL_VERSION);
+        assert_eq!(descriptor.device_id, "fixture-android-device");
+        assert_eq!(descriptor.device_name, "Fixture Android phone");
+        assert_eq!(descriptor.platform, NockyConnectDevicePlatform::Android);
+        assert_eq!(descriptor.protocol_version, NOCKY_CONNECT_PROTOCOL_VERSION);
+        assert!(descriptor
+            .features
+            .contains(&NockyConnectFeature::SnapshotExport));
+        assert!(descriptor
+            .features
+            .contains(&NockyConnectFeature::SnapshotImportPaused));
+        assert!(descriptor
+            .features
+            .contains(&NockyConnectFeature::FileRoundTrip));
+    }
+
+    #[test]
     fn rejects_unsupported_protocol_version() {
         let payload = r#"{
             "schema":"io.github.maylton.nocky.connect.DeviceDescriptor",
