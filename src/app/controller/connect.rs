@@ -5,9 +5,15 @@
 //! keeping the regular action table and footer UI small.
 
 use super::AppController;
+use crate::connect::{
+    default_connect_config_dir, scan_once, NockyConnectDeviceDescriptor,
+    NockyConnectDeviceIdentity,
+};
 use adw::prelude::*;
 use gtk::gio;
-use std::rc::Rc;
+use std::{rc::Rc, time::Duration};
+
+const NOCKY_CONNECT_DISCOVERY_TIMEOUT: Duration = Duration::from_millis(1_800);
 
 impl AppController {
     pub(crate) fn install_nocky_connect_action(self: &Rc<Self>, app: &adw::Application) {
@@ -75,8 +81,10 @@ impl AppController {
         let send_surface = surface.clone();
         send_button.connect_clicked(move |_| {
             toast_overlay.add_toast(adw::Toast::new(
-                "Nocky Connect: descoberta local será adicionada no próximo passo",
+                "Nocky Connect: procurando dispositivos na rede local…",
             ));
+            let message = run_desktop_nocky_connect_scan("Enviar para Android");
+            toast_overlay.add_toast(adw::Toast::new(&message));
             send_surface.close();
         });
 
@@ -84,8 +92,10 @@ impl AppController {
         let receive_surface = surface.clone();
         receive_button.connect_clicked(move |_| {
             toast_overlay.add_toast(adw::Toast::new(
-                "Nocky Connect: descoberta local será adicionada no próximo passo",
+                "Nocky Connect: procurando dispositivos na rede local…",
             ));
+            let message = run_desktop_nocky_connect_scan("Receber do Android");
+            toast_overlay.add_toast(adw::Toast::new(&message));
             receive_surface.close();
         });
 
@@ -139,4 +149,43 @@ fn build_connect_surface_action(
     row.append(&labels);
     button.set_child(Some(&row));
     button
+}
+
+fn run_desktop_nocky_connect_scan(action_label: &str) -> String {
+    let identity = NockyConnectDeviceIdentity::new(default_connect_config_dir());
+    let device_id = match identity.get_or_create() {
+        Ok(device_id) => device_id,
+        Err(error) => return format!("Nocky Connect scan failed: {error}"),
+    };
+    let descriptor = NockyConnectDeviceDescriptor::linux_desktop(
+        device_id,
+        desktop_device_name(),
+        Some(env!("CARGO_PKG_VERSION").to_string()),
+    );
+
+    match scan_once(&descriptor, NOCKY_CONNECT_DISCOVERY_TIMEOUT) {
+        Ok(devices) if devices.is_empty() => {
+            format!("Nocky Connect: nenhum dispositivo encontrado para {action_label}")
+        }
+        Ok(devices) => {
+            let names = devices
+                .iter()
+                .take(3)
+                .map(|device| device.descriptor.device_name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!(
+                "Nocky Connect: {} dispositivo(s) encontrado(s): {names}",
+                devices.len()
+            )
+        }
+        Err(error) => format!("Nocky Connect scan failed: {error}"),
+    }
+}
+
+fn desktop_device_name() -> String {
+    std::env::var("HOSTNAME")
+        .ok()
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or_else(|| "Nocky Desktop".to_string())
 }
