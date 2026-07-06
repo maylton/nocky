@@ -13,6 +13,7 @@ This PR adds a desktop-side foundation only:
 - export mapping from the existing `PlaybackQueue` model to `PlaybackSessionSnapshot`;
 - restore mapping from a received `PlaybackSessionSnapshot` back to a paused `PlaybackQueue` plan;
 - development CLI inspection for manually exchanged snapshot JSON files;
+- development CLI staged restore for importing a snapshot into the desktop queue/session store;
 - device descriptor model for future LAN discovery and capability negotiation;
 - local private snapshot file store;
 - local desktop device identity helper;
@@ -20,7 +21,7 @@ This PR adds a desktop-side foundation only:
 - shared v1 JSON fixture compatibility tests for snapshots and device descriptors;
 - unit tests for export, restore, schema validation, descriptor validation, device identity and file storage.
 
-The implementation is isolated under `src/connect/` plus one temporary command-line inspection hook in `src/main.rs`. It does not change UI, player controls, GStreamer playback, MPRIS, YouTube stream resolution, local library scanning or queue behavior.
+The implementation is isolated under `src/connect/` plus temporary command-line development hooks in `src/main.rs`. It does not change normal UI controls, GStreamer playback, MPRIS, YouTube stream resolution, local library scanning or regular queue behavior.
 
 ## Protocol compatibility
 
@@ -54,7 +55,18 @@ cargo run -- --nocky-connect-inspect /path/to/nocky-android-snapshot.json
 
 This command does not open the GTK UI. It validates the schema/version, decodes the snapshot, prepares a conservative paused restore plan and prints a summary including session id, source, playback position, queue size, current item and rebuilt desktop queue state.
 
-This is the first manual Android → Desktop compatibility checkpoint before wiring the restore plan into real playback.
+## Manual Android snapshot staged restore
+
+A second temporary command imports an Android-exported snapshot into the desktop queue/session store:
+
+```bash
+cargo run -- --nocky-connect-restore /path/to/nocky-android-snapshot.json
+cargo run
+```
+
+The restore command validates the snapshot, rebuilds the desktop `PlaybackQueue`, writes the source-specific Queue 2.0 state, writes a paused source-specific `PlaybackSession`, switches the startup source in `config.json` to match the snapshot source and exits. The following regular `cargo run` starts the app through its normal startup path and restores the staged queue paused at the received position.
+
+The command intentionally stages `was_playing = false`, so opening Nocky after import must not unexpectedly start playback.
 
 ## Device identity and descriptor
 
@@ -91,12 +103,13 @@ Restoring a snapshot is conservative:
 - the current index is clamped to the available item range;
 - playback state is always prepared as paused;
 - position, volume, repeat and shuffle intent are preserved in the restore plan;
+- only `repeat_mode = "one"` maps to the current desktop repeat toggle for now;
 - no stream URL, cookie, browser header, token or account data is accepted or required.
 
 ## Next steps
 
 1. Validate an Android-exported JSON snapshot with `--nocky-connect-inspect`.
-2. Wire the gateway to the real desktop playback/session state with explicit export and restore methods.
-3. Add a development menu/action for export/import JSON round trips.
+2. Stage an Android-exported JSON snapshot with `--nocky-connect-restore`, then start Nocky normally and confirm the paused restore.
+3. Replace the staged CLI import with an in-app development action.
 4. Verify Android ⇄ Desktop JSON compatibility with manually exchanged snapshots.
 5. Add same-network discovery and explicit accept/deny confirmation after manual JSON round trips work both ways.
