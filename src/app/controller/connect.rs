@@ -155,9 +155,6 @@ impl AppController {
                     return;
                 }
             };
-            let target_url = target
-                .local_http_url()
-                .unwrap_or_else(|| "local_http endpoint".to_string());
 
             controller.show_toast(&format!(
                 "Sending handoff snapshot to {} · {summary} · {encoded_bytes} bytes",
@@ -167,7 +164,6 @@ impl AppController {
             start_desktop_handoff_send(
                 weak.clone(),
                 descriptor.device_name.clone(),
-                target_url,
                 target,
                 envelope,
                 snapshot_json,
@@ -346,7 +342,6 @@ impl AppController {
 fn start_desktop_handoff_send(
     weak: std::rc::Weak<AppController>,
     device_name: String,
-    target_url: String,
     target: crate::connect::NockyConnectHandoffTarget,
     envelope: NockyConnectHandoffEnvelope,
     snapshot_json: String,
@@ -372,9 +367,7 @@ fn start_desktop_handoff_send(
     glib::timeout_add_local(Duration::from_millis(120), move || match receiver.try_recv() {
         Ok(Ok(detail)) => {
             if let Some(controller) = weak.upgrade() {
-                controller.show_toast(&format!(
-                    "Nocky Connect: {device_name} {detail} · {target_url}"
-                ));
+                controller.show_toast(&format!("Nocky Connect: {device_name} {detail}"));
             }
             glib::ControlFlow::Break
         }
