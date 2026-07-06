@@ -106,7 +106,6 @@ impl AppController {
         app.add_action(&focus_search);
 
         self.install_nocky_connect_action(app);
-        self.start_nocky_connect_services();
 
         let settings = gio::SimpleAction::new("settings", None);
         {
