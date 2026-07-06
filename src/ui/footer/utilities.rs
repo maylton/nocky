@@ -26,6 +26,7 @@ const GROUP_HEIGHT: i32 = 56;
 
 pub(crate) struct FooterUtilityParts {
     pub(crate) root: gtk::Box,
+    pub(crate) connect_button: gtk::Button,
     pub(crate) lyrics_button: gtk::ToggleButton,
     pub(crate) mute_icon: gtk::Image,
     pub(crate) mute_button: gtk::Button,
@@ -102,6 +103,7 @@ pub(crate) fn build_footer_utilities(
 
     FooterUtilityParts {
         root,
+        connect_button,
         lyrics_button,
         mute_icon,
         mute_button,
