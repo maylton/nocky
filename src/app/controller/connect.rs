@@ -42,6 +42,8 @@ static DESKTOP_CONNECT_DEVICE_LIST: OnceLock<Mutex<NockyConnectDeviceList>> = On
 
 impl AppController {
     pub(crate) fn install_nocky_connect_action(self: &Rc<Self>, app: &adw::Application) {
+        self.start_nocky_connect_services();
+
         let connect = gio::SimpleAction::new("nocky-connect", None);
         {
             let weak = Rc::downgrade(self);
