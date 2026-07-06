@@ -66,16 +66,23 @@ Validated:
   - Android saves pending restore as fallback;
   - Android applies restore automatically;
   - Android player switches to the desktop queue paused.
-- Android -> Desktop:
+- Android -> Desktop with Desktop popover open:
   - Android discovers Desktop;
   - Android sends handoff offer;
   - Desktop accepts;
   - Android transfers snapshot;
   - Desktop applies restore paused.
+- Android -> Desktop with only the Desktop app open:
+  - Desktop starts its handoff receiver during Nocky Connect action wiring;
+  - Desktop starts a background UDP discovery responder;
+  - Android discovers Desktop without the Desktop Nocky Connect popover being opened;
+  - Android sends the handoff offer and snapshot;
+  - Desktop applies the received queue paused.
 
 Known implementation notes:
 
-- Desktop receiver is currently started from the Nocky Connect surface and guarded as a singleton to avoid duplicate binds on TCP `35187`.
+- Desktop receiver and UDP discovery responder are now started from the Nocky Connect action wiring and guarded as singleton background services.
+- Desktop foreground discovery scans use an ephemeral UDP port so they can coexist with the background responder owning UDP `34987`.
 - Android snapshot export must read ExoPlayer state on the main thread.
 - Android pending restore remains an internal fallback for received desktop snapshots.
 - Restored queues can still have incomplete artwork/metadata. Metadata hydration is a later polish phase.
@@ -90,17 +97,18 @@ Implemented on Desktop:
 - local Desktop descriptor advertises a local HTTP handoff endpoint;
 - discovered devices are cached for 5 minutes;
 - opening the popover renders cached devices immediately;
-- opening the popover starts the Desktop handoff receiver;
+- Desktop starts its handoff receiver when Nocky Connect action wiring is installed;
+- Desktop starts a background UDP discovery responder when Nocky Connect action wiring is installed;
 - opening the popover starts a LAN scan immediately;
 - while the popover remains open, Desktop refreshes LAN discovery every 15 seconds;
 - scan overlap is guarded to avoid concurrent discovery workers;
+- foreground scans coexist with the background discovery responder;
 - selecting an Android row sends the current Desktop playback snapshot to Android;
-- Android -> Desktop handoff applies the received queue paused.
+- Android -> Desktop handoff applies the received queue paused even when the Desktop popover was never opened.
 
 Still temporary on Desktop:
 
-- presence/listener is not started at app startup yet;
-- receiver lifecycle is still tied to opening the Nocky Connect surface;
+- the background responder currently runs as a lightweight loop, but still needs cleaner shutdown/error lifecycle semantics;
 - surface is still a popover, not a full internal page;
 - row states do not yet distinguish `available now` from `recently seen`;
 - verbose diagnostic logs should be removed or gated before release.
@@ -175,6 +183,8 @@ Keep and build on:
 - strict no-secrets rule;
 - pending restore store as an internal Android fallback;
 - Desktop device cache;
+- Desktop background receiver;
+- Desktop background UDP discovery responder;
 - Desktop periodic refresh while the popover is open;
 - Android short presence window;
 - Android device-picker surface.
@@ -205,14 +215,19 @@ Desktop should eventually move from a popover to an internal Nocky Connect page/
 
 Future product behavior should not require opening the Nocky Connect surface to make a device visible.
 
+Current status:
+
+- Desktop starts a background receiver and UDP discovery responder when the app wires Nocky Connect actions.
+- Android still uses a short foreground presence window when the Nocky Connect surface opens or refreshes.
+
 Target behavior:
 
-- Desktop starts local presence/listener when the app is running, not only when the Nocky Connect popover opens.
+- Desktop keeps local presence/listener available while the app is running.
 - Android starts local presence/listener when the app/player lifecycle allows it.
 - Each side maintains a small live cache of recently seen devices.
 - Opening the Nocky Connect surface renders the already-known device list and can trigger a manual refresh.
 - Discovery should be rate-limited and lifecycle-aware, especially on Android, to avoid unnecessary battery/network usage.
-- Receiver HTTP should become a background singleton with clear lifecycle ownership.
+- Receiver HTTP should remain a background singleton with clear lifecycle ownership.
 
 ### Transport
 
@@ -304,6 +319,7 @@ Desktop:
 - keeps troubleshooting text for UFW/UDP `34987` and TCP `35187`;
 - renders cached devices immediately;
 - refreshes periodically while the popover is open;
+- starts receiver/discovery responder in the background while the app is running;
 - later migrate from popover to internal ViewStack page.
 
 Android:
@@ -316,12 +332,20 @@ Android:
 
 ### Phase 4 - Always-on discovery and background receiver
 
-Status: next major milestone.
+Status: partially complete for Desktop; next major milestone for Android.
 
-- Desktop should start presence/receiver at app startup.
-- Android should start presence/receiver when app/player lifecycle allows it.
-- Device picker should read from live cache instead of starting discovery from scratch.
-- Discovery must be rate-limited and avoid battery-heavy loops.
+Done:
+
+- Desktop starts background handoff receiver from Nocky Connect action wiring;
+- Desktop starts background UDP discovery responder from Nocky Connect action wiring;
+- Desktop foreground scans coexist with the background UDP responder.
+
+Remaining:
+
+- Android should start presence/receiver when app/player lifecycle allows it;
+- Device picker should expose live/recently-seen row states;
+- Discovery must be rate-limited and avoid battery-heavy loops;
+- Desktop responder lifecycle should gain cleaner shutdown/restart semantics.
 
 ### Phase 5 - Trust, confirmation, and polish
 
