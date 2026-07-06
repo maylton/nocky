@@ -8,7 +8,7 @@ use super::{
     PlaybackSessionSnapshot, RestoredDesktopSnapshot, NOCKY_CONNECT_PROTOCOL_VERSION,
     PLAYBACK_SESSION_SNAPSHOT_SCHEMA,
 };
-use crate::playback::PlaybackQueue;
+use crate::playback::queue::PlaybackQueue;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NockyConnectError {
@@ -124,7 +124,7 @@ fn now_epoch_ms() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{connect::NockyRepeatMode, playback::QueueMedia};
+    use crate::{connect::NockyRepeatMode, playback::queue::QueueMedia};
 
     #[test]
     fn exports_and_prepares_restore_from_json() {
