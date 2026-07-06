@@ -1,5 +1,6 @@
 //! Shared footer UI components.
 
+mod connect;
 mod layout;
 mod now_playing;
 mod progress;
