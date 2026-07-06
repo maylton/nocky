@@ -41,6 +41,11 @@ const NOCKY_CONNECT_HANDOFF_RECEIVE_TIMEOUT: Duration = Duration::from_secs(45);
 
 static DESKTOP_HANDOFF_RECEIVER_ACTIVE: AtomicBool = AtomicBool::new(false);
 
+std::thread_local! {
+    static DESKTOP_CONNECT_DEVICE_LIST: Rc<RefCell<NockyConnectDeviceList>> =
+        Rc::new(RefCell::new(NockyConnectDeviceList::new()));
+}
+
 impl AppController {
     pub(crate) fn install_nocky_connect_action(self: &Rc<Self>, app: &adw::Application) {
         let connect = gio::SimpleAction::new("nocky-connect", None);
@@ -61,7 +66,13 @@ impl AppController {
         start_desktop_handoff_receive(Rc::downgrade(self));
 
         let local_descriptor = build_local_desktop_descriptor().ok();
-        let device_list = Rc::new(RefCell::new(NockyConnectDeviceList::new()));
+        let device_list = DESKTOP_CONNECT_DEVICE_LIST.with(Rc::clone);
+        {
+            let now = Instant::now();
+            device_list
+                .borrow_mut()
+                .remove_stale(now, NOCKY_CONNECT_DEVICE_STALE_AFTER);
+        }
         let surface = build_nocky_connect_popover(local_descriptor.as_ref());
         let on_selected = self.build_device_selected_handler(&surface.popover);
 
@@ -70,6 +81,13 @@ impl AppController {
             &device_list.borrow(),
             Some(on_selected.clone()),
         );
+        let cached_count = device_list.borrow().len();
+        if cached_count > 0 {
+            surface.status.set_text(match cached_count {
+                1 => "LAN discovery • 1 cached device • refreshing…",
+                _ => "LAN discovery • cached devices • refreshing…",
+            });
+        }
         let anchor = self.nocky_connect_popover_anchor();
         surface.popover.set_parent(&anchor);
         {
