@@ -7,6 +7,10 @@ use crate::connect::{
     NockyConnectDeviceDescriptor, NockyConnectDeviceList, NockyConnectDevicePlatform,
 };
 use gtk::prelude::*;
+use std::{net::SocketAddr, rc::Rc};
+
+pub(crate) type NockyConnectDeviceSelected =
+    Rc<dyn Fn(NockyConnectDeviceDescriptor, SocketAddr) + 'static>;
 
 pub(crate) struct NockyConnectPopoverParts {
     pub(crate) popover: gtk::Popover,
@@ -23,7 +27,7 @@ pub(crate) fn build_nocky_connect_popover(
     popover.set_position(gtk::PositionType::Top);
     popover.set_has_arrow(false);
     popover.set_autohide(true);
-    popover.set_size_request(404, 392);
+    popover.set_size_request(404, 376);
     popover.add_css_class("queue2-popover");
 
     let root = gtk::Box::new(gtk::Orientation::Vertical, 10);
@@ -82,7 +86,7 @@ pub(crate) fn build_nocky_connect_popover(
 
     let scroll = gtk::ScrolledWindow::new();
     scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-    scroll.set_min_content_height(94);
+    scroll.set_min_content_height(76);
     scroll.set_max_content_height(150);
     scroll.set_hexpand(true);
     scroll.set_child(Some(&device_list));
@@ -93,6 +97,7 @@ pub(crate) fn build_nocky_connect_popover(
     refresh_button.add_css_class("pill");
     refresh_button.add_css_class("queue2-page-action");
     refresh_button.set_halign(gtk::Align::Fill);
+    refresh_button.set_margin_top(4);
     root.append(&refresh_button);
 
     let troubleshooting = gtk::Label::new(Some("No devices? Same network • UDP 34987"));
@@ -116,6 +121,7 @@ pub(crate) fn build_nocky_connect_popover(
 pub(crate) fn render_nocky_connect_devices(
     list: &gtk::Box,
     device_list: &NockyConnectDeviceList,
+    on_selected: Option<NockyConnectDeviceSelected>,
 ) {
     while let Some(child) = list.first_child() {
         list.remove(&child);
@@ -128,7 +134,11 @@ pub(crate) fn render_nocky_connect_devices(
     }
 
     for entry in entries {
-        list.append(&build_device_button(&entry.descriptor, &entry.address.to_string()));
+        list.append(&build_device_button(
+            &entry.descriptor,
+            entry.address,
+            on_selected.clone(),
+        ));
     }
 }
 
@@ -194,9 +204,9 @@ fn build_this_device_row(descriptor: Option<&NockyConnectDeviceDescriptor>) -> g
 }
 
 fn build_empty_device_state() -> gtk::Box {
-    let empty = gtk::Box::new(gtk::Orientation::Vertical, 6);
-    empty.set_margin_top(10);
-    empty.set_margin_bottom(10);
+    let empty = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    empty.set_margin_top(6);
+    empty.set_margin_bottom(6);
     empty.set_margin_start(12);
     empty.set_margin_end(12);
     empty.set_halign(gtk::Align::Fill);
@@ -205,25 +215,22 @@ fn build_empty_device_state() -> gtk::Box {
     empty.add_css_class("queue2-empty-state");
 
     let icon = gtk::Image::from_icon_name("network-workgroup-symbolic");
-    icon.set_pixel_size(28);
+    icon.set_pixel_size(22);
     icon.add_css_class("queue2-state-icon");
 
-    let title = gtk::Label::new(Some("No devices found yet"));
+    let title = gtk::Label::new(Some("No devices found"));
     title.add_css_class("queue2-state-title");
-
-    let description = gtk::Label::new(Some("Open Nocky Connect on another device."));
-    description.set_wrap(true);
-    description.set_justify(gtk::Justification::Center);
-    description.add_css_class("dim-label");
-    description.add_css_class("queue2-state-description");
 
     empty.append(&icon);
     empty.append(&title);
-    empty.append(&description);
     empty
 }
 
-fn build_device_button(descriptor: &NockyConnectDeviceDescriptor, address: &str) -> gtk::Button {
+fn build_device_button(
+    descriptor: &NockyConnectDeviceDescriptor,
+    address: SocketAddr,
+    on_selected: Option<NockyConnectDeviceSelected>,
+) -> gtk::Button {
     let button = gtk::Button::new();
     button.add_css_class("flat");
     button.add_css_class("queue2-row");
@@ -265,6 +272,14 @@ fn build_device_button(descriptor: &NockyConnectDeviceDescriptor, address: &str)
     row.append(&arrow);
 
     button.set_child(Some(&row));
+
+    if let Some(on_selected) = on_selected {
+        let descriptor = descriptor.clone();
+        button.connect_clicked(move |_| {
+            on_selected(descriptor.clone(), address);
+        });
+    }
+
     button
 }
 
