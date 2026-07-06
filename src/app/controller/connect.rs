@@ -28,7 +28,7 @@ use std::{
     rc::Rc,
     sync::{
         atomic::{AtomicBool, Ordering},
-        mpsc,
+        mpsc, Mutex, OnceLock,
     },
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -40,11 +40,7 @@ const NOCKY_CONNECT_HANDOFF_HTTP_TIMEOUT: Duration = Duration::from_secs(5);
 const NOCKY_CONNECT_HANDOFF_RECEIVE_TIMEOUT: Duration = Duration::from_secs(45);
 
 static DESKTOP_HANDOFF_RECEIVER_ACTIVE: AtomicBool = AtomicBool::new(false);
-
-std::thread_local! {
-    static DESKTOP_CONNECT_DEVICE_LIST: Rc<RefCell<NockyConnectDeviceList>> =
-        Rc::new(RefCell::new(NockyConnectDeviceList::new()));
-}
+static DESKTOP_CONNECT_DEVICE_LIST: OnceLock<Mutex<NockyConnectDeviceList>> = OnceLock::new();
 
 impl AppController {
     pub(crate) fn install_nocky_connect_action(self: &Rc<Self>, app: &adw::Application) {
@@ -66,13 +62,7 @@ impl AppController {
         start_desktop_handoff_receive(Rc::downgrade(self));
 
         let local_descriptor = build_local_desktop_descriptor().ok();
-        let device_list = DESKTOP_CONNECT_DEVICE_LIST.with(Rc::clone);
-        {
-            let now = Instant::now();
-            device_list
-                .borrow_mut()
-                .remove_stale(now, NOCKY_CONNECT_DEVICE_STALE_AFTER);
-        }
+        let device_list = Rc::new(RefCell::new(load_desktop_device_cache()));
         let surface = build_nocky_connect_popover(local_descriptor.as_ref());
         let on_selected = self.build_device_selected_handler(&surface.popover);
 
@@ -485,6 +475,7 @@ fn start_desktop_device_scan(
                 let mut list = device_list.borrow_mut();
                 list.update_with_discovered(devices, now);
                 list.remove_stale(now, NOCKY_CONNECT_DEVICE_STALE_AFTER);
+                save_desktop_device_cache(&list);
             }
             render_nocky_connect_devices(
                 &device_list_box,
@@ -512,6 +503,27 @@ fn start_desktop_device_scan(
             glib::ControlFlow::Break
         }
     });
+}
+
+fn desktop_device_cache() -> &'static Mutex<NockyConnectDeviceList> {
+    DESKTOP_CONNECT_DEVICE_LIST.get_or_init(|| Mutex::new(NockyConnectDeviceList::new()))
+}
+
+fn load_desktop_device_cache() -> NockyConnectDeviceList {
+    let now = Instant::now();
+    match desktop_device_cache().lock() {
+        Ok(mut cache) => {
+            cache.remove_stale(now, NOCKY_CONNECT_DEVICE_STALE_AFTER);
+            cache.clone()
+        }
+        Err(_) => NockyConnectDeviceList::new(),
+    }
+}
+
+fn save_desktop_device_cache(list: &NockyConnectDeviceList) {
+    if let Ok(mut cache) = desktop_device_cache().lock() {
+        *cache = list.clone();
+    }
 }
 
 fn run_desktop_device_scan() -> Result<Vec<NockyConnectDiscoveredDevice>, String> {
