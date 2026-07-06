@@ -1,4 +1,7 @@
-use std::{fmt, time::{SystemTime, UNIX_EPOCH}};
+use std::{
+    fmt,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use super::{
     export_desktop_queue_snapshot, restore_desktop_queue_snapshot, DesktopPlaybackState,
@@ -17,7 +20,9 @@ pub enum NockyConnectError {
 impl fmt::Display for NockyConnectError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::UnsupportedSchema(schema) => write!(formatter, "unsupported Nocky Connect schema {schema}"),
+            Self::UnsupportedSchema(schema) => {
+                write!(formatter, "unsupported Nocky Connect schema {schema}")
+            }
             Self::UnsupportedSchemaVersion(version) => {
                 write!(formatter, "unsupported Nocky Connect schema version {version}")
             }
@@ -77,14 +82,20 @@ impl NockyConnectGateway {
         .map_err(|error| NockyConnectError::Json(error.to_string()))
     }
 
-    pub fn decode_snapshot(&self, payload: &str) -> Result<PlaybackSessionSnapshot, NockyConnectError> {
+    pub fn decode_snapshot(
+        &self,
+        payload: &str,
+    ) -> Result<PlaybackSessionSnapshot, NockyConnectError> {
         let snapshot = serde_json::from_str::<PlaybackSessionSnapshot>(payload)
             .map_err(|error| NockyConnectError::Json(error.to_string()))?;
         self.require_supported(&snapshot)?;
         Ok(snapshot)
     }
 
-    pub fn prepare_restore(&self, payload: &str) -> Result<RestoredDesktopSnapshot, NockyConnectError> {
+    pub fn prepare_restore(
+        &self,
+        payload: &str,
+    ) -> Result<RestoredDesktopSnapshot, NockyConnectError> {
         let snapshot = self.decode_snapshot(payload)?;
         Ok(restore_desktop_queue_snapshot(&snapshot))
     }
@@ -120,7 +131,9 @@ mod tests {
         let gateway = NockyConnectGateway::new("desktop-device");
         let mut queue = PlaybackQueue::new();
         queue.replace(
-            vec![QueueMedia::youtube("video-1", "First", "Artist", "Album", 180, None)],
+            vec![QueueMedia::youtube(
+                "video-1", "First", "Artist", "Album", 180, None,
+            )],
             Some(0),
         );
 
@@ -142,6 +155,28 @@ mod tests {
         assert_eq!(restored.title.as_deref(), Some("Gateway queue"));
         assert_eq!(restored.queue.len(), 1);
         assert_eq!(restored.state.position_ms, 12_345);
+        assert_eq!(restored.state.repeat_mode, NockyRepeatMode::All);
+    }
+
+    #[test]
+    fn decodes_shared_v1_fixture_and_prepares_paused_restore() {
+        let gateway = NockyConnectGateway::new("desktop-device");
+        let payload = include_str!("../../docs/fixtures/nocky-connect-snapshot-v1.json");
+
+        let snapshot = gateway.decode_snapshot(payload).expect("fixture should decode");
+        let restored = gateway.prepare_restore(payload).expect("fixture should restore");
+
+        assert_eq!(snapshot.schema, PLAYBACK_SESSION_SNAPSHOT_SCHEMA);
+        assert_eq!(snapshot.schema_version, NOCKY_CONNECT_PROTOCOL_VERSION);
+        assert_eq!(snapshot.session_id, "compat-session-v1");
+        assert_eq!(snapshot.revision, 7);
+        assert_eq!(snapshot.queue.title.as_deref(), Some("Compatibility fixture"));
+        assert_eq!(snapshot.queue.current_index, 1);
+        assert_eq!(snapshot.queue.items.len(), 2);
+        assert_eq!(restored.title.as_deref(), Some("Compatibility fixture"));
+        assert_eq!(restored.queue.current_index(), Some(1));
+        assert_eq!(restored.queue.len(), 2);
+        assert_eq!(restored.state.position_ms, 45_000);
         assert_eq!(restored.state.repeat_mode, NockyRepeatMode::All);
     }
 
