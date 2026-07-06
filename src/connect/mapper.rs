@@ -1,6 +1,6 @@
 use std::{fs, path::Path, time::UNIX_EPOCH};
 
-use crate::playback::{PlaybackQueue, QueueMedia, QueueSource, QueueSourceKind};
+use crate::playback::queue::{PlaybackQueue, QueueMedia, QueueSource, QueueSourceKind};
 
 use super::protocol::{
     LocalTrackIdentity, NockyConnectSource, NockyPlaybackState, NockyRepeatMode, PlaybackInfo,
@@ -253,7 +253,7 @@ fn local_identity_for_path(path: &Path) -> LocalTrackIdentity {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::playback::QueueMedia;
+    use crate::playback::queue::QueueMedia;
 
     #[test]
     fn exports_youtube_queue_snapshot() {
