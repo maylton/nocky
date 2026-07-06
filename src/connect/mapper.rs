@@ -47,7 +47,7 @@ impl DesktopPlaybackState {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RestoredDesktopSnapshot {
     pub queue: PlaybackQueue,
     pub state: DesktopPlaybackState,
