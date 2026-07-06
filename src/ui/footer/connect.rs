@@ -12,7 +12,6 @@ pub(crate) fn build_footer_connect_button() -> gtk::Button {
     let button = gtk::Button::builder()
         .icon_name("network-workgroup-symbolic")
         .tooltip_text("Nocky Connect")
-        .action_name("app.nocky-connect")
         .build();
     button.add_css_class("flat");
     button.add_css_class("footer-control");
