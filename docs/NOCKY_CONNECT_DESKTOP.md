@@ -14,6 +14,7 @@ This PR adds a desktop-side foundation only:
 - restore mapping from a received `PlaybackSessionSnapshot` back to a paused `PlaybackQueue` plan;
 - local private snapshot file store;
 - gateway for schema/version validation, export and restore planning;
+- shared v1 JSON fixture compatibility test;
 - unit tests for export, restore, schema validation and file storage.
 
 The implementation is isolated under `src/connect/` and does not change UI, player controls, GStreamer playback, MPRIS, YouTube stream resolution, local library scanning or queue behavior.
@@ -33,6 +34,10 @@ Current schema version:
 ```
 
 The shape is intentionally aligned with the Android fork's `PlaybackSessionSnapshot` model.
+
+## Compatibility fixture
+
+`docs/fixtures/nocky-connect-snapshot-v1.json` is a shared protocol fixture. The desktop gateway test decodes it and prepares a paused restore plan to verify that the Rust implementation remains compatible with the Android-side v1 snapshot contract.
 
 ## Export behavior
 
