@@ -1,0 +1,79 @@
+{
+  "schema": "io.github.maylton.nocky.connect.PlaybackSessionSnapshot",
+  "schema_version": 1,
+  "session_id": "compat-session-v1",
+  "revision": 7,
+  "origin_device_id": "fixture-desktop-device",
+  "updated_at_epoch_ms": 1700000000000,
+  "updated_at_monotonic_ms": null,
+  "source": "youtube",
+  "playback": {
+    "state": "paused",
+    "position_ms": 45000,
+    "duration_ms": 181000,
+    "rate": 1.0,
+    "volume": 0.8,
+    "muted": false
+  },
+  "queue": {
+    "title": "Compatibility fixture",
+    "current_index": 1,
+    "repeat_mode": "all",
+    "shuffle_enabled": false,
+    "shuffle_seed": null,
+    "items": [
+      {
+        "queue_item_id": "youtube:video:video-1",
+        "source": "youtube",
+        "provider": "youtube_music",
+        "playable_id": "video-1",
+        "set_video_id": "set-video-1",
+        "playlist_id": "playlist-1",
+        "browse_id": null,
+        "title": "First fixture song",
+        "artists": [
+          {
+            "id": "artist-1",
+            "name": "Fixture Artist One"
+          }
+        ],
+        "album": {
+          "id": "album-1",
+          "title": "Fixture Album"
+        },
+        "duration_ms": 180000,
+        "thumbnail_url": "https://example.com/fixture-1.jpg",
+        "explicit": false,
+        "is_video": false,
+        "is_episode": false,
+        "local": null
+      },
+      {
+        "queue_item_id": "youtube:video:video-2",
+        "source": "youtube",
+        "provider": "youtube_music",
+        "playable_id": "video-2",
+        "set_video_id": "set-video-2",
+        "playlist_id": "playlist-1",
+        "browse_id": null,
+        "title": "Second fixture song",
+        "artists": [
+          {
+            "id": "artist-2",
+            "name": "Fixture Artist Two"
+          }
+        ],
+        "album": {
+          "id": "album-1",
+          "title": "Fixture Album"
+        },
+        "duration_ms": 181000,
+        "thumbnail_url": "https://example.com/fixture-2.jpg",
+        "explicit": false,
+        "is_video": false,
+        "is_episode": false,
+        "local": null
+      }
+    ]
+  }
+}
