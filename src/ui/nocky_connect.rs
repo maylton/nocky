@@ -13,6 +13,7 @@ pub(crate) struct NockyConnectPopoverParts {
     pub(crate) status: gtk::Label,
     pub(crate) device_list: gtk::Box,
     pub(crate) refresh_button: gtk::Button,
+    pub(crate) close_button: gtk::Button,
 }
 
 pub(crate) fn build_nocky_connect_popover(
@@ -22,64 +23,54 @@ pub(crate) fn build_nocky_connect_popover(
     popover.set_position(gtk::PositionType::Top);
     popover.set_has_arrow(false);
     popover.set_autohide(true);
-    popover.set_size_request(404, 420);
+    popover.set_size_request(404, 392);
     popover.add_css_class("queue2-popover");
-    popover.add_css_class("nocky-connect-popover");
 
     let root = gtk::Box::new(gtk::Orientation::Vertical, 10);
     root.set_margin_top(16);
     root.set_margin_bottom(16);
-    root.set_margin_start(16);
-    root.set_margin_end(16);
+    root.set_margin_start(18);
+    root.set_margin_end(18);
     root.add_css_class("queue2-page");
-    root.add_css_class("nocky-connect-panel");
 
     let header = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    header.add_css_class("queue2-page-header");
+    header.set_margin_bottom(2);
 
-    let title_column = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    let title_column = gtk::Box::new(gtk::Orientation::Vertical, 2);
     title_column.set_hexpand(true);
-
-    let title_row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-    title_row.add_css_class("queue2-page-title-row");
-
-    let icon = gtk::Image::from_icon_name("network-workgroup-symbolic");
-    icon.set_pixel_size(18);
-    icon.add_css_class("queue2-page-title-icon");
 
     let title = gtk::Label::new(Some("Nocky Connect"));
     title.set_xalign(0.0);
     title.add_css_class("title-1");
     title.add_css_class("queue2-page-title");
 
-    title_row.append(&icon);
-    title_row.append(&title);
-
-    let subtitle = gtk::Label::new(Some("Choose where this session should be available."));
+    let subtitle = gtk::Label::new(Some("LAN discovery • scanning"));
     subtitle.set_xalign(0.0);
     subtitle.set_wrap(true);
     subtitle.add_css_class("dim-label");
     subtitle.add_css_class("queue2-page-source");
 
-    title_column.append(&title_row);
+    title_column.append(&title);
     title_column.append(&subtitle);
     header.append(&title_column);
+
+    let close_button = gtk::Button::builder()
+        .icon_name("window-close-symbolic")
+        .tooltip_text("Close")
+        .build();
+    close_button.add_css_class("flat");
+    close_button.add_css_class("circular");
+    close_button.set_valign(gtk::Align::Start);
+    header.append(&close_button);
+
     root.append(&header);
 
-    root.append(&build_section_header(
-        "This device",
-        "computer-symbolic",
-        "Available for Nocky Connect.",
-    ));
+    root.append(&build_section_header("This device", "computer-symbolic"));
     root.append(&build_this_device_row(local_descriptor));
 
-    root.append(&build_section_header(
-        "Available devices",
-        "view-list-symbolic",
-        "Nearby devices found on your local network.",
-    ));
+    root.append(&build_section_header("Available devices", "view-list-symbolic"));
 
-    let status = gtk::Label::new(Some("Scanning for nearby Nocky devices…"));
+    let status = gtk::Label::new(Some("Scanning for up to 6 seconds…"));
     status.set_xalign(0.0);
     status.set_wrap(true);
     status.add_css_class("dim-label");
@@ -88,12 +79,11 @@ pub(crate) fn build_nocky_connect_popover(
 
     let device_list = gtk::Box::new(gtk::Orientation::Vertical, 0);
     device_list.add_css_class("queue2-list");
-    device_list.add_css_class("nocky-connect-device-list");
 
     let scroll = gtk::ScrolledWindow::new();
     scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-    scroll.set_min_content_height(108);
-    scroll.set_max_content_height(170);
+    scroll.set_min_content_height(94);
+    scroll.set_max_content_height(150);
     scroll.set_hexpand(true);
     scroll.set_child(Some(&device_list));
     scroll.add_css_class("queue2-page-scroll");
@@ -101,18 +91,15 @@ pub(crate) fn build_nocky_connect_popover(
 
     let refresh_button = gtk::Button::with_label("Refresh devices");
     refresh_button.add_css_class("pill");
-    refresh_button.add_css_class("suggested-action");
     refresh_button.add_css_class("queue2-page-action");
     refresh_button.set_halign(gtk::Align::Fill);
     root.append(&refresh_button);
 
-    let troubleshooting = gtk::Label::new(Some(
-        "No devices? Keep both apps open, use the same network, and allow UDP 34987 in the desktop firewall.",
-    ));
+    let troubleshooting = gtk::Label::new(Some("No devices? Same network • UDP 34987"));
     troubleshooting.set_xalign(0.0);
     troubleshooting.set_wrap(true);
     troubleshooting.add_css_class("dim-label");
-    troubleshooting.add_css_class("queue2-state-description");
+    troubleshooting.add_css_class("queue2-page-source");
     root.append(&troubleshooting);
 
     popover.set_child(Some(&root));
@@ -122,6 +109,7 @@ pub(crate) fn build_nocky_connect_popover(
         status,
         device_list,
         refresh_button,
+        close_button,
     }
 }
 
@@ -144,31 +132,25 @@ pub(crate) fn render_nocky_connect_devices(
     }
 }
 
-fn build_section_header(title: &str, icon_name: &str, subtitle: &str) -> gtk::Box {
+fn build_section_header(title: &str, icon_name: &str) -> gtk::Box {
     let header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    header.set_margin_top(4);
+    header.set_margin_bottom(4);
+    header.set_margin_start(8);
+    header.set_margin_end(8);
     header.add_css_class("queue2-section-header");
 
     let icon = gtk::Image::from_icon_name(icon_name);
     icon.set_pixel_size(15);
     icon.add_css_class("queue2-section-icon");
 
-    let labels = gtk::Box::new(gtk::Orientation::Vertical, 1);
-    labels.set_hexpand(true);
+    let label = gtk::Label::new(Some(title));
+    label.set_xalign(0.0);
+    label.set_hexpand(true);
+    label.add_css_class("queue2-section-title");
 
-    let title = gtk::Label::new(Some(title));
-    title.set_xalign(0.0);
-    title.add_css_class("queue2-section-title");
-
-    let subtitle = gtk::Label::new(Some(subtitle));
-    subtitle.set_xalign(0.0);
-    subtitle.set_wrap(true);
-    subtitle.add_css_class("dim-label");
-    subtitle.add_css_class("queue2-state-description");
-
-    labels.append(&title);
-    labels.append(&subtitle);
     header.append(&icon);
-    header.append(&labels);
+    header.append(&label);
     header
 }
 
@@ -194,12 +176,11 @@ fn build_this_device_row(descriptor: Option<&NockyConnectDeviceDescriptor>) -> g
         .unwrap_or("Nocky Desktop");
     let name_label = gtk::Label::new(Some(name));
     name_label.set_xalign(0.0);
-    name_label.add_css_class("queue2-track-title");
+    name_label.add_css_class("heading");
 
     let detail = gtk::Label::new(Some("This desktop"));
     detail.set_xalign(0.0);
     detail.add_css_class("dim-label");
-    detail.add_css_class("queue2-track-meta");
 
     labels.append(&name_label);
     labels.append(&detail);
@@ -213,9 +194,9 @@ fn build_this_device_row(descriptor: Option<&NockyConnectDeviceDescriptor>) -> g
 }
 
 fn build_empty_device_state() -> gtk::Box {
-    let empty = gtk::Box::new(gtk::Orientation::Vertical, 7);
-    empty.set_margin_top(12);
-    empty.set_margin_bottom(12);
+    let empty = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    empty.set_margin_top(10);
+    empty.set_margin_bottom(10);
     empty.set_margin_start(12);
     empty.set_margin_end(12);
     empty.set_halign(gtk::Align::Fill);
@@ -224,15 +205,13 @@ fn build_empty_device_state() -> gtk::Box {
     empty.add_css_class("queue2-empty-state");
 
     let icon = gtk::Image::from_icon_name("network-workgroup-symbolic");
-    icon.set_pixel_size(30);
+    icon.set_pixel_size(28);
     icon.add_css_class("queue2-state-icon");
 
     let title = gtk::Label::new(Some("No devices found yet"));
     title.add_css_class("queue2-state-title");
 
-    let description = gtk::Label::new(Some(
-        "Open Nocky Connect on another device or refresh discovery.",
-    ));
+    let description = gtk::Label::new(Some("Open Nocky Connect on another device."));
     description.set_wrap(true);
     description.set_justify(gtk::Justification::Center);
     description.add_css_class("dim-label");
@@ -248,7 +227,6 @@ fn build_device_button(descriptor: &NockyConnectDeviceDescriptor, address: &str)
     let button = gtk::Button::new();
     button.add_css_class("flat");
     button.add_css_class("queue2-row");
-    button.add_css_class("nocky-connect-device-row");
     button.set_halign(gtk::Align::Fill);
 
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
@@ -267,7 +245,7 @@ fn build_device_button(descriptor: &NockyConnectDeviceDescriptor, address: &str)
 
     let title = gtk::Label::new(Some(&descriptor.device_name));
     title.set_xalign(0.0);
-    title.add_css_class("queue2-track-title");
+    title.add_css_class("heading");
 
     let subtitle = gtk::Label::new(Some(&format!(
         "{} · {address} · last seen now",
@@ -276,7 +254,6 @@ fn build_device_button(descriptor: &NockyConnectDeviceDescriptor, address: &str)
     subtitle.set_xalign(0.0);
     subtitle.set_wrap(true);
     subtitle.add_css_class("dim-label");
-    subtitle.add_css_class("queue2-track-meta");
 
     labels.append(&title);
     labels.append(&subtitle);
