@@ -12,11 +12,12 @@ This PR adds a desktop-side foundation only:
 - JSON encode/decode through `serde` and `serde_json`;
 - export mapping from the existing `PlaybackQueue` model to `PlaybackSessionSnapshot`;
 - restore mapping from a received `PlaybackSessionSnapshot` back to a paused `PlaybackQueue` plan;
+- device descriptor model for future LAN discovery and capability negotiation;
 - local private snapshot file store;
 - local desktop device identity helper;
 - gateway for schema/version validation, export and restore planning;
-- shared v1 JSON fixture compatibility test;
-- unit tests for export, restore, schema validation, device identity and file storage.
+- shared v1 JSON fixture compatibility tests for snapshots and device descriptors;
+- unit tests for export, restore, schema validation, descriptor validation, device identity and file storage.
 
 The implementation is isolated under `src/connect/` and does not change UI, player controls, GStreamer playback, MPRIS, YouTube stream resolution, local library scanning or queue behavior.
 
@@ -36,13 +37,28 @@ Current schema version:
 
 The shape is intentionally aligned with the Android fork's `PlaybackSessionSnapshot` model.
 
-## Compatibility fixture
+## Compatibility fixtures
 
 `docs/fixtures/nocky-connect-snapshot-v1.json` is a shared protocol fixture. The desktop gateway test decodes it and prepares a paused restore plan to verify that the Rust implementation remains compatible with the Android-side v1 snapshot contract.
 
-## Device identity
+`docs/fixtures/nocky-connect-device-descriptor-v1.json` is a shared descriptor fixture. The desktop descriptor test decodes it to verify that the Rust implementation remains compatible with the future Android-side LAN discovery descriptor contract.
+
+## Device identity and descriptor
 
 `NockyConnectDeviceIdentity` creates and reuses a random app-local device ID stored under `nocky-connect/device-id` in the provided base directory. `default_connect_config_dir()` resolves to `$XDG_CONFIG_HOME/nocky`, `~/.config/nocky`, or a temporary fallback. The ID is intentionally not based on hardware identifiers.
+
+`NockyConnectDeviceDescriptor` describes a device before any handoff happens. It includes device ID, display name, platform, app name/version, protocol version and supported features.
+
+## LAN-first discovery direction
+
+QR pairing is not planned as the default flow. The intended first real handoff flow is same-network discovery:
+
+1. both apps advertise a `NockyConnectDeviceDescriptor` on the local network;
+2. each app shows compatible devices discovered on the same LAN;
+3. the receiving device requires an explicit accept/deny confirmation before a restore happens;
+4. YouTube Music account state is not exchanged or inspected by Nocky Connect.
+
+Using the same Google/YouTube Music account can make the handoff more likely to resolve the same songs, but it should not be used as a pairing secret. Nocky Connect should transfer public playable IDs and metadata, not account cookies, tokens or headers.
 
 ## Export behavior
 
@@ -69,4 +85,4 @@ Restoring a snapshot is conservative:
 1. Wire the gateway to the real desktop playback/session state with explicit export and restore methods.
 2. Add a development menu/action for export/import JSON round trips.
 3. Verify Android ⇄ Desktop JSON compatibility with manually exchanged snapshots.
-4. Add local-network pairing only after manual round trips work both ways.
+4. Add same-network discovery and explicit accept/deny confirmation after manual JSON round trips work both ways.
