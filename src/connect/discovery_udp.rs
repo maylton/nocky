@@ -23,7 +23,10 @@ pub fn scan_once(
     local_descriptor: &NockyConnectDeviceDescriptor,
     timeout: Duration,
 ) -> io::Result<Vec<NockyConnectDiscoveredDevice>> {
-    let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))?;
+    // Use the fixed discovery port while scanning too. Some platforms reply to
+    // the sender port from the incoming broadcast; listening on the same known
+    // port makes desktop scan behavior match receive mode and Android receive.
+    let socket = bind_discovery_socket()?;
     socket.set_broadcast(true)?;
     socket.set_read_timeout(Some(Duration::from_millis(120)))?;
 
@@ -41,11 +44,15 @@ pub fn receive_once(
     local_descriptor: &NockyConnectDeviceDescriptor,
     timeout: Duration,
 ) -> io::Result<Vec<NockyConnectDiscoveredDevice>> {
-    let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, NOCKY_CONNECT_DISCOVERY_PORT))?;
+    let socket = bind_discovery_socket()?;
     socket.set_broadcast(true)?;
     socket.set_read_timeout(Some(Duration::from_millis(120)))?;
 
     collect_discovery_replies(&socket, local_descriptor, timeout)
+}
+
+fn bind_discovery_socket() -> io::Result<UdpSocket> {
+    UdpSocket::bind((Ipv4Addr::UNSPECIFIED, NOCKY_CONNECT_DISCOVERY_PORT))
 }
 
 fn collect_discovery_replies(
