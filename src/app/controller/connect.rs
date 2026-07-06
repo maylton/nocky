@@ -1,31 +1,27 @@
 //! Controller surface for the desktop Nocky Connect entry point.
 //!
-//! LAN discovery, device picking and accept/deny confirmation will live here.
-//! For now this module owns the placeholder action used by the footer button,
-//! keeping the regular action table and footer UI small.
+//! This surface is evolving toward a Spotify Connect-like device picker: it shows
+//! the current device, discovers nearby Nocky devices on the LAN, and renders the
+//! discovered devices as selectable rows. Actual handoff is wired in a later step.
 
 use super::AppController;
 use crate::connect::{
-    default_connect_config_dir, receive_once, scan_once, NockyConnectDeviceDescriptor,
-    NockyConnectDeviceIdentity,
+    default_connect_config_dir, scan_once, NockyConnectDeviceDescriptor,
+    NockyConnectDeviceIdentity, NockyConnectDeviceList, NockyConnectDevicePlatform,
+    NockyConnectDiscoveredDevice,
 };
 use adw::prelude::*;
 use gtk::{gio, glib};
 use std::{
+    cell::RefCell,
     rc::Rc,
     sync::mpsc,
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
-const NOCKY_CONNECT_SEND_TIMEOUT: Duration = Duration::from_secs(6);
-const NOCKY_CONNECT_RECEIVE_TIMEOUT: Duration = Duration::from_secs(15);
-
-#[derive(Clone, Copy)]
-enum NockyConnectDiscoveryMode {
-    Send,
-    Receive,
-}
+const NOCKY_CONNECT_SCAN_TIMEOUT: Duration = Duration::from_secs(6);
+const NOCKY_CONNECT_DEVICE_STALE_AFTER: Duration = Duration::from_secs(30);
 
 impl AppController {
     pub(crate) fn install_nocky_connect_action(self: &Rc<Self>, app: &adw::Application) {
@@ -45,12 +41,15 @@ impl AppController {
     pub(crate) fn open_nocky_connect_surface(&self) {
         self.persist_playback_session_now();
 
+        let local_descriptor = build_local_desktop_descriptor().ok();
+        let device_list = Rc::new(RefCell::new(NockyConnectDeviceList::new()));
+
         let surface = gtk::Window::builder()
             .title("Nocky Connect")
             .transient_for(&self.window)
             .modal(true)
-            .default_width(420)
-            .default_height(280)
+            .default_width(460)
+            .default_height(520)
             .resizable(false)
             .build();
         surface.add_css_class("nocky-connect-surface");
@@ -67,7 +66,7 @@ impl AppController {
         content.append(&title);
 
         let description = gtk::Label::new(Some(
-            "Move the session between this desktop and Android on your local network.",
+            "Choose where this Nocky session should be available on your local network.",
         ));
         description.add_css_class("dim-label");
         description.set_wrap(true);
@@ -75,148 +74,263 @@ impl AppController {
         description.set_halign(gtk::Align::Center);
         content.append(&description);
 
-        let actions = gtk::Box::new(gtk::Orientation::Vertical, 10);
-        actions.set_margin_top(8);
+        content.append(&build_section_label("This device"));
+        content.append(&build_this_device_card(local_descriptor.as_ref()));
 
-        let send_button = build_connect_surface_action(
-            "Send to Android",
-            "Search for Android devices for up to 6 seconds.",
-            "network-workgroup-symbolic",
-        );
-        let receive_button = build_connect_surface_action(
-            "Receive from Android",
-            "Wait 15 seconds for an Android device to start discovery.",
-            "document-save-symbolic",
-        );
+        content.append(&build_section_label("Available on your network"));
 
-        let toast_overlay = self.toast_overlay.clone();
-        let send_surface = surface.clone();
-        send_button.connect_clicked(move |_| {
-            start_desktop_nocky_connect_discovery(NockyConnectDiscoveryMode::Send, toast_overlay.clone());
-            send_surface.close();
-        });
+        let status_label = gtk::Label::new(Some("Scanning for nearby Nocky devices…"));
+        status_label.add_css_class("dim-label");
+        status_label.set_wrap(true);
+        status_label.set_xalign(0.0);
+        content.append(&status_label);
 
-        let toast_overlay = self.toast_overlay.clone();
-        let receive_surface = surface.clone();
-        receive_button.connect_clicked(move |_| {
-            start_desktop_nocky_connect_discovery(
-                NockyConnectDiscoveryMode::Receive,
-                toast_overlay.clone(),
-            );
-            receive_surface.close();
-        });
+        let device_list_box = gtk::ListBox::new();
+        device_list_box.add_css_class("boxed-list");
+        device_list_box.set_selection_mode(gtk::SelectionMode::None);
+        content.append(&device_list_box);
+        render_device_list(&device_list_box, &device_list.borrow());
 
-        actions.append(&send_button);
-        actions.append(&receive_button);
-        content.append(&actions);
+        let refresh_button = gtk::Button::with_label("Refresh devices");
+        refresh_button.add_css_class("suggested-action");
+        refresh_button.set_halign(gtk::Align::Fill);
+        content.append(&refresh_button);
+
+        let troubleshooting = gtk::Label::new(Some(
+            "No devices? Make sure both apps are open, on the same network, and UDP 34987 is allowed in the desktop firewall.",
+        ));
+        troubleshooting.add_css_class("dim-label");
+        troubleshooting.set_wrap(true);
+        troubleshooting.set_xalign(0.0);
+        content.append(&troubleshooting);
+
+        {
+            let device_list_box = device_list_box.clone();
+            let status_label = status_label.clone();
+            let device_list = device_list.clone();
+            refresh_button.connect_clicked(move |button| {
+                start_desktop_device_scan(
+                    button.clone(),
+                    status_label.clone(),
+                    device_list_box.clone(),
+                    device_list.clone(),
+                );
+            });
+        }
 
         surface.set_child(Some(&content));
         surface.present();
+
+        start_desktop_device_scan(refresh_button, status_label, device_list_box, device_list);
     }
 }
 
-fn build_connect_surface_action(
-    title: &str,
-    description: &str,
-    icon_name: &str,
-) -> gtk::Button {
-    let button = gtk::Button::new();
-    button.add_css_class("flat");
-    button.add_css_class("nocky-connect-action");
-    button.set_halign(gtk::Align::Fill);
+fn build_section_label(text: &str) -> gtk::Label {
+    let label = gtk::Label::new(Some(text));
+    label.add_css_class("heading");
+    label.set_halign(gtk::Align::Start);
+    label.set_xalign(0.0);
+    label
+}
 
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 14);
-    row.set_margin_top(12);
-    row.set_margin_bottom(12);
-    row.set_margin_start(14);
-    row.set_margin_end(14);
+fn build_this_device_card(descriptor: Option<&NockyConnectDeviceDescriptor>) -> gtk::Box {
+    let card = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    card.add_css_class("card");
+    card.set_margin_top(2);
+    card.set_margin_bottom(2);
+    card.set_margin_start(0);
+    card.set_margin_end(0);
 
-    let icon = gtk::Image::from_icon_name(icon_name);
+    let icon = gtk::Image::from_icon_name("computer-symbolic");
     icon.set_pixel_size(24);
     icon.set_valign(gtk::Align::Center);
-    row.append(&icon);
+    card.append(&icon);
 
     let labels = gtk::Box::new(gtk::Orientation::Vertical, 2);
     labels.set_hexpand(true);
-    labels.set_valign(gtk::Align::Center);
 
-    let title = gtk::Label::new(Some(title));
+    let name = descriptor
+        .map(|descriptor| descriptor.device_name.as_str())
+        .unwrap_or("Nocky Desktop");
+    let name_label = gtk::Label::new(Some(name));
+    name_label.add_css_class("heading");
+    name_label.set_halign(gtk::Align::Start);
+    name_label.set_xalign(0.0);
+    labels.append(&name_label);
+
+    let detail = gtk::Label::new(Some("This desktop"));
+    detail.add_css_class("dim-label");
+    detail.set_halign(gtk::Align::Start);
+    detail.set_xalign(0.0);
+    labels.append(&detail);
+
+    card.append(&labels);
+
+    let check = gtk::Image::from_icon_name("object-select-symbolic");
+    check.set_pixel_size(18);
+    check.set_valign(gtk::Align::Center);
+    card.append(&check);
+
+    card
+}
+
+fn start_desktop_device_scan(
+    refresh_button: gtk::Button,
+    status_label: gtk::Label,
+    device_list_box: gtk::ListBox,
+    device_list: Rc<RefCell<NockyConnectDeviceList>>,
+) {
+    refresh_button.set_sensitive(false);
+    status_label.set_text("Scanning for up to 6 seconds…");
+
+    let (sender, receiver) = mpsc::channel::<Result<Vec<NockyConnectDiscoveredDevice>, String>>();
+    thread::spawn(move || {
+        let _ = sender.send(run_desktop_device_scan());
+    });
+
+    glib::timeout_add_local(Duration::from_millis(150), move || match receiver.try_recv() {
+        Ok(Ok(devices)) => {
+            let now = Instant::now();
+            {
+                let mut list = device_list.borrow_mut();
+                list.update_with_discovered(devices, now);
+                list.remove_stale(now, NOCKY_CONNECT_DEVICE_STALE_AFTER);
+            }
+            render_device_list(&device_list_box, &device_list.borrow());
+            let count = device_list.borrow().len();
+            status_label.set_text(match count {
+                0 => "No devices found yet. Try again while the Android app is open.",
+                1 => "1 device available.",
+                _ => "Multiple devices available.",
+            });
+            refresh_button.set_sensitive(true);
+            glib::ControlFlow::Break
+        }
+        Ok(Err(error)) => {
+            status_label.set_text(&format!("Discovery failed: {error}"));
+            refresh_button.set_sensitive(true);
+            glib::ControlFlow::Break
+        }
+        Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+        Err(mpsc::TryRecvError::Disconnected) => {
+            status_label.set_text("Discovery failed: worker stopped unexpectedly.");
+            refresh_button.set_sensitive(true);
+            glib::ControlFlow::Break
+        }
+    });
+}
+
+fn render_device_list(list_box: &gtk::ListBox, device_list: &NockyConnectDeviceList) {
+    while let Some(child) = list_box.first_child() {
+        list_box.remove(&child);
+    }
+
+    let entries = device_list.entries();
+    if entries.is_empty() {
+        list_box.append(&build_empty_device_row());
+        return;
+    }
+
+    for entry in entries {
+        list_box.append(&build_device_row(entry.descriptor.clone(), entry.address));
+    }
+}
+
+fn build_empty_device_row() -> gtk::ListBoxRow {
+    let row = gtk::ListBoxRow::new();
+    row.set_selectable(false);
+    row.set_activatable(false);
+
+    let label = gtk::Label::new(Some("No devices found yet"));
+    label.add_css_class("dim-label");
+    label.set_margin_top(14);
+    label.set_margin_bottom(14);
+    label.set_margin_start(14);
+    label.set_margin_end(14);
+    label.set_halign(gtk::Align::Start);
+    label.set_xalign(0.0);
+    row.set_child(Some(&label));
+    row
+}
+
+fn build_device_row(
+    descriptor: NockyConnectDeviceDescriptor,
+    address: std::net::SocketAddr,
+) -> gtk::ListBoxRow {
+    let row = gtk::ListBoxRow::new();
+    row.set_selectable(false);
+    row.set_activatable(true);
+
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    content.set_margin_top(12);
+    content.set_margin_bottom(12);
+    content.set_margin_start(14);
+    content.set_margin_end(14);
+
+    let icon = gtk::Image::from_icon_name(platform_icon_name(descriptor.platform));
+    icon.set_pixel_size(24);
+    icon.set_valign(gtk::Align::Center);
+    content.append(&icon);
+
+    let labels = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    labels.set_hexpand(true);
+
+    let title = gtk::Label::new(Some(&descriptor.device_name));
     title.add_css_class("heading");
     title.set_halign(gtk::Align::Start);
     title.set_xalign(0.0);
     labels.append(&title);
 
-    let description = gtk::Label::new(Some(description));
-    description.add_css_class("dim-label");
-    description.set_wrap(true);
-    description.set_halign(gtk::Align::Start);
-    description.set_xalign(0.0);
-    labels.append(&description);
+    let subtitle = gtk::Label::new(Some(&format!(
+        "{} · {} · last seen now",
+        platform_label(descriptor.platform),
+        address
+    )));
+    subtitle.add_css_class("dim-label");
+    subtitle.set_wrap(true);
+    subtitle.set_halign(gtk::Align::Start);
+    subtitle.set_xalign(0.0);
+    labels.append(&subtitle);
 
-    row.append(&labels);
-    button.set_child(Some(&row));
-    button
+    content.append(&labels);
+
+    let arrow = gtk::Image::from_icon_name("go-next-symbolic");
+    arrow.set_pixel_size(18);
+    arrow.set_valign(gtk::Align::Center);
+    content.append(&arrow);
+
+    row.set_child(Some(&content));
+    row
 }
 
-fn start_desktop_nocky_connect_discovery(
-    mode: NockyConnectDiscoveryMode,
-    toast_overlay: adw::ToastOverlay,
-) {
-    toast_overlay.add_toast(adw::Toast::new(match mode {
-        NockyConnectDiscoveryMode::Send => "Nocky Connect: scanning for up to 6 seconds…",
-        NockyConnectDiscoveryMode::Receive => "Nocky Connect: waiting up to 15 seconds…",
-    }));
-
-    let (sender, receiver) = mpsc::channel::<String>();
-    thread::spawn(move || {
-        let message = run_desktop_nocky_connect_discovery(mode);
-        let _ = sender.send(message);
-    });
-
-    glib::timeout_add_local(Duration::from_millis(150), move || match receiver.try_recv() {
-        Ok(message) => {
-            toast_overlay.add_toast(adw::Toast::new(&message));
-            glib::ControlFlow::Break
-        }
-        Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
-        Err(mpsc::TryRecvError::Disconnected) => glib::ControlFlow::Break,
-    });
+fn run_desktop_device_scan() -> Result<Vec<NockyConnectDiscoveredDevice>, String> {
+    let descriptor = build_local_desktop_descriptor()?;
+    scan_once(&descriptor, NOCKY_CONNECT_SCAN_TIMEOUT).map_err(|error| error.to_string())
 }
 
-fn run_desktop_nocky_connect_discovery(mode: NockyConnectDiscoveryMode) -> String {
+fn build_local_desktop_descriptor() -> Result<NockyConnectDeviceDescriptor, String> {
     let identity = NockyConnectDeviceIdentity::new(default_connect_config_dir());
-    let device_id = match identity.get_or_create() {
-        Ok(device_id) => device_id,
-        Err(error) => return format!("Nocky Connect failed: {error}"),
-    };
-    let descriptor = NockyConnectDeviceDescriptor::linux_desktop(
+    let device_id = identity.get_or_create().map_err(|error| error.to_string())?;
+    Ok(NockyConnectDeviceDescriptor::linux_desktop(
         device_id,
         desktop_device_name(),
         Some(env!("CARGO_PKG_VERSION").to_string()),
-    );
+    ))
+}
 
-    let result = match mode {
-        NockyConnectDiscoveryMode::Send => scan_once(&descriptor, NOCKY_CONNECT_SEND_TIMEOUT),
-        NockyConnectDiscoveryMode::Receive => {
-            receive_once(&descriptor, NOCKY_CONNECT_RECEIVE_TIMEOUT)
-        }
-    };
+fn platform_label(platform: NockyConnectDevicePlatform) -> &'static str {
+    match platform {
+        NockyConnectDevicePlatform::Android => "Android",
+        NockyConnectDevicePlatform::LinuxDesktop => "Linux desktop",
+        NockyConnectDevicePlatform::Unknown => "Unknown device",
+    }
+}
 
-    match result {
-        Ok(devices) if devices.is_empty() => match mode {
-            NockyConnectDiscoveryMode::Send => "Nocky Connect: no devices found".to_string(),
-            NockyConnectDiscoveryMode::Receive => "Nocky Connect: no incoming device".to_string(),
-        },
-        Ok(devices) => {
-            let names = devices
-                .iter()
-                .take(3)
-                .map(|device| device.descriptor.device_name.as_str())
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("Nocky Connect: {} device(s) found: {names}", devices.len())
-        }
-        Err(error) => format!("Nocky Connect failed: {error}"),
+fn platform_icon_name(platform: NockyConnectDevicePlatform) -> &'static str {
+    match platform {
+        NockyConnectDevicePlatform::Android => "smartphone-symbolic",
+        NockyConnectDevicePlatform::LinuxDesktop => "computer-symbolic",
+        NockyConnectDevicePlatform::Unknown => "network-workgroup-symbolic",
     }
 }
 
