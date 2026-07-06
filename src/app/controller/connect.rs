@@ -7,10 +7,11 @@ use super::AppController;
 use crate::{
     connect::{
         default_connect_config_dir, resolve_handoff_target, scan_once, send_handoff_offer_http,
-        NockyConnectDeviceDescriptor, NockyConnectDeviceIdentity, NockyConnectDeviceList,
-        NockyConnectDiscoveredDevice, NockyConnectHandoffEnvelope, NockyConnectHandoffKind,
+        send_handoff_snapshot_http, DesktopPlaybackState, NockyConnectDeviceDescriptor,
+        NockyConnectDeviceIdentity, NockyConnectDeviceList, NockyConnectDiscoveredDevice,
+        NockyConnectGateway, NockyConnectHandoffEnvelope, NockyConnectHandoffKind,
         NockyConnectHandoffOffer, NockyConnectHandoffPayload, NockyConnectRestorePolicy,
-        NockyConnectSnapshotSummary, NockyConnectSource,
+        NockyConnectSnapshotSummary, NockyConnectSource, NockyPlaybackState, NockyRepeatMode,
     },
     playback::queue::QueueSourceKind,
     ui::nocky_connect::{
@@ -124,15 +125,20 @@ impl AppController {
                     return;
                 }
             };
+            let snapshot_json = match controller.build_handoff_snapshot_json() {
+                Ok(snapshot_json) => snapshot_json,
+                Err(error) => {
+                    controller.show_toast(&format!("Could not prepare handoff snapshot: {error}"));
+                    return;
+                }
+            };
             let summary = handoff_offer_summary(&envelope);
-            let encoded_bytes = serde_json::to_string(&envelope)
-                .map(|payload| payload.len())
-                .unwrap_or_default();
+            let encoded_bytes = snapshot_json.len();
             let target = match resolve_handoff_target(&descriptor, address) {
                 Ok(target) => target,
                 Err(_) => {
                     controller.show_toast(&format!(
-                        "Handoff offer ready for {} · {summary} · {encoded_bytes} bytes · receiver endpoint pending",
+                        "Handoff snapshot ready for {} · {summary} · {encoded_bytes} bytes · receiver endpoint pending",
                         descriptor.device_name
                     ));
                     popover.popdown();
@@ -144,7 +150,7 @@ impl AppController {
                 .unwrap_or_else(|| "local_http endpoint".to_string());
 
             controller.show_toast(&format!(
-                "Sending handoff offer to {} · {summary} · {encoded_bytes} bytes",
+                "Sending handoff snapshot to {} · {summary} · {encoded_bytes} bytes",
                 descriptor.device_name
             ));
             popover.popdown();
@@ -154,6 +160,7 @@ impl AppController {
                 target_url,
                 target,
                 envelope,
+                snapshot_json,
             );
         })
     }
@@ -205,6 +212,49 @@ impl AppController {
             },
         ))
     }
+
+    fn build_handoff_snapshot_json(&self) -> Result<String, String> {
+        self.persist_playback_session_now();
+
+        let sender = build_local_desktop_descriptor()?;
+        let queue = self.playback_queue_v2.borrow();
+        let current = queue
+            .current()
+            .ok_or_else(|| "current queue is empty".to_string())?;
+        let position_ms = self.player.position_us().max(0) as u64 / 1_000;
+        let duration_ms = duration_ms(current.media.duration_seconds).or_else(|| {
+            let player_duration = self.player.duration_us();
+            (player_duration > 0).then_some(player_duration as u64 / 1_000)
+        });
+        let title = self.listening_history_context.borrow().title.clone();
+        let now = unix_millis();
+        let playback_state = DesktopPlaybackState {
+            state: if self.player.is_playing() {
+                NockyPlaybackState::Playing
+            } else {
+                NockyPlaybackState::Paused
+            },
+            position_ms,
+            duration_ms,
+            repeat_mode: if self.repeat_button.is_active() {
+                NockyRepeatMode::All
+            } else {
+                NockyRepeatMode::Off
+            },
+            shuffle_enabled: self.shuffle_enabled.get(),
+            ..Default::default()
+        };
+
+        NockyConnectGateway::new(sender.device_id)
+            .export_snapshot_json(
+                &queue,
+                title,
+                playback_state,
+                format!("desktop-session-{now}"),
+                1,
+            )
+            .map_err(|error| error.to_string())
+    }
 }
 
 fn start_desktop_handoff_send(
@@ -213,24 +263,31 @@ fn start_desktop_handoff_send(
     target_url: String,
     target: crate::connect::NockyConnectHandoffTarget,
     envelope: NockyConnectHandoffEnvelope,
+    snapshot_json: String,
 ) {
-    let (sender, receiver) = mpsc::channel::<Result<NockyConnectHandoffEnvelope, String>>();
+    let (sender, receiver) = mpsc::channel::<Result<String, String>>();
     thread::spawn(move || {
         let result = send_handoff_offer_http(&target, &envelope, NOCKY_CONNECT_HANDOFF_HTTP_TIMEOUT)
-            .map_err(|error| error.to_string());
+            .map_err(|error| error.to_string())
+            .and_then(|response| match response.kind {
+                NockyConnectHandoffKind::Accept => send_handoff_snapshot_http(
+                    &target,
+                    &snapshot_json,
+                    NOCKY_CONNECT_HANDOFF_HTTP_TIMEOUT,
+                )
+                .map(|_| "accepted and snapshot delivered".to_string())
+                .map_err(|error| error.to_string()),
+                NockyConnectHandoffKind::Decline => Ok("declined handoff".to_string()),
+                _ => Ok("responded to handoff".to_string()),
+            });
         let _ = sender.send(result);
     });
 
     glib::timeout_add_local(Duration::from_millis(120), move || match receiver.try_recv() {
-        Ok(Ok(response)) => {
+        Ok(Ok(detail)) => {
             if let Some(controller) = weak.upgrade() {
-                let detail = match response.kind {
-                    NockyConnectHandoffKind::Accept => "accepted",
-                    NockyConnectHandoffKind::Decline => "declined",
-                    _ => "responded",
-                };
                 controller.show_toast(&format!(
-                    "Nocky Connect: {device_name} {detail} handoff · {target_url}"
+                    "Nocky Connect: {device_name} {detail} · {target_url}"
                 ));
             }
             glib::ControlFlow::Break
@@ -238,7 +295,7 @@ fn start_desktop_handoff_send(
         Ok(Err(error)) => {
             if let Some(controller) = weak.upgrade() {
                 controller.show_toast(&format!(
-                    "Nocky Connect: could not send offer to {device_name}: {error}"
+                    "Nocky Connect: could not send snapshot to {device_name}: {error}"
                 ));
             }
             glib::ControlFlow::Break
