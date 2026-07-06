@@ -1,0 +1,15 @@
+{
+  "schema": "io.github.maylton.nocky.connect.DeviceDescriptor",
+  "schema_version": 1,
+  "device_id": "fixture-android-device",
+  "device_name": "Fixture Android phone",
+  "platform": "android",
+  "app_name": "Nocky Android",
+  "app_version": "dev",
+  "protocol_version": 1,
+  "features": [
+    "snapshot_export",
+    "snapshot_import_paused",
+    "file_round_trip"
+  ]
+}
