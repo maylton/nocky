@@ -8,7 +8,10 @@ use crate::{
     connect::{
         default_connect_config_dir, scan_once, NockyConnectDeviceDescriptor,
         NockyConnectDeviceIdentity, NockyConnectDeviceList, NockyConnectDiscoveredDevice,
+        NockyConnectHandoffEnvelope, NockyConnectHandoffOffer, NockyConnectHandoffPayload,
+        NockyConnectRestorePolicy, NockyConnectSnapshotSummary, NockyConnectSource,
     },
+    playback::queue::QueueSourceKind,
     ui::nocky_connect::{
         build_nocky_connect_popover, render_nocky_connect_devices, NockyConnectDeviceSelected,
     },
@@ -20,7 +23,7 @@ use std::{
     rc::Rc,
     sync::mpsc,
     thread,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 const NOCKY_CONNECT_SCAN_TIMEOUT: Duration = Duration::from_secs(6);
@@ -111,12 +114,72 @@ impl AppController {
             let Some(controller) = weak.upgrade() else {
                 return;
             };
-            controller.show_toast(&format!(
-                "Nocky Connect handoff for {} is next",
-                descriptor.device_name
-            ));
-            popover.popdown();
+
+            match controller.build_handoff_offer(&descriptor) {
+                Ok(envelope) => {
+                    let summary = handoff_offer_summary(&envelope);
+                    let encoded_bytes = serde_json::to_string(&envelope)
+                        .map(|payload| payload.len())
+                        .unwrap_or_default();
+                    controller.show_toast(&format!(
+                        "Handoff offer ready for {} · {summary} · {encoded_bytes} bytes",
+                        descriptor.device_name
+                    ));
+                    popover.popdown();
+                }
+                Err(error) => {
+                    controller.show_toast(&format!("Could not prepare handoff offer: {error}"));
+                }
+            }
         })
+    }
+
+    fn build_handoff_offer(
+        &self,
+        receiver: &NockyConnectDeviceDescriptor,
+    ) -> Result<NockyConnectHandoffEnvelope, String> {
+        self.persist_playback_session_now();
+
+        let sender = build_local_desktop_descriptor()?;
+        let queue = self.playback_queue_v2.borrow();
+        let current = queue
+            .current()
+            .ok_or_else(|| "current queue is empty".to_string())?;
+        let source = queue
+            .source_kind()
+            .map_err(|error| error.to_string())?
+            .map(connect_source_from_queue_source_kind)
+            .unwrap_or(NockyConnectSource::Unknown);
+        let position_ms = self.player.position_us().max(0) as u64 / 1_000;
+        let duration_ms = duration_ms(current.media.duration_seconds).or_else(|| {
+            let player_duration = self.player.duration_us();
+            (player_duration > 0).then_some(player_duration as u64 / 1_000)
+        });
+        let current_artist = (!current.media.artist.trim().is_empty())
+            .then(|| current.media.artist.clone());
+        let created_at_epoch_ms = unix_millis();
+        let offer_id = format!("desktop-offer-{created_at_epoch_ms}");
+
+        Ok(NockyConnectHandoffEnvelope::offer(
+            format!("desktop-offer-message-{created_at_epoch_ms}"),
+            created_at_epoch_ms,
+            NockyConnectHandoffOffer {
+                offer_id,
+                sender_device_id: sender.device_id,
+                sender_device_name: sender.device_name,
+                receiver_device_id: receiver.device_id.clone(),
+                snapshot_summary: NockyConnectSnapshotSummary {
+                    source,
+                    current_title: Some(current.media.title.clone()),
+                    current_artist,
+                    queue_items: queue.len(),
+                    position_ms,
+                    duration_ms,
+                    was_playing: self.player.is_playing(),
+                },
+                restore_policy: NockyConnectRestorePolicy::RestorePaused,
+            },
+        ))
     }
 }
 
@@ -184,6 +247,34 @@ fn build_local_desktop_descriptor() -> Result<NockyConnectDeviceDescriptor, Stri
         desktop_device_name(),
         Some(env!("CARGO_PKG_VERSION").to_string()),
     ))
+}
+
+fn handoff_offer_summary(envelope: &NockyConnectHandoffEnvelope) -> String {
+    match &envelope.payload {
+        NockyConnectHandoffPayload::Offer(offer) => format!(
+            "{} items · restore paused",
+            offer.snapshot_summary.queue_items
+        ),
+        _ => "not an offer".to_string(),
+    }
+}
+
+fn connect_source_from_queue_source_kind(kind: QueueSourceKind) -> NockyConnectSource {
+    match kind {
+        QueueSourceKind::Local => NockyConnectSource::Local,
+        QueueSourceKind::YouTube => NockyConnectSource::YouTube,
+    }
+}
+
+fn duration_ms(duration_seconds: u64) -> Option<u64> {
+    (duration_seconds > 0).then_some(duration_seconds.saturating_mul(1_000))
+}
+
+fn unix_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis().min(u128::from(u64::MAX)) as u64)
+        .unwrap_or_default()
 }
 
 fn find_descendant_with_css_class(root: &gtk::Widget, class_name: &str) -> Option<gtk::Widget> {
