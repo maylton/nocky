@@ -58,7 +58,7 @@ QR pairing is not planned as the default flow. The intended first real handoff f
 3. the receiving device requires an explicit accept/deny confirmation before a restore happens;
 4. YouTube Music account state is not exchanged or inspected by Nocky Connect.
 
-Using the same Google/YouTube Music account can make the handoff more likely to resolve the same songs, but it should not be used as a pairing secret. Nocky Connect should transfer public playable IDs and metadata, not account cookies, tokens or headers.
+Using the same Google/YouTube Music account can make the handoff more likely to resolve the same songs, but it should not be used as a pairing secret. Nocky Connect should transfer public playable IDs and metadata, not account cookies, tokens or headers. A future LAN implementation can still show an optional pairing code or confirmation code if accidental-device protection is needed, but QR is not required for the main flow.
 
 ## Export behavior
 
