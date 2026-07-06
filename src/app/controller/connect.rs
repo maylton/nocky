@@ -9,7 +9,9 @@ use crate::{
         default_connect_config_dir, scan_once, NockyConnectDeviceDescriptor,
         NockyConnectDeviceIdentity, NockyConnectDeviceList, NockyConnectDiscoveredDevice,
     },
-    ui::nocky_connect::{build_nocky_connect_popover, render_nocky_connect_devices},
+    ui::nocky_connect::{
+        build_nocky_connect_popover, render_nocky_connect_devices, NockyConnectDeviceSelected,
+    },
 };
 use adw::prelude::*;
 use gtk::{gio, glib};
@@ -39,14 +41,19 @@ impl AppController {
         app.add_action(&connect);
     }
 
-    pub(crate) fn open_nocky_connect_surface(&self) {
+    pub(crate) fn open_nocky_connect_surface(self: &Rc<Self>) {
         self.persist_playback_session_now();
 
         let local_descriptor = build_local_desktop_descriptor().ok();
         let device_list = Rc::new(RefCell::new(NockyConnectDeviceList::new()));
         let surface = build_nocky_connect_popover(local_descriptor.as_ref());
+        let on_selected = self.build_device_selected_handler(&surface.popover);
 
-        render_nocky_connect_devices(&surface.device_list, &device_list.borrow());
+        render_nocky_connect_devices(
+            &surface.device_list,
+            &device_list.borrow(),
+            Some(on_selected.clone()),
+        );
         let anchor = self.nocky_connect_popover_anchor();
         surface.popover.set_parent(&anchor);
         {
@@ -67,12 +74,14 @@ impl AppController {
             let device_list_box = surface.device_list.clone();
             let status_label = surface.status.clone();
             let device_list = device_list.clone();
+            let on_selected = on_selected.clone();
             surface.refresh_button.connect_clicked(move |button| {
                 start_desktop_device_scan(
                     button.clone(),
                     status_label.clone(),
                     device_list_box.clone(),
                     device_list.clone(),
+                    on_selected.clone(),
                 );
             });
         }
@@ -83,12 +92,31 @@ impl AppController {
             surface.status,
             surface.device_list,
             device_list,
+            on_selected,
         );
     }
 
     fn nocky_connect_popover_anchor(&self) -> gtk::Widget {
         let root: gtk::Widget = self.footer_right_controls.clone().upcast();
         find_descendant_with_css_class(&root, "footer-connect-button").unwrap_or(root)
+    }
+
+    fn build_device_selected_handler(
+        self: &Rc<Self>,
+        popover: &gtk::Popover,
+    ) -> NockyConnectDeviceSelected {
+        let weak = Rc::downgrade(self);
+        let popover = popover.clone();
+        Rc::new(move |descriptor, _address| {
+            let Some(controller) = weak.upgrade() else {
+                return;
+            };
+            controller.show_toast(&format!(
+                "Nocky Connect handoff for {} is next",
+                descriptor.device_name
+            ));
+            popover.popdown();
+        })
     }
 }
 
@@ -97,6 +125,7 @@ fn start_desktop_device_scan(
     status_label: gtk::Label,
     device_list_box: gtk::Box,
     device_list: Rc<RefCell<NockyConnectDeviceList>>,
+    on_selected: NockyConnectDeviceSelected,
 ) {
     refresh_button.set_sensitive(false);
     status_label.set_text("Scanning for up to 6 seconds…");
@@ -114,7 +143,11 @@ fn start_desktop_device_scan(
                 list.update_with_discovered(devices, now);
                 list.remove_stale(now, NOCKY_CONNECT_DEVICE_STALE_AFTER);
             }
-            render_nocky_connect_devices(&device_list_box, &device_list.borrow());
+            render_nocky_connect_devices(
+                &device_list_box,
+                &device_list.borrow(),
+                Some(on_selected.clone()),
+            );
             let count = device_list.borrow().len();
             status_label.set_text(match count {
                 0 => "No devices found yet. Try again while the Android app is open.",
