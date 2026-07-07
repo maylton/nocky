@@ -27,6 +27,45 @@ window.theme-material-expressive .footer-utility-action {
   background-color: alpha(@m3_surface_container_highest, 0.64);
 }
 
+button.footer-connect-button {
+  transition:
+    background-color 180ms ease-out,
+    box-shadow 220ms ease-out,
+    color 180ms ease-out;
+}
+
+window.theme-material-expressive button.footer-connect-button.connect-device-available {
+  color: @m3_primary;
+  background-color: alpha(@m3_primary, 0.14);
+  box-shadow:
+    0 0 0 1px alpha(@m3_primary, 0.16),
+    0 2px 10px alpha(@m3_primary, 0.30);
+}
+
+window.theme-material-expressive button.footer-connect-button.connect-device-available:hover,
+window.theme-material-expressive button.footer-connect-button.connect-device-available:focus-visible {
+  background-color: alpha(@m3_primary, 0.19);
+  box-shadow:
+    0 0 0 2px alpha(@m3_primary, 0.14),
+    0 4px 14px alpha(@m3_primary, 0.34);
+}
+
+window.theme-noctalia button.footer-connect-button.connect-device-available {
+  color: @accent_color;
+  background-color: alpha(@accent_color, 0.14);
+  box-shadow:
+    0 0 0 1px alpha(@accent_color, 0.18),
+    0 2px 10px alpha(@accent_color, 0.32);
+}
+
+window.theme-noctalia button.footer-connect-button.connect-device-available:hover,
+window.theme-noctalia button.footer-connect-button.connect-device-available:focus-visible {
+  background-color: alpha(@accent_color, 0.18);
+  box-shadow:
+    0 0 0 2px alpha(@accent_color, 0.13),
+    0 4px 14px alpha(@accent_color, 0.34);
+}
+
 window.theme-material-expressive .footer-utility-action:checked {
   color: @m3_on_primary;
   background-color: @m3_primary;
