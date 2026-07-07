@@ -9,6 +9,7 @@ use super::{
     BrowserPlaybackState, HomeCard, HomeSectionPresentation,
 };
 use crate::{
+    app::perf::PerfTimer,
     config::{AppConfig, AppLanguage},
     ui::widgets::MaterialLoadingIndicator,
     youtube::{cached_cover_for_item, HomeV3Item, HomeV3Page, YouTubeItem},
@@ -512,7 +513,15 @@ pub(super) fn youtube_home_v3_feed_shell(
     card_effects: bool,
     existing_home: Option<&gtk::Box>,
 ) -> gtk::Box {
+    let timer = PerfTimer::start("home.v3.feed_shell");
     let copy = home_v3_copy(language);
+    let section_count = page.sections.len();
+    let item_count = page
+        .sections
+        .iter()
+        .map(|section| section.items.len())
+        .sum::<usize>();
+    let chip_count = page.chips.len();
 
     let page_signature = home_v3_page_signature(page);
     if !loading {
@@ -520,6 +529,13 @@ pub(super) fn youtube_home_v3_feed_shell(
             if existing_home.has_css_class("youtube-home-v3")
                 && existing_home.widget_name().as_str() == page_signature
             {
+                timer.finish_with(&[
+                    ("cached", "true".to_string()),
+                    ("sections", section_count.to_string()),
+                    ("items", item_count.to_string()),
+                    ("chips", chip_count.to_string()),
+                    ("loading", loading.to_string()),
+                ]);
                 return existing_home.clone();
             }
         }
@@ -546,6 +562,13 @@ pub(super) fn youtube_home_v3_feed_shell(
 
     if page.sections.is_empty() {
         home.append(&empty_row(copy.empty_text));
+        timer.finish_with(&[
+            ("cached", "false".to_string()),
+            ("sections", section_count.to_string()),
+            ("items", item_count.to_string()),
+            ("chips", chip_count.to_string()),
+            ("loading", loading.to_string()),
+        ]);
         return home;
     }
 
@@ -573,6 +596,13 @@ pub(super) fn youtube_home_v3_feed_shell(
         home.append(&button);
     }
 
+    timer.finish_with(&[
+        ("cached", "false".to_string()),
+        ("sections", section_count.to_string()),
+        ("items", item_count.to_string()),
+        ("chips", chip_count.to_string()),
+        ("loading", loading.to_string()),
+    ]);
     home
 }
 
