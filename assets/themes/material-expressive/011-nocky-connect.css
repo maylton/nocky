@@ -8,33 +8,28 @@ button.footer-connect-button {
     color 180ms ease-out;
 }
 
-button.footer-connect-button .footer-connect-indicator {
-  min-width: 36px;
-  min-height: 36px;
-  border-radius: 18px;
-  transition:
-    background-color 180ms ease-out,
-    box-shadow 220ms ease-out;
-}
-
 button.footer-connect-button image {
   transition:
     color 180ms ease-out,
     -gtk-icon-transform 180ms ease-out;
 }
 
-window.theme-material-expressive button.footer-connect-button.connect-device-available,
 window.theme-material-expressive .footer-mode-compact button.footer-connect-button.connect-device-available,
-window.theme-noctalia button.footer-connect-button.connect-device-available,
 window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-device-available {
-  background-image: none;
-  border-color: transparent;
-  box-shadow: none;
+  border-radius: 22px;
 }
 
-window.theme-material-expressive button.footer-connect-button.connect-device-available .footer-connect-indicator,
-window.theme-material-expressive .footer-mode-compact button.footer-connect-button.connect-device-available .footer-connect-indicator {
+window.theme-material-expressive button.footer-connect-button.connect-device-available {
+  color: @m3_primary;
+  background-image: none;
   background-color: alpha(@m3_primary, 0.06);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px alpha(@m3_primary, 0.32);
+}
+
+window.theme-material-expressive .footer-mode-compact button.footer-connect-button.connect-device-available {
+  background-color: alpha(@m3_primary, 0.06);
+  border-color: transparent;
   box-shadow: inset 0 0 0 1px alpha(@m3_primary, 0.32);
 }
 
@@ -45,19 +40,18 @@ window.theme-material-expressive .footer-mode-compact button.footer-connect-butt
 }
 
 window.theme-material-expressive button.footer-connect-button.connect-device-available:hover,
-window.theme-material-expressive button.footer-connect-button.connect-device-available:focus-visible,
-window.theme-material-expressive .footer-mode-compact button.footer-connect-button.connect-device-available:hover,
-window.theme-material-expressive .footer-mode-compact button.footer-connect-button.connect-device-available:focus-visible {
+window.theme-material-expressive button.footer-connect-button.connect-device-available:focus-visible {
+  color: @m3_primary;
   background-image: none;
+  background-color: alpha(@m3_primary, 0.08);
   border-color: transparent;
-  box-shadow: none;
+  box-shadow: inset 0 0 0 1px alpha(@m3_primary, 0.40);
 }
 
-window.theme-material-expressive button.footer-connect-button.connect-device-available:hover .footer-connect-indicator,
-window.theme-material-expressive button.footer-connect-button.connect-device-available:focus-visible .footer-connect-indicator,
-window.theme-material-expressive .footer-mode-compact button.footer-connect-button.connect-device-available:hover .footer-connect-indicator,
-window.theme-material-expressive .footer-mode-compact button.footer-connect-button.connect-device-available:focus-visible .footer-connect-indicator {
+window.theme-material-expressive .footer-mode-compact button.footer-connect-button.connect-device-available:hover,
+window.theme-material-expressive .footer-mode-compact button.footer-connect-button.connect-device-available:focus-visible {
   background-color: alpha(@m3_primary, 0.08);
+  border-color: transparent;
   box-shadow: inset 0 0 0 1px alpha(@m3_primary, 0.40);
 }
 
@@ -69,9 +63,17 @@ window.theme-material-expressive .footer-mode-compact button.footer-connect-butt
   -gtk-icon-effect: highlight;
 }
 
-window.theme-noctalia button.footer-connect-button.connect-device-available .footer-connect-indicator,
-window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-device-available .footer-connect-indicator {
+window.theme-noctalia button.footer-connect-button.connect-device-available {
+  color: @accent_color;
+  background-image: none;
   background-color: alpha(@accent_color, 0.06);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px alpha(@accent_color, 0.32);
+}
+
+window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-device-available {
+  background-color: alpha(@accent_color, 0.06);
+  border-color: transparent;
   box-shadow: inset 0 0 0 1px alpha(@accent_color, 0.32);
 }
 
@@ -82,19 +84,18 @@ window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-
 }
 
 window.theme-noctalia button.footer-connect-button.connect-device-available:hover,
-window.theme-noctalia button.footer-connect-button.connect-device-available:focus-visible,
-window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-device-available:hover,
-window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-device-available:focus-visible {
+window.theme-noctalia button.footer-connect-button.connect-device-available:focus-visible {
+  color: @accent_color;
   background-image: none;
+  background-color: alpha(@accent_color, 0.08);
   border-color: transparent;
-  box-shadow: none;
+  box-shadow: inset 0 0 0 1px alpha(@accent_color, 0.40);
 }
 
-window.theme-noctalia button.footer-connect-button.connect-device-available:hover .footer-connect-indicator,
-window.theme-noctalia button.footer-connect-button.connect-device-available:focus-visible .footer-connect-indicator,
-window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-device-available:hover .footer-connect-indicator,
-window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-device-available:focus-visible .footer-connect-indicator {
+window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-device-available:hover,
+window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-device-available:focus-visible {
   background-color: alpha(@accent_color, 0.08);
+  border-color: transparent;
   box-shadow: inset 0 0 0 1px alpha(@accent_color, 0.40);
 }
 
