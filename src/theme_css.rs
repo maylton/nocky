@@ -50,6 +50,10 @@ const MATERIAL_EXPRESSIVE_MODULES: &[(&str, &str)] = &[
         include_str!("../assets/themes/material-expressive/095-controls.css"),
     ),
     (
+        "096-contextual-menus.css",
+        include_str!("../assets/themes/material-expressive/096-contextual-menus.css"),
+    ),
+    (
         "096-tonal-surfaces.css",
         include_str!("../assets/themes/material-expressive/096-tonal-surfaces.css"),
     ),
@@ -107,6 +111,7 @@ mod tests {
             ".expressive-player-card",
             ".header-view-switcher",
             ".queue2-page",
+            ".material-context-menu",
             ".material-loading-indicator.contained",
         ] {
             assert!(css.contains(required), "missing required CSS: {required}");
