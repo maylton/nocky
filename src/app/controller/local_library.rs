@@ -2,7 +2,7 @@
 
 use super::AppController;
 use crate::{
-    app::{library_state::scanned_library_matches, state::PlaybackSource},
+    app::{library_state::scanned_library_matches, perf::PerfTimer, state::PlaybackSource},
     background::BackgroundMessage,
     config::StartupSource,
     i18n::Message,
@@ -15,6 +15,7 @@ use std::{rc::Rc, thread};
 
 impl AppController {
     pub(crate) fn load_saved_library(self: &Rc<Self>) {
+        let _timer = PerfTimer::start("library.load_saved");
         if self.config.borrow().music_directory.is_some() {
             self.scan_library();
         }
@@ -52,6 +53,7 @@ impl AppController {
     }
 
     pub(crate) fn scan_library(&self) {
+        let _timer = PerfTimer::start("library.scan_request");
         if self.scanning.replace(true) {
             self.show_toast("A biblioteca já está sendo escaneada");
             return;
@@ -65,12 +67,15 @@ impl AppController {
 
         let sender = self.background.sender();
         thread::spawn(move || {
+            let timer = PerfTimer::start("library.scan_worker");
             let result = library::scan_music_directory(&root);
+            timer.finish_with(&[("root", root.display().to_string())]);
             let _ = sender.send(BackgroundMessage::LibraryScanned { root, result });
         });
     }
 
     pub(crate) fn apply_scanned_library(&self, data: Vec<TrackData>) {
+        let timer = PerfTimer::start("library.apply_scanned");
         let unchanged = {
             let state = self.state.borrow();
             scanned_library_matches(&state.tracks, &data)
@@ -117,6 +122,7 @@ impl AppController {
             }
             self.show_toast("Nenhum arquivo de áudio compatível foi encontrado nessa pasta");
         }
+        timer.finish_with(&[("tracks", count.to_string())]);
     }
 
     pub(crate) fn sync_active_library(&self) {
