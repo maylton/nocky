@@ -292,7 +292,7 @@ fn write_http_response(
 ) -> Result<(), NockyConnectHandoffHttpReceiverError> {
     let response = format!(
         "HTTP/1.1 {status_code} {status_text}\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        body.as_bytes().len(),
+        body.len(),
     );
     stream
         .write_all(response.as_bytes())

@@ -354,7 +354,7 @@ impl AppController {
         if media
             .cover_path
             .as_ref()
-            .is_some_and(pathbuf_is_portable_http_url)
+            .is_some_and(|path| pathbuf_is_portable_http_url(path.as_path()))
         {
             return media;
         }
@@ -982,7 +982,7 @@ fn is_youtube_default_thumbnail_url(url: &str) -> bool {
     )
 }
 
-fn pathbuf_is_portable_http_url(path: &PathBuf) -> bool {
+fn pathbuf_is_portable_http_url(path: &Path) -> bool {
     is_portable_http_value(path.to_string_lossy().trim())
 }
 
