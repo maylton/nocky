@@ -299,7 +299,9 @@ fn next_discovery_message_id(prefix: &str) -> String {
 }
 
 fn debug_discovery(mode: &str, message: impl AsRef<str>) {
-    eprintln!("[Nocky Connect][desktop][{mode}] {}", message.as_ref());
+    if std::env::var_os("NOCKY_CONNECT_DEBUG").is_some() {
+        eprintln!("[Nocky Connect][desktop][{mode}] {}", message.as_ref());
+    }
 }
 
 #[cfg(test)]
