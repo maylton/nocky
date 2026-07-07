@@ -17,15 +17,17 @@ use crate::{
         NockyConnectSource, NockyPlaybackState, NockyRepeatMode, RestoredDesktopSnapshot,
         NOCKY_CONNECT_DESKTOP_HANDOFF_PORT,
     },
-    playback::queue::QueueSourceKind,
+    playback::queue::{PlaybackQueue, QueueEntryId, QueueMedia, QueueSource, QueueSourceKind},
     ui::nocky_connect::{
         build_nocky_connect_popover, render_nocky_connect_devices, NockyConnectDeviceSelected,
     },
+    youtube::YouTubeItem,
 };
 use adw::prelude::*;
 use gtk::{gio, glib};
 use std::{
     cell::{Cell, RefCell},
+    path::{Path, PathBuf},
     rc::Rc,
     sync::{mpsc, Mutex, OnceLock},
     thread,
@@ -38,6 +40,7 @@ const NOCKY_CONNECT_PERIODIC_SCAN_INTERVAL: Duration = Duration::from_secs(15);
 const NOCKY_CONNECT_HANDOFF_HTTP_TIMEOUT: Duration = Duration::from_secs(5);
 const NOCKY_CONNECT_HANDOFF_RECEIVE_TIMEOUT: Duration = Duration::from_secs(45);
 const NOCKY_CONNECT_DISCOVERY_RESPONDER_TIMEOUT: Duration = Duration::from_secs(60);
+const NOCKY_CONNECT_EXPORTED_ARTWORK_SIZE: u32 = 1200;
 
 static DESKTOP_CONNECT_DEVICE_LIST: OnceLock<Mutex<NockyConnectDeviceList>> = OnceLock::new();
 
@@ -298,10 +301,11 @@ impl AppController {
             shuffle_enabled: self.shuffle_enabled.get(),
             ..Default::default()
         };
+        let export_queue = self.nocky_connect_queue_with_resolved_artwork(&queue);
 
         NockyConnectGateway::new(sender.device_id)
             .export_snapshot_json(
-                &queue,
+                &export_queue,
                 title,
                 playback_state,
                 format!("desktop-session-{now}"),
@@ -310,18 +314,103 @@ impl AppController {
             .map_err(|error| error.to_string())
     }
 
-    fn apply_received_handoff_snapshot(&self, payload: &str) -> Result<String, String> {
+    fn nocky_connect_queue_with_resolved_artwork(&self, queue: &PlaybackQueue) -> PlaybackQueue {
+        let current_index = queue.current_index();
+        let media = queue
+            .entries()
+            .iter()
+            .map(|entry| self.nocky_connect_media_with_resolved_artwork(&entry.media))
+            .collect::<Vec<_>>();
+        let mut resolved = PlaybackQueue::new();
+        resolved.replace(media, current_index);
+        resolved
+    }
+
+    fn nocky_connect_media_with_resolved_artwork(&self, media: &QueueMedia) -> QueueMedia {
+        let mut media = media.clone();
+        if media.cover_path.as_ref().is_some_and(pathbuf_is_portable_http_url) {
+            return media;
+        }
+
+        let QueueSource::YouTube { video_id } = &media.source else {
+            return media;
+        };
+        if let Some(url) = self.resolve_nocky_connect_youtube_artwork_url(video_id) {
+            media.cover_path = Some(PathBuf::from(url));
+        }
+        media
+    }
+
+    fn resolve_nocky_connect_youtube_artwork_url(&self, video_id: &str) -> Option<String> {
+        let video_id = video_id.trim();
+        if video_id.is_empty() {
+            return None;
+        }
+
+        if let Some(url) = {
+            let state = self.youtube_state.borrow();
+            state.as_ref().and_then(|state| {
+                for item in std::iter::once(&state.item).chain(state.queue.iter()) {
+                    if item.video_id == video_id {
+                        if let Some(url) = nocky_connect_youtube_item_artwork_url(item) {
+                            return Some(url);
+                        }
+                    }
+                }
+                None
+            })
+        } {
+            return Some(url);
+        }
+
+        let library = self.youtube_library.borrow();
+        for item in library
+            .library
+            .iter()
+            .chain(library.liked.iter())
+            .chain(library.recently_played.iter())
+            .chain(library.playlist_tracks.values().flat_map(|items| items.iter()))
+            .chain(library.collection_tracks.values().flat_map(|items| items.iter()))
+            .chain(library.search.songs.iter())
+        {
+            if item.video_id == video_id {
+                if let Some(url) = nocky_connect_youtube_item_artwork_url(item) {
+                    return Some(url);
+                }
+            }
+        }
+
+        None
+    }
+
+    fn apply_received_handoff_snapshot(self: &Rc<Self>, payload: &str) -> Result<String, String> {
+        let started = Instant::now();
+        debug_desktop_restore(
+            started,
+            format!("prepare_restore:start bytes={}", payload.len()),
+        );
         let receiver = build_local_desktop_descriptor()?;
         let restored = NockyConnectGateway::new(receiver.device_id)
             .prepare_restore(payload)
             .map_err(|error| error.to_string())?;
-        self.apply_restored_desktop_snapshot(restored)
+        debug_desktop_restore(
+            started,
+            format!("prepare_restore:done queue_items={}", restored.queue.len()),
+        );
+        let detail = self.apply_restored_desktop_snapshot(restored)?;
+        debug_desktop_restore(started, "prepare_restore:complete");
+        Ok(detail)
     }
 
     fn apply_restored_desktop_snapshot(
-        &self,
+        self: &Rc<Self>,
         restored: RestoredDesktopSnapshot,
     ) -> Result<String, String> {
+        let started = Instant::now();
+        debug_desktop_restore(
+            started,
+            format!("apply:start queue_items={}", restored.queue.len()),
+        );
         if restored.queue.is_empty() {
             return Err("received queue is empty".to_string());
         }
@@ -348,6 +437,10 @@ impl AppController {
             .or_else(|| restored.title.clone())
             .unwrap_or_else(|| "queue".to_string());
         let snapshot = restored.queue.snapshot();
+        debug_desktop_restore(
+            started,
+            format!("apply:validated source={source:?} current_id={current_id}"),
+        );
 
         self.maybe_record_listening();
         let _ = self.player.pause();
@@ -357,9 +450,21 @@ impl AppController {
         self.youtube_state.borrow_mut().take();
         self.queue_v2_pending_entry.set(None);
         self.queue_dragged_entry.set(None);
+        debug_desktop_restore(started, "apply:stopped current playback");
+
         self.active_queue_source.set(source);
         self.playback_queue_v2.replace(restored.queue);
+        self.playback_queue_v2
+            .borrow_mut()
+            .select(current_id)
+            .map_err(|error| error.to_string())?;
         self.queue_last_saved_snapshot.replace(snapshot);
+        self.queue_page_last_snapshot.replace(None);
+        self.queue_page_last_source.set(None);
+        debug_desktop_restore(started, "apply:queue replaced");
+
+        self.present_restored_desktop_current_entry(current_id, position_us)?;
+        debug_desktop_restore(started, "apply:now playing presented");
 
         let shuffle_enabled = restored.state.shuffle_enabled;
         self.shuffle_enabled.set(shuffle_enabled);
@@ -373,16 +478,87 @@ impl AppController {
         self.pending_resume_position_us.set(Some(position_us));
         self.startup_restore_autoplay.set(Some(false));
         self.playback_session_restore_attempts.set(0);
+        debug_desktop_restore(started, "apply:playback flags updated");
 
-        self.play_queue_entry(current_id, false);
-        let _ = self.player.pause();
-        self.update_play_icons(false);
         self.persist_queue_now();
+        debug_desktop_restore(started, "apply:persist_queue_done");
         self.persist_playback_session_now();
+        debug_desktop_restore(started, "apply:persist_session_done");
         self.publish_mpris_capabilities();
-        self.update_footer_source();
+        debug_desktop_restore(started, "apply:footer updated");
 
+        let should_refresh_queue_page = self
+            .views
+            .visible_child_name()
+            .as_ref()
+            .is_some_and(|name| name.as_str() == "queue");
+        if should_refresh_queue_page {
+            let weak = Rc::downgrade(self);
+            glib::idle_add_local_once(move || {
+                if let Some(controller) = weak.upgrade() {
+                    debug_desktop_restore(started, "queue_page_refresh:start");
+                    controller.refresh_queue_page();
+                    debug_desktop_restore(started, "queue_page_refresh:done");
+                }
+            });
+        } else {
+            debug_desktop_restore(started, "queue_page_refresh:skipped hidden");
+        }
+
+        debug_desktop_restore(started, "apply:done");
         Ok(format!("restored paused · {current_title} · {item_count} items"))
+    }
+
+    fn present_restored_desktop_current_entry(
+        &self,
+        current_id: QueueEntryId,
+        position_us: i64,
+    ) -> Result<(), String> {
+        let media = self
+            .playback_queue_v2
+            .borrow()
+            .entry(current_id)
+            .map(|entry| entry.media.clone())
+            .ok_or_else(|| "received queue current item was not found".to_string())?;
+        let cover_path = local_cover_path(media.cover_path.as_deref());
+        let duration_us = media
+            .duration_seconds
+            .saturating_mul(1_000_000)
+            .min(i64::MAX as u64) as i64;
+        let position_us = if duration_us > 0 {
+            position_us.clamp(0, duration_us)
+        } else {
+            position_us.max(0)
+        };
+        let progress = if duration_us > 0 {
+            position_us as f64 / duration_us as f64
+        } else {
+            0.0
+        };
+        let elapsed = connect_time_label(position_us);
+        let duration = connect_time_label(duration_us);
+
+        self.player_view
+            .set_metadata(&media.title, &media.artist, &media.album);
+        self.set_footer_metadata(&media.title, &media.artist);
+        self.hero_cover.set_path(cover_path);
+        self.mini_cover.set_path(cover_path);
+        self.visual_theme_manager.update_artwork(cover_path);
+        self.elapsed.set_text(&elapsed);
+        self.duration.set_text(&duration);
+        self.footer_elapsed.set_text(&elapsed);
+        self.footer_duration.set_text(&duration);
+        self.updating_progress.set(true);
+        self.progress.set_value(progress.clamp(0.0, 1.0));
+        self.footer_traditional_progress
+            .set_value(progress.clamp(0.0, 1.0));
+        self.home_wave_progress.set_fraction(progress.clamp(0.0, 1.0));
+        self.footer_progress.set_fraction(progress.clamp(0.0, 1.0));
+        self.updating_progress.set(false);
+        self.last_mpris_position.set(position_us);
+        self.update_play_icons(false);
+        self.update_footer_source();
+        Ok(())
     }
 }
 
@@ -593,6 +769,100 @@ fn build_local_desktop_descriptor() -> Result<NockyConnectDeviceDescriptor, Stri
     .with_handoff_endpoint(NockyConnectHandoffEndpoint::local_http(
         NOCKY_CONNECT_DESKTOP_HANDOFF_PORT,
     )))
+}
+
+fn nocky_connect_youtube_item_artwork_url(item: &YouTubeItem) -> Option<String> {
+    let thumbnail = item.thumbnail_url.trim();
+    if thumbnail.is_empty() || is_youtube_default_thumbnail_url(thumbnail) {
+        return None;
+    }
+    Some(resize_innertube_artwork_url(
+        thumbnail,
+        NOCKY_CONNECT_EXPORTED_ARTWORK_SIZE,
+    ))
+}
+
+fn resize_innertube_artwork_url(url: &str, size: u32) -> String {
+    let trimmed = url.trim();
+    if !is_portable_http_value(trimmed) {
+        return trimmed.to_string();
+    }
+
+    let base = trimmed
+        .split_once('=')
+        .map(|(base, _)| base)
+        .unwrap_or(trimmed);
+    if base.contains("googleusercontent.com") || base.contains("ggpht.com") {
+        format!("{base}=w{size}-h{size}-l90-rj")
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn is_youtube_default_thumbnail_url(url: &str) -> bool {
+    let value = url.to_ascii_lowercase();
+    if !value.contains("i.ytimg.com/vi/") && !value.contains("img.youtube.com/vi/") {
+        return false;
+    }
+    let file_name = value
+        .split("/vi/")
+        .nth(1)
+        .unwrap_or_default()
+        .split('/')
+        .nth(1)
+        .unwrap_or_default()
+        .split('?')
+        .next()
+        .unwrap_or_default()
+        .split('#')
+        .next()
+        .unwrap_or_default();
+    matches!(
+        file_name,
+        "default.jpg"
+            | "mqdefault.jpg"
+            | "hqdefault.jpg"
+            | "sddefault.jpg"
+            | "maxresdefault.jpg"
+            | "0.jpg"
+            | "1.jpg"
+            | "2.jpg"
+            | "3.jpg"
+    )
+}
+
+fn pathbuf_is_portable_http_url(path: &PathBuf) -> bool {
+    is_portable_http_value(path.to_string_lossy().trim())
+}
+
+fn is_portable_http_value(value: &str) -> bool {
+    value.starts_with("https://") || value.starts_with("http://")
+}
+
+fn local_cover_path(path: Option<&Path>) -> Option<&Path> {
+    path.filter(|path| path.is_file())
+}
+
+fn connect_time_label(position_us: i64) -> String {
+    let seconds = position_us.max(0) as u64 / 1_000_000;
+    let hours = seconds / 3600;
+    let minutes = (seconds % 3600) / 60;
+    let seconds = seconds % 60;
+    if hours > 0 {
+        format!("{hours}:{minutes:02}:{seconds:02}")
+    } else {
+        format!("{minutes}:{seconds:02}")
+    }
+}
+
+fn debug_desktop_restore(started: Instant, message: impl AsRef<str>) {
+    if std::env::var_os("NOCKY_CONNECT_DEBUG").is_some() {
+        eprintln!(
+            "[Nocky Connect][desktop][restore][{:>4}ms] {}",
+            started.elapsed().as_millis(),
+            message.as_ref()
+        );
+    }
 }
 
 fn handoff_offer_summary(envelope: &NockyConnectHandoffEnvelope) -> String {
