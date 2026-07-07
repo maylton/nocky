@@ -7,14 +7,17 @@ use crate::{
         state::PlaybackSource,
     },
     browser::{BrowserEvent, BrowserPlaybackState, BrowserRenderContext, BrowserRoute},
-    config::{AppLanguage, StartupSource},
+    config::{AppConfig, AppLanguage, StartupSource},
     i18n::Message,
     listening_history,
     model::Track,
-    youtube::{credited_artists, YouTubeItem},
+    youtube::{credited_artists, YouTubeItem, YouTubeLibraryCache},
 };
 use gtk::prelude::*;
-use std::{collections::HashSet, rc::Rc};
+use std::{
+    collections::{BTreeSet, HashSet},
+    rc::Rc,
+};
 
 impl AppController {
     pub(crate) fn browser_playback_state(&self) -> BrowserPlaybackState {
@@ -107,6 +110,8 @@ impl AppController {
             .as_ref()
             .map(|source| source.sections.len())
             .unwrap_or(0);
+        let count_fields = perf::enabled()
+            .then(|| browser_collection_count_fields(state.tracks.as_slice(), &config, &youtube));
         self.music_stack
             .set_visible_child_name(if has_library { "library" } else { "empty" });
         self.browser.refresh(
@@ -131,7 +136,7 @@ impl AppController {
                 self.browser.select_track(current);
             }
         }
-        timer.finish_with(&[
+        let mut fields = vec![
             ("route", route_label),
             ("home_visible", home_visible.to_string()),
             ("query", query_active.to_string()),
@@ -143,7 +148,11 @@ impl AppController {
             ),
             ("youtube_loading", self.youtube_home_loading.get().to_string()),
             ("has_library", has_library.to_string()),
-        ]);
+        ];
+        if let Some(count_fields) = count_fields {
+            fields.extend(count_fields);
+        }
+        timer.finish_with(&fields);
     }
 
     pub(crate) fn navigate_browser(&self, route: BrowserRoute) {
@@ -199,6 +208,8 @@ impl AppController {
             .as_ref()
             .map(|source| source.sections.len())
             .unwrap_or(0);
+        let count_fields = perf::enabled()
+            .then(|| browser_collection_count_fields(state.tracks.as_slice(), &config, &youtube));
         self.browser.navigate(
             route.clone(),
             effective_tracks,
@@ -223,7 +234,7 @@ impl AppController {
         if route_changed {
             self.browser.reset_queue_scroll_position();
         }
-        timer.finish_with(&[
+        let mut fields = vec![
             ("from", previous_route_label),
             ("to", target_route_label),
             ("changed", route_changed.to_string()),
@@ -235,7 +246,11 @@ impl AppController {
                 youtube_native_section_count.to_string(),
             ),
             ("youtube_loading", self.youtube_home_loading.get().to_string()),
-        ]);
+        ];
+        if let Some(count_fields) = count_fields {
+            fields.extend(count_fields);
+        }
+        timer.finish_with(&fields);
     }
 
     pub(crate) fn update_sidebar_active(&self, route: &BrowserRoute) {
@@ -773,4 +788,35 @@ impl AppController {
             self.navigate_browser(BrowserRoute::Album(album));
         }
     }
+}
+
+fn browser_collection_count_fields(
+    tracks: &[Track],
+    config: &AppConfig,
+    youtube: &YouTubeLibraryCache,
+) -> Vec<(&'static str, String)> {
+    let local_albums = tracks
+        .iter()
+        .map(|track| track.album.trim().to_lowercase())
+        .filter(|album| !album.is_empty())
+        .collect::<BTreeSet<_>>()
+        .len();
+    let local_artists = tracks
+        .iter()
+        .flat_map(|track| credited_artists(&track.artist))
+        .map(|artist| artist.trim().to_lowercase())
+        .filter(|artist| !artist.is_empty())
+        .collect::<BTreeSet<_>>()
+        .len();
+
+    vec![
+        ("local_tracks_total", tracks.len().to_string()),
+        ("local_albums", local_albums.to_string()),
+        ("local_artists", local_artists.to_string()),
+        ("local_playlists", config.playlists.len().to_string()),
+        ("youtube_albums", youtube.albums.len().to_string()),
+        ("youtube_artists", youtube.artists.len().to_string()),
+        ("youtube_playlists", youtube.playlists.len().to_string()),
+        ("youtube_liked", youtube.liked.len().to_string()),
+    ]
 }
