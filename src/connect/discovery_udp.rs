@@ -62,6 +62,18 @@ pub fn scan_once(
     let sent = socket.send_to(payload.as_bytes(), broadcast)?;
     debug_discovery("scan", format!("sent {sent} bytes"));
 
+    let shared_devices = recent_shared_discovered_devices(SHARED_DISCOVERY_DEVICE_STALE_AFTER);
+    if !shared_devices.is_empty() {
+        debug_discovery(
+            "scan",
+            format!(
+                "using {} recently observed shared device(s)",
+                shared_devices.len()
+            ),
+        );
+        return Ok(shared_devices);
+    }
+
     collect_discovery_replies("scan", &socket, local_descriptor, timeout)
 }
 
@@ -198,7 +210,20 @@ fn collect_discovery_replies(
                 if matches!(
                     error.kind(),
                     io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
-                ) => {}
+                ) =>
+            {
+                merge_shared_discovered_devices(&mut devices);
+                if !devices.is_empty() {
+                    debug_discovery(
+                        mode,
+                        format!(
+                            "returning early with {} shared/observed device(s)",
+                            devices.len()
+                        ),
+                    );
+                    return Ok(devices.into_values().collect());
+                }
+            }
             Err(error) => {
                 debug_discovery(mode, format!("recv failed: {error}"));
                 return Err(error);
@@ -227,21 +252,28 @@ fn record_shared_discovered_device(device_id: String, device: NockyConnectDiscov
     }
 }
 
-fn merge_shared_discovered_devices(devices: &mut HashMap<String, NockyConnectDiscoveredDevice>) {
+pub fn recent_shared_discovered_devices(max_age: Duration) -> Vec<NockyConnectDiscoveredDevice> {
     let now = Instant::now();
     let Ok(mut shared) = shared_discovery_devices().lock() else {
-        return;
+        return Vec::new();
     };
 
     shared.retain(|_, entry| match now.checked_duration_since(entry.last_seen) {
-        Some(age) => age <= SHARED_DISCOVERY_DEVICE_STALE_AFTER,
+        Some(age) => age <= max_age,
         None => true,
     });
 
-    for (device_id, entry) in shared.iter() {
+    shared
+        .values()
+        .map(|entry| entry.device.clone())
+        .collect()
+}
+
+fn merge_shared_discovered_devices(devices: &mut HashMap<String, NockyConnectDiscoveredDevice>) {
+    for device in recent_shared_discovered_devices(SHARED_DISCOVERY_DEVICE_STALE_AFTER) {
         devices
-            .entry(device_id.clone())
-            .or_insert_with(|| entry.device.clone());
+            .entry(device.descriptor.device_id.clone())
+            .or_insert(device);
     }
 }
 
