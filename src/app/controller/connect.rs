@@ -383,7 +383,7 @@ impl AppController {
         None
     }
 
-    fn apply_received_handoff_snapshot(&self, payload: &str) -> Result<String, String> {
+    fn apply_received_handoff_snapshot(self: &Rc<Self>, payload: &str) -> Result<String, String> {
         let receiver = build_local_desktop_descriptor()?;
         let restored = NockyConnectGateway::new(receiver.device_id)
             .prepare_restore(payload)
@@ -392,7 +392,7 @@ impl AppController {
     }
 
     fn apply_restored_desktop_snapshot(
-        &self,
+        self: &Rc<Self>,
         restored: RestoredDesktopSnapshot,
     ) -> Result<String, String> {
         if restored.queue.is_empty() {
@@ -433,6 +433,8 @@ impl AppController {
         self.active_queue_source.set(source);
         self.playback_queue_v2.replace(restored.queue);
         self.queue_last_saved_snapshot.replace(snapshot);
+        self.queue_page_last_snapshot.replace(None);
+        self.queue_page_last_source.set(None);
 
         let shuffle_enabled = restored.state.shuffle_enabled;
         self.shuffle_enabled.set(shuffle_enabled);
@@ -454,6 +456,7 @@ impl AppController {
         self.persist_playback_session_now();
         self.publish_mpris_capabilities();
         self.update_footer_source();
+        self.refresh_queue_page();
 
         Ok(format!("restored paused · {current_title} · {item_count} items"))
     }
