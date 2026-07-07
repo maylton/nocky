@@ -36,6 +36,7 @@ use std::{
 
 const NOCKY_CONNECT_SCAN_TIMEOUT: Duration = Duration::from_secs(6);
 const NOCKY_CONNECT_DEVICE_STALE_AFTER: Duration = Duration::from_secs(300);
+const NOCKY_CONNECT_PRESENCE_STALE_AFTER: Duration = Duration::from_secs(45);
 const NOCKY_CONNECT_PERIODIC_SCAN_INTERVAL: Duration = Duration::from_secs(15);
 const NOCKY_CONNECT_HANDOFF_HTTP_TIMEOUT: Duration = Duration::from_secs(5);
 const NOCKY_CONNECT_HANDOFF_RECEIVE_TIMEOUT: Duration = Duration::from_secs(45);
@@ -43,6 +44,7 @@ const NOCKY_CONNECT_DISCOVERY_RESPONDER_TIMEOUT: Duration = Duration::from_secs(
 const NOCKY_CONNECT_EXPORTED_ARTWORK_SIZE: u32 = 1200;
 
 static DESKTOP_CONNECT_DEVICE_LIST: OnceLock<Mutex<NockyConnectDeviceList>> = OnceLock::new();
+static DESKTOP_CONNECT_PRESENCE_LOOP_STARTED: OnceLock<()> = OnceLock::new();
 
 impl AppController {
     pub(crate) fn install_nocky_connect_action(self: &Rc<Self>, app: &adw::Application) {
@@ -69,6 +71,7 @@ impl AppController {
             );
         }
         start_desktop_handoff_receive_loop(Rc::downgrade(self));
+        start_desktop_connect_presence_loop(Rc::downgrade(self));
     }
 
     pub(crate) fn open_nocky_connect_surface(self: &Rc<Self>) {
@@ -87,6 +90,7 @@ impl AppController {
             Some(on_selected.clone()),
         );
         let cached_count = device_list.borrow().len();
+        self.update_nocky_connect_presence_indicator(cached_count > 0);
         if cached_count > 0 {
             surface.status.set_text(match cached_count {
                 1 => "Loaded 1 cached device • refreshing…",
@@ -162,9 +166,28 @@ impl AppController {
         );
     }
 
+    fn nocky_connect_footer_button(&self) -> Option<gtk::Widget> {
+        let root: gtk::Widget = self.footer_right_controls.clone().upcast();
+        find_descendant_with_css_class(&root, "footer-connect-button")
+    }
+
     fn nocky_connect_popover_anchor(&self) -> gtk::Widget {
         let root: gtk::Widget = self.footer_right_controls.clone().upcast();
-        find_descendant_with_css_class(&root, "footer-connect-button").unwrap_or(root)
+        self.nocky_connect_footer_button().unwrap_or(root)
+    }
+
+    fn update_nocky_connect_presence_indicator(&self, has_devices: bool) {
+        let Some(button) = self.nocky_connect_footer_button() else {
+            return;
+        };
+
+        if has_devices {
+            button.add_css_class("connect-device-available");
+            button.set_tooltip_text(Some("Nocky Connect • device available"));
+        } else {
+            button.remove_css_class("connect-device-available");
+            button.set_tooltip_text(Some("Nocky Connect"));
+        }
     }
 
     fn build_device_selected_handler(
@@ -658,6 +681,69 @@ fn start_desktop_handoff_receive_loop(weak: std::rc::Weak<AppController>) {
     });
 }
 
+fn start_desktop_connect_presence_loop(weak: std::rc::Weak<AppController>) {
+    if DESKTOP_CONNECT_PRESENCE_LOOP_STARTED.set(()).is_err() {
+        return;
+    }
+
+    let scan_in_progress = Rc::new(Cell::new(false));
+    if let Some(controller) = weak.upgrade() {
+        controller.update_nocky_connect_presence_indicator(desktop_device_cache_has_recent_presence());
+    }
+    start_desktop_presence_scan(weak.clone(), scan_in_progress.clone());
+
+    glib::timeout_add_local(NOCKY_CONNECT_PERIODIC_SCAN_INTERVAL, move || {
+        if weak.upgrade().is_none() {
+            return glib::ControlFlow::Break;
+        }
+        start_desktop_presence_scan(weak.clone(), scan_in_progress.clone());
+        glib::ControlFlow::Continue
+    });
+}
+
+fn start_desktop_presence_scan(
+    weak: std::rc::Weak<AppController>,
+    scan_in_progress: Rc<Cell<bool>>,
+) {
+    if scan_in_progress.replace(true) {
+        return;
+    }
+
+    let (sender, receiver) = mpsc::channel::<Result<Vec<NockyConnectDiscoveredDevice>, String>>();
+    thread::spawn(move || {
+        let _ = sender.send(run_desktop_device_scan());
+    });
+
+    glib::timeout_add_local(Duration::from_millis(150), move || match receiver.try_recv() {
+        Ok(Ok(devices)) => {
+            let has_recent = update_desktop_device_cache_with_discovered(devices);
+            if let Some(controller) = weak.upgrade() {
+                controller.update_nocky_connect_presence_indicator(has_recent);
+            }
+            scan_in_progress.set(false);
+            glib::ControlFlow::Break
+        }
+        Ok(Err(error)) => {
+            eprintln!("Nocky Connect: background discovery failed: {error}");
+            let has_recent = desktop_device_cache_has_recent_presence();
+            if let Some(controller) = weak.upgrade() {
+                controller.update_nocky_connect_presence_indicator(has_recent);
+            }
+            scan_in_progress.set(false);
+            glib::ControlFlow::Break
+        }
+        Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+        Err(mpsc::TryRecvError::Disconnected) => {
+            let has_recent = desktop_device_cache_has_recent_presence();
+            if let Some(controller) = weak.upgrade() {
+                controller.update_nocky_connect_presence_indicator(has_recent);
+            }
+            scan_in_progress.set(false);
+            glib::ControlFlow::Break
+        }
+    });
+}
+
 fn start_desktop_device_scan(
     refresh_button: gtk::Button,
     status_label: gtk::Label,
@@ -751,6 +837,43 @@ fn save_desktop_device_cache(list: &NockyConnectDeviceList) {
             cache.len()
         );
     }
+}
+
+fn update_desktop_device_cache_with_discovered(
+    devices: Vec<NockyConnectDiscoveredDevice>,
+) -> bool {
+    let now = Instant::now();
+    match desktop_device_cache().lock() {
+        Ok(mut cache) => {
+            cache.update_with_discovered(devices, now);
+            cache.remove_stale(now, NOCKY_CONNECT_DEVICE_STALE_AFTER);
+            eprintln!(
+                "Nocky Connect: saved {} cached desktop device(s)",
+                cache.len()
+            );
+            device_cache_has_recent_presence(&cache, now)
+        }
+        Err(_) => false,
+    }
+}
+
+fn desktop_device_cache_has_recent_presence() -> bool {
+    let now = Instant::now();
+    match desktop_device_cache().lock() {
+        Ok(mut cache) => {
+            cache.remove_stale(now, NOCKY_CONNECT_DEVICE_STALE_AFTER);
+            device_cache_has_recent_presence(&cache, now)
+        }
+        Err(_) => false,
+    }
+}
+
+fn device_cache_has_recent_presence(cache: &NockyConnectDeviceList, now: Instant) -> bool {
+    cache.entries().into_iter().any(|entry| {
+        now.checked_duration_since(entry.last_seen)
+            .map(|age| age <= NOCKY_CONNECT_PRESENCE_STALE_AFTER)
+            .unwrap_or(true)
+    })
 }
 
 fn run_desktop_device_scan() -> Result<Vec<NockyConnectDiscoveredDevice>, String> {
