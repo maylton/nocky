@@ -146,7 +146,10 @@ impl AppController {
                 "youtube_native_sections",
                 youtube_native_section_count.to_string(),
             ),
-            ("youtube_loading", self.youtube_home_loading.get().to_string()),
+            (
+                "youtube_loading",
+                self.youtube_home_loading.get().to_string(),
+            ),
             ("has_library", has_library.to_string()),
         ];
         if let Some(count_fields) = count_fields {
@@ -245,7 +248,10 @@ impl AppController {
                 "youtube_native_sections",
                 youtube_native_section_count.to_string(),
             ),
-            ("youtube_loading", self.youtube_home_loading.get().to_string()),
+            (
+                "youtube_loading",
+                self.youtube_home_loading.get().to_string(),
+            ),
         ];
         if let Some(count_fields) = count_fields {
             fields.extend(count_fields);
@@ -460,6 +466,10 @@ impl AppController {
                 BrowserEvent::LoadMoreArtists => {
                     self.browser.show_more_artists();
                     self.prefetch_home_artist_profiles(true);
+                    self.refresh_browser();
+                }
+                BrowserEvent::LoadMorePlaylists => {
+                    self.browser.show_more_playlists();
                     self.refresh_browser();
                 }
                 BrowserEvent::Navigate(route) => self.navigate_browser(route),
