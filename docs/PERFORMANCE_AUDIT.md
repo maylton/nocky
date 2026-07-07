@@ -93,11 +93,12 @@ Planned next instrumentation targets:
 
 ## Phase 2 direction
 
-The next optimization phase should focus on browser/Home rebuild auditing:
+The next optimization phase focuses on browser/Home rebuild auditing. The detailed event taxonomy and smoke-test plan live in [`docs/PERFORMANCE_REBUILD_AUDIT.md`](PERFORMANCE_REBUILD_AUDIT.md).
+
+Phase 2 should:
 
 - count refresh and navigation calls;
 - identify refreshes caused by playback updates, artwork completion, chip changes and continuations;
 - preserve the current Home V3 behavior;
 - avoid visual changes;
 - add focused tests where possible.
-
