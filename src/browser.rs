@@ -2108,7 +2108,7 @@ impl LibraryBrowser {
             route: RefCell::new(BrowserRoute::All),
             visible_tracks,
             queue_render_generation,
-            album_display_limit: Cell::new(COLLECTION_INITIAL_BATCH),
+            album_display_limit: Cell::new(ALBUM_INITIAL_BATCH),
             artist_display_limit: Cell::new(COLLECTION_INITIAL_BATCH),
             playlist_display_limit: Cell::new(COLLECTION_INITIAL_BATCH),
             playlist_names,
@@ -2343,7 +2343,7 @@ impl LibraryBrowser {
 
     pub fn show_more_albums(&self) {
         self.album_display_limit
-            .set(self.album_display_limit.get() + COLLECTION_BATCH_INCREMENT);
+            .set(self.album_display_limit.get() + ALBUM_BATCH_INCREMENT);
     }
 
     pub fn show_more_artists(&self) {
@@ -7129,6 +7129,8 @@ const COLLECTION_CARD_MAX_WIDTH: i32 = 220;
 const COLLECTION_CARD_MIN_HEIGHT: i32 = 210;
 const COLLECTION_ARTWORK_MIN_SIZE: i32 = 124;
 const COLLECTION_ARTWORK_MAX_SIZE: i32 = 216;
+const ALBUM_INITIAL_BATCH: usize = 36;
+const ALBUM_BATCH_INCREMENT: usize = 12;
 const COLLECTION_INITIAL_BATCH: usize = 48;
 const COLLECTION_BATCH_INCREMENT: usize = 48;
 
