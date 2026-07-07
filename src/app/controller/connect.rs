@@ -17,15 +17,17 @@ use crate::{
         NockyConnectSource, NockyPlaybackState, NockyRepeatMode, RestoredDesktopSnapshot,
         NOCKY_CONNECT_DESKTOP_HANDOFF_PORT,
     },
-    playback::queue::QueueSourceKind,
+    playback::queue::{PlaybackQueue, QueueMedia, QueueSource, QueueSourceKind},
     ui::nocky_connect::{
         build_nocky_connect_popover, render_nocky_connect_devices, NockyConnectDeviceSelected,
     },
+    youtube::YouTubeItem,
 };
 use adw::prelude::*;
 use gtk::{gio, glib};
 use std::{
     cell::{Cell, RefCell},
+    path::PathBuf,
     rc::Rc,
     sync::{mpsc, Mutex, OnceLock},
     thread,
@@ -38,6 +40,7 @@ const NOCKY_CONNECT_PERIODIC_SCAN_INTERVAL: Duration = Duration::from_secs(15);
 const NOCKY_CONNECT_HANDOFF_HTTP_TIMEOUT: Duration = Duration::from_secs(5);
 const NOCKY_CONNECT_HANDOFF_RECEIVE_TIMEOUT: Duration = Duration::from_secs(45);
 const NOCKY_CONNECT_DISCOVERY_RESPONDER_TIMEOUT: Duration = Duration::from_secs(60);
+const NOCKY_CONNECT_EXPORTED_ARTWORK_SIZE: u32 = 1200;
 
 static DESKTOP_CONNECT_DEVICE_LIST: OnceLock<Mutex<NockyConnectDeviceList>> = OnceLock::new();
 
@@ -298,16 +301,86 @@ impl AppController {
             shuffle_enabled: self.shuffle_enabled.get(),
             ..Default::default()
         };
+        let export_queue = self.nocky_connect_queue_with_resolved_artwork(&queue);
 
         NockyConnectGateway::new(sender.device_id)
             .export_snapshot_json(
-                &queue,
+                &export_queue,
                 title,
                 playback_state,
                 format!("desktop-session-{now}"),
                 1,
             )
             .map_err(|error| error.to_string())
+    }
+
+    fn nocky_connect_queue_with_resolved_artwork(&self, queue: &PlaybackQueue) -> PlaybackQueue {
+        let current_index = queue.current_index();
+        let media = queue
+            .entries()
+            .iter()
+            .map(|entry| self.nocky_connect_media_with_resolved_artwork(&entry.media))
+            .collect::<Vec<_>>();
+        let mut resolved = PlaybackQueue::new();
+        resolved.replace(media, current_index);
+        resolved
+    }
+
+    fn nocky_connect_media_with_resolved_artwork(&self, media: &QueueMedia) -> QueueMedia {
+        let mut media = media.clone();
+        if media.cover_path.as_ref().is_some_and(pathbuf_is_portable_http_url) {
+            return media;
+        }
+
+        let QueueSource::YouTube { video_id } = &media.source else {
+            return media;
+        };
+        if let Some(url) = self.resolve_nocky_connect_youtube_artwork_url(video_id) {
+            media.cover_path = Some(PathBuf::from(url));
+        }
+        media
+    }
+
+    fn resolve_nocky_connect_youtube_artwork_url(&self, video_id: &str) -> Option<String> {
+        let video_id = video_id.trim();
+        if video_id.is_empty() {
+            return None;
+        }
+
+        if let Some(url) = {
+            let state = self.youtube_state.borrow();
+            state.as_ref().and_then(|state| {
+                for item in std::iter::once(&state.item).chain(state.queue.iter()) {
+                    if item.video_id == video_id {
+                        if let Some(url) = nocky_connect_youtube_item_artwork_url(item) {
+                            return Some(url);
+                        }
+                    }
+                }
+                None
+            })
+        } {
+            return Some(url);
+        }
+
+        let library = self.youtube_library.borrow();
+        for item in library
+            .library
+            .iter()
+            .chain(library.liked.iter())
+            .chain(library.recently_played.iter())
+            .chain(library.playlist_tracks.values().flat_map(|items| items.iter()))
+            .chain(library.collection_tracks.values().flat_map(|items| items.iter()))
+            .chain(library.search.songs.iter())
+        {
+            if item.video_id == video_id {
+                if let Some(url) = nocky_connect_youtube_item_artwork_url(item) {
+                    return Some(url);
+                }
+            }
+        }
+
+        None
     }
 
     fn apply_received_handoff_snapshot(&self, payload: &str) -> Result<String, String> {
@@ -593,6 +666,74 @@ fn build_local_desktop_descriptor() -> Result<NockyConnectDeviceDescriptor, Stri
     .with_handoff_endpoint(NockyConnectHandoffEndpoint::local_http(
         NOCKY_CONNECT_DESKTOP_HANDOFF_PORT,
     )))
+}
+
+fn nocky_connect_youtube_item_artwork_url(item: &YouTubeItem) -> Option<String> {
+    let thumbnail = item.thumbnail_url.trim();
+    if thumbnail.is_empty() || is_youtube_default_thumbnail_url(thumbnail) {
+        return None;
+    }
+    Some(resize_innertube_artwork_url(
+        thumbnail,
+        NOCKY_CONNECT_EXPORTED_ARTWORK_SIZE,
+    ))
+}
+
+fn resize_innertube_artwork_url(url: &str, size: u32) -> String {
+    let trimmed = url.trim();
+    if !is_portable_http_value(trimmed) {
+        return trimmed.to_string();
+    }
+
+    let base = trimmed
+        .split_once('=')
+        .map(|(base, _)| base)
+        .unwrap_or(trimmed);
+    if base.contains("googleusercontent.com") || base.contains("ggpht.com") {
+        format!("{base}=w{size}-h{size}-l90-rj")
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn is_youtube_default_thumbnail_url(url: &str) -> bool {
+    let value = url.to_ascii_lowercase();
+    if !value.contains("i.ytimg.com/vi/") && !value.contains("img.youtube.com/vi/") {
+        return false;
+    }
+    let file_name = value
+        .split("/vi/")
+        .nth(1)
+        .unwrap_or_default()
+        .split('/')
+        .nth(1)
+        .unwrap_or_default()
+        .split('?')
+        .next()
+        .unwrap_or_default()
+        .split('#')
+        .next()
+        .unwrap_or_default();
+    matches!(
+        file_name,
+        "default.jpg"
+            | "mqdefault.jpg"
+            | "hqdefault.jpg"
+            | "sddefault.jpg"
+            | "maxresdefault.jpg"
+            | "0.jpg"
+            | "1.jpg"
+            | "2.jpg"
+            | "3.jpg"
+    )
+}
+
+fn pathbuf_is_portable_http_url(path: &PathBuf) -> bool {
+    is_portable_http_value(path.to_string_lossy().trim())
+}
+
+fn is_portable_http_value(value: &str) -> bool {
+    value.starts_with("https://") || value.starts_with("http://")
 }
 
 fn handoff_offer_summary(envelope: &NockyConnectHandoffEnvelope) -> String {
