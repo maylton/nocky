@@ -15,6 +15,9 @@ use std::{
 };
 
 const DEVICE_AVAILABLE_NOW_WINDOW: Duration = Duration::from_secs(30);
+const CONNECT_ROW_HEIGHT: i32 = 58;
+const CONNECT_ROW_HORIZONTAL_PADDING: i32 = 12;
+const CONNECT_ROW_VERTICAL_PADDING: i32 = 8;
 
 pub(crate) type NockyConnectDeviceSelected =
     Rc<dyn Fn(NockyConnectDeviceDescriptor, SocketAddr) + 'static>;
@@ -34,7 +37,7 @@ pub(crate) fn build_nocky_connect_popover(
     popover.set_position(gtk::PositionType::Top);
     popover.set_has_arrow(false);
     popover.set_autohide(true);
-    popover.set_size_request(360, 300);
+    popover.set_size_request(360, 320);
     popover.add_css_class("queue2-popover");
 
     let root = gtk::Box::new(gtk::Orientation::Vertical, 10);
@@ -65,14 +68,14 @@ pub(crate) fn build_nocky_connect_popover(
 
     root.append(&header);
 
-    let device_list = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let device_list = gtk::Box::new(gtk::Orientation::Vertical, 6);
     device_list.add_css_class("queue2-list");
     device_list.append(&build_this_device_row());
 
     let scroll = gtk::ScrolledWindow::new();
     scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-    scroll.set_min_content_height(108);
-    scroll.set_max_content_height(172);
+    scroll.set_min_content_height(132);
+    scroll.set_max_content_height(188);
     scroll.set_hexpand(true);
     scroll.set_child(Some(&device_list));
     scroll.add_css_class("queue2-page-scroll");
@@ -127,21 +130,28 @@ pub(crate) fn render_nocky_connect_devices(
 }
 
 fn build_this_device_row() -> gtk::Box {
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     row.add_css_class("queue2-row");
     row.add_css_class("active");
-    row.set_margin_top(4);
-    row.set_margin_bottom(4);
-    row.set_margin_start(4);
-    row.set_margin_end(4);
+    row.set_size_request(-1, CONNECT_ROW_HEIGHT);
+    row.set_margin_top(2);
+    row.set_margin_bottom(2);
+    row.set_margin_start(2);
+    row.set_margin_end(2);
 
     let icon = gtk::Image::from_icon_name("computer-symbolic");
     icon.set_pixel_size(22);
     icon.set_valign(gtk::Align::Center);
+    icon.set_margin_start(CONNECT_ROW_HORIZONTAL_PADDING);
+    icon.set_margin_top(CONNECT_ROW_VERTICAL_PADDING);
+    icon.set_margin_bottom(CONNECT_ROW_VERTICAL_PADDING);
     row.append(&icon);
 
-    let labels = gtk::Box::new(gtk::Orientation::Vertical, 1);
+    let labels = gtk::Box::new(gtk::Orientation::Vertical, 2);
     labels.set_hexpand(true);
+    labels.set_valign(gtk::Align::Center);
+    labels.set_margin_top(CONNECT_ROW_VERTICAL_PADDING);
+    labels.set_margin_bottom(CONNECT_ROW_VERTICAL_PADDING);
 
     let name_label = gtk::Label::new(Some("This computer"));
     name_label.set_xalign(0.0);
@@ -158,25 +168,36 @@ fn build_this_device_row() -> gtk::Box {
     let check = gtk::Image::from_icon_name("object-select-symbolic");
     check.set_pixel_size(16);
     check.set_valign(gtk::Align::Center);
+    check.set_margin_end(CONNECT_ROW_HORIZONTAL_PADDING);
+    check.set_margin_top(CONNECT_ROW_VERTICAL_PADDING);
+    check.set_margin_bottom(CONNECT_ROW_VERTICAL_PADDING);
     row.append(&check);
     row
 }
 
 fn build_empty_device_state() -> gtk::Box {
-    let empty = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let empty = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     empty.add_css_class("queue2-row");
-    empty.set_margin_top(4);
-    empty.set_margin_bottom(4);
-    empty.set_margin_start(4);
-    empty.set_margin_end(4);
+    empty.set_size_request(-1, CONNECT_ROW_HEIGHT);
+    empty.set_margin_top(2);
+    empty.set_margin_bottom(2);
+    empty.set_margin_start(2);
+    empty.set_margin_end(2);
 
     let icon = gtk::Image::from_icon_name("network-workgroup-symbolic");
     icon.set_pixel_size(22);
     icon.set_valign(gtk::Align::Center);
+    icon.set_margin_start(CONNECT_ROW_HORIZONTAL_PADDING);
+    icon.set_margin_top(CONNECT_ROW_VERTICAL_PADDING);
+    icon.set_margin_bottom(CONNECT_ROW_VERTICAL_PADDING);
     empty.append(&icon);
 
-    let labels = gtk::Box::new(gtk::Orientation::Vertical, 1);
+    let labels = gtk::Box::new(gtk::Orientation::Vertical, 2);
     labels.set_hexpand(true);
+    labels.set_valign(gtk::Align::Center);
+    labels.set_margin_top(CONNECT_ROW_VERTICAL_PADDING);
+    labels.set_margin_bottom(CONNECT_ROW_VERTICAL_PADDING);
+    labels.set_margin_end(CONNECT_ROW_HORIZONTAL_PADDING);
 
     let title = gtk::Label::new(Some("No Nocky devices found"));
     title.set_xalign(0.0);
@@ -203,20 +224,22 @@ fn build_device_button(
     button.add_css_class("flat");
     button.add_css_class("queue2-row");
     button.set_halign(gtk::Align::Fill);
+    button.set_size_request(-1, CONNECT_ROW_HEIGHT);
 
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    row.set_margin_top(4);
-    row.set_margin_bottom(4);
-    row.set_margin_start(4);
-    row.set_margin_end(4);
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    row.set_margin_top(CONNECT_ROW_VERTICAL_PADDING);
+    row.set_margin_bottom(CONNECT_ROW_VERTICAL_PADDING);
+    row.set_margin_start(CONNECT_ROW_HORIZONTAL_PADDING);
+    row.set_margin_end(CONNECT_ROW_HORIZONTAL_PADDING);
 
     let icon = gtk::Image::from_icon_name(platform_icon_name(descriptor.platform));
     icon.set_pixel_size(22);
     icon.set_valign(gtk::Align::Center);
     row.append(&icon);
 
-    let labels = gtk::Box::new(gtk::Orientation::Vertical, 1);
+    let labels = gtk::Box::new(gtk::Orientation::Vertical, 2);
     labels.set_hexpand(true);
+    labels.set_valign(gtk::Align::Center);
 
     let title = gtk::Label::new(Some(&descriptor.device_name));
     title.set_xalign(0.0);
