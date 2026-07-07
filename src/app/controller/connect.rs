@@ -384,17 +384,33 @@ impl AppController {
     }
 
     fn apply_received_handoff_snapshot(self: &Rc<Self>, payload: &str) -> Result<String, String> {
+        let started = Instant::now();
+        debug_desktop_restore(
+            started,
+            format!("prepare_restore:start bytes={}", payload.len()),
+        );
         let receiver = build_local_desktop_descriptor()?;
         let restored = NockyConnectGateway::new(receiver.device_id)
             .prepare_restore(payload)
             .map_err(|error| error.to_string())?;
-        self.apply_restored_desktop_snapshot(restored)
+        debug_desktop_restore(
+            started,
+            format!("prepare_restore:done queue_items={}", restored.queue.len()),
+        );
+        let detail = self.apply_restored_desktop_snapshot(restored)?;
+        debug_desktop_restore(started, "prepare_restore:complete");
+        Ok(detail)
     }
 
     fn apply_restored_desktop_snapshot(
         self: &Rc<Self>,
         restored: RestoredDesktopSnapshot,
     ) -> Result<String, String> {
+        let started = Instant::now();
+        debug_desktop_restore(
+            started,
+            format!("apply:start queue_items={}", restored.queue.len()),
+        );
         if restored.queue.is_empty() {
             return Err("received queue is empty".to_string());
         }
@@ -421,6 +437,10 @@ impl AppController {
             .or_else(|| restored.title.clone())
             .unwrap_or_else(|| "queue".to_string());
         let snapshot = restored.queue.snapshot();
+        debug_desktop_restore(
+            started,
+            format!("apply:validated source={source:?} current_id={current_id}"),
+        );
 
         self.maybe_record_listening();
         let _ = self.player.pause();
@@ -430,6 +450,8 @@ impl AppController {
         self.youtube_state.borrow_mut().take();
         self.queue_v2_pending_entry.set(None);
         self.queue_dragged_entry.set(None);
+        debug_desktop_restore(started, "apply:stopped current playback");
+
         self.active_queue_source.set(source);
         self.playback_queue_v2.replace(restored.queue);
         self.playback_queue_v2
@@ -439,6 +461,7 @@ impl AppController {
         self.queue_last_saved_snapshot.replace(snapshot);
         self.queue_page_last_snapshot.replace(None);
         self.queue_page_last_source.set(None);
+        debug_desktop_restore(started, "apply:queue replaced");
 
         let shuffle_enabled = restored.state.shuffle_enabled;
         self.shuffle_enabled.set(shuffle_enabled);
@@ -452,13 +475,35 @@ impl AppController {
         self.pending_resume_position_us.set(Some(position_us));
         self.startup_restore_autoplay.set(Some(false));
         self.playback_session_restore_attempts.set(0);
+        debug_desktop_restore(started, "apply:playback flags updated");
 
         self.persist_queue_now();
+        debug_desktop_restore(started, "apply:persist_queue_done");
         self.persist_playback_session_now();
+        debug_desktop_restore(started, "apply:persist_session_done");
         self.publish_mpris_capabilities();
         self.update_footer_source();
-        self.refresh_queue_page();
+        debug_desktop_restore(started, "apply:footer updated");
 
+        let should_refresh_queue_page = self
+            .views
+            .visible_child_name()
+            .as_ref()
+            .is_some_and(|name| name.as_str() == "queue");
+        if should_refresh_queue_page {
+            let weak = Rc::downgrade(self);
+            glib::idle_add_local_once(move || {
+                if let Some(controller) = weak.upgrade() {
+                    debug_desktop_restore(started, "queue_page_refresh:start");
+                    controller.refresh_queue_page();
+                    debug_desktop_restore(started, "queue_page_refresh:done");
+                }
+            });
+        } else {
+            debug_desktop_restore(started, "queue_page_refresh:skipped hidden");
+        }
+
+        debug_desktop_restore(started, "apply:done");
         Ok(format!("restored paused · {current_title} · {item_count} items"))
     }
 }
@@ -738,6 +783,16 @@ fn pathbuf_is_portable_http_url(path: &PathBuf) -> bool {
 
 fn is_portable_http_value(value: &str) -> bool {
     value.starts_with("https://") || value.starts_with("http://")
+}
+
+fn debug_desktop_restore(started: Instant, message: impl AsRef<str>) {
+    if std::env::var_os("NOCKY_CONNECT_DEBUG").is_some() {
+        eprintln!(
+            "[Nocky Connect][desktop][restore][{:>4}ms] {}",
+            started.elapsed().as_millis(),
+            message.as_ref()
+        );
+    }
 }
 
 fn handoff_offer_summary(envelope: &NockyConnectHandoffEnvelope) -> String {
