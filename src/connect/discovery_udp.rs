@@ -63,7 +63,7 @@ pub fn scan_once(
     debug_discovery("scan", format!("sent {sent} bytes"));
 
     let shared_devices = recent_shared_discovered_devices(SHARED_DISCOVERY_DEVICE_STALE_AFTER);
-    if !shared_devices.is_empty() {
+    if !shared_devices.is_empty() && shared_devices.iter().any(has_handoff_endpoint) {
         debug_discovery(
             "scan",
             format!(
@@ -72,6 +72,15 @@ pub fn scan_once(
             ),
         );
         return Ok(shared_devices);
+    }
+    if !shared_devices.is_empty() {
+        debug_discovery(
+            "scan",
+            format!(
+                "ignoring {} endpoint-less shared device(s) while waiting for actionable discovery",
+                shared_devices.len()
+            ),
+        );
     }
 
     collect_discovery_replies("scan", &socket, local_descriptor, timeout)
@@ -213,11 +222,11 @@ fn collect_discovery_replies(
                 ) =>
             {
                 merge_shared_discovered_devices(&mut devices);
-                if !devices.is_empty() {
+                if !devices.is_empty() && devices.values().any(has_handoff_endpoint) {
                     debug_discovery(
                         mode,
                         format!(
-                            "returning early with {} shared/observed device(s)",
+                            "returning early with {} shared/observed actionable device(s)",
                             devices.len()
                         ),
                     );
@@ -275,6 +284,10 @@ fn merge_shared_discovered_devices(devices: &mut HashMap<String, NockyConnectDis
             .entry(device.descriptor.device_id.clone())
             .or_insert(device);
     }
+}
+
+fn has_handoff_endpoint(device: &NockyConnectDiscoveredDevice) -> bool {
+    device.descriptor.handoff_endpoint.is_some()
 }
 
 fn next_discovery_message_id(prefix: &str) -> String {
