@@ -3,6 +3,7 @@
 //! Mute state, compact expansion, reveal callbacks and spring motion remain
 //! owned by `AppController`.
 
+use super::connect::{build_footer_connect_button, FOOTER_CONNECT_WIDTH_DELTA};
 use crate::{
     config::AppLanguage,
     i18n::{self, Message},
@@ -19,7 +20,8 @@ const CANVAS_X: f64 = 4.0;
 const REVEAL_DURATION_MS: u32 = 280;
 const GROUP_SPACING: i32 = 6;
 const GROUP_MARGIN_TOP: i32 = 0;
-const GROUP_WIDTH: i32 = 220;
+const BASE_GROUP_WIDTH: i32 = 220;
+const GROUP_WIDTH: i32 = BASE_GROUP_WIDTH + FOOTER_CONNECT_WIDTH_DELTA;
 const GROUP_HEIGHT: i32 = 56;
 
 pub(crate) struct FooterUtilityParts {
@@ -36,6 +38,8 @@ pub(crate) fn build_footer_utilities(
     initial_volume: f64,
 ) -> FooterUtilityParts {
     let tr = |message| i18n::text(language, message);
+
+    let connect_button = build_footer_connect_button();
 
     let lyrics_button = gtk::ToggleButton::builder()
         .icon_name("audio-input-microphone-symbolic")
@@ -91,6 +95,7 @@ pub(crate) fn build_footer_utilities(
     root.set_valign(gtk::Align::Center);
     root.add_css_class("footer-utility-group");
     root.set_size_request(GROUP_WIDTH, GROUP_HEIGHT);
+    root.append(&connect_button);
     root.append(&lyrics_button);
     root.append(&mute_button);
     root.append(&volume_revealer);
@@ -127,7 +132,8 @@ mod tests {
         assert_eq!((CANVAS_WIDTH, CANVAS_HEIGHT), (116, 42));
         assert_eq!(CANVAS_X, 4.0);
         assert_eq!(REVEAL_DURATION_MS, 280);
-        assert_eq!((GROUP_WIDTH, GROUP_HEIGHT), (220, 56));
+        assert_eq!(BASE_GROUP_WIDTH, 220);
+        assert_eq!((GROUP_WIDTH, GROUP_HEIGHT), (268, 56));
         assert_eq!((GROUP_SPACING, GROUP_MARGIN_TOP), (6, 0));
     }
 

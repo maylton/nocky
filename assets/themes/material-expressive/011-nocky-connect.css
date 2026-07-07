@@ -1,0 +1,113 @@
+button.footer-connect-button {
+  transition:
+    background-color 180ms ease-out,
+    background-image 180ms ease-out,
+    border-color 180ms ease-out,
+    border-radius 180ms ease-out,
+    box-shadow 220ms ease-out,
+    color 180ms ease-out;
+}
+
+button.footer-connect-button image {
+  transition:
+    color 180ms ease-out,
+    -gtk-icon-transform 180ms ease-out;
+}
+
+window.theme-material-expressive .footer-mode-compact button.footer-connect-button,
+window.theme-noctalia .footer-mode-compact button.footer-connect-button {
+  margin-left: -2px;
+}
+
+window.theme-material-expressive .footer-mode-compact button.footer-connect-button.connect-device-available,
+window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-device-available {
+  border-radius: 22px;
+}
+
+window.theme-material-expressive button.footer-connect-button.connect-device-available {
+  color: @m3_primary;
+  background-image: none;
+  background-color: alpha(@m3_primary, 0.06);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px alpha(@m3_primary, 0.32);
+}
+
+window.theme-material-expressive .footer-mode-compact button.footer-connect-button.connect-device-available {
+  background-color: alpha(@m3_primary, 0.06);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px alpha(@m3_primary, 0.32);
+}
+
+window.theme-material-expressive button.footer-connect-button.connect-device-available image,
+window.theme-material-expressive .footer-mode-compact button.footer-connect-button.connect-device-available image {
+  color: @m3_primary;
+  -gtk-icon-effect: none;
+}
+
+window.theme-material-expressive button.footer-connect-button.connect-device-available:hover,
+window.theme-material-expressive button.footer-connect-button.connect-device-available:focus-visible {
+  color: @m3_primary;
+  background-image: none;
+  background-color: alpha(@m3_primary, 0.08);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px alpha(@m3_primary, 0.40);
+}
+
+window.theme-material-expressive .footer-mode-compact button.footer-connect-button.connect-device-available:hover,
+window.theme-material-expressive .footer-mode-compact button.footer-connect-button.connect-device-available:focus-visible {
+  background-color: alpha(@m3_primary, 0.08);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px alpha(@m3_primary, 0.40);
+}
+
+window.theme-material-expressive button.footer-connect-button.connect-device-available:hover image,
+window.theme-material-expressive button.footer-connect-button.connect-device-available:focus-visible image,
+window.theme-material-expressive .footer-mode-compact button.footer-connect-button.connect-device-available:hover image,
+window.theme-material-expressive .footer-mode-compact button.footer-connect-button.connect-device-available:focus-visible image {
+  color: @m3_primary;
+  -gtk-icon-effect: highlight;
+}
+
+window.theme-noctalia button.footer-connect-button.connect-device-available {
+  color: @accent_color;
+  background-image: none;
+  background-color: alpha(@accent_color, 0.06);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px alpha(@accent_color, 0.32);
+}
+
+window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-device-available {
+  background-color: alpha(@accent_color, 0.06);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px alpha(@accent_color, 0.32);
+}
+
+window.theme-noctalia button.footer-connect-button.connect-device-available image,
+window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-device-available image {
+  color: @accent_color;
+  -gtk-icon-effect: none;
+}
+
+window.theme-noctalia button.footer-connect-button.connect-device-available:hover,
+window.theme-noctalia button.footer-connect-button.connect-device-available:focus-visible {
+  color: @accent_color;
+  background-image: none;
+  background-color: alpha(@accent_color, 0.08);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px alpha(@accent_color, 0.40);
+}
+
+window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-device-available:hover,
+window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-device-available:focus-visible {
+  background-color: alpha(@accent_color, 0.08);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px alpha(@accent_color, 0.40);
+}
+
+window.theme-noctalia button.footer-connect-button.connect-device-available:hover image,
+window.theme-noctalia button.footer-connect-button.connect-device-available:focus-visible image,
+window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-device-available:hover image,
+window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-device-available:focus-visible image {
+  color: @accent_color;
+  -gtk-icon-effect: highlight;
+}
