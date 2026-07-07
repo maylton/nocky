@@ -1,7 +1,5 @@
 use std::{
-    collections::hash_map::DefaultHasher,
     fs,
-    hash::{Hash, Hasher},
     io::Write,
     path::{Path, PathBuf},
     time::UNIX_EPOCH,
@@ -16,6 +14,8 @@ use super::protocol::{
 
 const REMOTE_ARTWORK_DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(4);
 const REMOTE_ARTWORK_MAX_BYTES: u64 = 2 * 1024 * 1024;
+const STABLE_HASH_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
+const STABLE_HASH_PRIME: u64 = 0x100000001b3;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DesktopPlaybackState {
@@ -241,7 +241,10 @@ fn portable_album(album: &str) -> Option<PortableAlbum> {
     })
 }
 
-fn portable_thumbnail_url(cover_path: Option<&Path>, youtube_video_id: Option<&str>) -> Option<String> {
+fn portable_thumbnail_url(
+    cover_path: Option<&Path>,
+    youtube_video_id: Option<&str>,
+) -> Option<String> {
     if let Some(url) = cover_path
         .map(|path| path.to_string_lossy().trim().to_string())
         .filter(|value| is_portable_http_url(value))
@@ -309,9 +312,9 @@ fn nocky_connect_artwork_cache_dir() -> PathBuf {
 }
 
 fn stable_hash(value: &str) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    value.hash(&mut hasher);
-    hasher.finish()
+    value.as_bytes().iter().fold(STABLE_HASH_OFFSET_BASIS, |hash, byte| {
+        (hash ^ u64::from(*byte)).wrapping_mul(STABLE_HASH_PRIME)
+    })
 }
 
 fn is_portable_http_url(value: &str) -> bool {
@@ -319,7 +322,8 @@ fn is_portable_http_url(value: &str) -> bool {
 }
 
 fn youtube_thumbnail_url(video_id: &str) -> Option<String> {
-    (!video_id.trim().is_empty()).then(|| format!("https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"))
+    (!video_id.trim().is_empty())
+        .then(|| format!("https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"))
 }
 
 fn connect_source_from_queue_source_kind(kind: QueueSourceKind) -> NockyConnectSource {
@@ -384,9 +388,15 @@ mod tests {
         assert_eq!(snapshot.source, NockyConnectSource::YouTube);
         assert_eq!(snapshot.queue.current_index, 1);
         assert_eq!(snapshot.queue.items.len(), 2);
-        assert_eq!(snapshot.queue.items[1].queue_item_id, "youtube:video:video-2");
+        assert_eq!(
+            snapshot.queue.items[1].queue_item_id,
+            "youtube:video:video-2"
+        );
         assert_eq!(snapshot.queue.items[1].playable_id, "video-2");
-        assert_eq!(snapshot.queue.items[1].thumbnail_url.as_deref(), Some("https://i.ytimg.com/vi/video-2/hqdefault.jpg"));
+        assert_eq!(
+            snapshot.queue.items[1].thumbnail_url.as_deref(),
+            Some("https://i.ytimg.com/vi/video-2/hqdefault.jpg")
+        );
         assert_eq!(snapshot.playback.position_ms, 42_000);
         assert_eq!(snapshot.playback.duration_ms, Some(181_000));
         assert_eq!(snapshot.queue.repeat_mode, NockyRepeatMode::All);
@@ -418,7 +428,10 @@ mod tests {
             1_700_000_000_000,
         );
 
-        assert_eq!(snapshot.queue.items[0].thumbnail_url.as_deref(), Some("https://i.ytimg.com/vi/video-1/hqdefault.jpg"));
+        assert_eq!(
+            snapshot.queue.items[0].thumbnail_url.as_deref(),
+            Some("https://i.ytimg.com/vi/video-1/hqdefault.jpg")
+        );
     }
 
     #[test]
@@ -430,12 +443,11 @@ mod tests {
 
     #[test]
     fn uses_stable_cache_path_for_remote_artwork() {
-        let path = nocky_connect_artwork_cache_dir().join(format!(
-            "{}.jpg",
-            stable_hash("https://i.ytimg.com/vi/video-1/hqdefault.jpg")
-        ));
+        let hash = stable_hash("https://i.ytimg.com/vi/video-1/hqdefault.jpg");
+        let path = nocky_connect_artwork_cache_dir().join(format!("{hash}.jpg"));
 
-        assert!(path.ends_with("connect-artwork/10794139468175564347.jpg"));
+        assert_eq!(hash, 14459817047780647072);
+        assert!(path.ends_with("connect-artwork/14459817047780647072.jpg"));
     }
 
     #[test]
