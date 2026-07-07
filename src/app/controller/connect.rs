@@ -17,7 +17,7 @@ use crate::{
         NockyConnectSource, NockyPlaybackState, NockyRepeatMode, RestoredDesktopSnapshot,
         NOCKY_CONNECT_DESKTOP_HANDOFF_PORT,
     },
-    playback::queue::{PlaybackQueue, QueueMedia, QueueSource, QueueSourceKind},
+    playback::queue::{PlaybackQueue, QueueEntryId, QueueMedia, QueueSource, QueueSourceKind},
     ui::nocky_connect::{
         build_nocky_connect_popover, render_nocky_connect_devices, NockyConnectDeviceSelected,
     },
@@ -27,7 +27,7 @@ use adw::prelude::*;
 use gtk::{gio, glib};
 use std::{
     cell::{Cell, RefCell},
-    path::PathBuf,
+    path::{Path, PathBuf},
     rc::Rc,
     sync::{mpsc, Mutex, OnceLock},
     thread,
@@ -463,6 +463,9 @@ impl AppController {
         self.queue_page_last_source.set(None);
         debug_desktop_restore(started, "apply:queue replaced");
 
+        self.present_restored_desktop_current_entry(current_id, position_us)?;
+        debug_desktop_restore(started, "apply:now playing presented");
+
         let shuffle_enabled = restored.state.shuffle_enabled;
         self.shuffle_enabled.set(shuffle_enabled);
         self.shuffle_button.set_active(shuffle_enabled);
@@ -482,7 +485,6 @@ impl AppController {
         self.persist_playback_session_now();
         debug_desktop_restore(started, "apply:persist_session_done");
         self.publish_mpris_capabilities();
-        self.update_footer_source();
         debug_desktop_restore(started, "apply:footer updated");
 
         let should_refresh_queue_page = self
@@ -505,6 +507,58 @@ impl AppController {
 
         debug_desktop_restore(started, "apply:done");
         Ok(format!("restored paused · {current_title} · {item_count} items"))
+    }
+
+    fn present_restored_desktop_current_entry(
+        &self,
+        current_id: QueueEntryId,
+        position_us: i64,
+    ) -> Result<(), String> {
+        let media = self
+            .playback_queue_v2
+            .borrow()
+            .entry(current_id)
+            .map(|entry| entry.media.clone())
+            .ok_or_else(|| "received queue current item was not found".to_string())?;
+        let cover_path = local_cover_path(media.cover_path.as_deref());
+        let duration_us = media
+            .duration_seconds
+            .saturating_mul(1_000_000)
+            .min(i64::MAX as u64) as i64;
+        let position_us = if duration_us > 0 {
+            position_us.clamp(0, duration_us)
+        } else {
+            position_us.max(0)
+        };
+        let progress = if duration_us > 0 {
+            position_us as f64 / duration_us as f64
+        } else {
+            0.0
+        };
+        let elapsed = connect_time_label(position_us);
+        let duration = connect_time_label(duration_us);
+
+        self.player_view
+            .set_metadata(&media.title, &media.artist, &media.album);
+        self.set_footer_metadata(&media.title, &media.artist);
+        self.hero_cover.set_path(cover_path);
+        self.mini_cover.set_path(cover_path);
+        self.visual_theme_manager.update_artwork(cover_path);
+        self.elapsed.set_text(&elapsed);
+        self.duration.set_text(&duration);
+        self.footer_elapsed.set_text(&elapsed);
+        self.footer_duration.set_text(&duration);
+        self.updating_progress.set(true);
+        self.progress.set_value(progress.clamp(0.0, 1.0));
+        self.footer_traditional_progress
+            .set_value(progress.clamp(0.0, 1.0));
+        self.home_wave_progress.set_fraction(progress.clamp(0.0, 1.0));
+        self.footer_progress.set_fraction(progress.clamp(0.0, 1.0));
+        self.updating_progress.set(false);
+        self.last_mpris_position.set(position_us);
+        self.update_play_icons(false);
+        self.update_footer_source();
+        Ok(())
     }
 }
 
@@ -783,6 +837,22 @@ fn pathbuf_is_portable_http_url(path: &PathBuf) -> bool {
 
 fn is_portable_http_value(value: &str) -> bool {
     value.starts_with("https://") || value.starts_with("http://")
+}
+
+fn local_cover_path(path: Option<&Path>) -> Option<&Path> {
+    path.filter(|path| path.is_file())
+}
+
+fn connect_time_label(position_us: i64) -> String {
+    let seconds = position_us.max(0) as u64 / 1_000_000;
+    let hours = seconds / 3600;
+    let minutes = (seconds % 3600) / 60;
+    let seconds = seconds % 60;
+    if hours > 0 {
+        format!("{hours}:{minutes:02}:{seconds:02}")
+    } else {
+        format!("{minutes}:{seconds:02}")
+    }
 }
 
 fn debug_desktop_restore(started: Instant, message: impl AsRef<str>) {
