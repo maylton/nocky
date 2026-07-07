@@ -351,7 +351,11 @@ impl AppController {
 
     fn nocky_connect_media_with_resolved_artwork(&self, media: &QueueMedia) -> QueueMedia {
         let mut media = media.clone();
-        if media.cover_path.as_ref().is_some_and(pathbuf_is_portable_http_url) {
+        if media
+            .cover_path
+            .as_ref()
+            .is_some_and(pathbuf_is_portable_http_url)
+        {
             return media;
         }
 
@@ -392,8 +396,18 @@ impl AppController {
             .iter()
             .chain(library.liked.iter())
             .chain(library.recently_played.iter())
-            .chain(library.playlist_tracks.values().flat_map(|items| items.iter()))
-            .chain(library.collection_tracks.values().flat_map(|items| items.iter()))
+            .chain(
+                library
+                    .playlist_tracks
+                    .values()
+                    .flat_map(|items| items.iter()),
+            )
+            .chain(
+                library
+                    .collection_tracks
+                    .values()
+                    .flat_map(|items| items.iter()),
+            )
             .chain(library.search.songs.iter())
         {
             if item.video_id == video_id {
@@ -529,7 +543,9 @@ impl AppController {
         }
 
         debug_desktop_restore(started, "apply:done");
-        Ok(format!("restored paused · {current_title} · {item_count} items"))
+        Ok(format!(
+            "restored paused · {current_title} · {item_count} items"
+        ))
     }
 
     fn present_restored_desktop_current_entry(
@@ -575,7 +591,8 @@ impl AppController {
         self.progress.set_value(progress.clamp(0.0, 1.0));
         self.footer_traditional_progress
             .set_value(progress.clamp(0.0, 1.0));
-        self.home_wave_progress.set_fraction(progress.clamp(0.0, 1.0));
+        self.home_wave_progress
+            .set_fraction(progress.clamp(0.0, 1.0));
         self.footer_progress.set_fraction(progress.clamp(0.0, 1.0));
         self.updating_progress.set(false);
         self.last_mpris_position.set(position_us);
@@ -594,43 +611,46 @@ fn start_desktop_handoff_send(
 ) {
     let (sender, receiver) = mpsc::channel::<Result<String, String>>();
     thread::spawn(move || {
-        let result = send_handoff_offer_http(&target, &envelope, NOCKY_CONNECT_HANDOFF_HTTP_TIMEOUT)
-            .map_err(|error| error.to_string())
-            .and_then(|response| match response.kind {
-                NockyConnectHandoffKind::Accept => send_handoff_snapshot_http(
-                    &target,
-                    &snapshot_json,
-                    NOCKY_CONNECT_HANDOFF_HTTP_TIMEOUT,
-                )
-                .map(|_| "accepted and snapshot delivered".to_string())
-                .map_err(|error| error.to_string()),
-                NockyConnectHandoffKind::Decline => Ok("declined handoff".to_string()),
-                _ => Ok("responded to handoff".to_string()),
-            });
+        let result =
+            send_handoff_offer_http(&target, &envelope, NOCKY_CONNECT_HANDOFF_HTTP_TIMEOUT)
+                .map_err(|error| error.to_string())
+                .and_then(|response| match response.kind {
+                    NockyConnectHandoffKind::Accept => send_handoff_snapshot_http(
+                        &target,
+                        &snapshot_json,
+                        NOCKY_CONNECT_HANDOFF_HTTP_TIMEOUT,
+                    )
+                    .map(|_| "accepted and snapshot delivered".to_string())
+                    .map_err(|error| error.to_string()),
+                    NockyConnectHandoffKind::Decline => Ok("declined handoff".to_string()),
+                    _ => Ok("responded to handoff".to_string()),
+                });
         let _ = sender.send(result);
     });
 
-    glib::timeout_add_local(Duration::from_millis(120), move || match receiver.try_recv() {
-        Ok(Ok(detail)) => {
-            if let Some(controller) = weak.upgrade() {
-                controller.show_toast(&format!("Nocky Connect: {device_name} {detail}"));
+    glib::timeout_add_local(Duration::from_millis(120), move || {
+        match receiver.try_recv() {
+            Ok(Ok(detail)) => {
+                if let Some(controller) = weak.upgrade() {
+                    controller.show_toast(&format!("Nocky Connect: {device_name} {detail}"));
+                }
+                glib::ControlFlow::Break
             }
-            glib::ControlFlow::Break
-        }
-        Ok(Err(error)) => {
-            if let Some(controller) = weak.upgrade() {
-                controller.show_toast(&format!(
-                    "Nocky Connect: could not send snapshot to {device_name}: {error}"
-                ));
+            Ok(Err(error)) => {
+                if let Some(controller) = weak.upgrade() {
+                    controller.show_toast(&format!(
+                        "Nocky Connect: could not send snapshot to {device_name}: {error}"
+                    ));
+                }
+                glib::ControlFlow::Break
             }
-            glib::ControlFlow::Break
-        }
-        Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
-        Err(mpsc::TryRecvError::Disconnected) => {
-            if let Some(controller) = weak.upgrade() {
-                controller.show_toast("Nocky Connect: handoff sender stopped unexpectedly");
+            Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                if let Some(controller) = weak.upgrade() {
+                    controller.show_toast("Nocky Connect: handoff sender stopped unexpectedly");
+                }
+                glib::ControlFlow::Break
             }
-            glib::ControlFlow::Break
         }
     });
 }
@@ -653,30 +673,33 @@ fn start_desktop_handoff_receive_loop(weak: std::rc::Weak<AppController>) {
     };
     let receiver = service.receiver;
 
-    glib::timeout_add_local(Duration::from_millis(150), move || match receiver.try_recv() {
-        Ok(DesktopHandoffReceiverEvent::SnapshotReceived(snapshot_json)) => {
-            let Some(controller) = weak.upgrade() else {
-                return glib::ControlFlow::Break;
-            };
-            match controller.apply_received_handoff_snapshot(&snapshot_json) {
-                Ok(detail) => controller.show_toast(&format!("Nocky Connect: {detail}")),
-                Err(error) => controller
-                    .show_toast(&format!("Nocky Connect: could not restore snapshot: {error}")),
+    glib::timeout_add_local(Duration::from_millis(150), move || {
+        match receiver.try_recv() {
+            Ok(DesktopHandoffReceiverEvent::SnapshotReceived(snapshot_json)) => {
+                let Some(controller) = weak.upgrade() else {
+                    return glib::ControlFlow::Break;
+                };
+                match controller.apply_received_handoff_snapshot(&snapshot_json) {
+                    Ok(detail) => controller.show_toast(&format!("Nocky Connect: {detail}")),
+                    Err(error) => controller.show_toast(&format!(
+                        "Nocky Connect: could not restore snapshot: {error}"
+                    )),
+                }
+                glib::ControlFlow::Continue
             }
-            glib::ControlFlow::Continue
-        }
-        Ok(DesktopHandoffReceiverEvent::Stopped(error)) => {
-            if let Some(controller) = weak.upgrade() {
-                controller.show_toast(&format!("Nocky Connect: receiver stopped: {error}"));
+            Ok(DesktopHandoffReceiverEvent::Stopped(error)) => {
+                if let Some(controller) = weak.upgrade() {
+                    controller.show_toast(&format!("Nocky Connect: receiver stopped: {error}"));
+                }
+                glib::ControlFlow::Break
             }
-            glib::ControlFlow::Break
-        }
-        Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
-        Err(mpsc::TryRecvError::Disconnected) => {
-            if let Some(controller) = weak.upgrade() {
-                controller.show_toast("Nocky Connect: receiver stopped unexpectedly");
+            Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                if let Some(controller) = weak.upgrade() {
+                    controller.show_toast("Nocky Connect: receiver stopped unexpectedly");
+                }
+                glib::ControlFlow::Break
             }
-            glib::ControlFlow::Break
         }
     });
 }
@@ -688,7 +711,8 @@ fn start_desktop_connect_presence_loop(weak: std::rc::Weak<AppController>) {
 
     let scan_in_progress = Rc::new(Cell::new(false));
     if let Some(controller) = weak.upgrade() {
-        controller.update_nocky_connect_presence_indicator(desktop_device_cache_has_recent_presence());
+        controller
+            .update_nocky_connect_presence_indicator(desktop_device_cache_has_recent_presence());
     }
     start_desktop_presence_scan(weak.clone(), scan_in_progress.clone());
 
@@ -714,32 +738,34 @@ fn start_desktop_presence_scan(
         let _ = sender.send(run_desktop_device_scan());
     });
 
-    glib::timeout_add_local(Duration::from_millis(150), move || match receiver.try_recv() {
-        Ok(Ok(devices)) => {
-            let has_recent = update_desktop_device_cache_with_discovered(devices);
-            if let Some(controller) = weak.upgrade() {
-                controller.update_nocky_connect_presence_indicator(has_recent);
+    glib::timeout_add_local(Duration::from_millis(150), move || {
+        match receiver.try_recv() {
+            Ok(Ok(devices)) => {
+                let has_recent = update_desktop_device_cache_with_discovered(devices);
+                if let Some(controller) = weak.upgrade() {
+                    controller.update_nocky_connect_presence_indicator(has_recent);
+                }
+                scan_in_progress.set(false);
+                glib::ControlFlow::Break
             }
-            scan_in_progress.set(false);
-            glib::ControlFlow::Break
-        }
-        Ok(Err(error)) => {
-            eprintln!("Nocky Connect: background discovery failed: {error}");
-            let has_recent = desktop_device_cache_has_recent_presence();
-            if let Some(controller) = weak.upgrade() {
-                controller.update_nocky_connect_presence_indicator(has_recent);
+            Ok(Err(error)) => {
+                eprintln!("Nocky Connect: background discovery failed: {error}");
+                let has_recent = desktop_device_cache_has_recent_presence();
+                if let Some(controller) = weak.upgrade() {
+                    controller.update_nocky_connect_presence_indicator(has_recent);
+                }
+                scan_in_progress.set(false);
+                glib::ControlFlow::Break
             }
-            scan_in_progress.set(false);
-            glib::ControlFlow::Break
-        }
-        Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
-        Err(mpsc::TryRecvError::Disconnected) => {
-            let has_recent = desktop_device_cache_has_recent_presence();
-            if let Some(controller) = weak.upgrade() {
-                controller.update_nocky_connect_presence_indicator(has_recent);
+            Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                let has_recent = desktop_device_cache_has_recent_presence();
+                if let Some(controller) = weak.upgrade() {
+                    controller.update_nocky_connect_presence_indicator(has_recent);
+                }
+                scan_in_progress.set(false);
+                glib::ControlFlow::Break
             }
-            scan_in_progress.set(false);
-            glib::ControlFlow::Break
         }
     });
 }
@@ -769,45 +795,47 @@ fn start_desktop_device_scan(
         let _ = sender.send(run_desktop_device_scan());
     });
 
-    glib::timeout_add_local(Duration::from_millis(150), move || match receiver.try_recv() {
-        Ok(Ok(devices)) => {
-            let now = Instant::now();
-            let discovered_count = devices.len();
-            {
-                let mut list = device_list.borrow_mut();
-                list.update_with_discovered(devices, now);
-                list.remove_stale(now, NOCKY_CONNECT_DEVICE_STALE_AFTER);
-                save_desktop_device_cache(&list);
+    glib::timeout_add_local(Duration::from_millis(150), move || {
+        match receiver.try_recv() {
+            Ok(Ok(devices)) => {
+                let now = Instant::now();
+                let discovered_count = devices.len();
+                {
+                    let mut list = device_list.borrow_mut();
+                    list.update_with_discovered(devices, now);
+                    list.remove_stale(now, NOCKY_CONNECT_DEVICE_STALE_AFTER);
+                    save_desktop_device_cache(&list);
+                }
+                render_nocky_connect_devices(
+                    &device_list_box,
+                    &device_list.borrow(),
+                    Some(on_selected.clone()),
+                );
+                let count = device_list.borrow().len();
+                status_label.set_text(match (count, discovered_count) {
+                    (0, _) => "No devices found yet. Try again while the Android app is open.",
+                    (1, 0) => "LAN discovery • 1 cached device available",
+                    (1, _) => "LAN discovery • 1 device available",
+                    (_, 0) => "LAN discovery • cached devices available",
+                    _ => "LAN discovery • multiple devices available",
+                });
+                scan_in_progress.set(false);
+                refresh_button.set_sensitive(true);
+                glib::ControlFlow::Break
             }
-            render_nocky_connect_devices(
-                &device_list_box,
-                &device_list.borrow(),
-                Some(on_selected.clone()),
-            );
-            let count = device_list.borrow().len();
-            status_label.set_text(match (count, discovered_count) {
-                (0, _) => "No devices found yet. Try again while the Android app is open.",
-                (1, 0) => "LAN discovery • 1 cached device available",
-                (1, _) => "LAN discovery • 1 device available",
-                (_, 0) => "LAN discovery • cached devices available",
-                _ => "LAN discovery • multiple devices available",
-            });
-            scan_in_progress.set(false);
-            refresh_button.set_sensitive(true);
-            glib::ControlFlow::Break
-        }
-        Ok(Err(error)) => {
-            status_label.set_text(&format!("Discovery failed: {error}"));
-            scan_in_progress.set(false);
-            refresh_button.set_sensitive(true);
-            glib::ControlFlow::Break
-        }
-        Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
-        Err(mpsc::TryRecvError::Disconnected) => {
-            status_label.set_text("Discovery failed: worker stopped unexpectedly.");
-            scan_in_progress.set(false);
-            refresh_button.set_sensitive(true);
-            glib::ControlFlow::Break
+            Ok(Err(error)) => {
+                status_label.set_text(&format!("Discovery failed: {error}"));
+                scan_in_progress.set(false);
+                refresh_button.set_sensitive(true);
+                glib::ControlFlow::Break
+            }
+            Err(mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                status_label.set_text("Discovery failed: worker stopped unexpectedly.");
+                scan_in_progress.set(false);
+                refresh_button.set_sensitive(true);
+                glib::ControlFlow::Break
+            }
         }
     });
 }
@@ -839,9 +867,7 @@ fn save_desktop_device_cache(list: &NockyConnectDeviceList) {
     }
 }
 
-fn update_desktop_device_cache_with_discovered(
-    devices: Vec<NockyConnectDiscoveredDevice>,
-) -> bool {
+fn update_desktop_device_cache_with_discovered(devices: Vec<NockyConnectDiscoveredDevice>) -> bool {
     let now = Instant::now();
     match desktop_device_cache().lock() {
         Ok(mut cache) => {
@@ -883,7 +909,9 @@ fn run_desktop_device_scan() -> Result<Vec<NockyConnectDiscoveredDevice>, String
 
 fn build_local_desktop_descriptor() -> Result<NockyConnectDeviceDescriptor, String> {
     let identity = NockyConnectDeviceIdentity::new(default_connect_config_dir());
-    let device_id = identity.get_or_create().map_err(|error| error.to_string())?;
+    let device_id = identity
+        .get_or_create()
+        .map_err(|error| error.to_string())?;
     Ok(NockyConnectDeviceDescriptor::linux_desktop(
         device_id,
         desktop_device_name(),

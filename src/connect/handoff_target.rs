@@ -41,7 +41,9 @@ pub enum NockyConnectHandoffTargetError {
 impl fmt::Display for NockyConnectHandoffTargetError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingEndpoint => write!(formatter, "device did not advertise a handoff endpoint"),
+            Self::MissingEndpoint => {
+                write!(formatter, "device did not advertise a handoff endpoint")
+            }
             Self::UnsupportedTransport => write!(formatter, "unsupported handoff transport"),
         }
     }
@@ -89,11 +91,9 @@ mod tests {
             Some("dev".to_string()),
         )
         .with_handoff_endpoint(NockyConnectHandoffEndpoint::local_http(35187));
-        let target = resolve_handoff_target(
-            &descriptor,
-            SocketAddr::from(([192, 168, 0, 8], 34987)),
-        )
-        .expect("target should resolve");
+        let target =
+            resolve_handoff_target(&descriptor, SocketAddr::from(([192, 168, 0, 8], 34987)))
+                .expect("target should resolve");
 
         assert_eq!(target.host, "192.168.0.8");
         assert_eq!(target.port, 35187);
@@ -113,11 +113,9 @@ mod tests {
             Some("dev".to_string()),
         );
 
-        let error = resolve_handoff_target(
-            &descriptor,
-            SocketAddr::from(([192, 168, 0, 8], 34987)),
-        )
-        .expect_err("legacy descriptor should not resolve");
+        let error =
+            resolve_handoff_target(&descriptor, SocketAddr::from(([192, 168, 0, 8], 34987)))
+                .expect_err("legacy descriptor should not resolve");
 
         assert_eq!(error, NockyConnectHandoffTargetError::MissingEndpoint);
     }

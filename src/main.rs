@@ -27,7 +27,13 @@ mod visual_theme;
 mod visualizer;
 mod youtube;
 
-use std::{env, ffi::OsStr, fs, path::Path, time::{SystemTime, UNIX_EPOCH}};
+use std::{
+    env,
+    ffi::OsStr,
+    fs,
+    path::Path,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use gtk::glib;
 
@@ -139,7 +145,10 @@ fn inspect_nocky_connect_snapshot(path: &Path) -> Result<(), Box<dyn std::error:
     let current_index = if item_count == 0 {
         0
     } else {
-        snapshot.queue.current_index.min(item_count.saturating_sub(1))
+        snapshot
+            .queue
+            .current_index
+            .min(item_count.saturating_sub(1))
     };
 
     println!("Nocky Connect snapshot OK");
@@ -184,11 +193,17 @@ fn inspect_nocky_connect_snapshot(path: &Path) -> Result<(), Box<dyn std::error:
 
     println!("Restore plan");
     println!("  rebuilt_queue_items: {}", restored.queue.len());
-    println!("  rebuilt_current_index: {:?}", restored.queue.current_index());
+    println!(
+        "  rebuilt_current_index: {:?}",
+        restored.queue.current_index()
+    );
     println!("  restored_state: {:?}", restored.state.state);
     println!("  restored_position_ms: {}", restored.state.position_ms);
     println!("  restored_repeat_mode: {:?}", restored.state.repeat_mode);
-    println!("  restored_shuffle_enabled: {}", restored.state.shuffle_enabled);
+    println!(
+        "  restored_shuffle_enabled: {}",
+        restored.state.shuffle_enabled
+    );
     println!("  autoplay: false");
 
     Ok(())
@@ -294,7 +309,9 @@ fn export_nocky_connect_snapshot(path: &Path) -> Result<ExportSummary, Box<dyn s
         .is_some_and(|session| session.shuffle_enabled);
     let title = session
         .as_ref()
-        .and_then(|session| (!session.context_title.trim().is_empty()).then(|| session.context_title.clone()))
+        .and_then(|session| {
+            (!session.context_title.trim().is_empty()).then(|| session.context_title.clone())
+        })
         .or_else(|| Some("Nocky Desktop handoff".to_string()));
     let device_id = connect::NockyConnectDeviceIdentity::new(connect::default_connect_config_dir())
         .get_or_create()?;
@@ -310,7 +327,10 @@ fn export_nocky_connect_snapshot(path: &Path) -> Result<ExportSummary, Box<dyn s
     };
     let payload = gateway.export_snapshot_json(&queue, title, playback_state, session_id, 1)?;
 
-    if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
         fs::create_dir_all(parent)?;
     }
     fs::write(path, payload)?;

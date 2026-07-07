@@ -119,7 +119,12 @@ pub fn restore_desktop_queue_snapshot(
     let current_index = if media.is_empty() {
         None
     } else {
-        Some(snapshot.queue.current_index.min(media.len().saturating_sub(1)))
+        Some(
+            snapshot
+                .queue
+                .current_index
+                .min(media.len().saturating_sub(1)),
+        )
     };
     queue.replace(media, current_index);
 
@@ -312,9 +317,12 @@ fn nocky_connect_artwork_cache_dir() -> PathBuf {
 }
 
 fn stable_hash(value: &str) -> u64 {
-    value.as_bytes().iter().fold(STABLE_HASH_OFFSET_BASIS, |hash, byte| {
-        (hash ^ u64::from(*byte)).wrapping_mul(STABLE_HASH_PRIME)
-    })
+    value
+        .as_bytes()
+        .iter()
+        .fold(STABLE_HASH_OFFSET_BASIS, |hash, byte| {
+            (hash ^ u64::from(*byte)).wrapping_mul(STABLE_HASH_PRIME)
+        })
 }
 
 fn is_portable_http_url(value: &str) -> bool {

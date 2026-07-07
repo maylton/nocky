@@ -45,7 +45,9 @@ impl fmt::Display for NockyConnectHandoffHttpError {
                 write!(formatter, "invalid handoff HTTP response: {error}")
             }
             Self::HttpStatus(status) => write!(formatter, "handoff HTTP request failed: {status}"),
-            Self::UnsupportedSchema(schema) => write!(formatter, "unsupported handoff schema {schema}"),
+            Self::UnsupportedSchema(schema) => {
+                write!(formatter, "unsupported handoff schema {schema}")
+            }
             Self::UnsupportedSchemaVersion(version) => {
                 write!(formatter, "unsupported handoff schema version {version}")
             }
@@ -72,7 +74,10 @@ pub fn send_handoff_offer_http(
     let response = send_json_http(target, &target.path, &body, timeout)?;
     decode_handoff_response(
         &response,
-        &[NockyConnectHandoffKind::Accept, NockyConnectHandoffKind::Decline],
+        &[
+            NockyConnectHandoffKind::Accept,
+            NockyConnectHandoffKind::Decline,
+        ],
     )
 }
 
@@ -153,9 +158,7 @@ fn response_has_complete_body(response: &[u8]) -> Result<bool, NockyConnectHando
 }
 
 fn find_header_end(response: &[u8]) -> Option<usize> {
-    response
-        .windows(4)
-        .position(|window| window == b"\r\n\r\n")
+    response.windows(4).position(|window| window == b"\r\n\r\n")
 }
 
 fn content_length(header_text: &str) -> Option<usize> {
@@ -205,7 +208,10 @@ fn decode_handoff_offer_response(
 ) -> Result<NockyConnectHandoffEnvelope, NockyConnectHandoffHttpError> {
     decode_handoff_response(
         response,
-        &[NockyConnectHandoffKind::Accept, NockyConnectHandoffKind::Decline],
+        &[
+            NockyConnectHandoffKind::Accept,
+            NockyConnectHandoffKind::Decline,
+        ],
     )
 }
 
@@ -388,9 +394,7 @@ mod tests {
 
         assert_eq!(
             error,
-            NockyConnectHandoffHttpError::ReceiverRestoreFailed(
-                "queue import failed".to_string(),
-            ),
+            NockyConnectHandoffHttpError::ReceiverRestoreFailed("queue import failed".to_string(),),
         );
     }
 
@@ -408,7 +412,8 @@ mod tests {
         let body = serde_json::to_string(&result).expect("result json");
         let response = format!("HTTP/1.1 202 Accepted\r\n\r\n{}", body);
 
-        let error = decode_handoff_offer_response(response.as_bytes()).expect_err("kind should fail");
+        let error =
+            decode_handoff_offer_response(response.as_bytes()).expect_err("kind should fail");
 
         assert_eq!(
             error,

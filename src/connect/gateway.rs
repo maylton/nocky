@@ -24,7 +24,10 @@ impl fmt::Display for NockyConnectError {
                 write!(formatter, "unsupported Nocky Connect schema {schema}")
             }
             Self::UnsupportedSchemaVersion(version) => {
-                write!(formatter, "unsupported Nocky Connect schema version {version}")
+                write!(
+                    formatter,
+                    "unsupported Nocky Connect schema version {version}"
+                )
             }
             Self::Json(error) => write!(formatter, "invalid Nocky Connect JSON: {error}"),
         }
@@ -105,10 +108,14 @@ impl NockyConnectGateway {
         snapshot: &PlaybackSessionSnapshot,
     ) -> Result<(), NockyConnectError> {
         if snapshot.schema != PLAYBACK_SESSION_SNAPSHOT_SCHEMA {
-            return Err(NockyConnectError::UnsupportedSchema(snapshot.schema.clone()));
+            return Err(NockyConnectError::UnsupportedSchema(
+                snapshot.schema.clone(),
+            ));
         }
         if snapshot.schema_version != NOCKY_CONNECT_PROTOCOL_VERSION {
-            return Err(NockyConnectError::UnsupportedSchemaVersion(snapshot.schema_version));
+            return Err(NockyConnectError::UnsupportedSchemaVersion(
+                snapshot.schema_version,
+            ));
         }
         Ok(())
     }
@@ -150,7 +157,9 @@ mod tests {
                 3,
             )
             .expect("snapshot JSON should encode");
-        let restored = gateway.prepare_restore(&payload).expect("snapshot should restore");
+        let restored = gateway
+            .prepare_restore(&payload)
+            .expect("snapshot should restore");
 
         assert_eq!(restored.title.as_deref(), Some("Gateway queue"));
         assert_eq!(restored.queue.len(), 1);
@@ -163,14 +172,21 @@ mod tests {
         let gateway = NockyConnectGateway::new("desktop-device");
         let payload = include_str!("../../docs/fixtures/nocky-connect-snapshot-v1.json");
 
-        let snapshot = gateway.decode_snapshot(payload).expect("fixture should decode");
-        let restored = gateway.prepare_restore(payload).expect("fixture should restore");
+        let snapshot = gateway
+            .decode_snapshot(payload)
+            .expect("fixture should decode");
+        let restored = gateway
+            .prepare_restore(payload)
+            .expect("fixture should restore");
 
         assert_eq!(snapshot.schema, PLAYBACK_SESSION_SNAPSHOT_SCHEMA);
         assert_eq!(snapshot.schema_version, NOCKY_CONNECT_PROTOCOL_VERSION);
         assert_eq!(snapshot.session_id, "compat-session-v1");
         assert_eq!(snapshot.revision, 7);
-        assert_eq!(snapshot.queue.title.as_deref(), Some("Compatibility fixture"));
+        assert_eq!(
+            snapshot.queue.title.as_deref(),
+            Some("Compatibility fixture")
+        );
         assert_eq!(snapshot.queue.current_index, 1);
         assert_eq!(snapshot.queue.items.len(), 2);
         assert_eq!(restored.title.as_deref(), Some("Compatibility fixture"));
@@ -196,7 +212,9 @@ mod tests {
             "queue":{"title":null,"current_index":0,"repeat_mode":"off","shuffle_enabled":false,"shuffle_seed":null,"items":[]}
         }"#;
 
-        let error = gateway.decode_snapshot(payload).expect_err("version should fail");
+        let error = gateway
+            .decode_snapshot(payload)
+            .expect_err("version should fail");
         assert_eq!(error, NockyConnectError::UnsupportedSchemaVersion(99));
     }
 }

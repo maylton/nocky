@@ -37,7 +37,8 @@ impl NockyConnectFileStore {
 
     pub fn read_snapshot(&self, path: impl AsRef<Path>) -> io::Result<PlaybackSessionSnapshot> {
         let payload = fs::read_to_string(path)?;
-        serde_json::from_str(&payload).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+        serde_json::from_str(&payload)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
     }
 
     pub fn latest_snapshot_file(&self) -> io::Result<Option<PathBuf>> {
@@ -53,7 +54,12 @@ impl NockyConnectFileStore {
         let mut files = fs::read_dir(&self.directory)?
             .filter_map(Result::ok)
             .map(|entry| entry.path())
-            .filter(|path| path.is_file() && path.extension().is_some_and(|extension| extension == "json"))
+            .filter(|path| {
+                path.is_file()
+                    && path
+                        .extension()
+                        .is_some_and(|extension| extension == "json")
+            })
             .collect::<Vec<_>>();
 
         files.sort_by_key(|path| {
@@ -105,7 +111,11 @@ mod tests {
         let files = store.list_snapshot_files().expect("list snapshots");
 
         assert!(path.exists());
-        assert!(path.file_name().unwrap().to_string_lossy().starts_with("snapshot_session_with_spaces_r5"));
+        assert!(path
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("snapshot_session_with_spaces_r5"));
         assert_eq!(decoded, snapshot);
         assert_eq!(files, vec![path.clone()]);
         assert_eq!(store.latest_snapshot_file().unwrap(), Some(path));

@@ -53,20 +53,22 @@ impl NockyConnectDeviceList {
     }
 
     pub fn remove_stale(&mut self, now: Instant, max_age: Duration) {
-        self.devices
-            .retain(|_, entry| match now.checked_duration_since(entry.last_seen) {
+        self.devices.retain(
+            |_, entry| match now.checked_duration_since(entry.last_seen) {
                 Some(age) => age <= max_age,
                 None => true,
-            });
+            },
+        );
     }
 
     pub fn entries(&self) -> Vec<&NockyConnectDeviceListEntry> {
         let mut entries = self.devices.values().collect::<Vec<_>>();
         entries.sort_by(|left, right| {
-            right
-                .last_seen
-                .cmp(&left.last_seen)
-                .then_with(|| left.descriptor.device_name.cmp(&right.descriptor.device_name))
+            right.last_seen.cmp(&left.last_seen).then_with(|| {
+                left.descriptor
+                    .device_name
+                    .cmp(&right.descriptor.device_name)
+            })
         });
         entries
     }
@@ -129,7 +131,10 @@ mod tests {
         let mut list = NockyConnectDeviceList::new();
 
         list.upsert(discovered("fresh", "Fresh", 34987), now);
-        list.upsert(discovered("old", "Old", 34988), now - Duration::from_secs(60));
+        list.upsert(
+            discovered("old", "Old", 34988),
+            now - Duration::from_secs(60),
+        );
 
         list.remove_stale(now, Duration::from_secs(30));
 
@@ -143,7 +148,10 @@ mod tests {
         let mut list = NockyConnectDeviceList::new();
 
         list.upsert(discovered("old", "Old", 34987), now);
-        list.upsert(discovered("fresh", "Fresh", 34988), now + Duration::from_secs(5));
+        list.upsert(
+            discovered("fresh", "Fresh", 34988),
+            now + Duration::from_secs(5),
+        );
 
         let entries = list.entries();
 

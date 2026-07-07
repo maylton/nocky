@@ -6,8 +6,7 @@
 
 use super::{
     discovery_udp::receive_once as receive_discovery_once,
-    handoff_http_receiver::receive_handoff_offer_and_snapshot,
-    NockyConnectDeviceDescriptor,
+    handoff_http_receiver::receive_handoff_offer_and_snapshot, NockyConnectDeviceDescriptor,
 };
 use std::{
     sync::{
@@ -52,7 +51,9 @@ pub fn try_start_desktop_handoff_receiver_loop(
             match receive_handoff_offer_and_snapshot(&local_device_id, timeout) {
                 Ok(received) => {
                     if sender
-                        .send(DesktopHandoffReceiverEvent::SnapshotReceived(received.snapshot_json))
+                        .send(DesktopHandoffReceiverEvent::SnapshotReceived(
+                            received.snapshot_json,
+                        ))
                         .is_err()
                     {
                         break;

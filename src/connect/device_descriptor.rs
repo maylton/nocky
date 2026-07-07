@@ -69,9 +69,11 @@ impl NockyConnectDeviceDescriptor {
             ));
         }
         if self.protocol_version != NOCKY_CONNECT_PROTOCOL_VERSION {
-            return Err(NockyConnectDeviceDescriptorError::UnsupportedProtocolVersion(
-                self.protocol_version,
-            ));
+            return Err(
+                NockyConnectDeviceDescriptorError::UnsupportedProtocolVersion(
+                    self.protocol_version,
+                ),
+            );
         }
         Ok(())
     }

@@ -19,10 +19,7 @@ pub struct NockyConnectDiscoveryEnvelope {
 }
 
 impl NockyConnectDiscoveryEnvelope {
-    pub fn hello(
-        message_id: impl Into<String>,
-        descriptor: NockyConnectDeviceDescriptor,
-    ) -> Self {
+    pub fn hello(message_id: impl Into<String>, descriptor: NockyConnectDeviceDescriptor) -> Self {
         Self::new(message_id, NockyConnectDiscoveryKind::Hello, descriptor)
     }
 
@@ -60,7 +57,9 @@ impl NockyConnectDiscoveryEnvelope {
             ));
         }
         if self.magic != NOCKY_CONNECT_DISCOVERY_MAGIC {
-            return Err(NockyConnectDiscoveryError::UnsupportedMagic(self.magic.clone()));
+            return Err(NockyConnectDiscoveryError::UnsupportedMagic(
+                self.magic.clone(),
+            ));
         }
         self.descriptor
             .require_supported()
@@ -89,11 +88,15 @@ pub enum NockyConnectDiscoveryError {
 impl std::fmt::Display for NockyConnectDiscoveryError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::UnsupportedSchema(schema) => write!(formatter, "unsupported discovery schema {schema}"),
+            Self::UnsupportedSchema(schema) => {
+                write!(formatter, "unsupported discovery schema {schema}")
+            }
             Self::UnsupportedSchemaVersion(version) => {
                 write!(formatter, "unsupported discovery schema version {version}")
             }
-            Self::UnsupportedMagic(magic) => write!(formatter, "unsupported discovery magic {magic}"),
+            Self::UnsupportedMagic(magic) => {
+                write!(formatter, "unsupported discovery magic {magic}")
+            }
             Self::Descriptor(error) => write!(formatter, "invalid discovery descriptor: {error}"),
             Self::Json(error) => write!(formatter, "invalid discovery JSON: {error}"),
         }
@@ -131,7 +134,8 @@ pub fn discovery_response_for_payload(
         return Ok(None);
     }
 
-    let response = NockyConnectDiscoveryEnvelope::announce(response_message_id, local_descriptor.clone());
+    let response =
+        NockyConnectDiscoveryEnvelope::announce(response_message_id, local_descriptor.clone());
     encode_discovery_envelope(&response).map(Some)
 }
 
@@ -170,13 +174,10 @@ mod tests {
         let hello = NockyConnectDiscoveryEnvelope::hello("hello-1", remote_descriptor);
         let payload = encode_discovery_envelope(&hello).expect("encode hello");
 
-        let response_payload = discovery_response_for_payload(
-            &payload,
-            &local_descriptor,
-            "announce-1",
-        )
-        .expect("response helper should parse hello")
-        .expect("remote hello should receive response");
+        let response_payload =
+            discovery_response_for_payload(&payload, &local_descriptor, "announce-1")
+                .expect("response helper should parse hello")
+                .expect("remote hello should receive response");
         let response = decode_discovery_envelope(&response_payload).expect("decode response");
 
         assert_eq!(response.kind, NockyConnectDiscoveryKind::Announce);
@@ -200,7 +201,8 @@ mod tests {
     fn ignores_announce_packets() {
         let local_descriptor = desktop_descriptor("local-device");
         let remote_descriptor = desktop_descriptor("remote-device");
-        let announce = NockyConnectDiscoveryEnvelope::announce("announce-remote", remote_descriptor);
+        let announce =
+            NockyConnectDiscoveryEnvelope::announce("announce-remote", remote_descriptor);
         let payload = encode_discovery_envelope(&announce).expect("encode announce");
 
         let response = discovery_response_for_payload(&payload, &local_descriptor, "announce-1")

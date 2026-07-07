@@ -1,4 +1,7 @@
-use std::{fs, io, path::{Path, PathBuf}};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 #[derive(Clone, Debug)]
 pub struct NockyConnectDeviceIdentity {
@@ -49,8 +52,11 @@ fn generate_device_id() -> String {
         let marker = String::new();
         marker.as_ptr() as usize as u128
     };
-    format!("desktop-{:#034x}", nanos ^ (process << 64) ^ address_entropy)
-        .replace("0x", "")
+    format!(
+        "desktop-{:#034x}",
+        nanos ^ (process << 64) ^ address_entropy
+    )
+    .replace("0x", "")
 }
 
 #[cfg(test)]

@@ -49,7 +49,9 @@ impl fmt::Display for NockyConnectHandoffHttpReceiverError {
             Self::InvalidRequest(error) => write!(formatter, "invalid handoff request: {error}"),
             Self::InvalidJson(error) => write!(formatter, "invalid handoff JSON: {error}"),
             Self::UnsupportedPath(path) => write!(formatter, "unsupported handoff path {path}"),
-            Self::UnsupportedSchema(schema) => write!(formatter, "unsupported handoff schema {schema}"),
+            Self::UnsupportedSchema(schema) => {
+                write!(formatter, "unsupported handoff schema {schema}")
+            }
             Self::UnsupportedSchemaVersion(version) => {
                 write!(formatter, "unsupported handoff schema version {version}")
             }
@@ -185,9 +187,7 @@ fn read_http_request(
     })
 }
 
-fn request_has_complete_body(
-    request: &[u8],
-) -> Result<bool, NockyConnectHandoffHttpReceiverError> {
+fn request_has_complete_body(request: &[u8]) -> Result<bool, NockyConnectHandoffHttpReceiverError> {
     let Some(header_end) = request.windows(4).position(|window| window == b"\r\n\r\n") else {
         return Ok(false);
     };
@@ -260,9 +260,7 @@ fn require_snapshot_schema(body: &str) -> Result<(), NockyConnectHandoffHttpRece
         .and_then(serde_json::Value::as_u64)
         .unwrap_or_default() as u32;
     if version != NOCKY_CONNECT_PROTOCOL_VERSION {
-        return Err(NockyConnectHandoffHttpReceiverError::UnsupportedSchemaVersion(
-            version,
-        ));
+        return Err(NockyConnectHandoffHttpReceiverError::UnsupportedSchemaVersion(version));
     }
     Ok(())
 }

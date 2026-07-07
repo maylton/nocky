@@ -143,7 +143,10 @@ fn collect_discovery_replies(
     while Instant::now() < deadline {
         match socket.recv_from(&mut buffer) {
             Ok((size, address)) => {
-                debug_discovery(mode, format!("packet received; bytes={size}; from={address}"));
+                debug_discovery(
+                    mode,
+                    format!("packet received; bytes={size}; from={address}"),
+                );
                 let payload = match std::str::from_utf8(&buffer[..size]) {
                     Ok(payload) => payload,
                     Err(error) => {
@@ -212,7 +215,10 @@ fn collect_discovery_replies(
                 devices.insert(device_id.clone(), device);
                 debug_discovery(
                     mode,
-                    format!("device recorded; device_id={device_id}; total={}", devices.len()),
+                    format!(
+                        "device recorded; device_id={device_id}; total={}",
+                        devices.len()
+                    ),
                 );
             }
             Err(error)
@@ -241,7 +247,10 @@ fn collect_discovery_replies(
     }
 
     merge_shared_discovered_devices(&mut devices);
-    debug_discovery(mode, format!("collect loop finished; found={}", devices.len()));
+    debug_discovery(
+        mode,
+        format!("collect loop finished; found={}", devices.len()),
+    );
     Ok(devices.into_values().collect())
 }
 
@@ -267,15 +276,14 @@ pub fn recent_shared_discovered_devices(max_age: Duration) -> Vec<NockyConnectDi
         return Vec::new();
     };
 
-    shared.retain(|_, entry| match now.checked_duration_since(entry.last_seen) {
-        Some(age) => age <= max_age,
-        None => true,
-    });
+    shared.retain(
+        |_, entry| match now.checked_duration_since(entry.last_seen) {
+            Some(age) => age <= max_age,
+            None => true,
+        },
+    );
 
-    shared
-        .values()
-        .map(|entry| entry.device.clone())
-        .collect()
+    shared.values().map(|entry| entry.device.clone()).collect()
 }
 
 fn merge_shared_discovered_devices(devices: &mut HashMap<String, NockyConnectDiscoveredDevice>) {
