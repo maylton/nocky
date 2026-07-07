@@ -18,6 +18,7 @@ const DEVICE_AVAILABLE_NOW_WINDOW: Duration = Duration::from_secs(30);
 const CONNECT_ROW_HEIGHT: i32 = 58;
 const CONNECT_ROW_HORIZONTAL_PADDING: i32 = 12;
 const CONNECT_ROW_VERTICAL_PADDING: i32 = 8;
+const CONNECT_ROW_OUTER_GUTTER: i32 = 4;
 
 pub(crate) type NockyConnectDeviceSelected =
     Rc<dyn Fn(NockyConnectDeviceDescriptor, SocketAddr) + 'static>;
@@ -68,7 +69,7 @@ pub(crate) fn build_nocky_connect_popover(
 
     root.append(&header);
 
-    let device_list = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    let device_list = gtk::Box::new(gtk::Orientation::Vertical, 4);
     device_list.add_css_class("queue2-list");
     device_list.append(&build_this_device_row());
 
@@ -134,10 +135,10 @@ fn build_this_device_row() -> gtk::Box {
     row.add_css_class("queue2-row");
     row.add_css_class("active");
     row.set_size_request(-1, CONNECT_ROW_HEIGHT);
-    row.set_margin_top(2);
-    row.set_margin_bottom(2);
-    row.set_margin_start(2);
-    row.set_margin_end(2);
+    row.set_margin_top(CONNECT_ROW_OUTER_GUTTER);
+    row.set_margin_bottom(CONNECT_ROW_OUTER_GUTTER);
+    row.set_margin_start(CONNECT_ROW_OUTER_GUTTER);
+    row.set_margin_end(CONNECT_ROW_OUTER_GUTTER);
 
     let icon = gtk::Image::from_icon_name("computer-symbolic");
     icon.set_pixel_size(22);
@@ -179,10 +180,10 @@ fn build_empty_device_state() -> gtk::Box {
     let empty = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     empty.add_css_class("queue2-row");
     empty.set_size_request(-1, CONNECT_ROW_HEIGHT);
-    empty.set_margin_top(2);
-    empty.set_margin_bottom(2);
-    empty.set_margin_start(2);
-    empty.set_margin_end(2);
+    empty.set_margin_top(CONNECT_ROW_OUTER_GUTTER);
+    empty.set_margin_bottom(CONNECT_ROW_OUTER_GUTTER);
+    empty.set_margin_start(CONNECT_ROW_OUTER_GUTTER);
+    empty.set_margin_end(CONNECT_ROW_OUTER_GUTTER);
 
     let icon = gtk::Image::from_icon_name("network-workgroup-symbolic");
     icon.set_pixel_size(22);
@@ -225,6 +226,10 @@ fn build_device_button(
     button.add_css_class("queue2-row");
     button.set_halign(gtk::Align::Fill);
     button.set_size_request(-1, CONNECT_ROW_HEIGHT);
+    button.set_margin_top(CONNECT_ROW_OUTER_GUTTER);
+    button.set_margin_bottom(CONNECT_ROW_OUTER_GUTTER);
+    button.set_margin_start(CONNECT_ROW_OUTER_GUTTER);
+    button.set_margin_end(CONNECT_ROW_OUTER_GUTTER);
 
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     row.set_margin_top(CONNECT_ROW_VERTICAL_PADDING);
