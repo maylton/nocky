@@ -2,7 +2,10 @@
 
 use super::AppController;
 use crate::{
-    app::state::PlaybackSource,
+    app::{
+        perf::{self, PerfTimer},
+        state::PlaybackSource,
+    },
     browser::{BrowserEvent, BrowserPlaybackState, BrowserRenderContext, BrowserRoute},
     config::{AppLanguage, StartupSource},
     i18n::Message,
@@ -54,6 +57,8 @@ impl AppController {
     }
 
     pub(crate) fn refresh_browser(&self) {
+        let timer = PerfTimer::start("browser.refresh");
+        let route_label = format!("{:?}", self.browser.route());
         let home_visible = matches!(self.browser.route(), BrowserRoute::All)
             && self.search_query.borrow().trim().is_empty();
         if !home_visible {
@@ -66,6 +71,10 @@ impl AppController {
             Ok(config) => config.clone(),
             Err(_) => {
                 eprintln!("Nocky browser refresh deferred: config is currently borrowed");
+                perf::log_event(
+                    "browser.refresh.deferred",
+                    &[("reason", "config_borrow".to_string())],
+                );
                 self.browser.mark_home_dirty();
                 return;
             }
@@ -90,6 +99,14 @@ impl AppController {
             || youtube.has_content()
             || !youtube_home.sections.is_empty()
             || youtube.syncing;
+        let query_active = !query.trim().is_empty();
+        let track_count = effective_tracks.len();
+        let youtube_section_count = youtube_home.sections.len();
+        let youtube_native_section_count = youtube_home
+            .native_v3_source
+            .as_ref()
+            .map(|source| source.sections.len())
+            .unwrap_or(0);
         self.music_stack
             .set_visible_child_name(if has_library { "library" } else { "empty" });
         self.browser.refresh(
@@ -114,10 +131,26 @@ impl AppController {
                 self.browser.select_track(current);
             }
         }
+        timer.finish_with(&[
+            ("route", route_label),
+            ("home_visible", home_visible.to_string()),
+            ("query", query_active.to_string()),
+            ("tracks", track_count.to_string()),
+            ("youtube_sections", youtube_section_count.to_string()),
+            (
+                "youtube_native_sections",
+                youtube_native_section_count.to_string(),
+            ),
+            ("youtube_loading", self.youtube_home_loading.get().to_string()),
+            ("has_library", has_library.to_string()),
+        ]);
     }
 
     pub(crate) fn navigate_browser(&self, route: BrowserRoute) {
+        let timer = PerfTimer::start("browser.navigate");
         let previous_route = self.browser.route();
+        let previous_route_label = format!("{previous_route:?}");
+        let target_route_label = format!("{route:?}");
         if matches!(&route, BrowserRoute::Artists) {
             self.prefetch_home_artist_profiles(true);
         }
@@ -125,6 +158,10 @@ impl AppController {
             Ok(config) => config.clone(),
             Err(_) => {
                 eprintln!("Nocky browser navigation skipped: config is currently borrowed");
+                perf::log_event(
+                    "browser.navigate.skipped",
+                    &[("reason", "config_borrow".to_string())],
+                );
                 return;
             }
         };
@@ -143,6 +180,14 @@ impl AppController {
         if youtube_only {
             effective_config.playlists.clear();
         }
+        let query_active = !query.trim().is_empty();
+        let track_count = effective_tracks.len();
+        let youtube_section_count = youtube_home.sections.len();
+        let youtube_native_section_count = youtube_home
+            .native_v3_source
+            .as_ref()
+            .map(|source| source.sections.len())
+            .unwrap_or(0);
         self.browser.navigate(
             route.clone(),
             effective_tracks,
@@ -163,9 +208,23 @@ impl AppController {
         drop(state);
         self.update_sidebar_active(&route);
         self.apply_footer_mode();
-        if previous_route != route {
+        let route_changed = previous_route != route;
+        if route_changed {
             self.browser.reset_queue_scroll_position();
         }
+        timer.finish_with(&[
+            ("from", previous_route_label),
+            ("to", target_route_label),
+            ("changed", route_changed.to_string()),
+            ("query", query_active.to_string()),
+            ("tracks", track_count.to_string()),
+            ("youtube_sections", youtube_section_count.to_string()),
+            (
+                "youtube_native_sections",
+                youtube_native_section_count.to_string(),
+            ),
+            ("youtube_loading", self.youtube_home_loading.get().to_string()),
+        ]);
     }
 
     pub(crate) fn update_sidebar_active(&self, route: &BrowserRoute) {
