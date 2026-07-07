@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     io,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4, UdpSocket},
+    sync::{Mutex, OnceLock},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -12,11 +13,21 @@ use super::{
 };
 
 const DISCOVERY_BUFFER_BYTES: usize = 64 * 1024;
+const SHARED_DISCOVERY_DEVICE_STALE_AFTER: Duration = Duration::from_secs(300);
+
+static SHARED_DISCOVERY_DEVICES: OnceLock<Mutex<HashMap<String, SharedDiscoveryDevice>>> =
+    OnceLock::new();
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NockyConnectDiscoveredDevice {
     pub descriptor: NockyConnectDeviceDescriptor,
     pub address: SocketAddr,
+}
+
+#[derive(Clone, Debug)]
+struct SharedDiscoveryDevice {
+    device: NockyConnectDiscoveredDevice,
+    last_seen: Instant,
 }
 
 pub fn scan_once(
@@ -136,7 +147,9 @@ fn collect_discovery_replies(
                         ),
                     },
                     Ok(None) => debug_discovery(mode, "no announce response needed for packet"),
-                    Err(error) => debug_discovery(mode, format!("response helper rejected packet: {error}")),
+                    Err(error) => {
+                        debug_discovery(mode, format!("response helper rejected packet: {error}"))
+                    }
                 }
 
                 let envelope = match decode_discovery_envelope(payload) {
@@ -170,13 +183,12 @@ fn collect_discovery_replies(
                 }
 
                 let device_id = envelope.descriptor.device_id.clone();
-                devices.insert(
-                    device_id.clone(),
-                    NockyConnectDiscoveredDevice {
-                        descriptor: envelope.descriptor,
-                        address,
-                    },
-                );
+                let device = NockyConnectDiscoveredDevice {
+                    descriptor: envelope.descriptor,
+                    address,
+                };
+                record_shared_discovered_device(device_id.clone(), device.clone());
+                devices.insert(device_id.clone(), device);
                 debug_discovery(
                     mode,
                     format!("device recorded; device_id={device_id}; total={}", devices.len()),
@@ -194,8 +206,43 @@ fn collect_discovery_replies(
         }
     }
 
+    merge_shared_discovered_devices(&mut devices);
     debug_discovery(mode, format!("collect loop finished; found={}", devices.len()));
     Ok(devices.into_values().collect())
+}
+
+fn shared_discovery_devices() -> &'static Mutex<HashMap<String, SharedDiscoveryDevice>> {
+    SHARED_DISCOVERY_DEVICES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn record_shared_discovered_device(device_id: String, device: NockyConnectDiscoveredDevice) {
+    if let Ok(mut shared) = shared_discovery_devices().lock() {
+        shared.insert(
+            device_id,
+            SharedDiscoveryDevice {
+                device,
+                last_seen: Instant::now(),
+            },
+        );
+    }
+}
+
+fn merge_shared_discovered_devices(devices: &mut HashMap<String, NockyConnectDiscoveredDevice>) {
+    let now = Instant::now();
+    let Ok(mut shared) = shared_discovery_devices().lock() else {
+        return;
+    };
+
+    shared.retain(|_, entry| match now.checked_duration_since(entry.last_seen) {
+        Some(age) => age <= SHARED_DISCOVERY_DEVICE_STALE_AFTER,
+        None => true,
+    });
+
+    for (device_id, entry) in shared.iter() {
+        devices
+            .entry(device_id.clone())
+            .or_insert_with(|| entry.device.clone());
+    }
 }
 
 fn next_discovery_message_id(prefix: &str) -> String {
