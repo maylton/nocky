@@ -11,13 +11,13 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use super::handoff_http::NOCKY_CONNECT_SNAPSHOT_PATH;
 use super::{
     NockyConnectHandoffAccept, NockyConnectHandoffEnvelope, NockyConnectHandoffKind,
     NockyConnectHandoffOffer, NockyConnectHandoffPayload, NockyConnectHandoffResult,
     NockyConnectHandoffResultStatus, HANDOFF_MESSAGE_SCHEMA, NOCKY_CONNECT_PROTOCOL_VERSION,
     PLAYBACK_SESSION_SNAPSHOT_SCHEMA,
 };
-use super::handoff_http::NOCKY_CONNECT_SNAPSHOT_PATH;
 
 pub const NOCKY_CONNECT_DESKTOP_HANDOFF_PORT: u16 = 35_187;
 pub const NOCKY_CONNECT_HANDOFF_PATH: &str = "/nocky-connect/handoff";
@@ -315,8 +315,8 @@ fn unix_millis() -> u64 {
 mod tests {
     use super::*;
     use crate::connect::{
-        NockyConnectRestorePolicy, NockyConnectSnapshotSummary, NockyConnectSource,
-        NockyPlaybackState, PlaybackInfo, PlaybackSessionSnapshot, PortableQueue,
+        NockyConnectRestorePolicy, NockyConnectSnapshotSummary, NockyConnectSource, PlaybackInfo,
+        PlaybackSessionSnapshot, PortableQueue,
     };
 
     #[test]
