@@ -14,6 +14,10 @@ const MATERIAL_EXPRESSIVE_MODULES: &[(&str, &str)] = &[
         include_str!("../assets/themes/material-expressive/010-footer.css"),
     ),
     (
+        "011-nocky-connect.css",
+        include_str!("../assets/themes/material-expressive/011-nocky-connect.css"),
+    ),
+    (
         "020-navigation.css",
         include_str!("../assets/themes/material-expressive/020-navigation.css"),
     ),
@@ -104,6 +108,7 @@ mod tests {
             "@define-color m3_error",
             "@define-color m3_outline_variant",
             ".expressive-footer",
+            ".footer-connect-button",
             ".expressive-player-card",
             ".header-view-switcher",
             ".queue2-page",
