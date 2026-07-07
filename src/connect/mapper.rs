@@ -1,4 +1,11 @@
-use std::{fs, path::Path, time::UNIX_EPOCH};
+use std::{
+    collections::hash_map::DefaultHasher,
+    fs,
+    hash::{Hash, Hasher},
+    io::Write,
+    path::{Path, PathBuf},
+    time::UNIX_EPOCH,
+};
 
 use crate::playback::queue::{PlaybackQueue, QueueMedia, QueueSource, QueueSourceKind};
 
@@ -6,6 +13,9 @@ use super::protocol::{
     LocalTrackIdentity, NockyConnectSource, NockyPlaybackState, NockyRepeatMode, PlaybackInfo,
     PlaybackSessionSnapshot, PortableAlbum, PortableArtist, PortableQueue, PortableQueueItem,
 };
+
+const REMOTE_ARTWORK_DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(4);
+const REMOTE_ARTWORK_MAX_BYTES: u64 = 2 * 1024 * 1024;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DesktopPlaybackState {
@@ -186,7 +196,7 @@ fn queue_media_from_portable_item(item: &PortableQueueItem) -> QueueMedia {
         .unwrap_or("Unknown album")
         .to_string();
     let duration_seconds = item.duration_ms.unwrap_or(0) / 1_000;
-    let cover_path = portable_cover_path(item.thumbnail_url.as_deref());
+    let cover_path = restored_cover_path(item.thumbnail_url.as_deref());
 
     match item.source {
         NockyConnectSource::Local => QueueMedia::local(
@@ -241,12 +251,67 @@ fn portable_thumbnail_url(cover_path: Option<&Path>, youtube_video_id: Option<&s
     youtube_video_id.and_then(youtube_thumbnail_url)
 }
 
-fn portable_cover_path(thumbnail_url: Option<&str>) -> Option<std::path::PathBuf> {
-    thumbnail_url
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .filter(|value| !is_portable_http_url(value))
-        .map(std::path::PathBuf::from)
+fn restored_cover_path(thumbnail_url: Option<&str>) -> Option<PathBuf> {
+    let thumbnail_url = thumbnail_url?.trim();
+    if thumbnail_url.is_empty() {
+        return None;
+    }
+    if is_portable_http_url(thumbnail_url) {
+        return cache_remote_artwork(thumbnail_url).ok();
+    }
+    Some(PathBuf::from(thumbnail_url))
+}
+
+fn cache_remote_artwork(url: &str) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
+    let cache_dir = nocky_connect_artwork_cache_dir();
+    fs::create_dir_all(&cache_dir)?;
+
+    let path = cache_dir.join(format!("{}.jpg", stable_hash(url)));
+    if path.exists() {
+        return Ok(path);
+    }
+
+    let response = reqwest::blocking::Client::builder()
+        .timeout(REMOTE_ARTWORK_DOWNLOAD_TIMEOUT)
+        .build()?
+        .get(url)
+        .send()?
+        .error_for_status()?;
+
+    if let Some(content_length) = response.content_length() {
+        if content_length > REMOTE_ARTWORK_MAX_BYTES {
+            return Err("remote artwork too large".into());
+        }
+    }
+
+    let bytes = response.bytes()?;
+    if bytes.len() as u64 > REMOTE_ARTWORK_MAX_BYTES {
+        return Err("remote artwork too large".into());
+    }
+
+    let temporary = path.with_extension("tmp");
+    {
+        let mut file = fs::File::create(&temporary)?;
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+    }
+    fs::rename(&temporary, &path)?;
+    Ok(path)
+}
+
+fn nocky_connect_artwork_cache_dir() -> PathBuf {
+    std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
+        .unwrap_or_else(|| std::env::temp_dir())
+        .join("nocky")
+        .join("connect-artwork")
+}
+
+fn stable_hash(value: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    value.hash(&mut hasher);
+    hasher.finish()
 }
 
 fn is_portable_http_url(value: &str) -> bool {
@@ -357,6 +422,23 @@ mod tests {
     }
 
     #[test]
+    fn keeps_non_http_cover_paths_as_local_paths() {
+        let path = restored_cover_path(Some("/tmp/nocky-cover.jpg"));
+
+        assert_eq!(path, Some(PathBuf::from("/tmp/nocky-cover.jpg")));
+    }
+
+    #[test]
+    fn uses_stable_cache_path_for_remote_artwork() {
+        let path = nocky_connect_artwork_cache_dir().join(format!(
+            "{}.jpg",
+            stable_hash("https://i.ytimg.com/vi/video-1/hqdefault.jpg")
+        ));
+
+        assert!(path.ends_with("connect-artwork/10794139468175564347.jpg"));
+    }
+
+    #[test]
     fn restores_snapshot_as_paused_queue() {
         let snapshot = PlaybackSessionSnapshot::new(
             "restore-session",
@@ -396,7 +478,7 @@ mod tests {
                         title: "Album".to_string(),
                     }),
                     duration_ms: Some(180_000),
-                    thumbnail_url: Some("https://example.com/cover.jpg".to_string()),
+                    thumbnail_url: Some("/tmp/local-cover.jpg".to_string()),
                     explicit: false,
                     is_video: false,
                     is_episode: false,
@@ -413,6 +495,9 @@ mod tests {
         assert_eq!(restored.state.position_ms, 90_000);
         assert_eq!(restored.state.repeat_mode, NockyRepeatMode::One);
         assert!(restored.state.shuffle_enabled);
-        assert!(restored.queue.entries()[0].media.cover_path.is_none());
+        assert_eq!(
+            restored.queue.entries()[0].media.cover_path.as_deref(),
+            Some(Path::new("/tmp/local-cover.jpg"))
+        );
     }
 }
