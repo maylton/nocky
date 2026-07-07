@@ -12,8 +12,9 @@ use std::{
 };
 
 use super::{
-    NockyConnectHandoffEnvelope, NockyConnectHandoffKind, NockyConnectHandoffTarget,
-    NockyConnectHandoffTransport, HANDOFF_MESSAGE_SCHEMA, NOCKY_CONNECT_PROTOCOL_VERSION,
+    NockyConnectHandoffEnvelope, NockyConnectHandoffKind, NockyConnectHandoffPayload,
+    NockyConnectHandoffResultStatus, NockyConnectHandoffTarget, NockyConnectHandoffTransport,
+    HANDOFF_MESSAGE_SCHEMA, NOCKY_CONNECT_PROTOCOL_VERSION,
 };
 
 pub const NOCKY_CONNECT_SNAPSHOT_PATH: &str = "/nocky-connect/snapshot";
@@ -30,6 +31,8 @@ pub enum NockyConnectHandoffHttpError {
     UnsupportedSchema(String),
     UnsupportedSchemaVersion(u32),
     UnsupportedKind(NockyConnectHandoffKind),
+    InvalidResultPayload,
+    ReceiverRestoreFailed(String),
 }
 
 impl fmt::Display for NockyConnectHandoffHttpError {
@@ -48,6 +51,10 @@ impl fmt::Display for NockyConnectHandoffHttpError {
             }
             Self::UnsupportedKind(kind) => {
                 write!(formatter, "unsupported handoff response kind {kind:?}")
+            }
+            Self::InvalidResultPayload => write!(formatter, "invalid handoff result payload"),
+            Self::ReceiverRestoreFailed(error) => {
+                write!(formatter, "receiver could not restore snapshot: {error}")
             }
         }
     }
@@ -75,7 +82,9 @@ pub fn send_handoff_snapshot_http(
     timeout: Duration,
 ) -> Result<NockyConnectHandoffEnvelope, NockyConnectHandoffHttpError> {
     let response = send_json_http(target, NOCKY_CONNECT_SNAPSHOT_PATH, snapshot_json, timeout)?;
-    decode_handoff_response(&response, &[NockyConnectHandoffKind::Result])
+    let envelope = decode_handoff_response(&response, &[NockyConnectHandoffKind::Result])?;
+    require_restored_paused_result(&envelope)?;
+    Ok(envelope)
 }
 
 fn send_json_http(
@@ -200,7 +209,9 @@ pub(crate) fn decode_handoff_offer_response(
 pub(crate) fn decode_handoff_snapshot_response(
     response: &[u8],
 ) -> Result<NockyConnectHandoffEnvelope, NockyConnectHandoffHttpError> {
-    decode_handoff_response(response, &[NockyConnectHandoffKind::Result])
+    let envelope = decode_handoff_response(response, &[NockyConnectHandoffKind::Result])?;
+    require_restored_paused_result(&envelope)?;
+    Ok(envelope)
 }
 
 fn decode_handoff_response(
@@ -244,6 +255,23 @@ fn require_supported_handoff_response(
     } else {
         Err(NockyConnectHandoffHttpError::UnsupportedKind(envelope.kind))
     }
+}
+
+fn require_restored_paused_result(
+    envelope: &NockyConnectHandoffEnvelope,
+) -> Result<(), NockyConnectHandoffHttpError> {
+    let NockyConnectHandoffPayload::Result(result) = &envelope.payload else {
+        return Err(NockyConnectHandoffHttpError::InvalidResultPayload);
+    };
+    if result.status == NockyConnectHandoffResultStatus::RestoredPaused {
+        return Ok(());
+    }
+    Err(NockyConnectHandoffHttpError::ReceiverRestoreFailed(
+        result
+            .error_message
+            .clone()
+            .unwrap_or_else(|| format!("receiver returned {:?}", result.status)),
+    ))
 }
 
 fn normalized_path(path: &str) -> String {
@@ -335,6 +363,30 @@ mod tests {
         let decoded = decode_handoff_snapshot_response(response.as_bytes()).expect("decode result");
 
         assert_eq!(decoded, result);
+    }
+
+    #[test]
+    fn rejects_failed_result_response_for_snapshot_transfer() {
+        let result = NockyConnectHandoffEnvelope::result(
+            "result-message-1",
+            1_789_002,
+            crate::connect::NockyConnectHandoffResult {
+                offer_id: "offer-1".to_string(),
+                status: crate::connect::NockyConnectHandoffResultStatus::Failed,
+                error_message: Some("queue import failed".to_string()),
+            },
+        );
+        let body = serde_json::to_string(&result).expect("result json");
+        let response = format!("HTTP/1.1 202 Accepted\r\n\r\n{}", body);
+
+        let error = decode_handoff_snapshot_response(response.as_bytes()).expect_err("result should fail");
+
+        assert_eq!(
+            error,
+            NockyConnectHandoffHttpError::ReceiverRestoreFailed(
+                "queue import failed".to_string(),
+            ),
+        );
     }
 
     #[test]
