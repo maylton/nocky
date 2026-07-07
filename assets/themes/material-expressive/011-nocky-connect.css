@@ -17,6 +17,7 @@ button.footer-connect-button image {
 window.theme-material-expressive .footer-mode-compact button.footer-connect-button.connect-device-available,
 window.theme-noctalia .footer-mode-compact button.footer-connect-button.connect-device-available {
   border-radius: 22px;
+  margin-left: 1px;
 }
 
 window.theme-material-expressive button.footer-connect-button.connect-device-available {
