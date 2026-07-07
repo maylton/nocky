@@ -10,7 +10,7 @@ pub(crate) const FOOTER_CONNECT_WIDTH_DELTA: i32 = 48;
 
 pub(crate) fn build_footer_connect_button() -> gtk::Button {
     let button = gtk::Button::builder()
-        .icon_name("network-workgroup-symbolic")
+        .icon_name("smartphone-symbolic")
         .tooltip_text("Nocky Connect")
         .action_name("app.nocky-connect")
         .build();
