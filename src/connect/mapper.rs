@@ -140,19 +140,10 @@ fn portable_item_from_media(media: &QueueMedia) -> PortableQueueItem {
             playlist_id: None,
             browse_id: None,
             title: media.title.clone(),
-            artists: vec![PortableArtist {
-                id: None,
-                name: media.artist.clone(),
-            }],
-            album: Some(PortableAlbum {
-                id: None,
-                title: media.album.clone(),
-            }),
+            artists: portable_artists(&media.artist),
+            album: portable_album(&media.album),
             duration_ms: duration_ms(media.duration_seconds),
-            thumbnail_url: media
-                .cover_path
-                .as_ref()
-                .map(|path| path.to_string_lossy().to_string()),
+            thumbnail_url: portable_thumbnail_url(media.cover_path.as_deref(), Some(video_id)),
             explicit: false,
             is_video: false,
             is_episode: false,
@@ -167,19 +158,10 @@ fn portable_item_from_media(media: &QueueMedia) -> PortableQueueItem {
             playlist_id: None,
             browse_id: None,
             title: media.title.clone(),
-            artists: vec![PortableArtist {
-                id: None,
-                name: media.artist.clone(),
-            }],
-            album: Some(PortableAlbum {
-                id: None,
-                title: media.album.clone(),
-            }),
+            artists: portable_artists(&media.artist),
+            album: portable_album(&media.album),
             duration_ms: duration_ms(media.duration_seconds),
-            thumbnail_url: media
-                .cover_path
-                .as_ref()
-                .map(|path| path.to_string_lossy().to_string()),
+            thumbnail_url: portable_thumbnail_url(media.cover_path.as_deref(), None),
             explicit: false,
             is_video: false,
             is_episode: false,
@@ -192,15 +174,19 @@ fn queue_media_from_portable_item(item: &PortableQueueItem) -> QueueMedia {
     let artist = item
         .artists
         .first()
-        .map(|artist| artist.name.clone())
-        .unwrap_or_else(|| "Unknown artist".to_string());
+        .map(|artist| artist.name.trim())
+        .filter(|name| !name.is_empty())
+        .unwrap_or("Unknown artist")
+        .to_string();
     let album = item
         .album
         .as_ref()
-        .map(|album| album.title.clone())
-        .unwrap_or_else(|| "Unknown album".to_string());
+        .map(|album| album.title.trim())
+        .filter(|title| !title.is_empty())
+        .unwrap_or("Unknown album")
+        .to_string();
     let duration_seconds = item.duration_ms.unwrap_or(0) / 1_000;
-    let cover_path = item.thumbnail_url.as_ref().map(std::path::PathBuf::from);
+    let cover_path = portable_cover_path(item.thumbnail_url.as_deref());
 
     match item.source {
         NockyConnectSource::Local => QueueMedia::local(
@@ -220,6 +206,55 @@ fn queue_media_from_portable_item(item: &PortableQueueItem) -> QueueMedia {
             cover_path,
         ),
     }
+}
+
+fn portable_artists(artist: &str) -> Vec<PortableArtist> {
+    let artist = artist.trim();
+    if artist.is_empty() {
+        vec![PortableArtist {
+            id: None,
+            name: "Unknown artist".to_string(),
+        }]
+    } else {
+        vec![PortableArtist {
+            id: None,
+            name: artist.to_string(),
+        }]
+    }
+}
+
+fn portable_album(album: &str) -> Option<PortableAlbum> {
+    let album = album.trim();
+    (!album.is_empty()).then(|| PortableAlbum {
+        id: None,
+        title: album.to_string(),
+    })
+}
+
+fn portable_thumbnail_url(cover_path: Option<&Path>, youtube_video_id: Option<&str>) -> Option<String> {
+    if let Some(url) = cover_path
+        .map(|path| path.to_string_lossy().trim().to_string())
+        .filter(|value| is_portable_http_url(value))
+    {
+        return Some(url);
+    }
+    youtube_video_id.and_then(youtube_thumbnail_url)
+}
+
+fn portable_cover_path(thumbnail_url: Option<&str>) -> Option<std::path::PathBuf> {
+    thumbnail_url
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .filter(|value| !is_portable_http_url(value))
+        .map(std::path::PathBuf::from)
+}
+
+fn is_portable_http_url(value: &str) -> bool {
+    value.starts_with("https://") || value.starts_with("http://")
+}
+
+fn youtube_thumbnail_url(video_id: &str) -> Option<String> {
+    (!video_id.trim().is_empty()).then(|| format!("https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"))
 }
 
 fn connect_source_from_queue_source_kind(kind: QueueSourceKind) -> NockyConnectSource {
@@ -286,10 +321,39 @@ mod tests {
         assert_eq!(snapshot.queue.items.len(), 2);
         assert_eq!(snapshot.queue.items[1].queue_item_id, "youtube:video:video-2");
         assert_eq!(snapshot.queue.items[1].playable_id, "video-2");
+        assert_eq!(snapshot.queue.items[1].thumbnail_url.as_deref(), Some("https://i.ytimg.com/vi/video-2/hqdefault.jpg"));
         assert_eq!(snapshot.playback.position_ms, 42_000);
         assert_eq!(snapshot.playback.duration_ms, Some(181_000));
         assert_eq!(snapshot.queue.repeat_mode, NockyRepeatMode::All);
         assert!(snapshot.queue.shuffle_enabled);
+    }
+
+    #[test]
+    fn does_not_export_local_cover_paths_as_portable_urls() {
+        let mut queue = PlaybackQueue::new();
+        queue.replace(
+            vec![QueueMedia::youtube(
+                "video-1",
+                "First",
+                "Artist One",
+                "Album",
+                180,
+                Some(std::path::PathBuf::from("/tmp/nocky-cover.jpg")),
+            )],
+            Some(0),
+        );
+
+        let snapshot = export_desktop_queue_snapshot(
+            &queue,
+            None,
+            DesktopPlaybackState::default(),
+            "desktop-session",
+            1,
+            "desktop-device",
+            1_700_000_000_000,
+        );
+
+        assert_eq!(snapshot.queue.items[0].thumbnail_url.as_deref(), Some("https://i.ytimg.com/vi/video-1/hqdefault.jpg"));
     }
 
     #[test]
@@ -332,7 +396,7 @@ mod tests {
                         title: "Album".to_string(),
                     }),
                     duration_ms: Some(180_000),
-                    thumbnail_url: None,
+                    thumbnail_url: Some("https://example.com/cover.jpg".to_string()),
                     explicit: false,
                     is_video: false,
                     is_episode: false,
@@ -349,5 +413,6 @@ mod tests {
         assert_eq!(restored.state.position_ms, 90_000);
         assert_eq!(restored.state.repeat_mode, NockyRepeatMode::One);
         assert!(restored.state.shuffle_enabled);
+        assert!(restored.queue.entries()[0].media.cover_path.is_none());
     }
 }
