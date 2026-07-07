@@ -151,6 +151,17 @@ impl AppController {
         let previous_route = self.browser.route();
         let previous_route_label = format!("{previous_route:?}");
         let target_route_label = format!("{route:?}");
+        let query_active_at_entry = !self.search_query.borrow().trim().is_empty();
+        if previous_route == route && !query_active_at_entry {
+            timer.finish_with(&[
+                ("from", previous_route_label),
+                ("to", target_route_label),
+                ("changed", "false".to_string()),
+                ("query", "false".to_string()),
+                ("skipped", "same_route".to_string()),
+            ]);
+            return;
+        }
         if matches!(&route, BrowserRoute::Artists) {
             self.prefetch_home_artist_profiles(true);
         }
