@@ -1,0 +1,71 @@
+popover.material-context-menu {
+  min-width: 224px;
+}
+
+popover.material-context-menu > contents {
+  border-radius: 24px;
+  background-color: alpha(@m3_surface_container_high, 0.98);
+  border: 1px solid alpha(@m3_outline_variant, 0.40);
+  box-shadow: 0 14px 38px alpha(black, 0.24);
+}
+
+.material-context-menu-content {
+  border-radius: 22px;
+}
+
+.material-context-menu-button {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.material-context-menu-button:hover,
+.material-context-menu-button:focus-visible,
+.material-context-menu-button:checked {
+  background-color: alpha(@m3_on_surface, 0.08);
+}
+
+.material-context-menu-button-icon {
+  color: alpha(@m3_on_surface, 0.78);
+}
+
+button.material-context-menu-action {
+  min-height: 40px;
+  padding: 0;
+  border-radius: 16px;
+  background-image: none;
+  color: @m3_on_surface;
+}
+
+button.material-context-menu-action:hover,
+button.material-context-menu-action:focus-visible {
+  background-color: alpha(@m3_on_surface, 0.08);
+}
+
+button.material-context-menu-action:disabled {
+  opacity: 0.42;
+}
+
+.material-context-menu-action-icon {
+  color: alpha(@m3_on_surface, 0.72);
+}
+
+.material-context-menu-action-label {
+  font-weight: 500;
+}
+
+button.material-context-menu-action.destructive-action,
+button.material-context-menu-action.destructive-action .material-context-menu-action-icon,
+button.material-context-menu-action.destructive-action .material-context-menu-action-label {
+  color: @m3_error;
+}
+
+button.material-context-menu-action.destructive-action:hover,
+button.material-context-menu-action.destructive-action:focus-visible {
+  background-color: alpha(@m3_error, 0.10);
+}
+
+.material-context-menu-separator {
+  background-color: alpha(@m3_outline_variant, 0.54);
+}
