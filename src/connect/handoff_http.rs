@@ -166,7 +166,8 @@ fn content_length(header_text: &str) -> Option<usize> {
         .and_then(|(_, value)| value.trim().parse::<usize>().ok())
 }
 
-pub(crate) fn build_handoff_offer_request(
+#[cfg(test)]
+fn build_handoff_offer_request(
     target: &NockyConnectHandoffTarget,
     envelope: &NockyConnectHandoffEnvelope,
 ) -> Result<Vec<u8>, NockyConnectHandoffHttpError> {
@@ -175,7 +176,8 @@ pub(crate) fn build_handoff_offer_request(
     Ok(build_json_post_request(target, &target.path, &body))
 }
 
-pub(crate) fn build_handoff_snapshot_request(
+#[cfg(test)]
+fn build_handoff_snapshot_request(
     target: &NockyConnectHandoffTarget,
     snapshot_json: &str,
 ) -> Vec<u8> {
@@ -197,7 +199,8 @@ fn build_json_post_request(target: &NockyConnectHandoffTarget, path: &str, body:
     request
 }
 
-pub(crate) fn decode_handoff_offer_response(
+#[cfg(test)]
+fn decode_handoff_offer_response(
     response: &[u8],
 ) -> Result<NockyConnectHandoffEnvelope, NockyConnectHandoffHttpError> {
     decode_handoff_response(
@@ -206,7 +209,8 @@ pub(crate) fn decode_handoff_offer_response(
     )
 }
 
-pub(crate) fn decode_handoff_snapshot_response(
+#[cfg(test)]
+fn decode_handoff_snapshot_response(
     response: &[u8],
 ) -> Result<NockyConnectHandoffEnvelope, NockyConnectHandoffHttpError> {
     let envelope = decode_handoff_response(response, &[NockyConnectHandoffKind::Result])?;
@@ -379,7 +383,8 @@ mod tests {
         let body = serde_json::to_string(&result).expect("result json");
         let response = format!("HTTP/1.1 202 Accepted\r\n\r\n{}", body);
 
-        let error = decode_handoff_snapshot_response(response.as_bytes()).expect_err("result should fail");
+        let error =
+            decode_handoff_snapshot_response(response.as_bytes()).expect_err("result should fail");
 
         assert_eq!(
             error,
