@@ -432,6 +432,10 @@ impl AppController {
         self.queue_dragged_entry.set(None);
         self.active_queue_source.set(source);
         self.playback_queue_v2.replace(restored.queue);
+        self.playback_queue_v2
+            .borrow_mut()
+            .select(current_id)
+            .map_err(|error| error.to_string())?;
         self.queue_last_saved_snapshot.replace(snapshot);
         self.queue_page_last_snapshot.replace(None);
         self.queue_page_last_source.set(None);
@@ -449,9 +453,6 @@ impl AppController {
         self.startup_restore_autoplay.set(Some(false));
         self.playback_session_restore_attempts.set(0);
 
-        self.play_queue_entry(current_id, false);
-        let _ = self.player.pause();
-        self.update_play_icons(false);
         self.persist_queue_now();
         self.persist_playback_session_now();
         self.publish_mpris_capabilities();
