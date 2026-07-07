@@ -19,7 +19,6 @@ pub(crate) fn build_footer_connect_button() -> gtk::Button {
     button.add_css_class("footer-utility-action");
     button.add_css_class("footer-connect-button");
     button.set_valign(gtk::Align::Center);
-    button.set_margin_start(4);
     button
 }
 
