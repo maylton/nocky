@@ -15,10 +15,11 @@ use std::{
 };
 
 const DEVICE_AVAILABLE_NOW_WINDOW: Duration = Duration::from_secs(30);
-const CONNECT_ROW_HEIGHT: i32 = 58;
-const CONNECT_ROW_HORIZONTAL_PADDING: i32 = 12;
-const CONNECT_ROW_VERTICAL_PADDING: i32 = 8;
-const CONNECT_ROW_OUTER_GUTTER: i32 = 4;
+const CONNECT_ROW_HEIGHT: i32 = 64;
+const CONNECT_ROW_HORIZONTAL_PADDING: i32 = 14;
+const CONNECT_ROW_VERTICAL_PADDING: i32 = 9;
+const CONNECT_ROW_OUTER_GUTTER: i32 = 5;
+const CONNECT_DEVICE_LIST_INSET: i32 = 8;
 
 pub(crate) type NockyConnectDeviceSelected =
     Rc<dyn Fn(NockyConnectDeviceDescriptor, SocketAddr) + 'static>;
@@ -38,7 +39,7 @@ pub(crate) fn build_nocky_connect_popover(
     popover.set_position(gtk::PositionType::Top);
     popover.set_has_arrow(false);
     popover.set_autohide(true);
-    popover.set_size_request(360, 320);
+    popover.set_size_request(380, 376);
     popover.add_css_class("queue2-popover");
 
     let root = gtk::Box::new(gtk::Orientation::Vertical, 10);
@@ -69,17 +70,23 @@ pub(crate) fn build_nocky_connect_popover(
 
     root.append(&header);
 
-    let device_list = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    let device_list = gtk::Box::new(gtk::Orientation::Vertical, 6);
     device_list.add_css_class("queue2-list");
+    device_list.add_css_class("nocky-connect-device-list");
+    device_list.set_margin_top(CONNECT_DEVICE_LIST_INSET);
+    device_list.set_margin_bottom(CONNECT_DEVICE_LIST_INSET);
+    device_list.set_margin_start(CONNECT_DEVICE_LIST_INSET);
+    device_list.set_margin_end(CONNECT_DEVICE_LIST_INSET);
     device_list.append(&build_this_device_row());
 
     let scroll = gtk::ScrolledWindow::new();
     scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
-    scroll.set_min_content_height(132);
-    scroll.set_max_content_height(188);
+    scroll.set_min_content_height(166);
+    scroll.set_max_content_height(230);
     scroll.set_hexpand(true);
     scroll.set_child(Some(&device_list));
     scroll.add_css_class("queue2-page-scroll");
+    scroll.add_css_class("nocky-connect-device-scroll");
     root.append(&scroll);
 
     let status = gtk::Label::new(Some("Same Wi-Fi network"));
