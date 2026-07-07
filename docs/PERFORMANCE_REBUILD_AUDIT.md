@@ -117,6 +117,18 @@ grep '^\[perf\] event=browser' /tmp/nocky-perf-phase2.log
 grep '^\[perf\] event=home.v3' /tmp/nocky-perf-phase2.log
 ```
 
+Summarize timings and counts:
+
+```bash
+scripts/perf-log-summary.py /tmp/nocky-perf-phase2.log
+```
+
+The summary helper accepts a file path or stdin:
+
+```bash
+NOCKY_PERF_TRACE=1 cargo run 2>&1 | scripts/perf-log-summary.py
+```
+
 ## How to interpret
 
 Repeated `browser.refresh` lines with the same route and unchanged section/item counts suggest redundant refresh work.
@@ -126,6 +138,8 @@ Repeated `browser.navigate` lines where `changed=false` suggest route reapplicat
 Repeated `home.v3.feed_shell cached=false` lines for identical Home V3 content suggest the shell is being rebuilt instead of reused.
 
 `home.v3.feed_shell cached=true` confirms the existing Home V3 shell reuse path is working.
+
+The summary helper is useful for quick comparisons: event counts show frequency, while `min_ms`, `avg_ms` and `max_ms` show timing spread.
 
 ## Phase 2 acceptance criteria
 
