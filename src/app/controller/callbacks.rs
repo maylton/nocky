@@ -4,11 +4,14 @@
 mod playlist_cache_first;
 
 use super::AppController;
+use crate::app::perf::PerfTimer;
 use gtk::{glib, prelude::*};
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 impl AppController {
     pub(crate) fn setup_callbacks(self: &Rc<Self>) {
+        let _timer = PerfTimer::start("controller.setup_callbacks");
+
         self.mpris.send(crate::playback::mpris::MprisUpdate::Volume(
             self.volume.value(),
         ));

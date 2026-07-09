@@ -1,4 +1,5 @@
 use crate::{
+    app::perf::PerfTimer,
     artist_index::LocalArtistIndex,
     config::{AppConfig, AppLanguage, StartupSource},
     listening_history::{HistoryActivity, ListeningHistory, ListeningSource, ListeningStats},
@@ -142,6 +143,7 @@ pub enum BrowserEvent {
     OpenYouTubeCollection(YouTubeItem),
     LoadMoreAlbums,
     LoadMoreArtists,
+    LoadMorePlaylists,
     RefreshSearch,
     Navigate(BrowserRoute),
     CreatePlaylist(String),
@@ -1043,6 +1045,7 @@ pub struct LibraryBrowser {
     queue_render_generation: Rc<Cell<u64>>,
     album_display_limit: Cell<usize>,
     artist_display_limit: Cell<usize>,
+    playlist_display_limit: Cell<usize>,
     playlist_names: Rc<RefCell<Vec<String>>>,
     playlist_row_refs: Rc<RefCell<Vec<Option<PlaylistRef>>>>,
     event_tx: Sender<BrowserEvent>,
@@ -2105,8 +2108,9 @@ impl LibraryBrowser {
             route: RefCell::new(BrowserRoute::All),
             visible_tracks,
             queue_render_generation,
-            album_display_limit: Cell::new(COLLECTION_INITIAL_BATCH),
+            album_display_limit: Cell::new(ALBUM_INITIAL_BATCH),
             artist_display_limit: Cell::new(COLLECTION_INITIAL_BATCH),
+            playlist_display_limit: Cell::new(COLLECTION_INITIAL_BATCH),
             playlist_names,
             playlist_row_refs,
             event_tx,
@@ -2339,12 +2343,17 @@ impl LibraryBrowser {
 
     pub fn show_more_albums(&self) {
         self.album_display_limit
-            .set(self.album_display_limit.get() + COLLECTION_BATCH_INCREMENT);
+            .set(self.album_display_limit.get() + ALBUM_BATCH_INCREMENT);
     }
 
     pub fn show_more_artists(&self) {
         self.artist_display_limit
             .set(self.artist_display_limit.get() + COLLECTION_BATCH_INCREMENT);
+    }
+
+    pub fn show_more_playlists(&self) {
+        self.playlist_display_limit
+            .set(self.playlist_display_limit.get() + COLLECTION_BATCH_INCREMENT);
     }
 
     pub fn artist_display_limit(&self) -> usize {
@@ -3451,6 +3460,7 @@ impl LibraryBrowser {
         playback: &BrowserPlaybackState,
         query: &str,
     ) {
+        let timer = PerfTimer::start("browser.rebuild_albums");
         clear_box(&self.albums_context_header);
         self.albums_context_header.set_visible(false);
         self.albums_default_header.set_visible(true);
@@ -3471,6 +3481,7 @@ impl LibraryBrowser {
                 .or_default()
                 .push(track);
         }
+        let local_album_count = local_groups.len();
         for (album, album_tracks) in local_groups {
             let artists = album_tracks
                 .iter()
@@ -3614,9 +3625,17 @@ impl LibraryBrowser {
                 ),
             );
         }
+        timer.finish_with(&[
+            ("query", (!query.is_empty()).to_string()),
+            ("rendered", position.to_string()),
+            ("hidden", hidden.to_string()),
+            ("local_albums", local_album_count.to_string()),
+            ("youtube_albums", youtube.albums.len().to_string()),
+        ]);
     }
 
     fn rebuild_artists(&self, tracks: &[Track], youtube: &YouTubeLibraryCache, query: &str) {
+        let timer = PerfTimer::start("browser.rebuild_artists");
         clear_grid(&self.artists_grid);
         let query = query.trim().to_lowercase();
         let limit = if query.is_empty() {
@@ -3634,6 +3653,7 @@ impl LibraryBrowser {
             .into_iter()
             .collect::<Vec<_>>();
         local_names.sort_by(|left, right| compare_text(left, right));
+        let local_artist_count = local_names.len();
 
         for artist in local_names {
             if !query.is_empty() && !artist.to_lowercase().contains(&query) {
@@ -3733,6 +3753,13 @@ impl LibraryBrowser {
                 }),
             );
         }
+        timer.finish_with(&[
+            ("query", (!query.is_empty()).to_string()),
+            ("rendered", position.to_string()),
+            ("hidden", hidden.to_string()),
+            ("local_artists", local_artist_count.to_string()),
+            ("youtube_artists", youtube.artists.len().to_string()),
+        ]);
     }
 
     fn rebuild_youtube_artist_context(
@@ -3874,6 +3901,7 @@ impl LibraryBrowser {
         playback: &BrowserPlaybackState,
         query: &str,
     ) {
+        let timer = PerfTimer::start("browser.rebuild_playlists");
         clear_list_box(&self.playlists_list);
         let query = query.trim().to_lowercase();
         let previous = self.playlist_dropdown.selected() as usize;
@@ -3882,23 +3910,38 @@ impl LibraryBrowser {
             self.playlist_model.remove(0);
         }
 
+        let limit = if query.is_empty() {
+            self.playlist_display_limit.get()
+        } else {
+            usize::MAX
+        };
+        let mut rendered_playlists = 0usize;
+        let mut hidden = 0usize;
         let mut all_names = Vec::new();
         let mut row_refs = Vec::new();
-        let local_matches = config
-            .playlists
-            .iter()
-            .filter(|playlist| query.is_empty() || playlist.name.to_lowercase().contains(&query))
-            .collect::<Vec<_>>();
-        if !local_matches.is_empty() {
-            self.playlists_list.append(&section_row("PLAYLISTS LOCAIS"));
-            row_refs.push(None);
-        }
+
+        let mut local_playlist_count = 0usize;
+        let mut local_section_added = false;
         for playlist in &config.playlists {
             self.playlist_model.append(&playlist.name);
             all_names.push(playlist.name.clone());
+
             if !query.is_empty() && !playlist.name.to_lowercase().contains(&query) {
                 continue;
             }
+
+            local_playlist_count += 1;
+            if rendered_playlists >= limit {
+                hidden += 1;
+                continue;
+            }
+
+            if !local_section_added {
+                self.playlists_list.append(&section_row("PLAYLISTS LOCAIS"));
+                row_refs.push(None);
+                local_section_added = true;
+            }
+
             self.playlists_list.append(&playlist_row(
                 None,
                 &playlist.name,
@@ -3910,6 +3953,7 @@ impl LibraryBrowser {
                 config.language,
             ));
             row_refs.push(Some(PlaylistRef::Local(playlist.name.clone())));
+            rendered_playlists += 1;
         }
 
         let online_matches = youtube
@@ -3929,12 +3973,22 @@ impl LibraryBrowser {
             .filter(|playlist| !is_mix_playlist(playlist))
             .collect::<Vec<_>>();
 
-        if !mixes.is_empty() {
-            self.playlists_list.append(&section_row("MIXES PARA VOCÊ"));
-            row_refs.push(None);
-        }
+        let mix_count = mixes.len();
+        let regular_playlist_count = regular_playlists.len();
 
+        let mut mix_section_added = false;
         for mix in mixes {
+            if rendered_playlists >= limit {
+                hidden += 1;
+                continue;
+            }
+
+            if !mix_section_added {
+                self.playlists_list.append(&section_row("MIXES PARA VOCÊ"));
+                row_refs.push(None);
+                mix_section_added = true;
+            }
+
             let tracks = youtube.playlist_tracks.get(&mix.browse_id);
             let track_count = tracks.map(Vec::len);
             let preferred_cover = mix.cached_cover().or_else(|| {
@@ -3950,14 +4004,22 @@ impl LibraryBrowser {
                 config.language,
             ));
             row_refs.push(Some(PlaylistRef::YouTube(Box::new(mix.clone()))));
+            rendered_playlists += 1;
         }
 
-        if !regular_playlists.is_empty() {
-            self.playlists_list.append(&section_row("YOUTUBE MUSIC"));
-            row_refs.push(None);
-        }
-
+        let mut regular_section_added = false;
         for playlist in regular_playlists {
+            if rendered_playlists >= limit {
+                hidden += 1;
+                continue;
+            }
+
+            if !regular_section_added {
+                self.playlists_list.append(&section_row("YOUTUBE MUSIC"));
+                row_refs.push(None);
+                regular_section_added = true;
+            }
+
             let track_count = youtube
                 .playlist_tracks
                 .get(&playlist.browse_id)
@@ -3977,6 +4039,21 @@ impl LibraryBrowser {
                 config.language,
             ));
             row_refs.push(Some(PlaylistRef::YouTube(Box::new(playlist.clone()))));
+            rendered_playlists += 1;
+        }
+
+        if hidden > 0 {
+            let button =
+                gtk::Button::with_label(&format!("Carregar mais playlists ({hidden} restantes)"));
+            button.set_hexpand(true);
+            button.add_css_class("playlist-load-more");
+            button.add_css_class("playlist-editor-action");
+            let tx = self.event_tx.clone();
+            button.connect_clicked(move |_| {
+                let _ = tx.send(BrowserEvent::LoadMorePlaylists);
+            });
+            self.playlists_list.append(&button);
+            row_refs.push(None);
         }
 
         if row_refs.is_empty() {
@@ -3988,6 +4065,7 @@ impl LibraryBrowser {
             row_refs.push(None);
         }
 
+        let row_count = row_refs.len();
         self.playlist_names.replace(all_names);
         self.playlist_row_refs.replace(row_refs);
 
@@ -3997,6 +4075,17 @@ impl LibraryBrowser {
                 .set_selected((previous.min(count as usize - 1)) as u32);
         }
         self.playlist_dropdown.set_sensitive(count > 0);
+
+        timer.finish_with(&[
+            ("query", (!query.is_empty()).to_string()),
+            ("rows", row_count.to_string()),
+            ("rendered", rendered_playlists.to_string()),
+            ("hidden", hidden.to_string()),
+            ("local_playlists", local_playlist_count.to_string()),
+            ("youtube_mixes", mix_count.to_string()),
+            ("youtube_playlists", regular_playlist_count.to_string()),
+            ("model_items", count.to_string()),
+        ]);
     }
 }
 
@@ -7040,6 +7129,8 @@ const COLLECTION_CARD_MAX_WIDTH: i32 = 220;
 const COLLECTION_CARD_MIN_HEIGHT: i32 = 210;
 const COLLECTION_ARTWORK_MIN_SIZE: i32 = 124;
 const COLLECTION_ARTWORK_MAX_SIZE: i32 = 216;
+const ALBUM_INITIAL_BATCH: usize = 36;
+const ALBUM_BATCH_INCREMENT: usize = 12;
 const COLLECTION_INITIAL_BATCH: usize = 48;
 const COLLECTION_BATCH_INCREMENT: usize = 48;
 
