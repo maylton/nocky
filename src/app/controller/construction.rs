@@ -486,7 +486,7 @@ impl AppController {
 
         shell.append(&player_bar);
 
-        let mpris = crate::playback::mpris::MprisBridge::start(config.volume);
+        let mpris = crate::playback::mpris::MprisBridge::start(config.volume, config.visual_theme);
         let youtube_bridge = YouTubeBridge::discover().ok().map(Arc::new);
 
         let seed = SystemTime::now()
