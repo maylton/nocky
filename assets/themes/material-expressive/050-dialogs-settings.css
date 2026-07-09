@@ -92,6 +92,13 @@ window.theme-material-expressive .player-lyrics-surface scrolledwindow {
   margin-right: 15px;
 }
 
+window.theme-material-expressive .lyrics-offset-button:hover,
+window.theme-material-expressive .lyrics-offset-reset:hover {
+  color: @m3_on_primary_container;
+  background-color: @m3_primary_container;
+  background-image: none;
+}
+
 /*
  * Settings is a separate window, not an in-window overlay. A transparent root
  * may be composited as black, so keep the dialog root opaque with the current

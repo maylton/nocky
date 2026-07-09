@@ -345,6 +345,44 @@ scale slider {
   padding-bottom: 12px;
 }
 
+.lyrics-offset-controls {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background-color: alpha(@window_fg_color, 0.05);
+  border: 1px solid alpha(@window_fg_color, 0.10);
+}
+
+.lyrics-offset-button,
+.lyrics-offset-reset {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+}
+
+.lyrics-offset-label {
+  min-width: 54px;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+}
+
+.lyric-seek-target {
+  border-radius: 18px;
+  padding: 8px 14px;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.lyric-seek-target:hover {
+  background-color: alpha(@window_fg_color, 0.07);
+}
+
+.lyric-seek-target:active {
+  transform: scale(0.985);
+}
+
 .lyric-line {
   min-height: 44px;
   padding: 7px 18px;
@@ -504,6 +542,15 @@ searchbar entry {
 
 .collection-artwork picture {
   border-radius: 12px;
+}
+
+.collection-card.artist-collection-card .collection-artwork {
+  border-radius: 999px;
+}
+
+.collection-card.artist-collection-card .collection-artwork picture,
+.collection-card.artist-collection-card .collection-artwork image {
+  border-radius: 999px;
 }
 
 .collection-card-title {
