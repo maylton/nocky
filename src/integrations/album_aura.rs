@@ -1,4 +1,7 @@
-use crate::playback::mpris::{MprisPlayback, MprisTrack, MprisUpdate};
+use crate::{
+    config::VisualTheme,
+    playback::mpris::{MprisPlayback, MprisTrack, MprisUpdate},
+};
 use serde_json::{json, Value};
 use std::{
     env, fs,
@@ -15,10 +18,11 @@ pub struct AlbumAuraBridge {
     playback: MprisPlayback,
     position_us: i64,
     revision: u64,
+    visual_theme: VisualTheme,
 }
 
 impl AlbumAuraBridge {
-    pub fn discover() -> Self {
+    pub fn discover(visual_theme: VisualTheme) -> Self {
         let path = env::var_os("XDG_RUNTIME_DIR")
             .filter(|value| !value.is_empty())
             .map(PathBuf::from)
@@ -30,6 +34,7 @@ impl AlbumAuraBridge {
             playback: MprisPlayback::Stopped,
             position_us: 0,
             revision: 0,
+            visual_theme,
         }
     }
 
@@ -56,6 +61,12 @@ impl AlbumAuraBridge {
             MprisUpdate::Position(position) | MprisUpdate::Seeked(position) => {
                 self.position_us = (*position).max(0);
                 self.publish();
+            }
+            MprisUpdate::VisualTheme(theme) => {
+                self.visual_theme = *theme;
+                if self.track.is_some() && !matches!(self.playback, MprisPlayback::Stopped) {
+                    self.publish();
+                }
             }
             MprisUpdate::Shutdown => self.shutdown(),
             _ => {}
@@ -93,6 +104,8 @@ impl AlbumAuraBridge {
             "playback_status": playback_name(self.playback),
             "position_us": self.position_us.max(0),
             "scheme": BRIDGE_SCHEME,
+            "visual_theme": visual_theme_name(self.visual_theme),
+            "palette_policy": palette_policy_name(self.visual_theme),
             "revision": self.revision,
             "updated_at": unix_timestamp(),
         });
@@ -137,6 +150,21 @@ fn source_name(track: &MprisTrack) -> &'static str {
     match track.url.as_deref() {
         Some(url) if url.starts_with("http://") || url.starts_with("https://") => "youtube",
         _ => "local",
+    }
+}
+
+const fn visual_theme_name(theme: VisualTheme) -> &'static str {
+    match theme {
+        VisualTheme::Noctalia => "noctalia",
+        VisualTheme::MaterialExpressive => "material_expressive",
+        VisualTheme::FrostedGlass => "frosted_glass",
+    }
+}
+
+const fn palette_policy_name(theme: VisualTheme) -> &'static str {
+    match theme {
+        VisualTheme::Noctalia => "follow_shell",
+        VisualTheme::MaterialExpressive | VisualTheme::FrostedGlass => "publish_album",
     }
 }
 
@@ -267,6 +295,7 @@ mod tests {
             playback: MprisPlayback::Stopped,
             position_us: 0,
             revision: 0,
+            visual_theme: VisualTheme::MaterialExpressive,
         };
 
         bridge.apply_mpris_update(&MprisUpdate::Metadata(MprisTrack {
@@ -289,6 +318,86 @@ mod tests {
         assert_eq!(stored["playback_status"], "Playing");
         assert_eq!(stored["position_us"], 42_000_000);
         assert_eq!(stored["title"], "Title");
+        assert_eq!(stored["visual_theme"], "material_expressive");
+        assert_eq!(stored["palette_policy"], "publish_album");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn maps_visual_themes_to_album_aura_palette_policy() {
+        assert_eq!(
+            (
+                visual_theme_name(VisualTheme::Noctalia),
+                palette_policy_name(VisualTheme::Noctalia)
+            ),
+            ("noctalia", "follow_shell")
+        );
+        assert_eq!(
+            (
+                visual_theme_name(VisualTheme::MaterialExpressive),
+                palette_policy_name(VisualTheme::MaterialExpressive)
+            ),
+            ("material_expressive", "publish_album")
+        );
+        assert_eq!(
+            (
+                visual_theme_name(VisualTheme::FrostedGlass),
+                palette_policy_name(VisualTheme::FrostedGlass)
+            ),
+            ("frosted_glass", "publish_album")
+        );
+    }
+
+    #[test]
+    fn republishes_active_payload_on_visual_theme_changes() {
+        let root = env::temp_dir().join(format!(
+            "nocky-album-aura-theme-test-{}-{}",
+            std::process::id(),
+            unix_timestamp()
+        ));
+        let path = root.join("nocky").join("album-aura.json");
+        let mut bridge = AlbumAuraBridge {
+            path: Some(path.clone()),
+            track: None,
+            playback: MprisPlayback::Stopped,
+            position_us: 0,
+            revision: 0,
+            visual_theme: VisualTheme::MaterialExpressive,
+        };
+
+        bridge.apply_mpris_update(&MprisUpdate::Metadata(MprisTrack {
+            track_id: "/io/github/maylton/Nocky/track/theme".into(),
+            title: "Theme".into(),
+            artist: "Artist".into(),
+            album: "Album".into(),
+            length_us: 180_000_000,
+            art_url: None,
+            url: Some("file:///home/user/Music/Theme.flac".into()),
+        }));
+        bridge.apply_mpris_update(&MprisUpdate::Playback(MprisPlayback::Paused));
+
+        let before: Value =
+            serde_json::from_slice(&fs::read(&path).expect("bridge file must exist"))
+                .expect("bridge JSON must be valid");
+        assert_eq!(before["visual_theme"], "material_expressive");
+        assert_eq!(before["palette_policy"], "publish_album");
+        assert_eq!(before["playback_status"], "Paused");
+
+        bridge.apply_mpris_update(&MprisUpdate::VisualTheme(VisualTheme::Noctalia));
+
+        let after: Value =
+            serde_json::from_slice(&fs::read(&path).expect("bridge file must exist"))
+                .expect("bridge JSON must be valid");
+        assert_eq!(after["active"], true);
+        assert_eq!(after["visual_theme"], "noctalia");
+        assert_eq!(after["palette_policy"], "follow_shell");
+        assert_eq!(after["track_id"], "/io/github/maylton/Nocky/track/theme");
+        assert_eq!(after["playback_status"], "Paused");
+        assert_eq!(
+            after["revision"].as_u64(),
+            before["revision"].as_u64().map(|value| value + 1)
+        );
 
         let _ = fs::remove_dir_all(root);
     }

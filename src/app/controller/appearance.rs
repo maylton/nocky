@@ -315,6 +315,10 @@ impl AppController {
         };
 
         self.visual_theme_manager.apply(&self.window, visual_theme);
+        self.mpris
+            .send(crate::playback::mpris::MprisUpdate::VisualTheme(
+                visual_theme,
+            ));
 
         let (blur_mode, blur_opacity) = {
             let config = self.config.borrow();
