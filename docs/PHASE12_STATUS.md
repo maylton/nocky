@@ -20,6 +20,9 @@ be updated whenever a Phase 12 slice is merged.
   loading.
 - Native single-track addition to confirmed-owned playlists, with duplicate
   submit protection and post-success playlist reconciliation.
+- Phase 12D architecture gate documented in
+  `PLAYLIST_MUTATION_ARCHITECTURE.md`, with delete, remove, reorder and
+  append-source-playlist actions still blocked from native UI.
 
 ## In progress
 
@@ -54,6 +57,8 @@ creation/addition slices:
 
 - Never expose edit controls unless ownership is explicitly confirmed.
 - Never remove a playlist occurrence without complete occurrence identity.
+- Never expose delete, remove or reorder controls from route/library presence
+  alone.
 - Keep creation, metadata edits, item changes and deletion as separate review
   checkpoints.
 - Every remote change requires duplicate suppression, actionable failure
@@ -67,4 +72,6 @@ creation/addition slices:
 - Playlist creation issue: completed and closed.
 - Read-only playlist metadata issue: completed and closed.
 - Playlist item-addition checkpoint: completed on main.
-- Playlist mutation architecture issue: remains open as the umbrella tracker.
+- Playlist mutation architecture issue: architecture gate completed; keep open
+  as the umbrella tracker until destructive membership and deletion checkpoints
+  are separately designed, implemented and validated.
