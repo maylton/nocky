@@ -390,17 +390,23 @@ Validated:
 
 ### Slice 12B — profile discovery and selection semantics
 
-Next checkpoint:
+Delivered:
 
-- Determine whether multiple YouTube and Brand Account profiles can be
-  discovered deterministically through the current authenticated backend.
-- Define a stable identifier that does not rely only on display name or handle.
-- Validate whether switching requires a fresh browser session or can safely use
-  an account index/header already present in the normalized contract.
+- Read-only profile discovery diagnostics for the active authenticated backend.
+- Stable sanitized profile identifiers when upstream exposes deterministic Brand
+  Account IDs.
+- Ambiguous and unavailable states that fall back to the already validated
+  active-profile presentation.
+- Privacy-safe parser boundaries that exclude cookies, headers, authorization
+  values, sign-in URLs and raw endpoint payloads.
+
+Still deferred:
+
 - Keep the active profile explicit in every selection surface.
 - Fall back to the single active-profile presentation when discovery is absent
   or ambiguous.
 - Do not broaden persisted authentication material.
+- Account/profile switching.
 
 ### Slice 12C — remote library mutations
 
@@ -413,10 +419,22 @@ Delivered:
 - Single-track addition to confirmed-owned playlists with duplicate-submit
   protection and server reconciliation.
 
+### Slice 12D — remote playlist mutation architecture
+
+Status: architecture gate completed in `PLAYLIST_MUTATION_ARCHITECTURE.md`.
+
+The gate documents the pinned `ytmusicapi==1.12.1` playlist mutation surface,
+required identifiers, ownership/editability requirements, risk classes, UI
+confirmation rules, cache reconciliation and privacy-safe diagnostics. It does
+not expose destructive playlist actions.
+
 Remaining checkpoints:
 
 - Rename playlists and update privacy with current-value confirmation.
 - Remove playlist tracks only when ownership and `setVideoId` are available.
+- Reorder playlist tracks only when occurrence identities and queue/cache
+  reconciliation are complete.
+- Delete playlists only after a separate destructive confirmation checkpoint.
 
 Remote destructive operations require a separate review before implementation.
 
